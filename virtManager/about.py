@@ -79,6 +79,8 @@ class vmmAbout(vmmGObject):
         def _hide(*_a):
             dialog.hide()
             dialog.set_visible(False)
+            dialog.destroy()
+            self._dialog = None
             return True
 
         def _on_key(_c, keyval, _keycode, _state):
@@ -96,9 +98,13 @@ class vmmAbout(vmmGObject):
         sctl = Gtk.ShortcutController()
         sctl.add_shortcut(shortcut)
         dialog.add_controller(sctl)
-        dialog.connect("close-request", lambda *_a: dialog.hide() or True)
+        dialog.connect("close-request", lambda *_a: _hide())
         self._dialog = dialog
         dialog.present()
+        try:
+            dialog.grab_focus()
+        except Exception:
+            pass
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing about")
