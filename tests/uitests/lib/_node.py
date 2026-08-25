@@ -26,8 +26,8 @@ _GTK4_ROLE_ALIASES = {
     ".*dialog.*": ".*(dialog|alert|window).*",
     "menu item": "(menu item|menu)",
     ".*menu item.*": ".*(menu item|menu).*",
-    "table cell": "(table cell|list item|cell)",
-    ".*table cell.*": ".*(table cell|list item|cell).*",
+    "table cell": "(table cell|list item|cell|button|push button)",
+    ".*table cell.*": ".*(table cell|list item|cell|button|push button).*",
     "radio button": "(radio button|radio)",
     "check button": "(check button|check box)",
     "check box": "(check box|check button)",
@@ -364,20 +364,23 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # pylint: disable=arguments-differ,signature-differs
         self.check_onscreen()
         self.check_sensitive()
-        if self.is_menuitem():
-            # Opacity-0 GTK 4 menu windows report menubar coordinates.
-            # A mouse click there misses the item; AT-SPI activate works.
+        button = kwargs.get("button", args[0] if args else 1)
+        if self.is_menuitem() or self.roleName in (
+            "table cell",
+            "cell",
+            "list item",
+            "push button",
+            "button",
+            "toggle button",
+        ):
+            # Opacity-0 GTK 4 menus/mirrors report bad coordinates.
             try:
                 self.doActionNamed("click")
-                return
             except Exception:
-                self.point()
-        if self.roleName in ("table cell", "cell", "list item"):
-            try:
-                self.doActionNamed("click")
-            except Exception:
+                if self.is_menuitem():
+                    self.point()
                 super().click(*args, **kwargs)
-            button = kwargs.get("button", args[0] if args else 1)
+                return
             if button == 3:
                 dogtail.rawinput.pressKey("Menu")
             return

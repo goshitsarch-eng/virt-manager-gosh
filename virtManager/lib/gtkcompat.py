@@ -123,7 +123,7 @@ def attach_treeview_a11y(treeview, name_column=1):
             _iter = model.iter_children(parent) if parent else model.get_iter_first()
             while _iter is not None:
                 try:
-                    if model[_iter][0] is handle:
+                    if model[_iter][0] == handle:
                         sel.select_iter(_iter)
                         return True
                 except Exception:
@@ -159,7 +159,9 @@ def attach_treeview_a11y(treeview, name_column=1):
                 except Exception:
                     handle = None
                 btn = Gtk.Button(label=name)
-                btn.set_accessible_role(Gtk.AccessibleRole.CELL)
+                # Keep BUTTON so AT-SPI still has a click action. Uitests
+                # accept "button" as a table-cell alias.
+                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
                 set_accessible_name(btn, name)
                 btn.connect("clicked", lambda _b, h=handle: _select_handle(h))
                 box.append(btn)
@@ -474,6 +476,10 @@ def _run_modal(window, response_signal="response"):
     if GObject.signal_lookup("close-request", window):
         close_hid = window.connect("close-request", on_close)
     window.present()
+    ctx = GLib.MainContext.default()
+    for _ in range(20):
+        if not ctx.iteration(False):
+            break
     loop.run()
     if hid is not None:
         window.disconnect(hid)
@@ -648,8 +654,15 @@ class MenuItem(Gtk.Button):
         self._set_selected(True)
         if self._submenu:
             self._submenu.popup_at_widget(self)
-        else:
+            return
+
+        # AT-SPI click waits for this handler. If we run a modal dialog
+        # here, dogtail never returns to look for the alert.
+        def _activate():
             self.emit("activate")
+            return False
+
+        GLib.idle_add(_activate)
 
     @classmethod
     def new_with_mnemonic(cls, label):
@@ -1037,7 +1050,10 @@ class MenuToolButton(Gtk.Box):
         self._menu = None
         self.connect("notify::label", self._sync_label)
         self.connect("notify::icon-name", self._sync_icon)
-        self._button.connect("clicked", lambda *_a: self.emit("clicked"))
+        self._button.connect(
+            "clicked",
+            lambda *_a: GLib.idle_add(lambda: self.emit("clicked") or False),
+        )
         self._menu_button.connect("toggled", self._on_menu_toggled)
 
     def _sync_label(self, *_args):
