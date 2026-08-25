@@ -305,8 +305,6 @@ class vmmManager(vmmGObjectUI):
         self.connmenu.show_all()
         gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
         self.vmmenu._vmm_menu_name = "vm-action-menu"
-        self.vmmenu._ensure_popover(self.topwin)
-        self.vmmenu._ensure_mapped()
 
         def _on_menu_key(_c, keyval, *_a):
             if Gdk.keyval_name(keyval) == "Menu":

@@ -385,12 +385,4 @@ class VMMDogtailApp:
             except dogtail.tree.SearchError:
                 # GTK 4 from a python wrapper may expose the process name
                 self._root = dogtail.tree.root.application("python3")
-            try:
-                self._topwin = self.find_window(window_name)
-            except dogtail.tree.SearchError:
-                self._topwin = self.root.find(
-                    name=window_name or "Virtual Machine Manager",
-                    roleName="(frame|dialog|alert|window)",
-                    recursive=True,
-                    check_active=False,
-                )
+            self._topwin = self.find_window(window_name)
