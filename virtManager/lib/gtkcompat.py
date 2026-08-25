@@ -958,8 +958,6 @@ def _oslist_show_popovers(oslist):
     reopen = False
     try:
         reopen = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
-        if reopen:
-            os.remove("/tmp/vmm-a11y-oslist-reopen")
     except Exception:
         reopen = False
     if not reopen:
@@ -991,6 +989,10 @@ def _oslist_show_popovers(oslist):
         if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
             return
         os.remove("/tmp/vmm-a11y-oslist-popover-hidden")
+        try:
+            os.remove("/tmp/vmm-a11y-oslist-reopen")
+        except Exception:
+            pass
         if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
             open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
             return
