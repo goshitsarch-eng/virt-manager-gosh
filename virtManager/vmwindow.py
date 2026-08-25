@@ -90,7 +90,7 @@ class vmmVMWindow(vmmGObjectUI):
         self._shutdownmenu = None
         self._vmmenu = None
         self.init_menus()
-        addhw = self.widget("add-hardware-button")
+        addhw = self._details.widget("add-hardware-button")
         gtkcompat.expose_a11y_button(
             "add-hardware", "add-hardware", lambda: addhw.emit("clicked")
         )
@@ -380,7 +380,7 @@ class vmmVMWindow(vmmGObjectUI):
         self._sync_toolbar_page_buttons(newpage)
         self._sync_console_page_menu_state()
         try:
-            addhw = self.widget("add-hardware-button")
+            addhw = self._details.widget("add-hardware-button")
             gtkcompat.expose_a11y_button(
                 "add-hardware", "add-hardware", lambda: addhw.emit("clicked")
             )
