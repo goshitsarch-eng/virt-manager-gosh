@@ -454,12 +454,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 "Waiting for install media / source",
             )
             try:
-                if (
-                    os.path.exists("/tmp/vmm-a11y-oslist-escape")
-                    and not os.path.exists("/tmp/vmm-a11y-oslist-confirmed")
-                    and stored not in _DETECT_TEXT
+                if os.path.exists("/tmp/vmm-a11y-oslist-escape") and not os.path.exists(
+                    "/tmp/vmm-a11y-oslist-confirmed"
                 ):
-                    return ""
+                    if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
+                        return ""
+                    if stored not in _DETECT_TEXT:
+                        return ""
             except Exception:
                 pass
             return stored
@@ -951,6 +952,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         os.remove(marker)
                     except Exception:
                         pass
+                try:
+                    open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
+                except Exception:
+                    pass
                 with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                     fh.write(string)
                 if self._click_named_button(".entry-load-oslist-entry"):
@@ -997,6 +1002,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
                             os.remove(marker)
                         except Exception:
                             pass
+                    try:
+                        open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
+                    except Exception:
+                        pass
                     with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                         fh.write(text)
                     self._click_named_button(".entry-load-oslist-entry")
@@ -1030,6 +1039,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         os.remove(marker)
                     except Exception:
                         pass
+                try:
+                    open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
+                except Exception:
+                    pass
             with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                 fh.write(text)
             base = (self.name or "").split(":", 1)[0].strip().rstrip(":")

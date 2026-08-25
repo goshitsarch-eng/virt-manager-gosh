@@ -185,7 +185,12 @@ class vmmOSList(vmmGObjectUI):
                 _("Detecting..."),
                 _("Waiting for install media / source"),
             )
-            if typed in special:
+            user_search = False
+            try:
+                user_search = os.path.exists("/tmp/vmm-a11y-oslist-typed")
+            except Exception:
+                user_search = False
+            if typed in special and not user_search:
                 label = typed
             else:
                 label = ""
@@ -410,6 +415,10 @@ class vmmOSList(vmmGObjectUI):
             pass
         try:
             os.remove("/tmp/vmm-a11y-oslist-confirmed")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-oslist-typed")
         except Exception:
             pass
         self._clear_filter()
