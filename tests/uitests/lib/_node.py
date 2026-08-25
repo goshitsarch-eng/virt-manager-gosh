@@ -154,11 +154,23 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
             except Exception:
                 text = ""
 
+            extra = ""
+            try:
+                if not (node.name or "") and self._roleName and "button" in self._roleName:
+                    for child in node.children:
+                        extra += " " + (child.name or "")
+                        try:
+                            extra += " " + (child.text or "")
+                        except Exception:
+                            pass
+            except Exception:
+                extra = ""
             if (
                 self._name
                 and not self._name_pattern.match(node.name or "")
                 and not self._name_pattern.match(labeller)
                 and not self._name_pattern.match(text)
+                and not self._name_pattern.match(extra.strip())
             ):
                 return
             if self._labeller_text and not self._labeller_pattern.match(labeller):
@@ -348,6 +360,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return
             except Exception:
                 self.point()
+        if self.roleName in ("table cell", "cell", "list item"):
+            try:
+                self.doActionNamed("click")
+            except Exception:
+                super().click(*args, **kwargs)
+            button = kwargs.get("button", args[0] if args else 1)
+            if button == 3:
+                dogtail.rawinput.pressKey("Menu")
+            return
         super().click(*args, **kwargs)
 
     def point(self, *args, **kwargs):

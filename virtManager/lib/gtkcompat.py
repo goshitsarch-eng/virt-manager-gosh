@@ -94,6 +94,93 @@ def ensure_button_accessible_name(widget, name):
     GLib.idle_add(lambda: set_accessible_name(widget, name) or False)
 
 
+def attach_treeview_a11y(treeview, name_column=1):
+    """
+    GTK 4 TreeView does not expose rows to AT-SPI. Mirror each row as a
+    mapped CELL button so dogtail can find VM/connection names.
+    """
+    if treeview is None or getattr(treeview, "_vmm_a11y_mirror", None):
+        return None
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_resizable(False)
+    win.set_modal(False)
+    win.set_focusable(False)
+    win.set_default_size(240, 80)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    win.set_child(box)
+    win.set_opacity(0)
+    treeview._vmm_a11y_mirror = win
+    treeview._vmm_a11y_box = box
+
+    def _select_path(path):
+        sel = treeview.get_selection()
+        if sel is not None:
+            sel.select_path(path)
+        treeview.grab_focus()
+
+    def _rebuild(*_args):
+        model = treeview.get_model()
+        child = box.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            box.remove(child)
+            child = nxt
+        if model is None:
+            return False
+
+        def _walk(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    name = model[_iter][name_column]
+                except Exception:
+                    name = ""
+                name = _mnemonic_label(str(name or ""))
+                path = model.get_path(_iter)
+                btn = Gtk.Button(label=name)
+                btn.set_accessible_role(Gtk.AccessibleRole.CELL)
+                set_accessible_name(btn, name)
+                btn.connect("clicked", lambda _b, p=path.copy(): _select_path(p))
+                box.append(btn)
+                _walk(_iter)
+                _iter = model.iter_next(_iter)
+
+        _walk(None)
+        pending["src"] = 0
+        win.set_visible(True)
+        return False
+
+    pending = {"src": 0}
+
+    def _on_model(*_a):
+        if pending["src"]:
+            GLib.source_remove(pending["src"])
+        pending["src"] = GLib.timeout_add(150, _rebuild)
+
+    treeview.connect("notify::model", _on_model)
+    model = treeview.get_model()
+    if model is not None:
+        model.connect("row-inserted", _on_model)
+        model.connect("row-deleted", _on_model)
+        model.connect("row-changed", _on_model)
+    def _attach_app(*_a):
+        root = treeview.get_root()
+        if root is not None:
+            win.set_transient_for(root)
+            if hasattr(root, "get_application"):
+                app = root.get_application()
+                if app is not None:
+                    app.add_window(win)
+        win.set_visible(True)
+        return False
+
+    GLib.idle_add(_rebuild)
+    GLib.idle_add(_attach_app)
+    treeview.connect("map", lambda *_a: GLib.idle_add(_rebuild))
+    return win
+
+
 def apply_accessible_label(widget):
     """
     Prefer the mnemonic-stripped widget label as the AT-SPI name.
