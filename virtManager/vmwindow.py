@@ -468,6 +468,7 @@ class vmmVMWindow(vmmGObjectUI):
             newpage = self.widget("details-pages").get_current_page()
         try:
             addhw = self._details.widget("add-hardware-button")
+            addhw._vmm_page_hidden = newpage != DETAILS_PAGE_DETAILS
             gtkcompat.set_accessible_name(
                 addhw,
                 "add-hardware" if newpage == DETAILS_PAGE_DETAILS else "add-hardware (hidden)",

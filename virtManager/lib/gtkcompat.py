@@ -1300,7 +1300,10 @@ def sync_builder_accessible(widget):
         if inner_btn is not None:
             apply_accessible_label(inner_btn)
         if bid and bid in _BUILDER_A11Y_NAMES:
-            set_accessible_name(widget, _BUILDER_A11Y_NAMES[bid])
+            name = _BUILDER_A11Y_NAMES[bid]
+            if getattr(widget, "_vmm_page_hidden", False):
+                name = name + " (hidden)"
+            set_accessible_name(widget, name)
         return False
 
     widget.connect("map", lambda *_a: GLib.idle_add(_reapply))
