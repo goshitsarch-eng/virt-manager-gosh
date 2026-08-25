@@ -303,6 +303,20 @@ class vmmManager(vmmGObjectUI):
         self.connmenu.add(Gtk.SeparatorMenuItem())
         add_to_menu("details", _("_Details"), self.show_host)
         self.connmenu.show_all()
+        gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
+        self.vmmenu._ensure_popover(self.topwin)
+        self.vmmenu._ensure_mapped()
+
+        key = Gtk.EventControllerKey()
+        key.connect(
+            "key-pressed",
+            lambda _c, keyval, *_a: (
+                self.popup_vm_menu_from_selection() or True
+                if Gdk.keyval_name(keyval) == "Menu"
+                else False
+            ),
+        )
+        self.topwin.add_controller(key)
 
     def init_vmlist(self):
         vmlist = self.widget("vm-list")
@@ -330,7 +344,10 @@ class vmmManager(vmmGObjectUI):
         except Exception:
             pass
         gtkcompat.attach_treeview_a11y(
-            vmlist, name_column=ROW_SORT_KEY, text_column=ROW_MARKUP
+            vmlist,
+            name_column=ROW_SORT_KEY,
+            text_column=ROW_MARKUP,
+            on_popup=self.popup_vm_menu_from_selection,
         )
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
@@ -818,13 +835,17 @@ class vmmManager(vmmGObjectUI):
         self.widget("menu_edit_details").set_sensitive(show_details)
         self.widget("menu_host_details").set_sensitive(host_details)
 
+    def popup_vm_menu_from_selection(self, event=None):
+        model, treeiter = self.widget("vm-list").get_selection().get_selected()
+        if model is None or treeiter is None:
+            return False
+        self.popup_vm_menu(model, treeiter, event)
+        return True
+
     def popup_vm_menu_key(self, widget_ignore, event):
         if Gdk.keyval_name(event.keyval) != "Menu":
             return False  # pragma: no cover
-
-        model, treeiter = self.widget("vm-list").get_selection().get_selected()
-        self.popup_vm_menu(model, treeiter, event)
-        return True
+        return self.popup_vm_menu_from_selection(event)
 
     def popup_vm_menu_button(self, vmlist, event):
         if event.button != 3:

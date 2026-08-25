@@ -161,7 +161,7 @@ def _strip_pango_markup(text):
     return re.sub(r"<[^>]+>", "", str(text or "")).replace("&amp;", "&")
 
 
-def attach_treeview_a11y(treeview, name_column=1, text_column=None):
+def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=None):
     """
     GTK 4 TreeView does not expose rows to AT-SPI. Mirror each row as a
     mapped CELL button so dogtail can find VM/connection names.
@@ -172,7 +172,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None):
     win.set_decorated(False)
     win.set_resizable(False)
     win.set_modal(False)
-    win.set_focusable(False)
+    win.set_focusable(True)
     win.set_default_size(240, 80)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     win.set_child(box)
@@ -203,6 +203,12 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None):
 
         _find(None)
         treeview.grab_focus()
+        root = treeview.get_root()
+        if root is not None:
+            try:
+                root.present()
+            except Exception:
+                pass
 
     def _rebuild(*_args):
         model = treeview.get_model()
@@ -300,6 +306,17 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None):
                     app.add_window(win)
         win.set_visible(True)
         return False
+
+    key = Gtk.EventControllerKey()
+
+    def _on_menu_key(_c, keyval, *_a):
+        if on_popup is not None and Gdk.keyval_name(keyval) == "Menu":
+            on_popup()
+            return True
+        return False
+
+    key.connect("key-pressed", _on_menu_key)
+    win.add_controller(key)
 
     GLib.idle_add(_rebuild)
     GLib.idle_add(_attach_app)
@@ -1019,6 +1036,10 @@ class Menu(Gtk.Box):
             self.unparent()
         if self._popover.get_child() is not self:
             self._popover.set_child(self)
+        name = self.get_name()
+        if name:
+            set_accessible_name(self, name)
+            set_accessible_name(self._popover, name)
         self.remove_css_class("vmm-submenu")
         show_all(self)
         for item in self._items:
