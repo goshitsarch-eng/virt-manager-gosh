@@ -1521,10 +1521,9 @@ class vmmCreateVM(vmmGObjectUI):
         return next_page
 
     def _forward_clicked(self, src_ignore=None):
-        # Validation alerts use dialog.run(); that must not run inside
-        # an AT-SPI click on the real _Forward button.
-        GLib.idle_add(self._forward_clicked_impl)
-        return True
+        # Sidecar Forward idle-dispatches emit("clicked") so AT-SPI is
+        # already off the stack. Construct/tests call this directly.
+        return self._forward_clicked_impl()
 
     def _forward_clicked_impl(self, *_a):
         notebook = self.widget("create-pages")
@@ -2011,8 +2010,7 @@ class vmmCreateVM(vmmGObjectUI):
     ##########################
 
     def _finish_clicked(self, src_ignore):
-        GLib.idle_add(self._finish_clicked_impl)
-        return True
+        return self._finish_clicked_impl()
 
     def _finish_clicked_impl(self, *_a):
         # Validate the final page
