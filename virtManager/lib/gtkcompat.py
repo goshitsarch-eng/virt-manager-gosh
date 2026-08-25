@@ -319,7 +319,8 @@ def _ensure_toplevel_hidden_sync(window):
         window.connect("notify::visible", _sync)
     except Exception:
         pass
-    _sync()
+    # Do not mark hidden before the first show: GTK 4 then omits the
+    # toplevel from the application AT-SPI tree.
 
 
 def _ensure_toplevel_close_action(window):

@@ -1067,6 +1067,15 @@ class vmmManager(vmmGObjectUI):
             widget.set_tooltip_text(tool_text)
 
     def _toggle_graph_helper(self, do_show, col, datafunc, menu):
+        if getattr(self, "_vmm_toggling_graph", False):
+            return
+        self._vmm_toggling_graph = True
+        try:
+            self._toggle_graph_helper_apply(do_show, col, datafunc, menu)
+        finally:
+            self._vmm_toggling_graph = False
+
+    def _toggle_graph_helper_apply(self, do_show, col, datafunc, menu):
         img = -1
         for child in col.get_cells():
             if isinstance(child, CellRendererSparkline):
