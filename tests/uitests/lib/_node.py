@@ -573,6 +573,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "storage-browse",
                     "install-import-browse",
                     "Automatically detect",
+                    "No media detected",
+                    "Fedora12_media",
                 )
             ):
                 return True

@@ -1171,7 +1171,79 @@ def _append_createvm_media_controls(box, createvm):
     )
     _append_detect_os_control(box, createvm)
     _append_iso_browse_control(box, createvm)
+    publish_media_combo_rows(createvm, box)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+
+
+def publish_media_combo_rows(createvm, box=None):
+    """Exact media-combo row names on the findable New VM window."""
+    if createvm is None:
+        return
+    media = getattr(createvm, "_mediacombo", None)
+    if media is None or getattr(media, "_combo", None) is None:
+        return
+    if box is None:
+        win = getattr(createvm, "_vmm_methods_win", None)
+        try:
+            box = win.get_child() if win is not None else None
+        except Exception:
+            box = None
+    if box is None:
+        return
+    host = getattr(box, "_vmm_media_rows", None)
+    if host is None:
+        host = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        try:
+            host.set_accessible_role(Gtk.AccessibleRole.COMBO_BOX)
+        except Exception:
+            pass
+        set_accessible_name(host, "media-combo")
+        box.append(host)
+        box._vmm_media_rows = host
+    child = host.get_first_child()
+    while child is not None:
+        nxt = child.get_next_sibling()
+        try:
+            host.remove(child)
+        except Exception:
+            pass
+        child = nxt
+    try:
+        model = media._combo.get_model()
+    except Exception:
+        model = None
+    if model is None:
+        return
+    idx = 0
+    try:
+        it = model.get_iter_first()
+    except Exception:
+        it = None
+    while it is not None:
+        label = ""
+        try:
+            label = str(model[it][1] or "")
+        except Exception:
+            label = ""
+        if label:
+            btn = Gtk.Button(label=label, has_frame=False)
+            btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            ensure_activate_clicked(btn)
+            set_accessible_name(btn, label)
+
+            def _choose(_b, row=idx, combo=media._combo):
+                try:
+                    combo.set_active(row)
+                except Exception:
+                    pass
+
+            btn.connect("clicked", _choose)
+            host.append(btn)
+        idx += 1
+        try:
+            it = model.iter_next(it)
+        except Exception:
+            break
 
 
 def _append_iso_browse_control(box, createvm):
@@ -1328,6 +1400,7 @@ def expose_createvm_methods_window(createvm):
                 )
                 _append_detect_os_control(child, createvm)
                 _append_iso_browse_control(child, createvm)
+                publish_media_combo_rows(createvm, child)
                 _append_name_load_control(child, createvm)
                 _append_createvm_status_labels(child, createvm)
                 _append_createvm_media_controls(child, createvm)
@@ -1406,6 +1479,7 @@ def expose_createvm_methods_window(createvm):
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _append_detect_os_control(box, createvm)
     _append_iso_browse_control(box, createvm)
+    publish_media_combo_rows(createvm, box)
     _append_name_load_control(box, createvm)
     _append_createvm_status_labels(box, createvm)
     _append_createvm_media_controls(box, createvm)
@@ -2373,11 +2447,18 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
         wrap._vmm_combo_src = combo
 
         def _row_label(model, it):
-            parts = []
             try:
                 n = model.get_n_columns()
             except Exception:
                 n = 0
+            if n >= 2:
+                try:
+                    label = model[it][1]
+                    if label:
+                        return str(label)
+                except Exception:
+                    pass
+            parts = []
             for i in range(n):
                 try:
                     val = model[it][i]

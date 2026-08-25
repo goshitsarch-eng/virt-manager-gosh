@@ -641,6 +641,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         # Install local
         self._mediacombo.reset_state()
+        gtkcompat.publish_media_combo_rows(self)
 
         # Install URL
         self.widget("install-urlopts-entry").set_text("")
@@ -842,6 +843,7 @@ class vmmCreateVM(vmmGObjectUI):
         # Dependent on connection so we need to do this here
         self._mediacombo.set_conn(self.conn)
         self._mediacombo.reset_state()
+        gtkcompat.publish_media_combo_rows(self)
 
         # Allow container bootstrap only for local connection and
         # only if virt-bootstrap is installed. Otherwise, show message.
