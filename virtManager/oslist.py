@@ -155,10 +155,22 @@ class vmmOSList(vmmGObjectUI):
     def refresh_a11y(self):
         """Keep the oslist-entry sidecar name in sync after page hide/show."""
         osobj = None
-        if getattr(self, "_os_confirmed", False):
+        confirmed = getattr(self, "_os_confirmed", False)
+        try:
+            confirmed = confirmed and os.path.exists("/tmp/vmm-a11y-oslist-confirmed")
+        except Exception:
+            pass
+        if confirmed:
             osobj = self._selected_os or self._kept_os
         label = osobj.label if osobj is not None else ""
-        if not label:
+        hidden = False
+        try:
+            hidden = os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden")
+        except Exception:
+            hidden = False
+        if hidden and not confirmed:
+            label = ""
+        elif not label:
             try:
                 label = self.search_entry.get_text() or ""
             except Exception:
