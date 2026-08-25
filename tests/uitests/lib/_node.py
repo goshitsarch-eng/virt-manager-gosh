@@ -444,6 +444,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "Choose the operating system"
         ):
             try:
+                if os.path.exists("/tmp/vmm-a11y-oslist-escape") and not os.path.exists(
+                    "/tmp/vmm-a11y-oslist-confirmed"
+                ):
+                    return ""
+            except Exception:
+                pass
+            try:
                 stored = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
                 return stored.strip()
             except Exception:

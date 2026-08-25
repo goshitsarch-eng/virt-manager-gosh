@@ -169,7 +169,9 @@ class vmmOSList(vmmGObjectUI):
         label = osobj.label if osobj is not None else ""
         hidden = False
         try:
-            hidden = os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden")
+            hidden = os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") or os.path.exists(
+                "/tmp/vmm-a11y-oslist-escape"
+            )
         except Exception:
             hidden = False
         if hidden and not confirmed:
@@ -237,6 +239,11 @@ class vmmOSList(vmmGObjectUI):
         self.emit("os-selected", self._selected_os)
 
     def _show_popover(self):
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+                return
+        except Exception:
+            pass
         # Match width to the search_entry width. Height is based on
         # whatever we can fit into the hardcoded create wizard sizes
         r = self.search_entry.get_allocation()
@@ -305,6 +312,20 @@ class vmmOSList(vmmGObjectUI):
         selected_label = None
         if self._selected_os:
             selected_label = self._selected_os.label
+
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+                try:
+                    self.topwin.popdown()
+                except Exception:
+                    pass
+                hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+                if hide:
+                    hide()
+                self.refresh_a11y()
+                return
+        except Exception:
+            pass
 
         if not src.get_sensitive() or not searchname or selected_label == searchname:
             self.topwin.popdown()
