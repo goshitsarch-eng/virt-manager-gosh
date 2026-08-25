@@ -4,12 +4,12 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
-from gi.repository import Adw
 from gi.repository import Gtk
 
 from virtinst import log
 
 from .baseclass import vmmGObject
+from .lib import gtkcompat
 
 
 class vmmAbout(vmmGObject):
@@ -30,14 +30,21 @@ class vmmAbout(vmmGObject):
     def show(self, parent):
         log.debug("Showing about")
         if self._dialog:
-            self._dialog.present(parent)
+            self._dialog.set_transient_for(parent)
+            self._dialog.present()
             return
-        dialog = Adw.AboutDialog()
-        dialog.set_application_name("Virtual Machine Manager")
-        dialog.set_application_icon("virt-manager")
+
+        # Gtk.AboutDialog remains a real window/dialog in GTK 4, which
+        # dogtail can find. Adw.AboutDialog presents as an overlay that
+        # is not reliably in the same AT-SPI tree as the manager.
+        dialog = Gtk.AboutDialog()
+        dialog.set_transient_for(parent)
+        dialog.set_modal(True)
+        dialog.set_title("About")
+        dialog.set_program_name("Virtual Machine Manager")
+        dialog.set_logo_icon_name("virt-manager")
         dialog.set_version(self.config.get_appversion())
-        dialog.set_developer_name("The virt-manager project")
-        dialog.set_developers(
+        dialog.set_authors(
             [
                 "Daniel P. Berrange <berrange@redhat.com>",
                 "Cole Robinson <crobinso@redhat.com>",
@@ -56,21 +63,24 @@ class vmmAbout(vmmGObject):
         dialog.set_copyright("Copyright (C) 2006-2020 Red Hat Inc.")
         dialog.set_comments(_("Powered by libvirt"))
         dialog.set_website("https://virt-manager.org/")
-        if hasattr(dialog, "set_website_label"):
-            dialog.set_website_label("https://virt-manager.org/")
         dialog.set_license_type(Gtk.License.GPL_2_0)
         dialog.set_accessible_role(Gtk.AccessibleRole.DIALOG)
-        from .lib import gtkcompat
-
-        gtkcompat.set_accessible_name(dialog, "About Virtual Machine Manager")
+        gtkcompat.set_accessible_name(dialog, "About")
+        copyright = Gtk.Label(label="Copyright (C) 2006-2020 Red Hat Inc.")
+        gtkcompat.set_accessible_name(copyright, "Copyright")
+        child = dialog.get_child()
+        if child is not None and hasattr(child, "append"):
+            child.append(copyright)
         self._dialog = dialog
-        dialog.present(parent)
+        dialog.present()
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing about")
         if self._dialog:
-            self._dialog.close()
+            self._dialog.hide()
         return 1
 
     def _cleanup(self):
+        if self._dialog:
+            self._dialog.destroy()
         self._dialog = None
