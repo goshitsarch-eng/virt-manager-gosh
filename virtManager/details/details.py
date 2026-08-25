@@ -1116,24 +1116,32 @@ class vmmDetails(vmmGObjectUI):
         self._enable_apply(EDIT_CPU)
 
     def _sync_cpu_topology_ui(self):
-        manual_top = self.widget("cpu-topology-table").is_sensitive()
-        self.widget("cpu-vcpus").set_sensitive(not manual_top)
+        # GTK 4 SpinButton.set_value always emits value-changed, which
+        # re-enters this handler. Block while we are syncing the widgets.
+        if getattr(self, "_cpu_topology_syncing", False):
+            return
+        self._cpu_topology_syncing = True
+        try:
+            manual_top = self.widget("cpu-topology-table").is_sensitive()
+            self.widget("cpu-vcpus").set_sensitive(not manual_top)
 
-        if manual_top:
-            cores = uiutil.spin_get_helper(self.widget("cpu-cores")) or 1
-            sockets = uiutil.spin_get_helper(self.widget("cpu-sockets")) or 1
-            threads = uiutil.spin_get_helper(self.widget("cpu-threads")) or 1
-            total = cores * sockets * threads
-            if uiutil.spin_get_helper(self.widget("cpu-vcpus")) > total:
+            if manual_top:
+                cores = uiutil.spin_get_helper(self.widget("cpu-cores")) or 1
+                sockets = uiutil.spin_get_helper(self.widget("cpu-sockets")) or 1
+                threads = uiutil.spin_get_helper(self.widget("cpu-threads")) or 1
+                total = cores * sockets * threads
+                if uiutil.spin_get_helper(self.widget("cpu-vcpus")) > total:
+                    self.widget("cpu-vcpus").set_value(total)
                 self.widget("cpu-vcpus").set_value(total)
-            self.widget("cpu-vcpus").set_value(total)
-        else:
-            vcpus = uiutil.spin_get_helper(self.widget("cpu-vcpus"))
-            self.widget("cpu-sockets").set_value(vcpus or 1)
-            self.widget("cpu-cores").set_value(1)
-            self.widget("cpu-threads").set_value(1)
+            else:
+                vcpus = uiutil.spin_get_helper(self.widget("cpu-vcpus"))
+                self.widget("cpu-sockets").set_value(vcpus or 1)
+                self.widget("cpu-cores").set_value(1)
+                self.widget("cpu-threads").set_value(1)
 
-        self._enable_apply(EDIT_TOPOLOGY)
+            self._enable_apply(EDIT_TOPOLOGY)
+        finally:
+            self._cpu_topology_syncing = False
 
     def _cpu_topology_enable_cb(self, src):
         do_enable = src.get_active()

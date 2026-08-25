@@ -187,6 +187,8 @@ class _EntryIconPosition:
 
 def _box_pack_start(self, child, expand=True, fill=True, padding=0):
     ignore = fill
+    if child.get_parent() is not None:
+        child.unparent()
     if expand:
         if self.get_orientation() == Gtk.Orientation.VERTICAL:
             child.set_vexpand(True)
@@ -200,6 +202,8 @@ def _box_pack_start(self, child, expand=True, fill=True, padding=0):
 
 def _box_pack_end(self, child, expand=True, fill=True, padding=0):
     ignore = fill
+    if child.get_parent() is not None:
+        child.unparent()
     if expand:
         if self.get_orientation() == Gtk.Orientation.VERTICAL:
             child.set_vexpand(True)
@@ -822,10 +826,31 @@ def _stock_to_label_icon(stock):
     return (str(stock), None)
 
 
+def _bin_remove(self, child=None):
+    current = self.get_child() if hasattr(self, "get_child") else None
+    if child is None or current is child or child is current:
+        if hasattr(self, "set_child"):
+            self.set_child(None)
+            return
+    if child is not None and child.get_parent() is self:
+        child.unparent()
+
+
 def _patch_bin_add(cls):
     if cls is None:
         return
     cls.add = _widget_add
+    orig_remove = getattr(cls, "remove", None)
+
+    def remove(self, child=None):
+        if orig_remove is not None and child is not None:
+            try:
+                return orig_remove(self, child)
+            except TypeError:
+                pass
+        return _bin_remove(self, child)
+
+    cls.remove = remove
 
 
 def _patch_widget_methods():
@@ -887,6 +912,20 @@ def _patch_widget_methods():
         self.set_margin_end(width)
 
     Gtk.Widget.set_border_width = set_border_width
+
+    if not hasattr(Gtk.Label, "set_line_wrap"):
+
+        def set_line_wrap(self, wrap):
+            self.set_wrap(bool(wrap))
+
+        Gtk.Label.set_line_wrap = set_line_wrap
+
+    if not hasattr(Gtk.Label, "set_line_wrap_mode"):
+
+        def set_line_wrap_mode(self, mode):
+            self.set_wrap_mode(mode)
+
+        Gtk.Label.set_line_wrap_mode = set_line_wrap_mode
 
     def grab_default(self):
         root = self.get_root() if hasattr(self, "get_root") else None

@@ -139,7 +139,7 @@ class Viewer(vmmGObject):
         self._display.connect("size-allocate", self._make_signal_proxy("size-allocate"))
 
         self.emit("add-display-widget", self._display)
-        if hasattr(self._display, "realize"):
+        if hasattr(self._display, "realize") and self._display.get_root() is not None:
             try:
                 self._display.realize()
             except Exception:
