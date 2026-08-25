@@ -94,8 +94,38 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None):
         kids = list(node.children)
     except Exception:
         return None
+
+    def _walk_prio(child):
+        try:
+            role = child.roleName or ""
+            name = child.name or ""
+        except Exception:
+            return 3
+        if role in ("panel", "frame", "window", "group", "table", "tree table"):
+            return 0
+        if role == "menu" and name.startswith("."):
+            return 4
+        if role == "menu":
+            return 2
+        return 1
+
+    try:
+        kids.sort(key=_walk_prio)
+    except Exception:
+        pass
     for child in kids:
         if recursive:
+            try:
+                closed_menu = child.roleName == "menu" and (child.name or "").startswith(".")
+            except Exception:
+                closed_menu = False
+            if closed_menu:
+                try:
+                    if pred.satisfiedByNode(child):
+                        return child
+                except Exception:
+                    pass
+                continue
             ret = _walk_find(child, pred, True, _seen, _budget)
         else:
             try:
