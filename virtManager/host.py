@@ -6,6 +6,7 @@
 
 from virtinst import log
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .engine import vmmEngine
@@ -87,6 +88,16 @@ class vmmHost(vmmGObjectUI):
             return  # pragma: no cover
 
         vmmEngine.get_instance().increment_window_counter()
+        try:
+            title = _("%(connection)s - Connection Details") % {
+                "connection": self.conn.get_pretty_desc()
+            }
+            self.topwin.set_title(title)
+            gtkcompat.set_accessible_name(self.topwin, title)
+            gtkcompat._ensure_app_window(self.topwin)
+            gtkcompat.attach_notebook_a11y(self.widget("details-tabs"))
+        except Exception:
+            pass
 
     def close(self, src=None, event=None):
         dummy = src

@@ -543,6 +543,16 @@ class vmmManager(vmmGObjectUI):
         model.set_sort_func(COL_NETWORK, self.vmlist_network_usage_sorter)
         model.set_sort_column_id(COL_NAME, Gtk.SortType.ASCENDING)
         gtkcompat.expose_conn_menu_window(self)
+        try:
+            gtkcompat.register_a11y_click("Connection Details", lambda: self.show_host(None))
+            gtkcompat.expose_a11y_button(
+                "menu-host-details",
+                "Connection Details",
+                lambda: self.show_host(None),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
 
     ##################
     # Helper methods #

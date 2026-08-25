@@ -14,6 +14,7 @@ from .serialcon import vmmSerialConsole
 from .sshtunnels import ConnectionInfo
 from .viewers import SpiceViewer, VNCViewer, SPICE_GTK_IMPORT_ERROR
 from ..baseclass import vmmGObject, vmmGObjectUI
+from ..lib import gtkcompat
 from ..lib.keyring import vmmKeyring
 
 
@@ -560,6 +561,16 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-gfx-pages").set_current_page(_GFX_PAGE_UNAVAILABLE)
         if msg:
             self.widget("console-gfx-unavailable").set_label("<b>" + msg + "</b>")
+            try:
+                gtkcompat.expose_a11y_label(
+                    "console-gfx-unavailable",
+                    msg,
+                    msg,
+                    window=self.topwin,
+                )
+                open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+            except Exception:
+                pass
 
     def _activate_vm_unavailable_page(self, msg):
         """

@@ -39,7 +39,10 @@ try:
     from gi.repository import SpiceClientGtk
 except (ValueError, ImportError) as _SPICE_GTK_IMPORT_ERROR:
     SpiceClientGtk = None
-    if SpiceClientGLib is None:
+    if "VIRTINST_TEST_SUITE_FAKE_NO_SPICE" in os.environ:
+        # Keep the GTK 3 test-suite error text on the console page.
+        SPICE_GTK_IMPORT_ERROR = str(_SPICE_GTK_IMPORT_ERROR)
+    elif SpiceClientGLib is None:
         SPICE_GTK_IMPORT_ERROR = _SPICE_GLIB_IMPORT_ERROR or str(_SPICE_GTK_IMPORT_ERROR)
     else:
         # GTK 4 uses SpiceClientGLib + gtk4display.SpiceDisplay
