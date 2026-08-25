@@ -73,6 +73,28 @@ def _virt_manager_app():
     return None
 
 
+def _oslist_start_search():
+    """Clear Escape/hide markers and allow the popover to reopen after a pick."""
+    for marker in (
+        "/tmp/vmm-a11y-oslist-escape",
+        "/tmp/vmm-a11y-oslist-popover-hidden",
+        "/tmp/vmm-a11y-os-select.txt",
+    ):
+        try:
+            os.remove(marker)
+        except Exception:
+            pass
+    try:
+        open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
+    except Exception:
+        pass
+    try:
+        if os.path.exists("/tmp/vmm-a11y-oslist-confirmed"):
+            open("/tmp/vmm-a11y-oslist-reopen", "w").write("1")
+    except Exception:
+        pass
+
+
 def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
     """
     Live AT-SPI walk. dogtail findChild uses a cache that often misses
@@ -956,19 +978,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # popover opens and Enter can confirm Generic.
         if "oslist-entry" in (self.name or ""):
             try:
-                for marker in (
-                    "/tmp/vmm-a11y-oslist-escape",
-                    "/tmp/vmm-a11y-oslist-popover-hidden",
-                    "/tmp/vmm-a11y-os-select.txt",
-                ):
-                    try:
-                        os.remove(marker)
-                    except Exception:
-                        pass
-                try:
-                    open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
-                except Exception:
-                    pass
+                _oslist_start_search()
                 with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                     fh.write(string)
                 if self._click_named_button(".entry-load-oslist-entry"):
@@ -1007,19 +1017,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             # opening oslist-popover. Always load the real SearchEntry.
             if "oslist-entry" in (self.name or ""):
                 try:
-                    for marker in (
-                        "/tmp/vmm-a11y-oslist-escape",
-                        "/tmp/vmm-a11y-oslist-popover-hidden",
-                        "/tmp/vmm-a11y-os-select.txt",
-                    ):
-                        try:
-                            os.remove(marker)
-                        except Exception:
-                            pass
-                    try:
-                        open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
-                    except Exception:
-                        pass
+                    _oslist_start_search()
                     with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                         fh.write(text)
                     self._click_named_button(".entry-load-oslist-entry")
@@ -1045,19 +1043,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return
         try:
             if "oslist-entry" in (self.name or ""):
-                for marker in (
-                    "/tmp/vmm-a11y-oslist-escape",
-                    "/tmp/vmm-a11y-oslist-popover-hidden",
-                    "/tmp/vmm-a11y-os-select.txt",
-                ):
-                    try:
-                        os.remove(marker)
-                    except Exception:
-                        pass
-                try:
-                    open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
-                except Exception:
-                    pass
+                _oslist_start_search()
             with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                 fh.write(text)
             base = (self.name or "").split(":", 1)[0].strip().rstrip(":")

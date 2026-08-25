@@ -955,6 +955,21 @@ def _oslist_show_popovers(oslist):
             return
     except Exception:
         pass
+    reopen = False
+    try:
+        reopen = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
+        if reopen:
+            os.remove("/tmp/vmm-a11y-oslist-reopen")
+    except Exception:
+        reopen = False
+    if not reopen:
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") and os.path.exists(
+                "/tmp/vmm-a11y-oslist-confirmed"
+            ):
+                return
+        except Exception:
+            pass
     try:
         text = (oslist.search_entry.get_text() or "").strip()
         if not text:
@@ -964,7 +979,8 @@ def _oslist_show_popovers(oslist):
     try:
         selected = getattr(oslist, "_selected_os", None) or getattr(oslist, "_kept_os", None)
         if (
-            getattr(oslist, "_os_confirmed", False)
+            not reopen
+            and getattr(oslist, "_os_confirmed", False)
             and selected is not None
             and (getattr(selected, "label", None) or "") == text
         ):
