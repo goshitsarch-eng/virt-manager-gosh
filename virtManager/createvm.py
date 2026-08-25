@@ -442,30 +442,13 @@ class vmmCreateVM(vmmGObjectUI):
             ("method-manual", "Manual install"),
         ):
             src = self.widget(wid)
-            try:
-                src.set_accessible_role(Gtk.AccessibleRole.RADIO)
-            except Exception:
-                pass
+            gtkcompat.set_accessible_name(src, name)
             gtkcompat.sync_accessible_checked(src)
             gtkcompat.expose_a11y_check(wid, name, src, window=self.topwin)
             sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
             if sidecar is not None:
-                try:
-                    sidecar.set_accessible_role(Gtk.AccessibleRole.RADIO)
-                except Exception:
-                    pass
                 gtkcompat.set_accessible_name(sidecar, name)
-            # Keep the real radio out of find(); GTK 4 RADIO activate
-            # does not toggle CheckButton, so dogtail must hit the sidecar.
-            gtkcompat.set_accessible_name(src, ".%s-real" % wid)
-            try:
-                src.install_action(
-                    "click",
-                    None,
-                    lambda *_a, s=src: (s.set_active(True), True)[-1],
-                )
-            except Exception:
-                pass
+                gtkcompat.sync_accessible_checked(sidecar)
         gtkcompat.expose_oslist_a11y(self._os_list, self.topwin)
         gtkcompat.expose_a11y_entry(
             "create-vm-name",
@@ -518,19 +501,12 @@ class vmmCreateVM(vmmGObjectUI):
                 ("storage-select", "Select or create custom storage"),
             ):
                 src = self._addstorage.widget(wid)
-                try:
-                    src.set_accessible_role(Gtk.AccessibleRole.RADIO)
-                except Exception:
-                    pass
                 gtkcompat.set_accessible_name(src, name)
                 gtkcompat.sync_accessible_checked(src)
                 gtkcompat.expose_a11y_check(wid, name, src, window=self.topwin)
                 sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
                 if sidecar is not None:
-                    try:
-                        sidecar.set_accessible_role(Gtk.AccessibleRole.RADIO)
-                    except Exception:
-                        pass
+                    gtkcompat.set_accessible_name(sidecar, name)
             gtkcompat.expose_a11y_spin(
                 "storage-size",
                 "GiB",
