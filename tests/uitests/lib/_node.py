@@ -665,6 +665,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return
             except Exception:
                 pass
+        if "oslist-entry" in (self.name or ""):
+            try:
+                self.doActionNamed("click")
+            except Exception:
+                try:
+                    self.grabFocus()
+                except Exception:
+                    pass
+            return
         if self.is_menuitem() or self.roleName in (
             "table cell",
             "cell",

@@ -949,6 +949,34 @@ def expose_oslist_a11y(oslist, window=None):
         window=window,
         name_with_value=True,
     )
+    sidecar = _A11Y_SIDECAR["items"].get("oslist-entry")
+    if sidecar is not None and not getattr(sidecar, "_vmm_oslist_enter", False):
+        sidecar._vmm_oslist_enter = True
+        key = Gtk.EventControllerKey()
+
+        def _on_key(_c, keyval, *_a, lst=oslist):
+            if Gdk.keyval_name(keyval) in ("Return", "KP_Enter"):
+                try:
+                    lst._entry_activate_cb(lst.search_entry)
+                except Exception:
+                    pass
+                return True
+            return False
+
+        key.connect("key-pressed", _on_key)
+        sidecar.add_controller(key)
+
+        def _focus(*_a, dst=sidecar):
+            try:
+                dst.grab_focus()
+            except Exception:
+                pass
+            return True
+
+        try:
+            sidecar.install_action("click", None, lambda *_a: _focus())
+        except Exception:
+            pass
 
     box = _a11y_sidecar_box(window)
     wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)

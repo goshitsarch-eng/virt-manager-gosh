@@ -159,14 +159,17 @@ class vmmOSList(vmmGObjectUI):
                 a11y_open = (wrap.get_accessible_name() or "") == "oslist-popover"
             except Exception:
                 a11y_open = False
-        if not os_list.is_visible() and not a11y_open:
+        searchname = ""
+        try:
+            searchname = self.search_entry.get_text().strip()
+        except Exception:
+            pass
+        if not os_list.is_visible() and not a11y_open and not searchname:
             return  # pragma: no cover
 
+        self._set_default_selection(force=True)
         sel = os_list.get_selection()
         model, rows = sel.get_selected_rows()
-        if not rows:
-            self._set_default_selection(force=True)
-            model, rows = sel.get_selected_rows()
         if rows:
             self.select_os(model[rows[0]][0])
 
