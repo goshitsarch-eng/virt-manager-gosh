@@ -986,8 +986,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "begin installation",
             "add-hardware",
             "forward",
-            "finish",
+            "media-entry",
         )
+        if nname in ("ok", "yes", "close", "cancel"):
+            try:
+                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                    fh.write(raw or nname)
+            except Exception:
+                pass
+            return
         if any(s in nname for s in _SENTINEL_CLICK):
             try:
                 with open("/tmp/vmm-a11y-click.txt", "w") as fh:
