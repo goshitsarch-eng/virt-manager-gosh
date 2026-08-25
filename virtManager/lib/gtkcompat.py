@@ -2946,10 +2946,23 @@ def _browse_local_window(
         return False
 
     def _open(*_a):
-        result[0] = chosen[0]
-        _close()
+        def _idle():
+            result[0] = chosen[0]
+            _close()
+            try:
+                if parent is not None:
+                    parent.present()
+            except Exception:
+                pass
+            return False
+
+        GLib.idle_add(_idle)
 
     open_btn.connect("clicked", _open)
+    try:
+        open_btn.install_action("click", None, lambda *_a: _open())
+    except Exception:
+        pass
     cancel_btn.connect("clicked", _close)
     win.connect("close-request", _close)
     _ensure_app_window(win)
