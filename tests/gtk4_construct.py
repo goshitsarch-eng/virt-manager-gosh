@@ -112,18 +112,6 @@ def main():
 
     vmmConfig.get_instance(BuildConfig, CLITestOptionsClass([]))
 
-    from virtManager.error import vmmErrorDialog
-
-    err = vmmErrorDialog.get_instance()
-    err.set_modal_default(False)
-    _orig_simple = err._simple_dialog
-
-    def _nonmodal_simple(*args, **kwargs):
-        kwargs["modal"] = False
-        return _orig_simple(*args, **kwargs)
-
-    err._simple_dialog = _nonmodal_simple
-
     print("init engine", flush=True)
     from virtManager.engine import vmmEngine
 
