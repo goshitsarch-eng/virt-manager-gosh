@@ -40,6 +40,10 @@ class vmmAbout(vmmGObject):
         dialog = Gtk.AboutDialog()
         dialog.set_transient_for(parent)
         dialog.set_modal(True)
+        if parent is not None and hasattr(parent, "get_application"):
+            app = parent.get_application()
+            if app is not None:
+                dialog.set_application(app)
         dialog.set_title("About")
         dialog.set_program_name("Virtual Machine Manager")
         dialog.set_logo_icon_name("virt-manager")
@@ -69,8 +73,12 @@ class vmmAbout(vmmGObject):
         copyright = Gtk.Label(label="Copyright (C) 2006-2020 Red Hat Inc.")
         gtkcompat.set_accessible_name(copyright, "Copyright")
         child = dialog.get_child()
-        if child is not None and hasattr(child, "append"):
-            child.append(copyright)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        if child is not None:
+            child.unparent()
+            box.append(child)
+        box.append(copyright)
+        dialog.set_child(box)
         self._dialog = dialog
         dialog.present()
 
