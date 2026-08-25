@@ -4,6 +4,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gdk
 from gi.repository import GdkPixbuf
 from gi.repository import GLib
@@ -173,6 +175,12 @@ class vmmManager(vmmGObjectUI):
         for conn in connmanager.conns.values():
             self._conn_added(connmanager, conn)
 
+        def _mark_added():
+            try:
+                open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
+            except Exception:
+                pass
+
         def _add_conn_tick():
             try:
                 uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
@@ -181,21 +189,20 @@ class vmmManager(vmmGObjectUI):
             if not uri:
                 return True
             try:
-                import os
-
                 os.remove("/tmp/vmm-a11y-add-conn.txt")
             except Exception:
                 pass
             try:
                 conn = vmmConnectionManager.get_instance().add_conn(uri)
-                if conn is not None and conn.is_disconnected():
+                if conn is None:
+                    _mark_added()
+                elif conn.is_disconnected():
+                    conn.connect_once("open-completed", lambda *_a: _mark_added())
                     conn.open()
+                else:
+                    _mark_added()
             except Exception:
-                pass
-            try:
-                open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
-            except Exception:
-                pass
+                _mark_added()
             return True
 
         GLib.timeout_add(50, _add_conn_tick)

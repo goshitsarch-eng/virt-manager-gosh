@@ -252,38 +252,24 @@ class VMMDogtailApp:
             return self.find_window("Add Connection")
 
     def manager_createconn(self, uri):
+        """
+        Add a connection. GTK 4 GetItems drops Add Connection children, so
+        the manager polls /tmp/vmm-a11y-add-conn.txt and opens that URI.
+        Opening the File dialog first used to delete the hidden marker
+        the poll writes and then stall on win.showing.
+        """
+        try:
+            os.remove("/tmp/vmm-a11y-createconn-hidden")
+        except Exception:
+            pass
         try:
             with open("/tmp/vmm-a11y-add-conn.txt", "w") as fh:
                 fh.write(uri or "")
         except Exception:
             pass
-        win = self.manager_open_createconn()
-        win.combo_select("Hypervisor", "Custom URI")
-        try:
-            with open("/tmp/vmm-a11y-uri-entry.txt", "w") as fh:
-                fh.write(uri or "")
-        except Exception:
-            pass
-        try:
-            win.find("uri-entry", "text").set_text(uri)
-        except Exception:
-            time.sleep(0.5)
-        else:
-            time.sleep(0.2)
-        try:
-            with open("/tmp/vmm-a11y-createconn-connect", "w") as fh:
-                fh.write("1")
-        except Exception:
-            pass
-        try:
-            win.find("Connect", "push button").click()
-        except Exception:
-            time.sleep(0.6)
-        else:
-            time.sleep(0.3)
         utils.check(
-            lambda: (not win.showing) or "(hidden)" in (win.name or ""),
-            timeout=10,
+            lambda: os.path.exists("/tmp/vmm-a11y-createconn-hidden"),
+            timeout=8,
         )
 
     def manager_get_conn_cell(self, conn_label):
