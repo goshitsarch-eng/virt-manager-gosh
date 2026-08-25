@@ -1170,7 +1170,45 @@ def _append_createvm_media_controls(box, createvm):
         parent=box,
     )
     _append_detect_os_control(box, createvm)
+    _append_iso_browse_control(box, createvm)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+
+
+def _append_iso_browse_control(box, createvm):
+    """Findable install-iso-browse on the methods window."""
+    if box is None or createvm is None or getattr(box, "_vmm_iso_browse", False):
+        return
+    src = None
+    try:
+        src = createvm.widget("install-iso-browse")
+    except Exception:
+        src = None
+    if src is None:
+        return
+    box._vmm_iso_browse = True
+    btn = Gtk.Button(label="install-iso-browse")
+    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(btn)
+    set_accessible_name(btn, "install-iso-browse")
+
+    def _browse(*_a, cvm=createvm):
+        def _idle():
+            try:
+                w = cvm.widget("install-iso-browse")
+                if w is not None:
+                    w.emit("clicked")
+            except Exception:
+                pass
+            return False
+
+        GLib.idle_add(_idle)
+
+    btn.connect("clicked", _browse)
+    try:
+        btn.install_action("click", None, lambda *_a: _browse())
+    except Exception:
+        pass
+    box.append(btn)
 
 
 def _append_detect_os_control(box, createvm):
@@ -1189,10 +1227,8 @@ def _append_detect_os_control(box, createvm):
         label="Automatically detect from the installation media / source",
         has_frame=False,
     )
-    try:
-        btn.set_accessible_role(Gtk.AccessibleRole.CHECKBOX)
-    except Exception:
-        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    # Keep BUTTON so AT-SPI click fires; find() maps "check" onto this name.
+    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
     ensure_activate_clicked(btn)
     set_accessible_name(
         btn, "Automatically detect from the installation media / source"
@@ -1291,6 +1327,7 @@ def expose_createvm_methods_window(createvm):
                     child, getattr(createvm, "_os_list", None)
                 )
                 _append_detect_os_control(child, createvm)
+                _append_iso_browse_control(child, createvm)
                 _append_name_load_control(child, createvm)
                 _append_createvm_status_labels(child, createvm)
                 _append_createvm_media_controls(child, createvm)
@@ -1368,6 +1405,7 @@ def expose_createvm_methods_window(createvm):
         box.append(nav)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _append_detect_os_control(box, createvm)
+    _append_iso_browse_control(box, createvm)
     _append_name_load_control(box, createvm)
     _append_createvm_status_labels(box, createvm)
     _append_createvm_media_controls(box, createvm)
