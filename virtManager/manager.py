@@ -486,6 +486,7 @@ class vmmManager(vmmGObjectUI):
         model.set_sort_func(COL_DISK, self.vmlist_disk_io_sorter)
         model.set_sort_func(COL_NETWORK, self.vmlist_network_usage_sorter)
         model.set_sort_column_id(COL_NAME, Gtk.SortType.ASCENDING)
+        gtkcompat.expose_conn_menu_window(self)
 
     ##################
     # Helper methods #
