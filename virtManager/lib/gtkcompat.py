@@ -32,6 +32,55 @@ def set_accessible_name(widget, name):
     widget.set_name(str(name))
 
 
+def _checked_tristate(active):
+    if bool(active):
+        return Gtk.AccessibleTristate.TRUE
+    return Gtk.AccessibleTristate.FALSE
+
+
+def sync_accessible_checked(widget):
+    """
+    GTK 4 ToggleButton/CheckButton CHECKED must be an AccessibleTristate.
+    Passing a bool fails the GValue conversion and leaves AT-SPI unchecked.
+    """
+    if widget is None or not hasattr(widget, "get_active"):
+        return
+
+    def _sync(*_a):
+        try:
+            widget.update_state(
+                [Gtk.AccessibleState.CHECKED], [_checked_tristate(widget.get_active())]
+            )
+        except Exception:
+            pass
+        return False
+
+    if not getattr(widget, "_vmm_checked_synced", False):
+        widget._vmm_checked_synced = True
+        try:
+            widget.connect("notify::active", _sync)
+        except Exception:
+            pass
+    _sync()
+
+
+def ensure_activate_clicked(widget):
+    """
+    GTK 4 AT-SPI 'click' calls gtk_widget_activate(). ToggleButton's default
+    activate signal does not emit 'clicked' or flip active, so Pause/check
+    widgets ignore accessibility clicks. Point activate at 'clicked'.
+    """
+    if widget is None or getattr(widget, "_vmm_activate_clicked", False):
+        return
+    if not hasattr(widget, "set_activate_signal_from_name"):
+        return
+    try:
+        widget.set_activate_signal_from_name("clicked")
+        widget._vmm_activate_clicked = True
+    except Exception:
+        pass
+
+
 def _mnemonic_label(text):
     if not text:
         return ""
@@ -91,20 +140,13 @@ def ensure_button_accessible_name(widget, name):
         pass
     apply_accessible_label(widget)
     set_accessible_name(widget, name)
+    ensure_activate_clicked(widget)
     if hasattr(widget, "get_active"):
-        def _sync_checked(*_a):
-            try:
-                widget.update_state(
-                    [Gtk.AccessibleState.CHECKED], [bool(widget.get_active())]
-                )
-            except Exception:
-                pass
-            return False
-
-        if not getattr(widget, "_vmm_checked_synced", False):
-            widget._vmm_checked_synced = True
-            widget.connect("notify::active", _sync_checked)
-        _sync_checked()
+        try:
+            widget.set_accessible_role(Gtk.AccessibleRole.TOGGLE_BUTTON)
+        except Exception:
+            pass
+        sync_accessible_checked(widget)
     GLib.idle_add(lambda: set_accessible_name(widget, name) or False)
 
 
@@ -258,9 +300,13 @@ def sync_builder_accessible(widget):
     if widget is None or not isinstance(widget, Gtk.Widget):
         return
     apply_accessible_label(widget)
+    ensure_activate_clicked(widget)
+    sync_accessible_checked(widget)
     inner = getattr(widget, "_button", None)
     if inner is not None:
         apply_accessible_label(inner)
+        ensure_activate_clicked(inner)
+        sync_accessible_checked(inner)
     if getattr(widget, "_vmm_a11y_synced", False):
         return
     widget._vmm_a11y_synced = True

@@ -11,6 +11,7 @@ from virtinst import log
 
 from . import vmmenu
 from .baseclass import vmmGObjectUI
+from .lib import gtkcompat
 from .engine import vmmEngine
 from .details.console import vmmConsolePages
 from .details.details import vmmDetails
@@ -259,8 +260,6 @@ class vmmVMWindow(vmmGObjectUI):
         self._shutdownmenu = vmmenu.VMShutdownMenu(self, lambda: self.vm)
         self.widget("control-shutdown").set_menu(self._shutdownmenu)
         self.widget("control-shutdown").set_icon_name("system-shutdown")
-        from .lib import gtkcompat
-
         gtkcompat.ensure_button_accessible_name(self.widget("control-run"), "Run")
         gtkcompat.ensure_button_accessible_name(self.widget("control-pause"), "Pause")
         gtkcompat.ensure_button_accessible_name(self.widget("control-vm-console"), "Console")
@@ -473,22 +472,28 @@ class vmmVMWindow(vmmGObjectUI):
         self._pause_ignore = True
         try:
             src.set_active(state)
+            gtkcompat.sync_accessible_checked(src)
         finally:
             self._pause_ignore = False
 
     def control_vm_pause(self, src):
         if getattr(self, "_pause_ignore", False):
             return
+        vm = self.vm
+        if not vm:
+            return
         do_pause = src.get_active()
+        if do_pause == bool(vm.is_paused()):
+            do_pause = not vm.is_paused()
 
         # Set button state back to original value: just let the status
         # update function fix things for us
         self.set_pause_state(not do_pause)
 
         if do_pause:
-            vmmenu.VMActionUI.suspend(self, self.vm)
+            vmmenu.VMActionUI.suspend(self, vm)
         else:
-            vmmenu.VMActionUI.resume(self, self.vm)
+            vmmenu.VMActionUI.resume(self, vm)
 
     def _on_menu_virtual_machine_activate_cb(self, src):
         self._console_refresh_can_usbredir()

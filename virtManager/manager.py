@@ -13,6 +13,7 @@ from virtinst import log
 from virtinst import xmlutil
 
 from . import vmmenu
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .connmanager import vmmConnectionManager
@@ -272,8 +273,6 @@ class vmmManager(vmmGObjectUI):
         self.widget("vm-shutdown").set_menu(self.shutdownmenu)
 
         tool = self.widget("vm-toolbar")
-        from .lib import gtkcompat
-
         gtkcompat.ensure_button_accessible_name(self.widget("vm-new"), "New")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-open"), "Open")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-run"), "Run")
@@ -330,8 +329,6 @@ class vmmManager(vmmGObjectUI):
             vmlist.set_accessible_role(Gtk.AccessibleRole.TREE_GRID)
         except Exception:
             pass
-        from .lib import gtkcompat
-
         gtkcompat.attach_treeview_a11y(vmlist, name_column=ROW_SORT_KEY)
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
@@ -519,22 +516,29 @@ class vmmManager(vmmGObjectUI):
         self._pause_ignore = True
         try:
             src.set_active(state)
+            gtkcompat.sync_accessible_checked(src)
         finally:
             self._pause_ignore = False
 
     def pause_vm_button(self, src):
         if getattr(self, "_pause_ignore", False):
             return
+        vm = self.current_vm()
+        if not vm:
+            return
         do_pause = src.get_active()
+        # AT-SPI activate used to emit clicked without flipping the toggle.
+        if do_pause == bool(vm.is_paused()):
+            do_pause = not vm.is_paused()
 
         # Set button state back to original value: just let the status
         # update function fix things for us
         self.set_pause_state(not do_pause)
 
         if do_pause:
-            vmmenu.VMActionUI.suspend(self, self.current_vm())
+            vmmenu.VMActionUI.suspend(self, vm)
         else:
-            vmmenu.VMActionUI.resume(self, self.current_vm())
+            vmmenu.VMActionUI.resume(self, vm)
 
     def start_vm(self, ignore):
         vmmenu.VMActionUI.run(self, self.current_vm())
