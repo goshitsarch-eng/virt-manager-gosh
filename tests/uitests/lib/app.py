@@ -380,9 +380,36 @@ class VMMDogtailApp:
         with utils.dogtail_timeout(10):
             # On Fedora 39 sometimes app launch from the test suite
             # takes a while for reasons I can't quite figure
+            self._root = None
+            deadline = time.time() + 12
+            while self._root is None and time.time() < deadline:
+                for name in ("virt-manager", "python3"):
+                    try:
+                        cand = dogtail.tree.root.application(name)
+                    except Exception:
+                        continue
+                    try:
+                        kids = list(cand.children)
+                    except Exception:
+                        kids = []
+                    if kids:
+                        self._root = cand
+                        break
+                if self._root is None:
+                    time.sleep(0.2)
+            if self._root is None:
+                try:
+                    self._root = dogtail.tree.root.application("virt-manager")
+                except dogtail.tree.SearchError:
+                    self._root = dogtail.tree.root.application("python3")
             try:
-                self._root = dogtail.tree.root.application("virt-manager")
+                self._topwin = self.find_window(window_name)
             except dogtail.tree.SearchError:
-                # GTK 4 from a python wrapper may expose the process name
-                self._root = dogtail.tree.root.application("python3")
-            self._topwin = self.find_window(window_name)
+                # Menu/a11y helper windows may sit in front of the manager
+                # as AT-SPI siblings; search the whole app tree.
+                self._topwin = self.root.find(
+                    name=window_name or "Virtual Machine Manager",
+                    roleName="(frame|dialog|alert|window)",
+                    recursive=True,
+                    check_active=False,
+                )
