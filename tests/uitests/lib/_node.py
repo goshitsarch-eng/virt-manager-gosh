@@ -504,6 +504,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return
         super().click(*args, **kwargs)
 
+    def doubleClick(self, *args, **kwargs):
+        # Opacity-0 GTK 4 mirrors have bad coordinates; two AT-SPI clicks
+        # are treated as activate (open connection / VM).
+        self.click()
+        self.click()
+
     def point(self, *args, **kwargs):
         # pylint: disable=signature-differs
         super().point(*args, **kwargs)

@@ -367,6 +367,7 @@ class vmmManager(vmmGObjectUI):
             name_column=ROW_SORT_KEY,
             text_column=ROW_MARKUP,
             on_popup=self.popup_vm_menu_for_name,
+            on_activate=self.activate_row_for_name,
         )
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
@@ -517,6 +518,34 @@ class vmmManager(vmmGObjectUI):
 
     def show_vm(self, _src):
         vmmenu.VMActionUI.show(self, self.current_vm())
+
+    def select_row_for_name(self, name):
+        model = self.widget("vm-list").get_model()
+        sel = self.widget("vm-list").get_selection()
+        if model is None or sel is None or not name:
+            return False
+
+        def _find(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    have = str(model[_iter][ROW_SORT_KEY] or "")
+                    if have == name or name in have:
+                        sel.select_iter(_iter)
+                        return True
+                except Exception:
+                    pass
+                if _find(_iter):
+                    return True
+                _iter = model.iter_next(_iter)
+            return False
+
+        return bool(_find(None))
+
+    def activate_row_for_name(self, name=None):
+        if name:
+            self.select_row_for_name(name)
+        self.row_activated(None)
 
     def row_activated(self, _src, *args):
         ignore = args
