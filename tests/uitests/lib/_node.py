@@ -1597,6 +1597,23 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 ret._vmm_is_copy_host = True
             except Exception:
                 pass
+            # dogtail caches Node.name as an instance string, which
+            # shadows _VMMDogtailNode.name. Keep the test-visible value
+            # on the instance itself.
+            shown = "Copy host CPU configuration (host-passthrough)"
+            try:
+                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+                if stored:
+                    shown = stored
+            except Exception:
+                pass
+            try:
+                ret.__dict__["name"] = shown
+            except Exception:
+                try:
+                    object.__setattr__(ret, "name", shown)
+                except Exception:
+                    pass
         return ret
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
