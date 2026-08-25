@@ -969,6 +969,42 @@ def _append_createvm_status_labels(box, createvm):
         set_accessible_name(page_lab, "pagenum-label: %s" % page)
 
 
+def _append_createvm_close_control(box, createvm, win):
+    if box is None or getattr(box, "_vmm_newvm_close", False):
+        return
+    box._vmm_newvm_close = True
+    btn = Gtk.Button(label=".win-close-New VM")
+    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(btn)
+    set_accessible_name(btn, ".win-close-New VM")
+
+    def _close(*_a, cvm=createvm, w=win):
+        try:
+            cvm.close()
+        except Exception:
+            pass
+        try:
+            hide_createvm_methods_window(cvm)
+        except Exception:
+            pass
+        try:
+            set_accessible_name(w, "New VM (hidden)")
+            w.set_title("New VM (hidden)")
+        except Exception:
+            pass
+        try:
+            parent = None
+            if cvm is not None and getattr(cvm, "topwin", None) is not None:
+                parent = cvm.topwin.get_transient_for()
+            if parent is not None:
+                parent.present()
+        except Exception:
+            pass
+
+    btn.connect("clicked", _close)
+    box.append(btn)
+
+
 def _ensure_app_window(win):
     app = Gtk.Application.get_default()
     if app is None or win is None:
@@ -996,6 +1032,7 @@ def expose_createvm_methods_window(createvm):
                 )
                 _append_name_load_control(child, createvm)
                 _append_createvm_status_labels(child, createvm)
+                _append_createvm_close_control(child, createvm, win)
             except Exception:
                 pass
             set_accessible_name(win, "New VM")
@@ -1070,6 +1107,7 @@ def expose_createvm_methods_window(createvm):
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _append_name_load_control(box, createvm)
     _append_createvm_status_labels(box, createvm)
+    _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
     win.set_visible(True)
     createvm._vmm_methods_win = win

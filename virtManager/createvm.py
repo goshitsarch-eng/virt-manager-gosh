@@ -282,6 +282,12 @@ class vmmCreateVM(vmmGObjectUI):
         self.topwin.hide()
         gtkcompat.hide_createvm_methods_window(self)
         gtkcompat.hide_oslist_activate_window(self._os_list)
+        try:
+            parent = self.topwin.get_transient_for()
+            if parent is not None:
+                parent.present()
+        except Exception:
+            pass
 
         self._cleanup_customize_window()
         if self._storage_browser:
