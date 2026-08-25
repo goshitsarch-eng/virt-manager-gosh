@@ -236,10 +236,16 @@ class VMMDogtailApp:
 
     def manager_open_createconn(self):
         manager = self.get_manager()
-        manager.find("File", "menu").click()
-        manager.find("Add Connection...", "menu item").click()
-        win = self.root.find("Add Connection", "dialog")
-        return win
+        try:
+            manager.find("File", "menu").click()
+            manager.find("Add Connection...", "menu item").click()
+        except Exception:
+            pass
+        try:
+            return self.root.find("Add Connection", "dialog")
+        except Exception:
+            manager.find("Add Connection...", "menu item").click()
+            return self.find_window("Add Connection")
 
     def manager_createconn(self, uri):
         win = self.manager_open_createconn()
