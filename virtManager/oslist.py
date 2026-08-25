@@ -143,8 +143,14 @@ class vmmOSList(vmmGObjectUI):
                 pass
             label = osobj.label
         try:
-            sidecar = gtkcompat._A11Y_SIDECAR["items"].get("oslist-entry")
-            if sidecar is not None:
+            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label or "")
+        except Exception:
+            pass
+        try:
+            for key in ("oslist-entry", "methods-oslist-entry"):
+                sidecar = gtkcompat._A11Y_SIDECAR["items"].get(key)
+                if sidecar is None:
+                    continue
                 if label:
                     sidecar.set_text(label)
                     gtkcompat.set_accessible_name(sidecar, "oslist-entry: %s" % label)

@@ -2150,6 +2150,7 @@ class vmmCreateVM(vmmGObjectUI):
         else:
             self._os_list.reset_state()
             self._os_list.search_entry.set_text(_("None detected"))
+            self._os_list.refresh_a11y()
 
         if forward_after_finish:
             self.idle_add(self._forward_clicked, ())
