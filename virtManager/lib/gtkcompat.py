@@ -1211,7 +1211,6 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     for role in (
         Gtk.AccessibleRole.GENERIC,
         Gtk.AccessibleRole.SECTION,
-        Gtk.AccessibleRole.GROUPING,
     ):
         try:
             win.set_accessible_role(role)
