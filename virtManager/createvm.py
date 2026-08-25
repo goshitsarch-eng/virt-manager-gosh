@@ -1358,6 +1358,8 @@ class vmmCreateVM(vmmGObjectUI):
         notebook.set_current_page(next_page)
 
     def _page_changed(self, ignore1, ignore2, pagenum):
+        if self.builder is None:
+            return
         if pagenum == PAGE_FINISH:
             try:
                 self._populate_summary()
