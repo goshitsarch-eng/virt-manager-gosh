@@ -558,14 +558,16 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return False
         try:
             name = self.name or ""
+        except Exception:
+            name = ""
+        if "oslist-popover" in (name or ""):
+            if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") or os.path.exists(
+                "/tmp/vmm-a11y-oslist-escape"
+            ):
+                return False
+        try:
             if name.startswith(".") or name.endswith(" (hidden)"):
                 return False
-            if "oslist-popover" in name:
-                try:
-                    if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden"):
-                        return False
-                except Exception:
-                    pass
             # Sidecar entries live on opacity-0 / 0x0 surfaces.
             if any(
                 key in name
@@ -575,7 +577,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "uri-entry",
                     "storage-entry",
                     "oslist-entry",
-                    "oslist-popover",
                     "create-conn",
                     "install-iso-browse",
                     "storage-browse",
