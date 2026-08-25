@@ -1,6 +1,7 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
 import re
 import time
 
@@ -699,6 +700,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
         nname = (self.name or "").lower()
+        if nname == "copying":
+            try:
+                path = os.path.join(os.getcwd(), "COPYING")
+                if os.path.isfile(path):
+                    with open("/tmp/vmm-a11y-file-open.path", "w") as fh:
+                        fh.write(path)
+            except Exception:
+                pass
         if nname.replace("_", "") == "open":
             try:
                 with open("/tmp/vmm-a11y-file-open", "w") as fh:

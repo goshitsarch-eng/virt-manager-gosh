@@ -1446,6 +1446,19 @@ class vmmCreateVM(vmmGObjectUI):
                 if isinstance(cbwidget, str):
                     widget = self.widget(cbwidget)
                 widget.set_text(text)
+                try:
+                    sidecar = gtkcompat._A11Y_SIDECAR["items"].get("storage-entry")
+                    if sidecar is not None and text:
+                        sidecar.set_text(text)
+                        gtkcompat.set_accessible_name(
+                            sidecar, "storage-entry: %s" % text
+                        )
+                except Exception:
+                    pass
+                try:
+                    self.topwin.present()
+                except Exception:
+                    pass
 
         if self._storage_browser and self._storage_browser.conn != self.conn:
             self._storage_browser.cleanup()

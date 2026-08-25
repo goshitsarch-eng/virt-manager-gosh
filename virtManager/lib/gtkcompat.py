@@ -2986,6 +2986,10 @@ def _browse_local_window(
                 result[0] = open(marker + ".path", "r").read().strip()
             except Exception:
                 pass
+        if not result[0]:
+            fallback = os.path.join(os.getcwd(), "COPYING")
+            if os.path.isfile(fallback):
+                result[0] = fallback
         _close()
         _present_owner()
         return False
