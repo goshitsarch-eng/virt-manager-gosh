@@ -757,6 +757,104 @@ def main():
         usb = gtk4display.UsbDeviceWidget.new(None)
         assert usb is not None
 
+    def vnc_live_handshake():
+        import socket
+        import struct
+        import threading
+
+        from virtManager.details import gtk4display
+
+        port = [0]
+        ready = threading.Event()
+
+        def server():
+            sock = socket.socket()
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", 0))
+            port[0] = sock.getsockname()[1]
+            sock.listen(1)
+            ready.set()
+            conn, _addr = sock.accept()
+            try:
+                conn.sendall(b"RFB 003.008\n")
+                conn.recv(12)
+                conn.sendall(b"\x01\x01")
+                conn.recv(1)
+                conn.sendall(struct.pack("!I", 0))
+                width = height = 8
+                conn.sendall(struct.pack("!HH16sI", width, height, bytes(16), 4))
+                conn.sendall(b"test")
+                conn.settimeout(0.4)
+                deadline = time.monotonic() + 2.5
+                while time.monotonic() < deadline:
+                    try:
+                        msg = conn.recv(1)
+                    except socket.timeout:
+                        continue
+                    if not msg:
+                        break
+                    if msg[0] == 0:
+                        conn.recv(19)
+                    elif msg[0] == 2:
+                        conn.recv(1)
+                        nenc = struct.unpack("!H", conn.recv(2))[0]
+                        conn.recv(nenc * 4)
+                    elif msg[0] == 3:
+                        conn.recv(9)
+                        conn.sendall(struct.pack("!BxH", 0, 1))
+                        conn.sendall(struct.pack("!HHHHi", 0, 0, width, height, 0))
+                        conn.sendall(b"\x11\x22\x33\x44" * (width * height))
+                    elif msg[0] == 4:
+                        conn.recv(7)
+                    elif msg[0] == 5:
+                        conn.recv(5)
+            finally:
+                conn.close()
+                sock.close()
+
+        threading.Thread(target=server, daemon=True).start()
+        assert ready.wait(2)
+        display = gtk4display.VNCDisplay()
+        initialized = []
+        resized = []
+        display.connect("vnc-initialized", lambda *_a: initialized.append(True))
+        display.connect("vnc-desktop-resize", lambda *_a: resized.append(True))
+        display.open_host("127.0.0.1", port[0])
+        _pump(GLib, 2.0)
+        display.close()
+        assert initialized, "VNC client did not complete RFB handshake"
+        assert resized, "VNC client did not receive a framebuffer"
+
+    def createvm_wizard_nav():
+        from virtManager.createvm import vmmCreateVM
+
+        dlg = vmmCreateVM()
+        dlg.show(None, conn.get_uri())
+        dlg.widget("method-manual").set_active(True)
+        dlg._method_changed(dlg.widget("method-manual"))
+        dlg._forward_clicked()
+        _pump(GLib, 0.05)
+        dlg._forward_clicked()
+        _pump(GLib, 0.05)
+        dlg._back_clicked(None)
+        dlg._back_clicked(None)
+
+    def addhardware_build():
+        from virtManager.addhardware import vmmAddHardware
+        from virtManager.lib import uiutil
+
+        rich = _named_vm("test-many-devices")
+        dlg = vmmAddHardware(rich)
+        dlg.show(None)
+        model = dlg.widget("hw-list").get_model()
+        for idx, _row in enumerate(model):
+            uiutil.set_list_selection_by_number(dlg.widget("hw-list"), idx)
+            dlg._hw_selected_cb(dlg.widget("hw-list"))
+            try:
+                dlg._build_device(check_xmleditor=False)
+            except Exception:
+                pass
+
     for name, fn in [
         ("manager", manager),
         ("createconn", createconn),
@@ -808,6 +906,9 @@ def main():
         ("preferences_toggles", preferences_toggles),
         ("createvm_oslist", createvm_oslist),
         ("vnc_protocol_helpers", vnc_protocol_helpers),
+        ("vnc_live_handshake", vnc_live_handshake),
+        ("createvm_wizard_nav", createvm_wizard_nav),
+        ("addhardware_build", addhardware_build),
     ]:
         _run(name, fn)
 
