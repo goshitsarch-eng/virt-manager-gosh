@@ -2016,10 +2016,8 @@ class vmmCreateVM(vmmGObjectUI):
             # start and libvirt reports "Unable to complete install".
             if "/" in (self._gdata.name or ""):
                 log.debug("Ignoring storage validate for name=%s: %s", self._gdata.name, e)
-                try:
-                    open("/tmp/vmm-a11y-storage-err.txt", "w").write(str(e))
-                except Exception:
-                    pass
+                if disk is None:
+                    return True
             else:
                 return self.err.val_err(_("Storage parameter error."), e)
 
