@@ -19,7 +19,7 @@ import dogtail.utils
 
 # find() backoff handling
 dogtail.config.config.searchBackoffDuration = 0.1
-dogtail.config.config.searchCutoffCount = 20
+dogtail.config.config.searchCutoffCount = 40
 
 # Use .1 second delay between each action (default 1)
 dogtail.config.config.actionDelay = 0.1
