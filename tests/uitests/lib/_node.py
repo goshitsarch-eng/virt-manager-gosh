@@ -717,7 +717,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # Only treat real toplevels as windows. GTK 4 panels are in
         # _WINDOW_ROLES for find_window(), but recursing into them here
         # loops forever looking for a focusable child.
-        if self.roleName in ("frame", "window", "dialog", "alert"):
+        if self.roleName in ("frame", "window", "dialog", "alert", "panel"):
             try:
                 child = self.window_find_focusable_child()
             except Exception:
