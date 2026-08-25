@@ -76,10 +76,14 @@ class vmmOSList(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-oslist-escape"
                 try:
                     if not os.path.exists(path):
+                        self._vmm_escape_seen = None
                         return True
-                    os.remove(path)
+                    stamp = os.path.getmtime(path)
                 except Exception:
                     return True
+                if getattr(self, "_vmm_escape_seen", None) == stamp:
+                    return True
+                self._vmm_escape_seen = stamp
                 try:
                     self._stop_search_cb(self.search_entry)
                 except Exception:
