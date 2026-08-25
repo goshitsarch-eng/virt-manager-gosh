@@ -804,6 +804,9 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-net-device.txt",
             "/tmp/vmm-a11y-net-warn.txt",
             "/tmp/vmm-a11y-combo-net-source.txt",
+            "/tmp/vmm-a11y-url-entry.txt",
+            "/tmp/vmm-a11y-urlopts-entry.txt",
+            "/tmp/vmm-a11y-url-activate",
         ):
             try:
                 os.unlink(path)
@@ -846,6 +849,10 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("install-url-options").set_expanded(False)
         urlmodel = self.widget("install-url-combo").get_model()
         _populate_media_model(urlmodel, self.config.get_media_urls())
+        try:
+            gtkcompat._publish_createvm_url_state(self)
+        except Exception:
+            pass
 
         # Install import
         self.widget("install-import-entry").set_text("")

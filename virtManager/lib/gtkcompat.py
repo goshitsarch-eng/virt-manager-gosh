@@ -1470,11 +1470,44 @@ def _append_createvm_customize_check(box, createvm):
         pass
 
 
+def _publish_createvm_url_state(createvm):
+    """Publish remembered install URLs for install-url-combo.fmt_nodes()."""
+    if createvm is None:
+        return
+    try:
+        combo = createvm.widget("install-url-combo")
+        fill = getattr(combo, "_vmm_a11y_fill", None) if combo is not None else None
+        if fill is not None:
+            fill()
+            return
+    except Exception:
+        pass
+    try:
+        entry = createvm.widget("install-url-entry")
+        text = ""
+        if entry is not None:
+            text = entry.get_text() or ""
+        lines = []
+        combo = createvm.widget("install-url-combo")
+        model = combo.get_model() if combo is not None else None
+        if model is not None:
+            for row in model:
+                label = str(row[0] or "")
+                if label:
+                    lines.append(label)
+        if text and text not in lines:
+            lines.append(text)
+        open("/tmp/vmm-a11y-combo-install-url-combo.txt", "w").write("\n".join(lines))
+    except Exception:
+        pass
+
+
 def _append_createvm_url_controls(box, createvm):
     """Network-install URL entry, combo, options expander, and extra args."""
     if box is None or createvm is None:
         return
     if getattr(box, "_vmm_url_controls", False):
+        _publish_createvm_url_state(createvm)
         return
     entry = None
     try:
@@ -1533,22 +1566,7 @@ def _append_createvm_url_controls(box, createvm):
         )
     except Exception:
         pass
-    try:
-        text = entry.get_text() or ""
-        open("/tmp/vmm-a11y-url-entry.txt", "w").write(text)
-        lines = []
-        combo = createvm.widget("install-url-combo")
-        model = combo.get_model() if combo is not None else None
-        if model is not None:
-            for row in model:
-                label = str(row[0] or "")
-                if label:
-                    lines.append(label)
-        if text and text not in lines:
-            lines.append(text)
-        open("/tmp/vmm-a11y-combo-install-url-combo.txt", "w").write("\n".join(lines))
-    except Exception:
-        pass
+    _publish_createvm_url_state(createvm)
 
 
 def _append_createvm_net_controls(box, createvm):
