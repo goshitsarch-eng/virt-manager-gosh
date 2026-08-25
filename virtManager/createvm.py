@@ -479,37 +479,12 @@ class vmmCreateVM(vmmGObjectUI):
                             before = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
                             before = ""
-                        try:
-                            osname = open(
-                                "/tmp/vmm-a11y-oslist-entry.txt", "r"
-                            ).read().strip()
-                            url = open(
-                                "/tmp/vmm-a11y-url-entry.txt", "r"
-                            ).read().strip()
-                        except Exception:
-                            osname, url = "", ""
-                        skip = (
-                            "None detected",
-                            "Detecting...",
-                            "Waiting for install media / source",
-                        )
-                        cur = getattr(self, "_vmm_goto_page", None)
-                        if cur is None:
-                            try:
-                                cur = self.widget("create-pages").get_current_page()
-                            except Exception:
-                                cur = None
-                        if (
-                            osname
-                            and osname not in skip
-                            and url.startswith("http")
-                            and cur == PAGE_INSTALL
-                        ):
+                        if self._should_prepublish_install_forward():
                             # Validate/build_guest can take longer than 2s;
                             # publish the next step first so _nav can proceed.
-                            # Do not set _vmm_goto_page here: impl still
-                            # needs to validate the install page.
-                            self._write_pagenum_file(self._get_next_pagenum(cur))
+                            self._write_pagenum_file(
+                                self._get_next_pagenum(PAGE_INSTALL)
+                            )
                         try:
                             self._forward_clicked_impl()
                         except Exception as exc:
@@ -1698,7 +1673,51 @@ class vmmCreateVM(vmmGObjectUI):
         return (media, extra)
 
     def _get_config_import_path(self):
-        return self.widget("install-import-entry").get_text()
+        path = self.widget("install-import-entry").get_text()
+        if not (path or "").strip():
+            try:
+                path = open("/tmp/vmm-a11y-import-entry.txt", "r").read().strip()
+            except Exception:
+                path = ""
+            if path:
+                try:
+                    self.widget("install-import-entry").set_text(path)
+                except Exception:
+                    pass
+        return path
+
+    def _should_prepublish_install_forward(self):
+        """True when install-page Forward will succeed and validate may exceed 2s."""
+        if self._current_create_page() != PAGE_INSTALL:
+            return False
+        try:
+            osname = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+        except Exception:
+            osname = ""
+        skip = (
+            _("None detected"),
+            _("Detecting..."),
+            _("Waiting for install media / source"),
+        )
+        if not osname or osname in skip:
+            return False
+        inst = self._get_config_install_page()
+        if inst == INSTALL_PAGE_URL:
+            try:
+                url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+            except Exception:
+                url = ""
+            return url.startswith(("http://", "https://", "ftp://"))
+        if inst == INSTALL_PAGE_IMPORT:
+            return bool((self._get_config_import_path() or "").strip())
+        if inst == INSTALL_PAGE_ISO:
+            try:
+                return bool(self._get_config_local_media())
+            except Exception:
+                return False
+        if inst == INSTALL_PAGE_MANUAL:
+            return True
+        return False
 
     def _is_default_storage(self):
         return self._addstorage.is_default_storage() and not self._should_skip_disk_page()
@@ -2177,14 +2196,8 @@ class vmmCreateVM(vmmGObjectUI):
             osobj = self._resolve_create_os()
             if osobj is not None:
                 self._os_already_detected_for_media = True
-                try:
-                    url = (self.widget("install-url-entry").get_text() or "").strip()
-                    if not url.startswith("http"):
-                        url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
-                    if url.startswith("http"):
-                        self._write_pagenum_file(self._get_next_pagenum(curpage))
-                except Exception:
-                    pass
+                if self._should_prepublish_install_forward():
+                    self._write_pagenum_file(self._get_next_pagenum(curpage))
             else:
                 # Make sure we have detected the OS before validating the page
                 did_start = self._start_detect_os_if_needed(forward_after_finish=True)
