@@ -16,14 +16,17 @@ from . import utils
 # Keep the original uitest strings and expand them to accept both.
 _GTK4_ROLE_ALIASES = {
     "push button": "(button|push button)",
-    ".*push button.*": "(button|push button)",
+    ".*push button.*": ".*(button|push button).*",
     "button": "(button|push button)",
     "frame": "(frame|window)",
     "window": "(frame|window)",
     "alert": "(alert|dialog)",
     "dialog": "(dialog|alert|window)",
+    ".*dialog.*": ".*(dialog|alert|window).*",
     "menu item": "(menu item|menu)",
+    ".*menu item.*": ".*(menu item|menu).*",
     "table cell": "(table cell|list item|cell)",
+    ".*table cell.*": ".*(table cell|list item|cell).*",
     "radio button": "(radio button|radio)",
     "check button": "(check button|check box)",
     "check box": "(check box|check button)",
@@ -32,6 +35,7 @@ _GTK4_ROLE_ALIASES = {
     "combo box": "(combo box|combo)",
     "file chooser": "(file chooser|dialog|window)",
     "label": "(label|static)",
+    ".*label.*": ".*(label|static).*",
     "toggle button": "(toggle button|button|push button)",
 }
 
@@ -381,7 +385,16 @@ class _VMMDogtailNode(dogtail.tree.Node):
             role_str = str(roleName or "")
             if any(
                 r in role_str
-                for r in ("dialog", "frame", "alert", "window", "menu item", "menu")
+                for r in (
+                    "dialog",
+                    "frame",
+                    "alert",
+                    "window",
+                    "menu item",
+                    "menu",
+                    "label",
+                    "static",
+                )
             ):
                 try:
                     ret = dogtail.tree.root.findChild(pred, recursive=True)

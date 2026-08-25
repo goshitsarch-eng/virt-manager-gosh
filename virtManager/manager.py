@@ -274,6 +274,14 @@ class vmmManager(vmmGObjectUI):
         tool = self.widget("vm-toolbar")
         from .lib import gtkcompat
 
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-new"), "New")
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-open"), "Open")
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-run"), "Run")
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-pause"), "Pause")
+        gtkcompat.ensure_button_accessible_name(
+            self.widget("vm-shutdown")._button, "Shut Down"
+        )
+
         for c in gtkcompat.get_children(tool):
             if hasattr(c, "set_homogeneous"):
                 c.set_homogeneous(False)

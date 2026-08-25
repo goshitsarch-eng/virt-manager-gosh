@@ -42,6 +42,16 @@ CSSDATA = """
     padding: 0;
     margin: 0;
 }
+
+/* Visually hide labels that exist only so AT-SPI sees GTK 3 button names */
+.vmm-sr-only {
+    min-width: 1px;
+    min-height: 1px;
+    padding: 0;
+    margin: 0;
+    font-size: 0;
+    opacity: 0;
+}
 """
 
 

@@ -259,6 +259,16 @@ class vmmVMWindow(vmmGObjectUI):
         self._shutdownmenu = vmmenu.VMShutdownMenu(self, lambda: self.vm)
         self.widget("control-shutdown").set_menu(self._shutdownmenu)
         self.widget("control-shutdown").set_icon_name("system-shutdown")
+        from .lib import gtkcompat
+
+        gtkcompat.ensure_button_accessible_name(self.widget("control-run"), "Run")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-pause"), "Pause")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-vm-console"), "Console")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-vm-details"), "Details")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-snapshots"), "Snapshots")
+        gtkcompat.ensure_button_accessible_name(
+            self.widget("control-shutdown")._button, "Shut Down"
+        )
 
         topmenu = self.widget("details-vm-menu")
         submenu = topmenu.get_submenu() or self.widget("virtual_machine1_menu")

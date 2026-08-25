@@ -58,6 +58,40 @@ def _on_query_tooltip(widget, _x, _y, _keyboard, tooltip):
     return True
 
 
+def ensure_button_accessible_name(widget, name):
+    """
+    Force a toolbar-style icon button to expose the GTK 3 label to AT-SPI.
+
+    GTK 4 uses tooltip text as the accessible name for icon-name buttons.
+    Keep the icon, stash the tooltip on query-tooltip, and give the button
+    a real LABEL plus a child label dogtail can see.
+    """
+    if widget is None or not name:
+        return
+    widget._vmm_a11y_name = name
+    icon = None
+    if hasattr(widget, "get_icon_name"):
+        try:
+            icon = widget.get_icon_name()
+        except Exception:
+            icon = None
+    if not icon:
+        icon = getattr(widget, "icon_name", None)
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+    if icon:
+        box.append(Gtk.Image.new_from_icon_name(icon))
+    lab = Gtk.Label(label=name)
+    lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+    lab.add_css_class("vmm-sr-only")
+    set_accessible_name(lab, name)
+    box.append(lab)
+    try:
+        widget.set_child(box)
+    except Exception:
+        pass
+    apply_accessible_label(widget)
+
+
 def apply_accessible_label(widget):
     """
     Prefer the mnemonic-stripped widget label as the AT-SPI name.

@@ -34,50 +34,45 @@ class vmmAbout(vmmGObject):
             self._dialog.present()
             return
 
-        # Gtk.AboutDialog remains a real window/dialog in GTK 4, which
-        # dogtail can find. Adw.AboutDialog presents as an overlay that
-        # is not reliably in the same AT-SPI tree as the manager.
-        dialog = Gtk.AboutDialog()
+        # Use a plain Gtk.Window with role DIALOG. Gtk.AboutDialog's
+        # internal widgets are not reliably exposed to AT-SPI in GTK 4,
+        # and Adw.AboutDialog is an overlay sibling.
+        dialog = Gtk.Window()
         dialog.set_transient_for(parent)
         dialog.set_modal(True)
+        dialog.set_title("About")
+        dialog.set_default_size(420, 320)
         if parent is not None and hasattr(parent, "get_application"):
             app = parent.get_application()
             if app is not None:
                 dialog.set_application(app)
-        dialog.set_title("About")
-        dialog.set_program_name("Virtual Machine Manager")
-        dialog.set_logo_icon_name("virt-manager")
-        dialog.set_version(self.config.get_appversion())
-        dialog.set_authors(
-            [
-                "Daniel P. Berrange <berrange@redhat.com>",
-                "Cole Robinson <crobinso@redhat.com>",
-                "Hugh O. Brock <hbrock@redhat.com>",
-            ]
-        )
-        dialog.set_artists(
-            [
-                "Máirín Duffy <duffy@redhat.com>",
-                "Mike Langlie <mlanglie@redhat.com>",
-                "Jeremy Perry <jeperry@redhat.com>",
-                "Jakub Steiner <jsteiner@redhat.com>",
-            ]
-        )
-        dialog.set_translator_credits(_("translator-credits"))
-        dialog.set_copyright("Copyright (C) 2006-2026 Red Hat Inc.")
-        dialog.set_comments(_("Powered by libvirt"))
-        dialog.set_website("https://virt-manager.org/")
-        dialog.set_license_type(Gtk.License.GPL_2_0)
         dialog.set_accessible_role(Gtk.AccessibleRole.DIALOG)
         gtkcompat.set_accessible_name(dialog, "About")
-        copyright = Gtk.Label(label="Copyright (C) 2006-2026 Red Hat Inc.")
-        gtkcompat.set_accessible_name(copyright, "Copyright")
-        child = dialog.get_child()
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        if child is not None:
-            child.unparent()
-            box.append(child)
-        box.append(copyright)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(18)
+        box.set_margin_bottom(18)
+        box.set_margin_start(18)
+        box.set_margin_end(18)
+
+        def _label(text, name=None):
+            lab = Gtk.Label(label=text)
+            lab.set_wrap(True)
+            lab.set_xalign(0)
+            lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+            if name:
+                gtkcompat.set_accessible_name(lab, name)
+            box.append(lab)
+            return lab
+
+        _label("Virtual Machine Manager", "Virtual Machine Manager")
+        _label(self.config.get_appversion())
+        _label(_("Powered by libvirt"))
+        _label("Copyright (C) 2006-2026 Red Hat Inc.", "Copyright")
+        _label("https://virt-manager.org/")
+        _label(
+            "Daniel P. Berrange, Cole Robinson, Hugh O. Brock"
+        )
         dialog.set_child(box)
         self._dialog = dialog
         dialog.present()
