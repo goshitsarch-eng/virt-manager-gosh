@@ -382,17 +382,32 @@ def expose_a11y_label(key, name, text):
 
 
 def expose_a11y_text(key, name, text):
+    """
+    GTK 4 entries on hidden notebook pages have no AccessibleText.
+    Mirror as a TEXT_BOX whose name is the labeller and whose child
+    label is the value, matching find_fuzzy("Name:", "text").text.
+    """
     box = _a11y_sidecar_box()
     ent = _A11Y_SIDECAR["items"].get(key)
     if ent is None:
-        ent = Gtk.Entry()
-        ent.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
+        ent = Gtk.Button()
+        try:
+            ent.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
+        except Exception:
+            pass
+        val = Gtk.Label(label=text or "")
+        val.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        ent.set_child(val)
         box.append(ent)
         _A11Y_SIDECAR["items"][key] = ent
-    try:
-        ent.set_text(text or "")
-    except Exception:
-        pass
+        ent._vmm_value = val
+    valw = getattr(ent, "_vmm_value", None)
+    if valw is not None:
+        try:
+            valw.set_text(text or "")
+        except Exception:
+            pass
+        set_accessible_name(valw, text or "")
     set_accessible_name(ent, name or text or "")
     ent.set_visible(True)
     return ent

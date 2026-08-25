@@ -323,11 +323,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
             if self.name:
                 parts.append(self.name)
             try:
-                child = self.children[0] if self.children else None
-                if child is not None and child.name and child.name != self.name:
-                    parts.append(child.name)
+                for child in list(self.children or [])[:3]:
+                    if child is not None and child.name and child.name != self.name:
+                        parts.append(child.name)
             except Exception:
                 pass
+            # Entry sidecars keep the labeller as name and the value as a child.
+            if self.roleName in ("text", "entry", "text box", "spin button") and len(parts) > 1:
+                return parts[-1]
             return "\n".join(parts)
         return None
 
