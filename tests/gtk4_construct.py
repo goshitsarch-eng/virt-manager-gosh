@@ -1085,6 +1085,8 @@ def main():
         guest = dlg._gdata.build_guest()
         installer = dlg._gdata.build_installer()
         installer.set_install_defaults(guest)
+        # testdriver predictable UUID is already used by gtk4-cloned-vm
+        guest.uuid = "12345678-aaaa-bbbb-cccc-1234567890ab"
         installer.start_install(guest)
         found = _wait_named_vm("gtk4-created-vm", timeout=12)
         assert found is not None, "createvm finish did not define gtk4-created-vm: %s" % errs
@@ -1177,15 +1179,16 @@ def main():
         assert name in current or name in [s.get_name() for s in snapvm.list_snapshots()]
 
         created = _named_vm("test-clone-simple")
-        names = [s.getName() for s in created.get_backend().listAllSnapshots()]
-        if "gtk4-live-snap" in names:
-            for snap in created.list_snapshots():
-                if snap.get_name() == "gtk4-live-snap":
-                    snap.delete()
-                    break
-            created._snapshot_list = None
-            leftover = [s.getName() for s in created.get_backend().listAllSnapshots()]
-            assert "gtk4-live-snap" not in leftover
+        created._snapshot_list = None
+        deleted = False
+        for raw in created.get_backend().listAllSnapshots():
+            if raw.getName() == "gtk4-live-snap":
+                raw.delete(0)
+                deleted = True
+                break
+        leftover = [s.getName() for s in created.get_backend().listAllSnapshots()]
+        assert deleted or "gtk4-live-snap" not in leftover
+        assert "gtk4-live-snap" not in leftover
 
     def pool_start_stop():
         from virtManager.host import vmmHost
