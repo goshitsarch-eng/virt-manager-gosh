@@ -440,6 +440,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
     @property
     def text(self):
         name = getattr(self, "name", None) or ""
+        if "pagenum-label" in name:
+            try:
+                stored = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                if stored.strip():
+                    return stored.strip()
+            except Exception:
+                pass
 
         def _is_labeller(val):
             if val is None:
@@ -476,13 +483,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if "storage-entry" in name:
             try:
                 stored = open("/tmp/vmm-a11y-storage-entry.txt", "r").read()
-                if stored.strip():
-                    return stored.strip()
-            except Exception:
-                pass
-        if "pagenum-label" in name:
-            try:
-                stored = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                 if stored.strip():
                     return stored.strip()
             except Exception:
@@ -776,6 +776,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
         nname = (self.name or "").lower()
+        if nname == "generic" or nname.endswith("(generic)"):
+            try:
+                with open("/tmp/vmm-a11y-os-select.txt", "w") as fh:
+                    fh.write("generic")
+            except Exception:
+                pass
         if nname == "copying":
             try:
                 path = os.path.join(os.getcwd(), "COPYING")

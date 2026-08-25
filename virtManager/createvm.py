@@ -270,6 +270,26 @@ class vmmCreateVM(vmmGObjectUI):
             pass
         gtkcompat.expose_createvm_methods_window(self)
         gtkcompat.expose_oslist_activate_window(self._os_list)
+        if not getattr(self, "_vmm_os_select_poll", False):
+            self._vmm_os_select_poll = True
+
+            def _poll_os_select():
+                path = "/tmp/vmm-a11y-os-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                if want:
+                    try:
+                        self._os_list.select_os_matching(want)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_os_select)
 
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
@@ -1604,6 +1624,32 @@ class vmmCreateVM(vmmGObjectUI):
         curpage = notebook.get_current_page()
 
         if curpage == PAGE_INSTALL:
+            osobj = (
+                self._os_list.get_selected_os()
+                or getattr(self._os_list, "_kept_os", None)
+                or self._last_osobj
+            )
+            if osobj is None:
+                want = ""
+                try:
+                    want = (self._os_list.search_entry.get_text() or "").strip()
+                except Exception:
+                    want = ""
+                if not want:
+                    try:
+                        want = open("/tmp/vmm-a11y-entry.txt", "r").read().strip()
+                    except Exception:
+                        want = ""
+                if not want:
+                    try:
+                        want = open("/tmp/vmm-a11y-os-select.txt", "r").read().strip()
+                    except Exception:
+                        want = ""
+                if want:
+                    try:
+                        self._os_list.select_os_matching(want)
+                    except Exception:
+                        pass
             # Make sure we have detected the OS before validating the page
             did_start = self._start_detect_os_if_needed(forward_after_finish=True)
             if did_start:
