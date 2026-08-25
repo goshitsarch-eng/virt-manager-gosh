@@ -952,6 +952,9 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-url-activate",
             "/tmp/vmm-a11y-create-forward",
             "/tmp/vmm-a11y-create-back",
+            "/tmp/vmm-a11y-oslist-entry.txt",
+            "/tmp/vmm-a11y-oslist-confirmed",
+            "/tmp/vmm-a11y-os-select.txt",
         ):
             try:
                 os.unlink(path)

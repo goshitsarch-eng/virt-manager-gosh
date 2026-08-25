@@ -24,15 +24,6 @@ def _patch_createvm_nav():
         except Exception:
             pass
         if check:
-            # virt-manager may be blocked in URL validate/GTK expose after
-            # GetItems. The official test only needs the label to change.
-            try:
-                open("/tmp/vmm-a11y-pagenum.txt", "w").write(
-                    "%s %s" % (oldtext, "fwd" if forward else "back")
-                )
-            except Exception:
-                pass
-
             def _changed():
                 try:
                     return open("/tmp/vmm-a11y-pagenum.txt", "r").read().strip() != oldtext
