@@ -919,6 +919,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # popover opens and Enter can confirm Generic.
         if "oslist-entry" in (self.name or ""):
             try:
+                for marker in (
+                    "/tmp/vmm-a11y-oslist-escape",
+                    "/tmp/vmm-a11y-oslist-popover-hidden",
+                ):
+                    try:
+                        os.remove(marker)
+                    except Exception:
+                        pass
                 with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                     fh.write(string)
                 if self._click_named_button(".entry-load-oslist-entry"):
@@ -957,6 +965,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
             # opening oslist-popover. Always load the real SearchEntry.
             if "oslist-entry" in (self.name or ""):
                 try:
+                    for marker in (
+                        "/tmp/vmm-a11y-oslist-escape",
+                        "/tmp/vmm-a11y-oslist-popover-hidden",
+                    ):
+                        try:
+                            os.remove(marker)
+                        except Exception:
+                            pass
                     with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                         fh.write(text)
                     self._click_named_button(".entry-load-oslist-entry")
@@ -981,6 +997,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
             return
         try:
+            if "oslist-entry" in (self.name or ""):
+                for marker in (
+                    "/tmp/vmm-a11y-oslist-escape",
+                    "/tmp/vmm-a11y-oslist-popover-hidden",
+                ):
+                    try:
+                        os.remove(marker)
+                    except Exception:
+                        pass
             with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                 fh.write(text)
             base = (self.name or "").split(":", 1)[0].strip().rstrip(":")
