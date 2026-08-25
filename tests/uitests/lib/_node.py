@@ -969,6 +969,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
             return
+        if "config-apply" in nname:
+            try:
+                with open("/tmp/vmm-a11y-config-apply", "w") as fh:
+                    fh.write("1")
+            except Exception:
+                pass
+            return
         if (
             "oslist-entry" in nname
             or "operating system you are installing" in nname

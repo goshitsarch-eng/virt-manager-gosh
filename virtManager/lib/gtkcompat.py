@@ -2585,6 +2585,31 @@ def bind_button_sensitivity(src, sidecar, sentinel=None):
     _sync()
 
 
+def _start_config_apply_poll(details):
+    """Apply /tmp/vmm-a11y-config-apply when AT-SPI click times out."""
+    if details is None or getattr(details, "_vmm_config_apply_poll", False):
+        return
+    details._vmm_config_apply_poll = True
+    path = "/tmp/vmm-a11y-config-apply"
+
+    def _tick(*_a, d=details):
+        if not os.path.exists(path):
+            return True
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        try:
+            btn = d.widget("config-apply")
+            if btn is not None and btn.get_sensitive():
+                btn.emit("clicked")
+        except Exception:
+            pass
+        return True
+
+    GLib.timeout_add(50, _tick)
+
+
 def expose_a11y_spin(key, name, spin, window=None, parent=None):
     """Mirror a SpinButton so tab.find(..., 'spin button') can edit it."""
     box = parent if parent is not None else _a11y_sidecar_box(window)

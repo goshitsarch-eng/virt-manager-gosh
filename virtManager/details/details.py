@@ -467,6 +467,7 @@ class vmmDetails(vmmGObjectUI):
             apply_btn,
             "/tmp/vmm-a11y-config-apply-sensitive",
         )
+        gtkcompat._start_config_apply_poll(self)
         gtkcompat.set_accessible_name(self.widget("config-cancel"), "config-cancel")
         cancel_btn = gtkcompat.expose_a11y_button(
             "details-config-cancel",
