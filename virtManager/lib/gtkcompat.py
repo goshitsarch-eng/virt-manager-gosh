@@ -172,7 +172,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     win.set_decorated(False)
     win.set_resizable(False)
     win.set_modal(False)
-    win.set_focusable(True)
+    win.set_focusable(False)
     win.set_default_size(240, 80)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     win.set_child(box)
@@ -203,12 +203,6 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
 
         _find(None)
         treeview.grab_focus()
-        root = treeview.get_root()
-        if root is not None:
-            try:
-                root.present()
-            except Exception:
-                pass
 
     def _rebuild(*_args):
         model = treeview.get_model()
@@ -306,17 +300,6 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                     app.add_window(win)
         win.set_visible(True)
         return False
-
-    key = Gtk.EventControllerKey()
-
-    def _on_menu_key(_c, keyval, *_a):
-        if on_popup is not None and Gdk.keyval_name(keyval) == "Menu":
-            on_popup()
-            return True
-        return False
-
-    key.connect("key-pressed", _on_menu_key)
-    win.add_controller(key)
 
     GLib.idle_add(_rebuild)
     GLib.idle_add(_attach_app)
