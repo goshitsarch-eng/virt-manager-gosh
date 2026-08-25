@@ -249,13 +249,20 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
             except Exception:
                 nname_l = ""
                 nrole = ""
+            _CHECK_SIDECARS = (
+                "automatically detect",
+                "start virtual machine",
+                "copy host",
+                "customize",
+                "removable",
+            )
             if self._roleName and not self._role_pattern.match(nrole or node.roleName):
-                # GTK 4 CheckButton AT-SPI clicks are no-ops. The
-                # Automatically detect sidecar is a Button that toggles.
+                # GTK 4 CheckButton AT-SPI clicks are no-ops. Sidecar
+                # Buttons toggle the real check.
                 if not (
                     "check" in str(self._roleName)
-                    and "automatically detect" in nname_l
                     and nrole in ("button", "push button")
+                    and any(p in nname_l for p in _CHECK_SIDECARS)
                 ):
                     return
             # Native GTK 4 CheckButtons keep the visible label but ignore
@@ -268,6 +275,10 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                     "network install",
                     "import existing disk",
                     "automatically detect",
+                    "start virtual machine",
+                    "copy host",
+                    "customize",
+                    "removable",
                 )
             ):
                 return
@@ -647,6 +658,9 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "Fedora12_media",
                     "cpus",
                     "Memory:",
+                    "Start virtual machine",
+                    "Copy host",
+                    "Removable",
                 )
             ):
                 return True

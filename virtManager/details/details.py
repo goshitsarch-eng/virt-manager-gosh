@@ -491,6 +491,24 @@ class vmmDetails(vmmGObjectUI):
             )
         except Exception:
             pass
+        try:
+            gtkcompat.expose_a11y_check(
+                "boot-autostart",
+                "Start virtual machine on host boot up",
+                self.widget("boot-autostart"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_check(
+                "cpu-copy-host",
+                "Copy host CPU configuration",
+                self.widget("cpu-copy-host"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
 
     @property
     def conn(self):
