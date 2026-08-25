@@ -551,6 +551,9 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "storage-entry",
                     "oslist-entry",
                     "create-conn",
+                    "install-iso-browse",
+                    "storage-browse",
+                    "install-import-browse",
                 )
             ):
                 return True
