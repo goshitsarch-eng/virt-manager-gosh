@@ -62,14 +62,26 @@ def _virt_manager_app():
     return None
 
 
-def _walk_find(node, pred, recursive=True, _seen=None):
+def _node_walk_key(node):
+    try:
+        return (node.roleName, node.name or "", tuple(node.position), tuple(node.size))
+    except Exception:
+        return id(node)
+
+
+def _walk_find(node, pred, recursive=True, _seen=None, _budget=None):
     """
     Live AT-SPI walk. dogtail findChild uses a cache that often misses
     GTK 4 windows and freshly mapped labels.
     """
     if _seen is None:
         _seen = set()
-    key = id(node)
+    if _budget is None:
+        _budget = [400]
+    if _budget[0] <= 0:
+        return None
+    _budget[0] -= 1
+    key = _node_walk_key(node)
     if key in _seen:
         return None
     _seen.add(key)
@@ -84,7 +96,7 @@ def _walk_find(node, pred, recursive=True, _seen=None):
         return None
     for child in kids:
         if recursive:
-            ret = _walk_find(child, pred, True, _seen)
+            ret = _walk_find(child, pred, True, _seen, _budget)
         else:
             try:
                 ret = child if pred.satisfiedByNode(child) else None
@@ -527,11 +539,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
         ret = None
         deadline = time.time() + 4
         while ret is None and time.time() < deadline:
-            ret = _walk_find(self, pred, recursive=recursive)
+            if recursive:
+                ret = _walk_find(self, pred, False)
+            if ret is None:
+                ret = _walk_find(self, pred, recursive=recursive)
             if ret is None:
                 app = _virt_manager_app()
                 if app is not None and app is not self:
-                    ret = _walk_find(app, pred, True)
+                    ret = _walk_find(app, pred, False) or _walk_find(app, pred, True)
             if ret is None:
                 time.sleep(0.1)
         if ret is None:
