@@ -156,13 +156,21 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
 
             extra = ""
             try:
-                if not (node.name or "") and self._roleName and "button" in self._roleName:
-                    for child in node.children:
+                if self._roleName and "button" in self._roleName:
+                    stack = list(node.children)
+                    depth = 0
+                    while stack and depth < 12:
+                        child = stack.pop(0)
                         extra += " " + (child.name or "")
                         try:
                             extra += " " + (child.text or "")
                         except Exception:
                             pass
+                        try:
+                            stack.extend(child.children)
+                        except Exception:
+                            pass
+                        depth += 1
             except Exception:
                 extra = ""
             if (
