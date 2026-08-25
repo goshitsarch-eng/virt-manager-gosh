@@ -1470,6 +1470,61 @@ def _append_createvm_customize_check(box, createvm):
         pass
 
 
+def _append_createvm_arch_controls(box, createvm):
+    """Architecture expander, Xen type, and import path on the methods window."""
+    if box is None or createvm is None or getattr(box, "_vmm_arch_controls", False):
+        return
+    box._vmm_arch_controls = True
+
+    def _toggle_arch(*_a, cvm=createvm):
+        exp = cvm.widget("arch-expander")
+        if exp is None:
+            return
+        try:
+            exp.set_expanded(not exp.get_expanded())
+        except Exception:
+            pass
+
+    try:
+        expose_a11y_button(
+            "arch-expander",
+            "Architecture options",
+            _toggle_arch,
+            parent=box,
+        )
+        register_a11y_click("Architecture options", _toggle_arch)
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "xen-type",
+            "Xen Type",
+            createvm.widget("xen-type"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "arch",
+            "Architecture",
+            createvm.widget("arch"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "methods-import-entry",
+            "import-entry",
+            createvm.widget("install-import-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+
+
 def _append_createvm_storage_radios(box, createvm):
     """Findable storage create/select radios on the New VM methods window."""
     if box is None or createvm is None or getattr(box, "_vmm_storage_radios", False):
@@ -1696,6 +1751,7 @@ def expose_createvm_methods_window(createvm):
                 _append_createvm_media_controls(child, createvm)
                 _append_createvm_resource_spins(child, createvm)
                 _append_createvm_storage_radios(child, createvm)
+                _append_createvm_arch_controls(child, createvm)
                 _append_createvm_customize_check(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:
@@ -1782,6 +1838,7 @@ def expose_createvm_methods_window(createvm):
     _append_createvm_media_controls(box, createvm)
     _append_createvm_resource_spins(box, createvm)
     _append_createvm_storage_radios(box, createvm)
+    _append_createvm_arch_controls(box, createvm)
     _append_createvm_customize_check(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)

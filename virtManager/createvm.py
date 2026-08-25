@@ -358,6 +358,29 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_storage_entry)
 
+        if not getattr(self, "_vmm_import_entry_poll", False):
+            self._vmm_import_entry_poll = True
+
+            def _poll_import_entry():
+                path = "/tmp/vmm-a11y-import-entry.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                except Exception:
+                    return True
+                if getattr(self, "_vmm_import_entry_seen", None) == stamp:
+                    return True
+                self._vmm_import_entry_seen = stamp
+                try:
+                    self.widget("install-import-entry").set_text(text)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_import_entry)
+
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
 

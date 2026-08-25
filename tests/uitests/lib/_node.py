@@ -49,6 +49,8 @@ _GTK4_ROLE_ALIASES = {
     "label": "(label|static)",
     ".*label.*": ".*(label|static).*",
     "toggle button": "(toggle button|button|push button)",
+    "toggle": "(toggle button|button|push button|expander)",
+    ".*toggle.*": ".*(toggle button|button|push button|expander).*",
 }
 
 _WINDOW_ROLES = ("frame", "window", "dialog", "alert", "file chooser", "panel", "list")
@@ -356,6 +358,44 @@ class _SentinelEntry(object):
                 pass
 
 
+class _ArchOptionsSentinel(object):
+    name = "Architecture options"
+    roleName = "toggle button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("Architecture options")
+        except Exception:
+            pass
+
+    def click_expander(self, *args, **kwargs):
+        self.click()
+
+
+def _sentinel_arch_options(name, roleName):
+    if not name:
+        return None
+    compact = str(name).replace(".*", "").lower()
+    if "architecture options" not in compact:
+        return None
+    return _ArchOptionsSentinel()
+
+
 def _sentinel_named_entry(name, roleName):
     if not name:
         return None
@@ -372,6 +412,8 @@ def _sentinel_named_entry(name, roleName):
         return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
     if compact in ("name", "name:") or raw in ("Name", "Name:"):
         return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
+    if compact == "import-entry" or raw == "import-entry":
+        return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
     return None
 
 
@@ -1361,6 +1403,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "forward",
             "finish",
             "select or create",
+            "architecture options",
             "media-entry",
             "copy host",
         )
@@ -1555,6 +1598,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
                     except Exception:
                         pass
+                if "import-entry" in (self.name or ""):
+                    try:
+                        open("/tmp/vmm-a11y-import-entry.txt", "w").write(text)
+                    except Exception:
+                        pass
                 with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                     fh.write(text)
                 if "oslist-entry" in (self.name or ""):
@@ -1591,6 +1639,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
             if "storage-entry" in (self.name or ""):
                 try:
                     open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                except Exception:
+                    pass
+            if "import-entry" in (self.name or ""):
+                try:
+                    open("/tmp/vmm-a11y-import-entry.txt", "w").write(text)
                 except Exception:
                     pass
             with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
@@ -1864,6 +1917,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_named_entry(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_arch_options(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
