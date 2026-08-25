@@ -852,9 +852,161 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None, name_with_valu
     return ent
 
 
+def _oslist_popover_wraps(oslist):
+    wraps = []
+    if oslist is None:
+        return wraps
+    extra = getattr(oslist, "_vmm_popover_boxes", None) or []
+    for wrap in extra:
+        if wrap is not None and wrap not in wraps:
+            wraps.append(wrap)
+    wrap = getattr(oslist, "_vmm_popover_box", None)
+    if wrap is not None and wrap not in wraps:
+        wraps.append(wrap)
+    return wraps
+
+
+def _oslist_clear_wrap(wrap):
+    if wrap is None:
+        return
+    child = wrap.get_first_child()
+    while child is not None:
+        nxt = child.get_next_sibling()
+        try:
+            wrap.remove(child)
+        except Exception:
+            pass
+        child = nxt
+
+
+def _oslist_fill_wrap(wrap, oslist):
+    """Populate one findable popover with filtered OS rows plus include-eol."""
+    if wrap is None or oslist is None:
+        return
+    _oslist_clear_wrap(wrap)
+
+    def _row(label, osobj=None, eol=False):
+        if not label:
+            return
+        btn = Gtk.Button(label=label, has_frame=False)
+        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        set_accessible_name(btn, label)
+        ensure_activate_clicked(btn)
+
+        def _choose(_b, obj=osobj, text=label, toggle_eol=eol, lst=oslist):
+            if toggle_eol:
+                try:
+                    src = lst.widget("include-eol")
+                    src.set_active(not bool(src.get_active()))
+                except Exception:
+                    pass
+                _oslist_show_popovers(lst)
+                return
+            if obj is not None:
+                try:
+                    lst.select_os(obj)
+                except Exception:
+                    pass
+            elif hasattr(lst, "select_os_matching"):
+                try:
+                    lst.select_os_matching(text)
+                except Exception:
+                    pass
+            _oslist_hide_popovers(lst)
+
+        btn.connect("clicked", _choose)
+        wrap.append(btn)
+
+    _row("generic")
+    _row("include-eol", eol=True)
+    _row("oslist-include-eol", eol=True)
+    try:
+        model = oslist.widget("os-list").get_model()
+    except Exception:
+        model = None
+    if model is not None:
+        try:
+            it = model.get_iter_first()
+        except Exception:
+            it = None
+        while it is not None:
+            try:
+                osobj = model[it][0]
+                label = str(model[it][1] or "")
+                if not label and osobj is not None:
+                    label = "%s (%s)" % (osobj.label, osobj.name)
+            except Exception:
+                osobj = None
+                label = ""
+            if label:
+                _row(label, osobj=osobj)
+            try:
+                it = model.iter_next(it)
+            except Exception:
+                break
+    wrap.set_visible(True)
+
+
+def _oslist_show_popovers(oslist):
+    if oslist is None:
+        return
+    for wrap in _oslist_popover_wraps(oslist):
+        try:
+            _oslist_fill_wrap(wrap, oslist)
+            set_accessible_name(wrap, "oslist-popover")
+            wrap.set_visible(True)
+        except Exception:
+            pass
+
+
+def _oslist_hide_popovers(oslist):
+    if oslist is None:
+        return
+    for wrap in _oslist_popover_wraps(oslist):
+        try:
+            set_accessible_name(wrap, ".oslist-popover")
+        except Exception:
+            pass
+
+
+def _append_oslist_popover(box, oslist):
+    """Host oslist-popover on a findable add_window() surface."""
+    if box is None or oslist is None:
+        return None
+    wrap = getattr(box, "_vmm_oslist_popover", None)
+    if wrap is not None:
+        wraps = getattr(oslist, "_vmm_popover_boxes", None)
+        if wraps is None:
+            oslist._vmm_popover_boxes = [wrap]
+        elif wrap not in wraps:
+            wraps.append(wrap)
+        return wrap
+    wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    try:
+        wrap.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+    except Exception:
+        pass
+    set_accessible_name(wrap, ".oslist-popover")
+    box.append(wrap)
+    box._vmm_oslist_popover = wrap
+    wraps = getattr(oslist, "_vmm_popover_boxes", None)
+    if wraps is None:
+        oslist._vmm_popover_boxes = [wrap]
+    elif wrap not in wraps:
+        wraps.append(wrap)
+    if getattr(oslist, "_vmm_popover_box", None) is None:
+        oslist._vmm_popover_box = wrap
+    wrap.set_visible(True)
+    return wrap
+
+
 def _oslist_apply_search_text(oslist, text):
     if oslist is None:
         return
+    try:
+        oslist.search_entry.set_sensitive(True)
+    except Exception:
+        pass
     try:
         oslist.search_entry.set_text(text or "")
     except Exception:
@@ -868,12 +1020,7 @@ def _oslist_load_search_from_file(oslist):
     except Exception:
         return
     _oslist_apply_search_text(oslist, text)
-    show = getattr(oslist, "_vmm_oslist_show_a11y", None)
-    if show:
-        try:
-            show()
-        except Exception:
-            pass
+    _oslist_show_popovers(oslist)
 
 
 def _oslist_confirm_search(oslist):
@@ -889,6 +1036,7 @@ def _append_oslist_a11y_controls(box, oslist):
     """Load/activate buttons on a findable add_window() surface."""
     if box is None or oslist is None:
         return
+    _append_oslist_popover(box, oslist)
     if getattr(box, "_vmm_oslist_controls", False):
         return
     box._vmm_oslist_controls = True
@@ -906,6 +1054,17 @@ def _append_oslist_a11y_controls(box, oslist):
     set_accessible_name(act, ".oslist-activate")
     act.connect("clicked", lambda *_a, lst=oslist: _oslist_confirm_search(lst))
     box.append(act)
+
+    try:
+        expose_a11y_entry(
+            "methods-oslist-entry",
+            "oslist-entry",
+            oslist.search_entry,
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
 
 
 def _append_name_load_control(box, createvm):
@@ -1000,6 +1159,16 @@ def _append_createvm_media_controls(box, createvm):
         createvm.widget("create-conn"),
         parent=box,
     )
+    try:
+        expose_a11y_check(
+            "methods-install-detect-os",
+            "Automatically detect from the installation media / source",
+            createvm.widget("install-detect-os"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
 
 
 def _append_createvm_close_control(box, createvm, win):
@@ -1783,73 +1952,10 @@ def expose_oslist_a11y(oslist, window=None):
         root.add_controller(wkey)
 
     box = _a11y_sidecar_box(window)
-    wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-    try:
-        wrap.set_accessible_role(Gtk.AccessibleRole.GENERIC)
-    except Exception:
-        pass
-    set_accessible_name(wrap, ".oslist-popover")
-    box.append(wrap)
+    wrap = _append_oslist_popover(box, oslist)
     oslist._vmm_popover_box = wrap
-
-    def _clear():
-        child = wrap.get_first_child()
-        while child is not None:
-            nxt = child.get_next_sibling()
-            try:
-                wrap.remove(child)
-            except Exception:
-                pass
-            child = nxt
-
-    def _hide():
-        set_accessible_name(wrap, ".oslist-popover")
-
-    def _show():
-        _clear()
-        try:
-            model = oslist.widget("os-list").get_model()
-        except Exception:
-            model = None
-        if model is not None:
-            try:
-                it = model.get_iter_first()
-            except Exception:
-                it = None
-            while it is not None:
-                try:
-                    osobj = model[it][0]
-                    label = str(model[it][1] or "")
-                    if not label and osobj is not None:
-                        label = "%s (%s)" % (osobj.label, osobj.name)
-                except Exception:
-                    osobj = None
-                    label = ""
-                if label:
-                    btn = Gtk.Button(label=label, has_frame=False)
-                    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
-                    set_accessible_name(btn, label)
-                    ensure_activate_clicked(btn)
-
-                    def _choose(_b, obj=osobj):
-                        if obj is not None:
-                            try:
-                                oslist.select_os(obj)
-                            except Exception:
-                                pass
-                        _hide()
-
-                    btn.connect("clicked", _choose)
-                    wrap.append(btn)
-                try:
-                    it = model.iter_next(it)
-                except Exception:
-                    break
-        set_accessible_name(wrap, "oslist-popover")
-        wrap.set_visible(True)
-
-    oslist._vmm_oslist_show_a11y = _show
-    oslist._vmm_oslist_hide_a11y = _hide
+    oslist._vmm_oslist_show_a11y = lambda lst=oslist: _oslist_show_popovers(lst)
+    oslist._vmm_oslist_hide_a11y = lambda lst=oslist: _oslist_hide_popovers(lst)
     wrap.set_visible(True)
     expose_oslist_activate_window(oslist)
     return wrap

@@ -550,6 +550,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "uri-entry",
                     "storage-entry",
                     "oslist-entry",
+                    "oslist-popover",
                     "create-conn",
                     "install-iso-browse",
                     "storage-browse",
@@ -914,6 +915,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
         if (self.text or "") == text:
+            # Sidecar AccessibleText can accept the string without
+            # opening oslist-popover. Always load the real SearchEntry.
+            if "oslist-entry" in (self.name or ""):
+                try:
+                    with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
+                        fh.write(text)
+                    self._click_named_button(".entry-load-oslist-entry")
+                except Exception:
+                    pass
             return
         # GTK 4 AccessibleText often ignores writes. Sidecar load
         # buttons apply /tmp files to the real Gtk buffers.
