@@ -924,26 +924,26 @@ def attach_treeview_column_a11y(treeview):
     GTK 4 TreeView column headers are often missing from AT-SPI.
     Mirror each title as a COLUMN_HEADER button that triggers sort.
     """
-    if treeview is None or getattr(treeview, "_vmm_col_a11y", None):
+    if treeview is None or getattr(treeview, "_vmm_col_a11y", False):
         return None
-    win = Gtk.Window()
-    win.set_decorated(False)
-    win.set_resizable(False)
-    win.set_modal(False)
-    win.set_focusable(False)
-    win.set_accessible_role(Gtk.AccessibleRole.GROUP)
-    win.set_default_size(200, 32)
-    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-    win.set_child(box)
-    win.set_opacity(0)
-    treeview._vmm_col_a11y = win
+    treeview._vmm_col_a11y = True
 
     def _rebuild(*_a):
-        child = box.get_first_child()
-        while child is not None:
-            nxt = child.get_next_sibling()
-            box.remove(child)
-            child = nxt
+        root = None
+        try:
+            root = treeview.get_root()
+        except Exception:
+            root = None
+        window = root if isinstance(root, Gtk.Window) else None
+        box = _a11y_sidecar_box(window)
+        for btn in list(getattr(treeview, "_vmm_col_btns", []) or []):
+            try:
+                parent = btn.get_parent()
+                if parent is not None:
+                    parent.remove(btn)
+            except Exception:
+                pass
+        btns = []
         for col in treeview.get_columns():
             title = ""
             try:
@@ -968,25 +968,14 @@ def attach_treeview_column_a11y(treeview):
 
             btn.connect("clicked", _sort)
             box.append(btn)
-        win.set_visible(True)
-        return False
-
-    def _attach_app(*_a):
-        root = treeview.get_root()
-        if root is not None:
-            try:
-                win.set_transient_for(root)
-            except Exception:
-                pass
-            set_accessible_name(win, ".a11y-columns")
-        win.set_visible(True)
+            btns.append(btn)
+        treeview._vmm_col_btns = btns
         return False
 
     GLib.idle_add(_rebuild)
-    GLib.idle_add(_attach_app)
     treeview.connect("map", lambda *_a: GLib.idle_add(_rebuild))
     treeview.connect("notify::model", lambda *_a: GLib.idle_add(_rebuild))
-    return win
+    return True
 
 
 def _first_string_column(model):
