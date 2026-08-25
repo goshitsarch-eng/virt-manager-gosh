@@ -124,23 +124,49 @@ class vmmOSList(vmmGObjectUI):
         self._filter_by_name("")
         self.widget("os-scroll").get_vadjustment().set_value(0)
 
+    def refresh_a11y(self):
+        """Keep the oslist-entry sidecar name in sync after page hide/show."""
+        osobj = self._selected_os
+        label = osobj.label if osobj is not None else ""
+        if not label:
+            try:
+                label = self.search_entry.get_text() or ""
+            except Exception:
+                label = ""
+        if osobj is not None and not label:
+            label = osobj.label
+        if osobj is not None and label != osobj.label:
+            try:
+                self.search_entry.set_text(osobj.label)
+            except Exception:
+                pass
+            label = osobj.label
+        try:
+            sidecar = gtkcompat._A11Y_SIDECAR["items"].get("oslist-entry")
+            if sidecar is not None:
+                if label:
+                    sidecar.set_text(label)
+                    gtkcompat.set_accessible_name(sidecar, "oslist-entry: %s" % label)
+                else:
+                    sidecar.set_text("")
+                    gtkcompat.set_accessible_name(sidecar, "oslist-entry")
+        except Exception:
+            pass
+
     def _sync_os_selection(self):
         model, titer = self.widget("os-list").get_selection().get_selected()
-        self._selected_os = None
         if titer:
             self._selected_os = model[titer][0]
             self.search_entry.set_text(self._selected_os.label)
+        elif self._selected_os is not None:
+            # _clear_filter() unselects the tree; keep the chosen OS.
             try:
-                sidecar = gtkcompat._A11Y_SIDECAR["items"].get("oslist-entry")
-                if sidecar is not None:
-                    label = self._selected_os.label
-                    sidecar.set_text(label)
-                    gtkcompat.set_accessible_name(
-                        sidecar, "oslist-entry: %s" % label
-                    )
+                self.search_entry.set_text(self._selected_os.label)
             except Exception:
                 pass
-
+        else:
+            self._selected_os = None
+        self.refresh_a11y()
         self.emit("os-selected", self._selected_os)
 
     def _show_popover(self):
@@ -218,7 +244,9 @@ class vmmOSList(vmmGObjectUI):
             hide = getattr(self, "_vmm_oslist_hide_a11y", None)
             if hide:
                 hide()
-            self._clear_filter()
+            if selected_label != searchname:
+                self._clear_filter()
+            self.refresh_a11y()
             return
 
         self._filter_by_name(searchname)

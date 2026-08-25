@@ -902,6 +902,30 @@ def _append_oslist_a11y_controls(box, oslist):
     box.append(act)
 
 
+def _append_name_load_control(box, createvm):
+    if box is None or createvm is None or getattr(box, "_vmm_name_load", False):
+        return
+    box._vmm_name_load = True
+    btn = Gtk.Button(label=".entry-load-Name")
+    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(btn)
+    set_accessible_name(btn, ".entry-load-Name")
+
+    def _load(*_a, cvm=createvm):
+        path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+        try:
+            text = open(path, "r").read()
+        except Exception:
+            return
+        try:
+            cvm.widget("create-vm-name").set_text(text)
+        except Exception:
+            pass
+
+    btn.connect("clicked", _load)
+    box.append(btn)
+
+
 def _ensure_app_window(win):
     app = Gtk.Application.get_default()
     if app is None or win is None:
@@ -923,9 +947,11 @@ def expose_createvm_methods_window(createvm):
         try:
             _ensure_app_window(win)
             try:
+                child = win.get_child()
                 _append_oslist_a11y_controls(
-                    win.get_child(), getattr(createvm, "_os_list", None)
+                    child, getattr(createvm, "_os_list", None)
                 )
+                _append_name_load_control(child, createvm)
             except Exception:
                 pass
             win.set_visible(True)
@@ -993,6 +1019,7 @@ def expose_createvm_methods_window(createvm):
         nav.connect("clicked", _nav)
         box.append(nav)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+    _append_name_load_control(box, createvm)
     _ensure_app_window(win)
     win.set_visible(True)
     createvm._vmm_methods_win = win
