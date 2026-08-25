@@ -3,12 +3,13 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
-from gi.repository import Gdk, Gtk
+from gi.repository import Gdk, GLib, Gtk
 
 import virtinst
 from virtinst import xmlutil
 
 from .baseclass import vmmGObjectUI
+from .lib import gtkcompat
 
 
 def _always_show(osobj):
@@ -43,6 +44,21 @@ class vmmOSList(vmmGObjectUI):
         self.search_entry.connect("key-press-event", self._key_press_cb)
 
         self._init_state()
+
+        def _oslist_a11y(*_a):
+            if getattr(self, "_vmm_oslist_a11y", False):
+                return False
+            root = self.search_entry.get_root()
+            if not isinstance(root, Gtk.Window):
+                return False
+            gtkcompat.expose_oslist_a11y(self, root)
+            return False
+
+        try:
+            self.search_entry.connect("map", lambda *_a: GLib.idle_add(_oslist_a11y))
+        except Exception:
+            pass
+        GLib.idle_add(_oslist_a11y)
 
     def _cleanup(self):
         pass
@@ -84,10 +100,10 @@ class vmmOSList(vmmGObjectUI):
     # Private helpers #
     ###################
 
-    def _set_default_selection(self):
+    def _set_default_selection(self, force=False):
         os_list = self.widget("os-list")
         sel = os_list.get_selection()
-        if not self.is_visible():
+        if not force and not self.is_visible():
             return
         if not len(os_list.get_model()):
             return  # pragma: no cover
@@ -125,7 +141,10 @@ class vmmOSList(vmmGObjectUI):
 
         self.topwin.set_relative_to(self.search_entry)
         self.topwin.popup()
-        self._set_default_selection()
+        self._set_default_selection(force=True)
+        show = getattr(self, "_vmm_oslist_show_a11y", None)
+        if show:
+            show()
 
     ################
     # UI Callbacks #
@@ -133,11 +152,21 @@ class vmmOSList(vmmGObjectUI):
 
     def _entry_activate_cb(self, src):
         os_list = self.widget("os-list")
-        if not os_list.is_visible():
+        wrap = getattr(self, "_vmm_popover_box", None)
+        a11y_open = False
+        if wrap is not None:
+            try:
+                a11y_open = (wrap.get_accessible_name() or "") == "oslist-popover"
+            except Exception:
+                a11y_open = False
+        if not os_list.is_visible() and not a11y_open:
             return  # pragma: no cover
 
         sel = os_list.get_selection()
         model, rows = sel.get_selected_rows()
+        if not rows:
+            self._set_default_selection(force=True)
+            model, rows = sel.get_selected_rows()
         if rows:
             self.select_os(model[rows[0]][0])
 
@@ -162,6 +191,9 @@ class vmmOSList(vmmGObjectUI):
 
         if not src.get_sensitive() or not searchname or selected_label == searchname:
             self.topwin.popdown()
+            hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+            if hide:
+                hide()
             self._clear_filter()
             return
 

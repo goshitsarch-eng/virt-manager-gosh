@@ -454,6 +454,77 @@ class vmmCreateVM(vmmGObjectUI):
                     sidecar.set_accessible_role(Gtk.AccessibleRole.RADIO)
                 except Exception:
                     pass
+        gtkcompat.expose_oslist_a11y(self._os_list, self.topwin)
+        gtkcompat.expose_a11y_entry(
+            "create-vm-name",
+            "Name:",
+            self.widget("create-vm-name"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_check(
+            "install-detect-os",
+            "Automatically detect from the installation media / source",
+            self.widget("install-detect-os"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "install-iso-browse",
+            "install-iso-browse",
+            lambda: self.widget("install-iso-browse").emit("clicked"),
+            window=self.topwin,
+        )
+        if self._mediacombo is not None:
+            gtkcompat.expose_a11y_combo(
+                "media-combo",
+                "media-combo",
+                self._mediacombo._combo,
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_entry(
+                "media-entry",
+                "media-entry",
+                self._mediacombo._entry,
+                window=self.topwin,
+                name_with_value=True,
+            )
+        if self._addstorage is not None:
+            gtkcompat.expose_a11y_entry(
+                "storage-entry",
+                "storage-entry",
+                self._addstorage.widget("storage-entry"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+            gtkcompat.expose_a11y_button(
+                "storage-browse",
+                "storage-browse",
+                lambda: self._addstorage.widget("storage-browse").emit("clicked"),
+                window=self.topwin,
+            )
+            for wid, name in (
+                ("storage-create", "Create a disk image for the virtual machine"),
+                ("storage-select", "Select or create custom storage"),
+            ):
+                src = self._addstorage.widget(wid)
+                try:
+                    src.set_accessible_role(Gtk.AccessibleRole.RADIO)
+                except Exception:
+                    pass
+                gtkcompat.set_accessible_name(src, name)
+                gtkcompat.sync_accessible_checked(src)
+                gtkcompat.expose_a11y_check(wid, name, src, window=self.topwin)
+                sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
+                if sidecar is not None:
+                    try:
+                        sidecar.set_accessible_role(Gtk.AccessibleRole.RADIO)
+                    except Exception:
+                        pass
+            gtkcompat.expose_a11y_spin(
+                "storage-size",
+                "GiB",
+                self._addstorage.widget("storage-size"),
+                window=self.topwin,
+            )
 
     def _reset_state(self, urihint=None):
         """

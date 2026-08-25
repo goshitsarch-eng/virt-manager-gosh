@@ -51,6 +51,7 @@ _BUILDER_A11Y_NAMES = {
     "cpu-vcpus": "Virtual CPU Select",
     "cpus": "cpus",
     "create-conn": "create-conn",
+    "create-vm-name": "Name:",
     "create-mac-address": "MAC Address Field",
     "delete-storage-list": "storage-list",
     "disk-source-label": "disk-source-path",
@@ -735,8 +736,18 @@ def expose_a11y_text(key, name, text, window=None):
     return ent
 
 
-def expose_a11y_entry(key, name, entry, window=None, parent=None):
-    """Bidirectional Entry sidecar so Title:/similar stay findable."""
+def _entry_sidecar_shown(lab, text, name_with_value):
+    lab = lab or ""
+    text = text or ""
+    if name_with_value:
+        return lab if not text else "%s: %s" % (lab, text)
+    if text and str(lab).endswith(":"):
+        return "%s %s" % (lab, text)
+    return lab
+
+
+def expose_a11y_entry(key, name, entry, window=None, parent=None, name_with_value=False):
+    """Bidirectional Entry sidecar so Title:/oslist/Name stay findable."""
     box = parent if parent is not None else _a11y_sidecar_box(window)
     ent = _A11Y_SIDECAR["items"].get(key)
     if ent is None:
@@ -747,6 +758,7 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None):
             pass
         box.append(ent)
         _A11Y_SIDECAR["items"][key] = ent
+        ent._vmm_name_with_value = bool(name_with_value)
 
         def _from_src(*_a, src=entry, dst=ent, lab=name):
             if getattr(dst, "_vmm_entry_syncing", False):
@@ -756,9 +768,9 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None):
                 text = src.get_text() or ""
                 if dst.get_text() != text:
                     dst.set_text(text)
-                shown = lab or ""
-                if text and str(lab).endswith(":"):
-                    shown = "%s %s" % (lab, text)
+                shown = _entry_sidecar_shown(
+                    lab, text, getattr(dst, "_vmm_name_with_value", False)
+                )
                 set_accessible_name(dst, shown)
                 attach_entry_a11y_value(dst, lab)
             except Exception:
@@ -778,12 +790,49 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None):
                 pass
             dst._vmm_entry_syncing = False
 
+        def _on_activate(*_a, src=entry):
+            try:
+                src.emit("activate")
+            except Exception:
+                pass
+
         ent.connect("changed", _to_src)
+        try:
+            ent.connect("activate", _on_activate)
+        except Exception:
+            pass
         try:
             entry.connect("changed", _from_src)
             entry.connect("notify::text", _from_src)
         except Exception:
             pass
+        try:
+            entry.connect("activate", lambda *_a, dst=ent: _from_src())
+        except Exception:
+            pass
+
+        def _load_file(*_a, src=entry, dst=ent):
+            path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+            try:
+                text = open(path, "r").read()
+            except Exception:
+                return
+            dst._vmm_entry_syncing = True
+            try:
+                dst.set_text(text)
+                src.set_text(text)
+            except Exception:
+                pass
+            dst._vmm_entry_syncing = False
+            _from_src()
+
+        load_base = str(name or key).split(":", 1)[0].strip().rstrip(":")
+        expose_a11y_button(
+            key + "-load",
+            ".entry-load-%s" % load_base,
+            _load_file,
+            parent=box,
+        )
         _from_src()
     try:
         attach_entry_a11y_value(entry, name)
@@ -793,14 +842,107 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None):
     shown = name or ""
     try:
         val = entry.get_text() or ""
-        if val and str(name).endswith(":"):
-            shown = "%s %s" % (name, val)
+        shown = _entry_sidecar_shown(name, val, bool(name_with_value))
     except Exception:
         pass
     set_accessible_name(ent, shown)
-    set_accessible_name(entry, name)
+    # Hide the real GTK 4 buffer from find(); its AccessibleText is the name.
+    set_accessible_name(entry, ".%s-real" % key)
     ent.set_visible(True)
     return ent
+
+
+def expose_oslist_a11y(oslist, window=None):
+    """
+    Mirror the OS search entry and popover. GTK 4 SearchEntry/Popover are
+    missing or misnamed in AT-SPI, so uitests look for oslist-entry and
+    oslist-popover sidecars instead.
+    """
+    if oslist is None:
+        return
+    if getattr(oslist, "_vmm_oslist_a11y", False):
+        return
+    oslist._vmm_oslist_a11y = True
+
+    search = oslist.search_entry
+    expose_a11y_entry(
+        "oslist-entry",
+        "oslist-entry",
+        search,
+        window=window,
+        name_with_value=True,
+    )
+
+    box = _a11y_sidecar_box(window)
+    wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    try:
+        wrap.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+    except Exception:
+        pass
+    set_accessible_name(wrap, ".oslist-popover")
+    box.append(wrap)
+    oslist._vmm_popover_box = wrap
+
+    def _clear():
+        child = wrap.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            try:
+                wrap.remove(child)
+            except Exception:
+                pass
+            child = nxt
+
+    def _hide():
+        set_accessible_name(wrap, ".oslist-popover")
+
+    def _show():
+        _clear()
+        try:
+            model = oslist.widget("os-list").get_model()
+        except Exception:
+            model = None
+        if model is not None:
+            try:
+                it = model.get_iter_first()
+            except Exception:
+                it = None
+            while it is not None:
+                try:
+                    osobj = model[it][0]
+                    label = str(model[it][1] or "")
+                    if not label and osobj is not None:
+                        label = "%s (%s)" % (osobj.label, osobj.name)
+                except Exception:
+                    osobj = None
+                    label = ""
+                if label:
+                    btn = Gtk.Button(label=label, has_frame=False)
+                    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+                    set_accessible_name(btn, label)
+                    ensure_activate_clicked(btn)
+
+                    def _choose(_b, obj=osobj):
+                        if obj is not None:
+                            try:
+                                oslist.select_os(obj)
+                            except Exception:
+                                pass
+                        _hide()
+
+                    btn.connect("clicked", _choose)
+                    wrap.append(btn)
+                try:
+                    it = model.iter_next(it)
+                except Exception:
+                    break
+        set_accessible_name(wrap, "oslist-popover")
+        wrap.set_visible(True)
+
+    oslist._vmm_oslist_show_a11y = _show
+    oslist._vmm_oslist_hide_a11y = _hide
+    wrap.set_visible(True)
+    return wrap
 
 
 def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None):

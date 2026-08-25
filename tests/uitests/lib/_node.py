@@ -261,7 +261,11 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                 and not self._name_pattern.match(extra.strip())
             ):
                 return
-            if self._labeller_text and not self._labeller_pattern.match(labeller):
+            if self._labeller_text and not (
+                self._labeller_pattern.match(labeller)
+                or self._labeller_pattern.match(node.name or "")
+                or self._labeller_pattern.match(text or "")
+            ):
                 return
             if self._focusable and not (
                 node.focusable
@@ -425,8 +429,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
             if self.roleName in ("text", "entry", "text box", "spin button"):
                 if len(parts) > 1:
-                    return parts[-1]
-                return parts[0] if parts else ""
+                    extra = parts[-1]
+                    if extra != name:
+                        return extra
+                # GTK 4 empty entries expose the accessible name as text.
+                return ""
             return "\n".join(parts)
         return None
 
@@ -723,13 +730,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
         if (self.text or "") == text:
             return
-        # GTK 4 AccessibleText often ignores writes. The XML sidecar
-        # loads /tmp/vmm-a11y-xml.txt when .xml-load is clicked.
+        # GTK 4 AccessibleText often ignores writes. Sidecar load
+        # buttons apply /tmp files to the real Gtk buffers.
+        app = _virt_manager_app()
         if "XML" in (self.name or ""):
             try:
                 with open("/tmp/vmm-a11y-xml.txt", "w") as fh:
                     fh.write(text)
-                app = _virt_manager_app()
                 pred = _FuzzyPredicate(".xml-load", _alias_role("push button"))
                 btn = _walk_find(app, pred, True) if app is not None else None
                 if btn is not None:
@@ -739,6 +746,22 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         btn.click()
             except Exception:
                 pass
+            return
+        try:
+            with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
+                fh.write(text)
+            base = (self.name or "").split(":", 1)[0].strip().rstrip(":")
+            pred = _FuzzyPredicate(
+                re.escape(".entry-load-" + base), _alias_role("push button")
+            )
+            btn = _walk_find(app, pred, True) if app is not None else None
+            if btn is not None:
+                try:
+                    btn.doActionNamed("click")
+                except Exception:
+                    btn.click()
+        except Exception:
+            pass
 
     def get_text_override(self):
         self.check_onscreen()
