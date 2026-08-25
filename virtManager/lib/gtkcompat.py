@@ -1032,24 +1032,72 @@ def expose_createvm_methods_window(createvm):
     return win
 
 
+def _sync_conn_menu_sensitivity(manager):
+    items = getattr(manager, "connmenu_items", None) or {}
+    conn = None
+    try:
+        conn = manager.current_conn()
+    except Exception:
+        conn = None
+    if conn is None:
+        return items
+    try:
+        disconn = conn.is_disconnected()
+        conning = conn.is_connecting()
+        if "create" in items:
+            items["create"].set_sensitive(not disconn)
+        if "disconnect" in items:
+            items["disconnect"].set_sensitive(not (disconn or conning))
+        if "connect" in items:
+            items["connect"].set_sensitive(disconn)
+        if "delete" in items:
+            items["delete"].set_sensitive(disconn)
+    except Exception:
+        pass
+    return items
+
+
 def expose_conn_menu_window(manager):
-    """Findable connection context menu after GetItems cache errors."""
+    """Always-mapped connection context menu. Overlay Gtk.Menu popovers
+    are often missing after GetItems; a new add_window() surface stays
+    findable as conn-menu even before the first right-click."""
     if manager is None:
         return None
+    items = _sync_conn_menu_sensitivity(manager)
     win = getattr(manager, "_vmm_conn_menu_win", None)
     if win is not None:
         try:
             _ensure_app_window(win)
+            set_accessible_name(win, "conn-menu")
             win.set_visible(True)
+            box = win.get_child()
+            child = box.get_first_child() if box is not None else None
+            while child is not None:
+                name = ""
+                try:
+                    name = child.get_accessible_name() or ""
+                except Exception:
+                    pass
+                src = None
+                if name.startswith("conn-"):
+                    src = items.get(name[5:])
+                if src is not None:
+                    try:
+                        child.set_sensitive(src.get_sensitive())
+                    except Exception:
+                        pass
+                child = child.get_next_sibling()
             return win
         except Exception:
             manager._vmm_conn_menu_win = None
     win = Gtk.Window()
     win.set_decorated(False)
     win.set_modal(False)
-    win.set_default_size(200, 180)
+    win.set_focusable(False)
+    win.set_focus_on_click(False)
+    win.set_default_size(220, 200)
     try:
-        win.set_accessible_role(Gtk.AccessibleRole.MENU)
+        win.set_accessible_role(Gtk.AccessibleRole.DIALOG)
     except Exception:
         pass
     set_accessible_name(win, "conn-menu")
@@ -1059,7 +1107,6 @@ def expose_conn_menu_window(manager):
         pass
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     win.set_child(box)
-    items = getattr(manager, "connmenu_items", None) or {}
     for idx in ("create", "connect", "disconnect", "delete", "details"):
         src = items.get(idx)
         name = "conn-%s" % idx
@@ -1070,6 +1117,11 @@ def expose_conn_menu_window(manager):
             btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
         ensure_activate_clicked(btn)
         set_accessible_name(btn, name)
+        if src is not None:
+            try:
+                btn.set_sensitive(src.get_sensitive())
+            except Exception:
+                pass
 
         def _act(_b, it=src):
             if it is None:
@@ -3543,6 +3595,10 @@ class Menu(Gtk.Box):
             self.unparent()
         if self._popover.get_child() is not self:
             self._popover.set_child(self)
+        try:
+            _ensure_app_window(self._popover)
+        except Exception:
+            pass
         self._sync_menu_a11y_name()
         self.remove_css_class("vmm-submenu")
         show_all(self)
