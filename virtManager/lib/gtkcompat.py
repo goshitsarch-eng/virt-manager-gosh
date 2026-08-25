@@ -1169,55 +1169,64 @@ def _append_createvm_media_controls(box, createvm):
         createvm.widget("create-conn"),
         parent=box,
     )
+    _append_detect_os_control(box, createvm)
+    _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+
+
+def _append_detect_os_control(box, createvm):
+    """Findable Automatically detect control; native CheckButton clicks no-op."""
+    if box is None or createvm is None or getattr(box, "_vmm_detect_os", False):
+        return
+    detect = None
     try:
         detect = createvm.widget("install-detect-os")
-        if detect is not None and not getattr(box, "_vmm_detect_os", False):
-            box._vmm_detect_os = True
-            btn = Gtk.Button(
-                label="Automatically detect from the installation media / source",
-                has_frame=False,
-            )
-            try:
-                btn.set_accessible_role(Gtk.AccessibleRole.CHECKBOX)
-            except Exception:
-                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
-            ensure_activate_clicked(btn)
-            set_accessible_name(
-                btn, "Automatically detect from the installation media / source"
-            )
+    except Exception:
+        detect = None
+    if detect is None:
+        return
+    box._vmm_detect_os = True
+    btn = Gtk.Button(
+        label="Automatically detect from the installation media / source",
+        has_frame=False,
+    )
+    try:
+        btn.set_accessible_role(Gtk.AccessibleRole.CHECKBOX)
+    except Exception:
+        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(btn)
+    set_accessible_name(
+        btn, "Automatically detect from the installation media / source"
+    )
 
-            def _toggle(*_a, src=detect, dst=btn):
-                try:
-                    src.set_active(not bool(src.get_active()))
-                except Exception:
-                    pass
-                try:
-                    _sync_checked_state(dst, bool(src.get_active()))
-                except Exception:
-                    pass
+    def _toggle(*_a, src=detect, dst=btn):
+        try:
+            src.set_active(not bool(src.get_active()))
+        except Exception:
+            pass
+        try:
+            _sync_checked_state(dst, bool(src.get_active()))
+        except Exception:
+            pass
 
-            btn.connect("clicked", _toggle)
-            try:
-                btn.install_action("click", None, lambda *_a: _toggle())
-            except Exception:
-                pass
-            try:
-                detect.connect(
-                    "notify::active",
-                    lambda *_a, src=detect, dst=btn: _sync_checked_state(
-                        dst, bool(src.get_active())
-                    ),
-                )
-            except Exception:
-                pass
-            try:
-                _sync_checked_state(btn, bool(detect.get_active()))
-            except Exception:
-                pass
-            box.append(btn)
+    btn.connect("clicked", _toggle)
+    try:
+        btn.install_action("click", None, lambda *_a: _toggle())
     except Exception:
         pass
-    _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+    try:
+        detect.connect(
+            "notify::active",
+            lambda *_a, src=detect, dst=btn: _sync_checked_state(
+                dst, bool(src.get_active())
+            ),
+        )
+    except Exception:
+        pass
+    try:
+        _sync_checked_state(btn, bool(detect.get_active()))
+    except Exception:
+        pass
+    box.append(btn)
 
 
 def _append_createvm_close_control(box, createvm, win):
@@ -1281,6 +1290,7 @@ def expose_createvm_methods_window(createvm):
                 _append_oslist_a11y_controls(
                     child, getattr(createvm, "_os_list", None)
                 )
+                _append_detect_os_control(child, createvm)
                 _append_name_load_control(child, createvm)
                 _append_createvm_status_labels(child, createvm)
                 _append_createvm_media_controls(child, createvm)
@@ -1357,6 +1367,7 @@ def expose_createvm_methods_window(createvm):
         nav.connect("clicked", _nav)
         box.append(nav)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+    _append_detect_os_control(box, createvm)
     _append_name_load_control(box, createvm)
     _append_createvm_status_labels(box, createvm)
     _append_createvm_media_controls(box, createvm)

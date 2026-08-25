@@ -220,15 +220,22 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                 if nname.startswith(".") and not str(self._name or "").startswith("."):
                     return
             except Exception:
-                pass
-            if self._roleName and not self._role_pattern.match(node.roleName):
-                return
+                nname = ""
             try:
-                nname_l = (node.name or "").lower()
+                nname_l = nname.lower()
                 nrole = node.roleName or ""
             except Exception:
                 nname_l = ""
                 nrole = ""
+            if self._roleName and not self._role_pattern.match(nrole or node.roleName):
+                # GTK 4 CheckButton AT-SPI clicks are no-ops. The
+                # Automatically detect sidecar is a Button that toggles.
+                if not (
+                    "check" in str(self._roleName)
+                    and "automatically detect" in nname_l
+                    and nrole in ("button", "push button")
+                ):
+                    return
             # Native GTK 4 CheckButtons keep the visible label but ignore
             # activate. Skip them so find() reaches sidecar Buttons.
             if nrole in ("check box", "check button") and any(
