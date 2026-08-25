@@ -291,6 +291,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
         return False
 
     @property
+    def showing(self):
+        try:
+            st = self.getState()
+            if hasattr(pyatspi, "STATE_HIDDEN") and st.contains(pyatspi.STATE_HIDDEN):
+                return False
+        except Exception:
+            pass
+        try:
+            return self.getState().contains(pyatspi.STATE_SHOWING)
+        except Exception:
+            return False
+
+    @property
     def checked(self):
         # GTK 4 ToggleButton exposes AccessibleState.CHECKED as STATE_PRESSED
         st = self.getState()

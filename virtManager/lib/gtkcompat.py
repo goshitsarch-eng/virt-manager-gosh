@@ -431,11 +431,20 @@ def expose_a11y_button(key, name, callback):
 
 
 def sync_sidecar_visible(key, visible):
+    """
+    Keep the sidecar mapped so dogtail can find it, but mark it hidden
+    so .showing is False on inactive notebook pages.
+    """
     widget = _A11Y_SIDECAR.get("items", {}).get(key)
     if widget is None:
         return
     try:
-        widget.set_visible(bool(visible))
+        widget.set_visible(True)
+        widget.set_opacity(1.0 if visible else 0.0)
+    except Exception:
+        pass
+    try:
+        widget.update_state([Gtk.AccessibleState.HIDDEN], [not bool(visible)])
     except Exception:
         pass
 

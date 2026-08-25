@@ -90,6 +90,14 @@ class vmmVMWindow(vmmGObjectUI):
         self._shutdownmenu = None
         self._vmmenu = None
         self.init_menus()
+        addhw = self.widget("add-hardware-button")
+        gtkcompat.expose_a11y_button(
+            "add-hardware", "add-hardware", lambda: addhw.emit("clicked")
+        )
+        gtkcompat.sync_sidecar_visible(
+            "add-hardware",
+            self.widget("details-pages").get_current_page() == DETAILS_PAGE_DETAILS,
+        )
 
         self.builder.connect_signals(
             {
