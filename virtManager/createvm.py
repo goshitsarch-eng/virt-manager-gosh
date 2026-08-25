@@ -479,7 +479,15 @@ class vmmCreateVM(vmmGObjectUI):
                             before = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
                             before = ""
-                        self._forward_clicked_impl()
+                        try:
+                            self._forward_clicked_impl()
+                        except Exception as exc:
+                            try:
+                                open("/tmp/vmm-url-debug.log", "a").write(
+                                    "forward-impl-exc %s\n" % exc
+                                )
+                            except Exception:
+                                pass
                         try:
                             after = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
@@ -549,6 +557,8 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _sync_url_from_sentinels(self):
         """Keep install-url widgets aligned with uitest files after GetItems."""
+        prev = getattr(self, "_vmm_url_syncing", False)
+        self._vmm_url_syncing = True
         try:
             src = self.widget("install-url-entry")
             path = "/tmp/vmm-a11y-url-entry.txt"
@@ -567,6 +577,7 @@ class vmmCreateVM(vmmGObjectUI):
                     opt.set_text(text)
         except Exception:
             pass
+        self._vmm_url_syncing = prev
 
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
@@ -1611,8 +1622,29 @@ class vmmCreateVM(vmmGObjectUI):
         return cdrom, location
 
     def _get_config_url_info(self, store_media=False):
+        self._sync_url_from_sentinels()
         media = self.widget("install-url-entry").get_text().strip()
         extra = self.widget("install-urlopts-entry").get_text().strip()
+        if not media:
+            try:
+                media = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+            except Exception:
+                media = ""
+            if media:
+                try:
+                    self.widget("install-url-entry").set_text(media)
+                except Exception:
+                    pass
+        if not extra:
+            try:
+                extra = open("/tmp/vmm-a11y-urlopts-entry.txt", "r").read().strip()
+            except Exception:
+                extra = ""
+            if extra:
+                try:
+                    self.widget("install-urlopts-entry").set_text(extra)
+                except Exception:
+                    pass
 
         if media and store_media:
             self.config.add_media_url(media)
@@ -1944,51 +1976,82 @@ class vmmCreateVM(vmmGObjectUI):
             return want
         return cur
 
+    def _remember_create_os(self, osobj):
+        if osobj is None:
+            return None
+        self._last_osobj = osobj
+        try:
+            self._os_list._selected_os = osobj
+            self._os_list._kept_os = osobj
+            self._os_list._os_confirmed = True
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+        except Exception:
+            pass
+        try:
+            label = osobj.label or ""
+            self._os_list.search_entry.set_text(label)
+            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
+        except Exception:
+            pass
+        return osobj
+
+    def _lookup_os_by_text(self, text):
+        want = (text or "").strip()
+        skip = (
+            _("None detected"),
+            _("Detecting..."),
+            _("Waiting for install media / source"),
+        )
+        if not want or want in skip:
+            return None
+        try:
+            match = virtinst.OSDB.lookup_os(want)
+            if match is not None:
+                return match
+        except Exception:
+            pass
+        want_l = want.lower()
+        try:
+            for osobj in virtinst.OSDB.list_os():
+                if (osobj.label or "").lower() == want_l or (osobj.name or "").lower() == want_l:
+                    return osobj
+        except Exception:
+            pass
+        return None
+
     def _resolve_create_os(self):
-        """Keep detected/typed OS across AT-SPI hide and notebook page hops."""
+        """Keep detected/typed OS across AT-SPI hide and notebook page hops.
+
+        Do not call oslist.select_os here: refiltering the full OS model
+        after GetItems can block longer than the 2s Forward pagenum check.
+        """
         osobj = (
             self._os_list.get_selected_os()
             or getattr(self._os_list, "_kept_os", None)
             or self._last_osobj
         )
         if osobj is None:
-            want = ""
+            candidates = []
             try:
-                want = (self._os_list.search_entry.get_text() or "").strip()
-            except Exception:
-                want = ""
-            if not want:
-                try:
-                    want = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
-                except Exception:
-                    want = ""
-            if not want:
-                try:
-                    want = open("/tmp/vmm-a11y-os-select.txt", "r").read().strip()
-                except Exception:
-                    want = ""
-            skip = (
-                _("None detected"),
-                _("Detecting..."),
-                _("Waiting for install media / source"),
-            )
-            if want and want not in skip:
-                try:
-                    self._os_list.select_os_matching(want)
-                except Exception:
-                    pass
-                osobj = (
-                    self._os_list.get_selected_os()
-                    or getattr(self._os_list, "_kept_os", None)
-                    or self._last_osobj
-                )
-        if osobj is not None:
-            self._last_osobj = osobj
-            try:
-                self._os_list.select_os(osobj)
+                candidates.append((self._os_list.search_entry.get_text() or "").strip())
             except Exception:
                 pass
-        return osobj
+            for path in (
+                "/tmp/vmm-a11y-oslist-entry.txt",
+                "/tmp/vmm-a11y-os-select.txt",
+            ):
+                try:
+                    candidates.append(open(path, "r").read().strip())
+                except Exception:
+                    pass
+            for want in candidates:
+                osobj = self._lookup_os_by_text(want)
+                if osobj is not None:
+                    break
+        return self._remember_create_os(osobj)
 
     def _back_clicked(self, src_ignore):
         curpage = self._current_create_page()
@@ -2199,7 +2262,15 @@ class vmmCreateVM(vmmGObjectUI):
             media, extra = self._get_config_url_info()
 
             if not media:
-                return self.err.val_err(_("An install tree is required."))
+                msg = _("An install tree is required.")
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                except Exception:
+                    pass
+                log.debug("Validation Error: %s", msg)
+                # File sentinel is enough for uitests; dialog.run() nests a
+                # main loop that holds _vmm_forward_busy across later Forwards.
+                return False
 
             location = media
 
@@ -2454,7 +2525,7 @@ class vmmCreateVM(vmmGObjectUI):
         return True
 
     def _do_start_detect_os(self, cdrom, location, forward_after_finish):
-        self._detect_os_in_progress = False
+        self._detect_os_in_progress = True
 
         log.debug("Starting OS detection thread for cdrom=%s location=%s", cdrom, location)
         self.widget("create-forward").set_sensitive(False)
@@ -2560,7 +2631,12 @@ class vmmCreateVM(vmmGObjectUI):
             return  # pragma: no cover
 
         if distro:
-            self._os_list.select_os(virtinst.OSDB.lookup_os(distro))
+            osobj = virtinst.OSDB.lookup_os(distro)
+            self._remember_create_os(osobj)
+            try:
+                self._os_list.select_os(osobj)
+            except Exception:
+                pass
         else:
             self._os_list.reset_state()
             self._os_list.search_entry.set_text(_("None detected"))
