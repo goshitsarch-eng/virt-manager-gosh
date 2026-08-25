@@ -134,6 +134,9 @@ class vmmOSList(vmmGObjectUI):
                 try:
                     src = self.widget("include-eol")
                     src.set_active(not src.get_active())
+                    open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
+                        "1" if src.get_active() else "0"
+                    )
                 except Exception:
                     pass
                 try:
@@ -556,6 +559,12 @@ class vmmOSList(vmmGObjectUI):
         os_list = self.widget("os-list")
         if vmosobj.eol and not self.widget("include-eol").get_active():
             self.widget("include-eol").set_active(True)
+        try:
+            open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
+                "1" if self.widget("include-eol").get_active() else "0"
+            )
+        except Exception:
+            pass
 
         for row in os_list.get_model():
             osobj = row[0]

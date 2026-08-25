@@ -158,6 +158,13 @@ class VMMDogtailApp:
                     pass
             if key_l in ("enter", "return"):
                 try:
+                    url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                    if url.startswith("http"):
+                        open("/tmp/vmm-a11y-url-activate", "w").write("1")
+                        return
+                except Exception:
+                    pass
+                try:
                     from . import _node
 
                     pred = _node._FuzzyPredicate(

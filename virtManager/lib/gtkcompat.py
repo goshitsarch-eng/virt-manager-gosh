@@ -1470,6 +1470,87 @@ def _append_createvm_customize_check(box, createvm):
         pass
 
 
+def _append_createvm_url_controls(box, createvm):
+    """Network-install URL entry, combo, options expander, and extra args."""
+    if box is None or createvm is None:
+        return
+    if getattr(box, "_vmm_url_controls", False):
+        return
+    entry = None
+    try:
+        entry = createvm.widget("install-url-entry")
+    except Exception:
+        entry = None
+    if entry is None:
+        return
+    box._vmm_url_controls = True
+
+    def _toggle_urlopts(*_a, cvm=createvm):
+        exp = cvm.widget("install-url-options")
+        if exp is None:
+            return
+        try:
+            exp.set_expanded(not exp.get_expanded())
+        except Exception:
+            pass
+
+    try:
+        expose_a11y_combo(
+            "install-url-combo",
+            "install-url-combo",
+            createvm.widget("install-url-combo"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "install-url-entry",
+            "install-url-entry",
+            entry,
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_button(
+            "install-urlopts-expander",
+            "install-urlopts-expander",
+            _toggle_urlopts,
+            parent=box,
+        )
+        register_a11y_click("install-urlopts-expander", _toggle_urlopts)
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "install-urlopts-entry",
+            "install-urlopts-entry",
+            createvm.widget("install-urlopts-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+    try:
+        text = entry.get_text() or ""
+        open("/tmp/vmm-a11y-url-entry.txt", "w").write(text)
+        lines = []
+        combo = createvm.widget("install-url-combo")
+        model = combo.get_model() if combo is not None else None
+        if model is not None:
+            for row in model:
+                label = str(row[0] or "")
+                if label:
+                    lines.append(label)
+        if text and text not in lines:
+            lines.append(text)
+        open("/tmp/vmm-a11y-combo-install-url-combo.txt", "w").write("\n".join(lines))
+    except Exception:
+        pass
+
+
 def _append_createvm_net_controls(box, createvm):
     """Finish-page net-source combo, device name, expander, and warning."""
     if box is None or createvm is None:
@@ -1817,6 +1898,7 @@ def expose_createvm_methods_window(createvm):
                 _append_createvm_resource_spins(child, createvm)
                 _append_createvm_storage_radios(child, createvm)
                 _append_createvm_arch_controls(child, createvm)
+                _append_createvm_url_controls(child, createvm)
                 _append_createvm_net_controls(child, createvm)
                 _append_createvm_customize_check(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
@@ -1905,6 +1987,7 @@ def expose_createvm_methods_window(createvm):
     _append_createvm_resource_spins(box, createvm)
     _append_createvm_storage_radios(box, createvm)
     _append_createvm_arch_controls(box, createvm)
+    _append_createvm_url_controls(box, createvm)
     _append_createvm_net_controls(box, createvm)
     _append_createvm_customize_check(box, createvm)
     _append_createvm_close_control(box, createvm, win)

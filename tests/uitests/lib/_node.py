@@ -356,6 +356,20 @@ class _SentinelEntry(object):
             open("/tmp/vmm-a11y-entry.txt", "w").write(text if text is not None else "")
         except Exception:
             pass
+        if self.name == "install-url-entry":
+            try:
+                open("/tmp/vmm-a11y-url-entry.txt", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
+        if self.name == "install-urlopts-entry":
+            try:
+                open("/tmp/vmm-a11y-urlopts-entry.txt", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
         if str(self.name).startswith("Name"):
             try:
                 open("/tmp/vmm-a11y-create-name.txt", "w").write(
@@ -427,6 +441,10 @@ def _sentinel_named_entry(name, roleName):
         return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
     if compact == "import-entry" or raw == "import-entry":
         return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
+    if compact == "install-url-entry" or raw == "install-url-entry":
+        return _SentinelEntry("install-url-entry", "/tmp/vmm-a11y-url-entry.txt")
+    if compact == "install-urlopts-entry" or raw == "install-urlopts-entry":
+        return _SentinelEntry("install-urlopts-entry", "/tmp/vmm-a11y-urlopts-entry.txt")
     if "device name" in compact:
         return _SentinelEntry("Device name:", "/tmp/vmm-a11y-net-device.txt")
     return None
@@ -755,6 +773,124 @@ def _sentinel_addhw_tab(name, roleName):
     )
     if compact in tabs or raw in tabs:
         return _SentinelAddhwTab(compact)
+    return None
+
+
+class _UrlOptsExpanderSentinel(object):
+    name = "install-urlopts-expander"
+    roleName = "toggle button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("install-urlopts-expander")
+        except Exception:
+            pass
+
+    def click_expander(self, *args, **kwargs):
+        self.click()
+
+
+class _SentinelUrlCombo(object):
+    name = "install-url-combo"
+    roleName = "combo box"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def visible(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def fmt_nodes(self):
+        try:
+            return open("/tmp/vmm-a11y-combo-install-url-combo.txt", "r").read()
+        except Exception:
+            return ""
+
+    def print_nodes(self):
+        print(self.fmt_nodes())
+
+
+class _SentinelIncludeEol(object):
+    name = "include-eol"
+    roleName = "check box"
+
+    @property
+    def isChecked(self):
+        try:
+            return open("/tmp/vmm-a11y-oslist-eol-state.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def checked(self):
+        return self.isChecked
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-oslist-eol.txt", "w").write("1")
+        except Exception:
+            pass
+
+
+def _sentinel_url_widgets(name, roleName):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "")
+    compact = raw.lower()
+    role = str(roleName or "").lower()
+    if compact == "install-url-combo" or raw == "install-url-combo":
+        if role and "combo" not in role:
+            return None
+        return _SentinelUrlCombo()
+    if "install-urlopts-expander" in compact or compact == "install-urlopts-expander":
+        return _UrlOptsExpanderSentinel()
+    if compact == "include-eol" or raw == "include-eol":
+        if role and "check" not in role and "button" not in role:
+            return None
+        return _SentinelIncludeEol()
     return None
 
 
@@ -1776,6 +1912,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "architecture options",
             "network selection",
             "connection details",
+            "install-urlopts-expander",
             "media-entry",
             "copy host",
         )
@@ -2294,6 +2431,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             pass
         try:
+            sent = _sentinel_url_widgets(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
             sent = _sentinel_arch_options(name, roleName)
             if sent is not None:
                 return sent
@@ -2502,7 +2645,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
         self.findChildren(_walk, isLambda=True)
         try:
             name = self.name or ""
-            if "media-combo" in name or "create-conn" in name:
+            if (
+                "media-combo" in name
+                or "create-conn" in name
+                or "install-url-combo" in name
+            ):
                 extra = open("/tmp/vmm-a11y-combo-%s.txt" % name, "r").read()
                 if extra.strip():
                     strs.append(extra)

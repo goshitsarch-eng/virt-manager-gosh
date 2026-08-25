@@ -277,6 +277,10 @@ class vmmAsyncJob(vmmGObjectUI):
         self._timer = GLib.timeout_add(100, self._exit_if_necessary)
 
         if self.show_progress:
+            try:
+                gtkcompat._ensure_app_window(self.topwin)
+            except Exception:
+                pass
             self.topwin.present()
 
         if not self.cancel_cb and self.show_progress:

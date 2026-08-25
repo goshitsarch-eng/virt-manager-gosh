@@ -426,6 +426,47 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_net)
 
+        if not getattr(self, "_vmm_url_poll", False):
+            self._vmm_url_poll = True
+
+            def _poll_url():
+                path = "/tmp/vmm-a11y-url-entry.txt"
+                try:
+                    if os.path.exists(path):
+                        text = open(path, "r").read()
+                        stamp = os.path.getmtime(path)
+                        if getattr(self, "_vmm_url_entry_seen", None) != stamp:
+                            self._vmm_url_entry_seen = stamp
+                            src = self.widget("install-url-entry")
+                            if src is not None:
+                                src.set_text(text)
+                                if (text or "").strip().startswith("http"):
+                                    self._url_activated(src)
+                except Exception:
+                    pass
+                opt = "/tmp/vmm-a11y-urlopts-entry.txt"
+                try:
+                    if os.path.exists(opt):
+                        text = open(opt, "r").read()
+                        stamp = os.path.getmtime(opt)
+                        if getattr(self, "_vmm_urlopts_seen", None) != stamp:
+                            self._vmm_urlopts_seen = stamp
+                            self.widget("install-urlopts-entry").set_text(text)
+                except Exception:
+                    pass
+                if os.path.exists("/tmp/vmm-a11y-url-activate"):
+                    try:
+                        os.remove("/tmp/vmm-a11y-url-activate")
+                    except Exception:
+                        pass
+                    try:
+                        self._url_activated(self.widget("install-url-entry"))
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_url)
+
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
 
@@ -1739,7 +1780,16 @@ class vmmCreateVM(vmmGObjectUI):
     def _change_os_detect(self, sensitive):
         self._os_list.set_sensitive(sensitive)
         if not sensitive and not self._os_list.get_selected_os():
-            self._os_list.search_entry.set_text(_("Waiting for install media / source"))
+            waiting = _("Waiting for install media / source")
+            self._os_list.search_entry.set_text(waiting)
+            try:
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(waiting)
+            except Exception:
+                pass
+            try:
+                self._os_list.refresh_a11y()
+            except Exception:
+                pass
 
     def _set_install_page(self):
         instpage = self._get_config_install_page()
