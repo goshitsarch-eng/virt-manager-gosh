@@ -50,19 +50,31 @@ def _accessible_label_for_widget(widget):
     return _mnemonic_label(label)
 
 
+def _on_query_tooltip(widget, _x, _y, _keyboard, tooltip):
+    tip = getattr(widget, "_vmm_tooltip", None)
+    if not tip:
+        return False
+    tooltip.set_text(tip)
+    return True
+
+
 def apply_accessible_label(widget):
     """
     Prefer the mnemonic-stripped widget label as the AT-SPI name.
 
     GTK 4 icon buttons otherwise expose the tooltip (e.g. "Create a new
-    virtual machine" instead of "New").
+    virtual machine" instead of "New"). Move tooltip-text to query-tooltip
+    so AT-SPI keeps the GTK 3 label, and cache the label across set_icon_name.
     """
     if widget is None or not isinstance(widget, Gtk.Widget):
         return
     name = _accessible_label_for_widget(widget)
-    if not name:
+    cached = getattr(widget, "_vmm_a11y_name", None)
+    if name:
+        widget._vmm_a11y_name = name
+        cached = name
+    if not cached:
         return
-    set_accessible_name(widget, name)
     tip = None
     if hasattr(widget, "get_tooltip_text"):
         try:
@@ -70,7 +82,17 @@ def apply_accessible_label(widget):
         except Exception:
             tip = None
     if tip:
+        widget._vmm_tooltip = tip
+        if not getattr(widget, "_vmm_tooltip_query", False):
+            widget._vmm_tooltip_query = True
+            widget.connect("query-tooltip", _on_query_tooltip)
+        try:
+            widget.set_tooltip_text(None)
+        except Exception:
+            pass
+        widget.set_has_tooltip(True)
         widget.update_property([Gtk.AccessibleProperty.DESCRIPTION], [str(tip)])
+    set_accessible_name(widget, cached)
 
 
 def sync_builder_accessible(widget):
@@ -93,13 +115,15 @@ def sync_builder_accessible(widget):
         inner_btn = getattr(widget, "_button", None)
         if inner_btn is not None:
             apply_accessible_label(inner_btn)
+        return False
 
-    widget.connect("map", _reapply)
+    widget.connect("map", lambda *_a: GLib.idle_add(_reapply))
     for prop in ("tooltip-text", "label", "icon-name"):
         try:
             widget.connect("notify::" + prop, _reapply)
         except TypeError:
             pass
+    GLib.idle_add(_reapply)
 
 
 def get_accessible_name(widget):
@@ -875,6 +899,9 @@ class MenuToolButton(Gtk.Box):
 
     def _sync_label(self, *_args):
         self._button.set_label(self.label)
+        name = _mnemonic_label(self.label)
+        if name:
+            self._button._vmm_a11y_name = name
         apply_accessible_label(self._button)
 
     def _sync_icon(self, *_args):
