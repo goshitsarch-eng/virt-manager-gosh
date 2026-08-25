@@ -19,13 +19,12 @@ def _testVMLifecycle(app):
     shutdown = manager.find("Shut Down", "push button")
     pause = manager.find("Pause", "toggle button")
     run = manager.find("Run", "push button")
-    force = manager.find("Force Off", "menu item")
     smenu = manager.find("Menu", "toggle button")
-    save = manager.find("Save", "menu item")
 
     c = manager.find("test-many-devices", "table cell")
     c.click()
     smenu.click()
+    force = manager.find("Force Off", "menu item")
     force.click()
     app.click_alert_button("Are you sure you want", "Yes")
     lib.utils.check(lambda: run.sensitive, timeout=5)
@@ -37,6 +36,7 @@ def _testVMLifecycle(app):
     pause.click()
     lib.utils.check(lambda: not pause.checked, timeout=5)
     smenu.click()
+    save = manager.find("Save", "menu item")
     save.click()
     lib.utils.check(lambda: run.sensitive, timeout=5)
     lib.utils.check(lambda: "Saved" in c.text)
@@ -112,13 +112,13 @@ def testManagerSaveCancelError(app):
     manager = app.topwin
     run = manager.find("Run", "push button")
     smenu = manager.find("Menu", "toggle button")
-    save = manager.find("Save", "menu item")
 
     c = manager.find("test-many-devices", "table cell")
     c.click()
 
     # Save it, attempt a cancel operation
     smenu.click()
+    save = manager.find("Save", "menu item")
     save.click()
     progwin = app.find_window("Saving Virtual Machine")
     # Attempt cancel which will fail, then find the error message
@@ -144,13 +144,13 @@ def testManagerQEMUSetTime(app):
     manager = app.topwin
     run = manager.find("Run", "push button")
     smenu = manager.find("Menu", "toggle button")
-    save = manager.find("Save", "menu item")
 
     c = manager.find("test alternate devs title", "table cell")
     c.click()
 
     # Save -> resume -> save
     smenu.click()
+    save = manager.find("Save", "menu item")
     save.click()
     lib.utils.check(lambda: run.sensitive)
     app.sleep(1)  # give settime thread time to run
@@ -158,7 +158,7 @@ def testManagerQEMUSetTime(app):
     lib.utils.check(lambda: not run.sensitive)
     app.sleep(1)  # give settime thread time to run
     smenu.click()
-    save.click()
+    manager.find("Save", "menu item").click()
     lib.utils.check(lambda: run.sensitive)
     app.sleep(1)  # give settime thread time to run
 
