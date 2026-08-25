@@ -967,10 +967,7 @@ def attach_treeview_column_a11y(treeview):
             except Exception:
                 pass
             btn = Gtk.Button(label=title)
-            try:
-                btn.set_accessible_role(Gtk.AccessibleRole.COLUMN_HEADER)
-            except Exception:
-                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
             set_accessible_name(btn, title)
             ensure_activate_clicked(btn)
 

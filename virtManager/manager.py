@@ -445,10 +445,8 @@ class vmmManager(vmmGObjectUI):
         self.diskcol = make_stats_column(_("Disk I/O"), COL_DISK)
         self.netcol = make_stats_column(_("Network I/O"), COL_NETWORK)
         gtkcompat.attach_treeview_column_a11y(vmlist)
-        try:
-            col_role = Gtk.AccessibleRole.COLUMN_HEADER
-        except Exception:
-            col_role = Gtk.AccessibleRole.BUTTON
+        # COLUMN_HEADER is exposed as AT-SPI "filler", which uitests
+        # do not treat as a table column header.
         for title, col in (
             ("Name", nameCol),
             ("CPU usage", self.guestcpucol),
@@ -462,7 +460,6 @@ class vmmManager(vmmGObjectUI):
                 title,
                 lambda c=col: c.clicked(),
                 window=self.topwin,
-                role=col_role,
             )
 
         model.set_sort_func(COL_NAME, self.vmlist_name_sorter)
