@@ -1467,6 +1467,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     _oslist_start_search()
                 if (self.name or "").startswith("Name"):
                     _write_overview_name(text)
+                if "storage-entry" in (self.name or ""):
+                    try:
+                        open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                    except Exception:
+                        pass
                 with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                     fh.write(text)
                 if "oslist-entry" in (self.name or ""):
@@ -1500,6 +1505,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 _oslist_start_search()
             if (self.name or "").startswith("Name"):
                 _write_overview_name(text)
+            if "storage-entry" in (self.name or ""):
+                try:
+                    open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                except Exception:
+                    pass
             with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                 fh.write(text)
             base = (self.name or "").split(":", 1)[0].strip().rstrip(":")
