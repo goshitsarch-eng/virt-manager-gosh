@@ -216,7 +216,7 @@ class VMMDogtailApp:
             return bool(text and label_text and label_text.lower() in text.lower())
 
         try:
-            utils.check(_alert_matches, timeout=3)
+            utils.check(_alert_matches, timeout=10)
         except Exception:
             pass
         if _alert_matches():

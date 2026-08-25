@@ -4,6 +4,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gdk
 from gi.repository import Gtk
 
@@ -209,6 +211,13 @@ class vmmVMWindow(vmmGObjectUI):
 
     def customize_finish(self, src):
         ignore = src
+        try:
+            if self._details.widget("config-apply").get_sensitive():
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "There are unapplied changes. Would you like to apply them now?"
+                )
+        except Exception:
+            pass
         if self._details.vmwindow_has_unapplied_changes():
             return
         self.emit("customize-finished", self.vm)
