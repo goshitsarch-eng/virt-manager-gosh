@@ -341,6 +341,19 @@ class _SentinelEntry(object):
             open("/tmp/vmm-a11y-entry.txt", "w").write(text if text is not None else "")
         except Exception:
             pass
+        if str(self.name).startswith("Name"):
+            try:
+                open("/tmp/vmm-a11y-create-name.txt", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-overview-name.txt", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
 
 
 def _sentinel_named_entry(name, roleName):
@@ -357,6 +370,8 @@ def _sentinel_named_entry(name, roleName):
     compact = raw.lower()
     if compact == "storage-entry" or raw == "storage-entry":
         return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
+    if compact in ("name", "name:") or raw in ("Name", "Name:"):
+        return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
     return None
 
 
