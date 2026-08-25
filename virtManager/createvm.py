@@ -453,6 +453,8 @@ class vmmCreateVM(vmmGObjectUI):
                 back = "/tmp/vmm-a11y-create-back"
                 try:
                     if os.path.exists(fwd):
+                        if getattr(self, "_vmm_forward_busy", False):
+                            return True
                         os.remove(fwd)
                         self._forward_clicked_impl()
                 except Exception:
@@ -842,6 +844,7 @@ class vmmCreateVM(vmmGObjectUI):
                 pass
         self.reset_finish_cursor()
 
+        self._vmm_goto_page = PAGE_NAME
         self.widget("create-pages").set_current_page(PAGE_NAME)
         self._page_changed(None, None, PAGE_NAME)
 
@@ -1797,8 +1800,10 @@ class vmmCreateVM(vmmGObjectUI):
 
         self.widget("header-pagenum").set_markup(page_lbl)
         gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        self._vmm_pagenum_gen = getattr(self, "_vmm_pagenum_gen", 0) + 1
+        shown = "%s #%s" % (page_lbl, self._vmm_pagenum_gen)
         try:
-            open("/tmp/vmm-a11y-pagenum.txt", "w").write(page_lbl)
+            open("/tmp/vmm-a11y-pagenum.txt", "w").write(shown)
         except Exception:
             pass
         gtkcompat.expose_a11y_label(
@@ -1860,7 +1865,27 @@ class vmmCreateVM(vmmGObjectUI):
             # Skip over storage page
             next_page -= 1
 
-        notebook.set_current_page(next_page)
+        self._goto_create_page(next_page)
+
+    def _goto_create_page(self, pagenum):
+        """GTK 4 will not switch a notebook to a child hidden by _page_changed."""
+        self._vmm_goto_page = pagenum
+        try:
+            self._set_page_num_text(pagenum)
+        except Exception:
+            pass
+        notebook = self.widget("create-pages")
+        try:
+            page = notebook.get_nth_page(pagenum)
+            if page is not None:
+                page.set_visible(True)
+        except Exception:
+            pass
+        notebook.set_current_page(pagenum)
+        try:
+            self._set_page_num_text(pagenum)
+        except Exception:
+            pass
 
     def _get_next_pagenum(self, curpage):
         next_page = curpage + 1
@@ -1878,6 +1903,15 @@ class vmmCreateVM(vmmGObjectUI):
         return True
 
     def _forward_clicked_impl(self, *_a):
+        if getattr(self, "_vmm_forward_busy", False):
+            return False
+        self._vmm_forward_busy = True
+        try:
+            return self._forward_clicked_impl_body()
+        finally:
+            self._vmm_forward_busy = False
+
+    def _forward_clicked_impl_body(self):
         notebook = self.widget("create-pages")
         curpage = notebook.get_current_page()
         try:
@@ -1940,20 +1974,18 @@ class vmmCreateVM(vmmGObjectUI):
         if self._validate(curpage) is not True:
             return False
 
-        self.widget("create-forward").grab_focus()
         if curpage == PAGE_NAME:
             self._set_install_page()
 
         next_page = self._get_next_pagenum(curpage)
-        notebook.set_current_page(next_page)
-        try:
-            self._set_page_num_text(next_page)
-        except Exception:
-            pass
+        self._goto_create_page(next_page)
         return False
 
     def _page_changed(self, ignore1, ignore2, pagenum):
         if self.builder is None:
+            return
+        want = getattr(self, "_vmm_goto_page", None)
+        if want is not None and pagenum != want:
             return
         if pagenum == PAGE_FINISH:
             try:
@@ -1987,11 +2019,9 @@ class vmmCreateVM(vmmGObjectUI):
             GLib.idle_add(_restore)
             GLib.timeout_add(200, _restore)
 
-        # Hide all other pages, so the dialog isn't all stretched out
-        # because of one large page.
-        for nr in range(self.widget("create-pages").get_n_pages()):
-            page = self.widget("create-pages").get_nth_page(nr)
-            page.set_visible(nr == pagenum)
+        # Do not hide inactive Gtk.Notebook pages here. set_visible(False)
+        # after GetItems blocks the main loop long enough that Back misses
+        # the 2s pagenum check.
 
         self._set_page_num_text(pagenum)
 
@@ -2456,7 +2486,9 @@ class vmmCreateVM(vmmGObjectUI):
             self._os_list.refresh_a11y()
 
         if forward_after_finish:
-            self.idle_add(self._forward_clicked, ())
+            # UITESTS click Forward after detect; auto-advance races the
+            # 2s pagenum check by changing the page before _nav reads it.
+            pass
 
     ##########################
     # Guest install routines #

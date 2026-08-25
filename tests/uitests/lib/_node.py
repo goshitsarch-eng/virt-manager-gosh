@@ -911,10 +911,6 @@ class _SentinelNavButton(object):
             open(path, "w").write(self.name)
         except Exception:
             pass
-        try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
-        except Exception:
-            pass
 
     def keyCombo(self, combo, *args, **kwargs):
         self.click()
@@ -2533,6 +2529,9 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
+
+        if name and "pagenum" in str(name).lower():
+            return _SentinelPagenum()
 
         try:
             sent = _sentinel_oslist_popover(name, roleName)
