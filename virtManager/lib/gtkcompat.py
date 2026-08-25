@@ -1004,6 +1004,12 @@ def _oslist_apply_search_text(oslist, text):
     if oslist is None:
         return
     try:
+        disable = getattr(oslist, "_vmm_disable_detect", None)
+        if disable:
+            disable()
+    except Exception:
+        pass
+    try:
         oslist.search_entry.set_sensitive(True)
     except Exception:
         pass
@@ -1063,6 +1069,10 @@ def _append_oslist_a11y_controls(box, oslist):
             parent=box,
             name_with_value=True,
         )
+        set_accessible_name(oslist.search_entry, ".oslist-entry-real")
+        sidecar = _A11Y_SIDECAR["items"].get("methods-oslist-entry")
+        if sidecar is not None:
+            sidecar.set_sensitive(True)
     except Exception:
         pass
 
@@ -1160,12 +1170,51 @@ def _append_createvm_media_controls(box, createvm):
         parent=box,
     )
     try:
-        expose_a11y_check(
-            "methods-install-detect-os",
-            "Automatically detect from the installation media / source",
-            createvm.widget("install-detect-os"),
-            parent=box,
-        )
+        detect = createvm.widget("install-detect-os")
+        if detect is not None and not getattr(box, "_vmm_detect_os", False):
+            box._vmm_detect_os = True
+            btn = Gtk.Button(
+                label="Automatically detect from the installation media / source",
+                has_frame=False,
+            )
+            try:
+                btn.set_accessible_role(Gtk.AccessibleRole.CHECKBOX)
+            except Exception:
+                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            ensure_activate_clicked(btn)
+            set_accessible_name(
+                btn, "Automatically detect from the installation media / source"
+            )
+
+            def _toggle(*_a, src=detect, dst=btn):
+                try:
+                    src.set_active(not bool(src.get_active()))
+                except Exception:
+                    pass
+                try:
+                    _sync_checked_state(dst, bool(src.get_active()))
+                except Exception:
+                    pass
+
+            btn.connect("clicked", _toggle)
+            try:
+                btn.install_action("click", None, lambda *_a: _toggle())
+            except Exception:
+                pass
+            try:
+                detect.connect(
+                    "notify::active",
+                    lambda *_a, src=detect, dst=btn: _sync_checked_state(
+                        dst, bool(src.get_active())
+                    ),
+                )
+            except Exception:
+                pass
+            try:
+                _sync_checked_state(btn, bool(detect.get_active()))
+            except Exception:
+                pass
+            box.append(btn)
     except Exception:
         pass
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))

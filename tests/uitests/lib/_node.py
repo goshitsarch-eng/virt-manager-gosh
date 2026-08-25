@@ -40,6 +40,8 @@ _GTK4_ROLE_ALIASES = {
     ".*radio.*": ".*(radio button|radio|toggle button|button|push button|check box|check button).*",
     "check button": "(check button|check box)",
     "check box": "(check box|check button)",
+    "check": "(check|check box|check button)",
+    ".*check.*": ".*(check|check box|check button).*",
     "page tab": "(page tab|tab|button|push button)",
     "text": "(text|entry|text box)",
     "combo box": "(combo box|combo)",
@@ -236,6 +238,7 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                     "local install media",
                     "network install",
                     "import existing disk",
+                    "automatically detect",
                 )
             ):
                 return
@@ -654,6 +657,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # GTK 4 FileChooser/alert buttons often lose AT-SPI states
         # after GetItems cache errors.
         if (self.name or "") in ("Open", "Cancel", "OK", "Yes", "No", "Close"):
+            return True
+        # Auto-detect leaves the real SearchEntry disabled; the sidecar
+        # still accepts set_text and opens oslist-popover.
+        if "oslist-entry" in (self.name or ""):
             return True
         utils.check(lambda: self.sensitive)
 

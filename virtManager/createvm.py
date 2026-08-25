@@ -502,6 +502,12 @@ class vmmCreateVM(vmmGObjectUI):
                 gtkcompat.set_accessible_name(sidecar, name)
                 gtkcompat.sync_accessible_checked(sidecar)
         gtkcompat.expose_oslist_a11y(self._os_list, self.topwin)
+        try:
+            self._os_list._vmm_disable_detect = lambda: self.widget(
+                "install-detect-os"
+            ).set_active(False)
+        except Exception:
+            pass
         gtkcompat.expose_a11y_entry(
             "create-vm-name",
             "Name:",
