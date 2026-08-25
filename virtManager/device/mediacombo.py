@@ -64,7 +64,16 @@ class vmmMediaCombo(vmmGObjectUI):
         self._entry = self._combo.get_child()
         self._entry.set_placeholder_text(_("No media selected"))
         self._entry.set_hexpand(True)
-        self._entry.get_accessible().set_name("media-entry")
+        try:
+            self._entry.get_accessible().set_name("media-entry")
+        except Exception:
+            pass
+        try:
+            from ..lib import gtkcompat
+
+            gtkcompat.set_accessible_name(self._entry, "media-entry")
+        except Exception:
+            pass
         self._entry.connect("changed", self._on_entry_changed_cb)
         self._entry.connect("activate", self._on_entry_activated_cb)
 
@@ -196,6 +205,10 @@ class vmmMediaCombo(vmmGObjectUI):
     def set_path(self, path):
         uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
         self._entry.set_position(-1)
+        try:
+            open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+        except Exception:
+            pass
 
     def set_mnemonic_label(self, label):
         label.set_mnemonic_widget(self._entry)

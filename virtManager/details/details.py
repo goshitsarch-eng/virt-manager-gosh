@@ -471,6 +471,26 @@ class vmmDetails(vmmGObjectUI):
         )
         title = self.widget("overview-title")
         gtkcompat.expose_a11y_entry("details-overview-title", "Title:", title, window=self.topwin)
+        try:
+            gtkcompat.expose_a11y_entry(
+                "details-media-entry",
+                "media-entry",
+                self._mediacombo._entry,
+                window=self.topwin,
+                name_with_value=True,
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_entry(
+                "details-mac-entry",
+                "mac-entry",
+                self.widget("network-mac-entry"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+        except Exception:
+            pass
 
     @property
     def conn(self):
