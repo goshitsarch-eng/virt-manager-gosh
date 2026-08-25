@@ -346,7 +346,9 @@ class vmmManager(vmmGObjectUI):
         self.vmmenu._vmm_menu_name = "vm-action-menu"
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
-        gtkcompat.expose_conn_menu_window(self)
+        for idx, item in self.connmenu_items.items():
+            gtkcompat.set_accessible_name(item, "conn-%s" % idx)
+            item._vmm_a11y_name = "conn-%s" % idx
 
         def _on_menu_key(_c, keyval, *_a):
             if Gdk.keyval_name(keyval) == "Menu":
@@ -548,6 +550,7 @@ class vmmManager(vmmGObjectUI):
     def new_vm(self, _src):
         from .createvm import vmmCreateVM
 
+        gtkcompat.hide_conn_menu_window(self)
         conn = self.current_conn()
         vmmCreateVM.show_instance(self, conn and conn.get_uri() or None)
 
@@ -933,8 +936,6 @@ class vmmManager(vmmGObjectUI):
         self.widget("menu_edit_delete").set_sensitive(can_delete)
         self.widget("menu_edit_details").set_sensitive(show_details)
         self.widget("menu_host_details").set_sensitive(host_details)
-        if conn is not None and vm is None:
-            gtkcompat.expose_conn_menu_window(self)
 
     def popup_vm_menu_from_selection(self, event=None):
         model, treeiter = self.widget("vm-list").get_selection().get_selected()

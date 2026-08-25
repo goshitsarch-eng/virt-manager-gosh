@@ -1123,7 +1123,7 @@ def expose_conn_menu_window(manager):
             except Exception:
                 pass
 
-        def _act(_b, it=src):
+        def _act(_b, it=src, mgr=manager):
             if it is None:
                 return
             try:
@@ -1133,6 +1133,16 @@ def expose_conn_menu_window(manager):
                     it.activate()
                 except Exception:
                     pass
+            try:
+                hide_conn_menu_window(mgr)
+            except Exception:
+                pass
+            try:
+                menu = getattr(mgr, "connmenu", None)
+                if menu is not None:
+                    menu.popdown()
+            except Exception:
+                pass
 
         btn.connect("clicked", _act)
         box.append(btn)
@@ -3211,7 +3221,10 @@ class MenuItem(Gtk.Button):
             text = self._label_widget.get_text() or ""
         if not text:
             text = (self.label or "").replace("_", "", 1)
-        if text:
+        forced = getattr(self, "_vmm_a11y_name", None)
+        if forced:
+            set_accessible_name(self, forced)
+        elif text:
             set_accessible_name(self, text)
         if not self._submenu:
             self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)

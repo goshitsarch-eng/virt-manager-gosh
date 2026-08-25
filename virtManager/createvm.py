@@ -257,6 +257,17 @@ class vmmCreateVM(vmmGObjectUI):
             vmmEngine.get_instance().increment_window_counter()
 
         self.topwin.present()
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "New VM")
+            self.topwin.set_title("New VM")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
         gtkcompat.expose_createvm_methods_window(self)
         gtkcompat.expose_oslist_activate_window(self._os_list)
 
