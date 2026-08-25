@@ -77,7 +77,7 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None):
     if _seen is None:
         _seen = set()
     if _budget is None:
-        _budget = [400]
+        _budget = [800]
     if _budget[0] <= 0:
         return None
     _budget[0] -= 1
@@ -573,6 +573,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 ret = _walk_find(self, pred, False)
             if ret is None:
                 ret = _walk_find(self, pred, recursive=recursive)
+            if ret is None:
+                try:
+                    parent = self.accessible_parent
+                except Exception:
+                    parent = None
+                if parent is not None and parent is not self:
+                    ret = _walk_find(parent, pred, False) or _walk_find(parent, pred, True)
             if ret is None:
                 app = _virt_manager_app()
                 if app is not None and app is not self:
