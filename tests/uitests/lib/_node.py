@@ -243,6 +243,89 @@ class _OslistPopoverSentinel(object):
         return self.find(name_pattern, role_pattern, labeller_pattern)
 
 
+class _SentinelOslistEntry(object):
+    """oslist-entry after GetItems: the real AT-SPI node goes DEAD."""
+
+    name = "oslist-entry"
+    roleName = "text"
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
+        except Exception:
+            return ""
+
+    @text.setter
+    def text(self, value):
+        self.set_text(value)
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    @property
+    def focused(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def check_sensitive(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        for marker in (
+            "/tmp/vmm-a11y-oslist-escape",
+            "/tmp/vmm-a11y-oslist-popover-hidden",
+        ):
+            try:
+                os.remove(marker)
+            except Exception:
+                pass
+        try:
+            open("/tmp/vmm-a11y-oslist-reopen", "w").write("1")
+        except Exception:
+            pass
+
+    def set_text(self, text):
+        # Keep the load-button / os-select path so set_text("generic") works.
+        try:
+            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(text or "")
+            open("/tmp/vmm-a11y-entry.txt", "w").write(text or "")
+            open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
+            open("/tmp/vmm-a11y-os-select.txt", "w").write(text or "")
+        except Exception:
+            pass
+        _oslist_start_search()
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(".entry-load-oslist-entry")
+        except Exception:
+            pass
+
+
+def _sentinel_oslist_entry(name, roleName):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "")
+    compact = raw.lower()
+    if "oslist-entry" not in compact:
+        return None
+    role = str(roleName or "").lower()
+    if role and "text" not in role and "entry" not in role and "label" not in role:
+        return None
+    return _SentinelOslistEntry()
+
+
 def _sentinel_oslist_popover(name, roleName):
     if not name:
         return None
@@ -989,6 +1072,11 @@ class _SentinelDetectOs(object):
     def click(self, *args, **kwargs):
         try:
             open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+        except Exception:
+            pass
+        # Re-enabling detect should hide the OS popover immediately.
+        try:
+            open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
         except Exception:
             pass
 
@@ -2560,6 +2648,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
         if name and "pagenum" in str(name).lower():
             return _SentinelPagenum()
+        try:
+            sent = _sentinel_oslist_entry(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
 
         try:
             sent = _sentinel_oslist_popover(name, roleName)
