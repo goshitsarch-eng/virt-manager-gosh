@@ -937,11 +937,32 @@ def expose_oslist_a11y(oslist, window=None):
     """
     if oslist is None:
         return
-    if getattr(oslist, "_vmm_oslist_a11y", False):
+    already = getattr(oslist, "_vmm_oslist_a11y", False)
+    search = oslist.search_entry
+    if already:
+        root = window
+        try:
+            if root is None:
+                root = search.get_root()
+        except Exception:
+            root = window
+        if isinstance(root, Gtk.Window) and not getattr(root, "_vmm_oslist_enter", False):
+            root._vmm_oslist_enter = True
+            wkey = Gtk.EventControllerKey()
+
+            def _win_key(_c, keyval, *_a, lst=oslist):
+                if Gdk.keyval_name(keyval) in ("Return", "KP_Enter"):
+                    try:
+                        lst._entry_activate_cb(lst.search_entry)
+                        return True
+                    except Exception:
+                        pass
+                return False
+
+            wkey.connect("key-pressed", _win_key)
+            root.add_controller(wkey)
         return
     oslist._vmm_oslist_a11y = True
-
-    search = oslist.search_entry
     expose_a11y_entry(
         "oslist-entry",
         "oslist-entry",
@@ -1074,7 +1095,73 @@ def expose_oslist_a11y(oslist, window=None):
     oslist._vmm_oslist_show_a11y = _show
     oslist._vmm_oslist_hide_a11y = _hide
     wrap.set_visible(True)
+    expose_oslist_activate_window(oslist)
     return wrap
+
+
+def expose_oslist_activate_window(oslist):
+    """Always-mapped window so Enter can confirm an OS after GetItems errors."""
+    if oslist is None:
+        return None
+    win = getattr(oslist, "_vmm_activate_win", None)
+    if win is not None:
+        try:
+            win.set_visible(True)
+            return win
+        except Exception:
+            pass
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_modal(False)
+    win.set_default_size(80, 32)
+    try:
+        win.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+    except Exception:
+        pass
+    set_accessible_name(win, ".oslist-activate-win")
+    try:
+        win.set_title(".oslist-activate-win")
+    except Exception:
+        pass
+    btn = Gtk.Button(label=".oslist-activate")
+    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(btn)
+    set_accessible_name(btn, ".oslist-activate")
+
+    def _activate(_b, lst=oslist):
+        try:
+            lst._entry_activate_cb(lst.search_entry)
+        except Exception:
+            pass
+
+    btn.connect("clicked", _activate)
+    win.set_child(btn)
+    app = Gtk.Application.get_default()
+    if app is not None:
+        try:
+            app.add_window(win)
+        except Exception:
+            pass
+    win.set_visible(True)
+    oslist._vmm_activate_win = win
+    return win
+
+
+def hide_oslist_activate_window(oslist):
+    win = getattr(oslist, "_vmm_activate_win", None) if oslist is not None else None
+    if win is None:
+        return
+    try:
+        app = Gtk.Application.get_default()
+        if app is not None:
+            app.remove_window(win)
+    except Exception:
+        pass
+    try:
+        win.close()
+    except Exception:
+        pass
+    oslist._vmm_activate_win = None
 
 
 def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None):

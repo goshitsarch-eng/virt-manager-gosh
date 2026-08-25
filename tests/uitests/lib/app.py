@@ -131,8 +131,34 @@ class VMMDogtailApp:
             return ".* on"
         return "Virtual Machine Manager"
 
-    rawinput = dogtail.rawinput
     tree = dogtail.tree
+
+    class _RawInput(object):
+        def __getattr__(self, name):
+            return getattr(dogtail.rawinput, name)
+
+        def pressKey(self, key, *a, **kw):
+            key_l = str(key or "").lower()
+            if key_l in ("enter", "return"):
+                try:
+                    from . import _node
+
+                    app = _node._virt_manager_app()
+                    pred = _node._FuzzyPredicate(
+                        ".oslist-activate", _node._alias_role("push button")
+                    )
+                    btn = _node._walk_find(app, pred, True) if app is not None else None
+                    if btn is not None:
+                        try:
+                            btn.doActionNamed("click")
+                        except Exception:
+                            btn.click()
+                        return
+                except Exception:
+                    pass
+            return dogtail.rawinput.pressKey(key, *a, **kw)
+
+    rawinput = _RawInput()
 
     #################################
     # virt-manager specific helpers #

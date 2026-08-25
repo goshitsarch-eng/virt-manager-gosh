@@ -151,6 +151,13 @@ class vmmOSList(vmmGObjectUI):
     ################
 
     def _entry_activate_cb(self, src):
+        searchname = ""
+        try:
+            searchname = self.search_entry.get_text().strip()
+        except Exception:
+            pass
+        if self.select_os_matching(searchname):
+            return
         os_list = self.widget("os-list")
         wrap = getattr(self, "_vmm_popover_box", None)
         a11y_open = False
@@ -159,11 +166,6 @@ class vmmOSList(vmmGObjectUI):
                 a11y_open = (wrap.get_accessible_name() or "") == "oslist-popover"
             except Exception:
                 a11y_open = False
-        searchname = ""
-        try:
-            searchname = self.search_entry.get_text().strip()
-        except Exception:
-            pass
         if not os_list.is_visible() and not a11y_open and not searchname:
             return  # pragma: no cover
 
@@ -241,6 +243,44 @@ class vmmOSList(vmmGObjectUI):
         self.search_entry.set_text("")
         self._clear_filter()
         self._sync_os_selection()
+
+    def select_os_matching(self, text):
+        """Pick the best OS for a search string (name, label, then generic)."""
+        want = (text or "").strip().lower()
+        if not want:
+            return False
+        try:
+            all_os = virtinst.OSDB.list_os()
+        except Exception:
+            return False
+        exact = []
+        starts = []
+        generics = []
+        contains = []
+        for osobj in all_os:
+            name = (osobj.name or "").lower()
+            label = (osobj.label or "").lower()
+            if name == want or label == want:
+                exact.append(osobj)
+            elif osobj.is_generic():
+                generics.append(osobj)
+            elif name.startswith(want) or label.startswith(want):
+                starts.append(osobj)
+            elif want in name or want in label:
+                contains.append(osobj)
+        pick = None
+        if exact:
+            pick = exact[0]
+        elif want == "generic" and generics:
+            pick = generics[0]
+        elif starts:
+            pick = starts[0]
+        elif contains:
+            pick = contains[0]
+        if pick is None:
+            return False
+        self.select_os(pick)
+        return True
 
     def select_os(self, vmosobj):
         self._clear_filter()

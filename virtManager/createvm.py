@@ -258,6 +258,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         self.topwin.present()
         gtkcompat.expose_createvm_methods_window(self)
+        gtkcompat.expose_oslist_activate_window(self._os_list)
 
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
@@ -269,6 +270,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         self.topwin.hide()
         gtkcompat.hide_createvm_methods_window(self)
+        gtkcompat.hide_oslist_activate_window(self._os_list)
 
         self._cleanup_customize_window()
         if self._storage_browser:
