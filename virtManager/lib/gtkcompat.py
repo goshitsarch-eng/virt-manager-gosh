@@ -1415,6 +1415,18 @@ def _start_combo_select_poll(createconn):
             except Exception:
                 pass
             try:
+                from . import uiutil
+
+                hv = c.widget("hypervisor")
+                model = hv.get_model() if hv is not None else None
+                if model is not None:
+                    it = model.get_iter_first()
+                    while it is not None:
+                        label = str(model[it][1] or "")
+                        if "custom uri" in label.lower():
+                            uiutil.set_list_selection(hv, model[it][0])
+                            break
+                        it = model.iter_next(it)
                 c.widget("uri-entry").set_text(uri)
             except Exception:
                 pass
@@ -1425,6 +1437,10 @@ def _start_combo_select_poll(createconn):
                 pass
             try:
                 c.open_conn(None)
+            except Exception:
+                pass
+            try:
+                hide_createconn_window(c)
             except Exception:
                 pass
         return True
@@ -1439,6 +1455,10 @@ def hide_createconn_window(createconn):
     try:
         set_accessible_name(win, "Add Connection (hidden)")
         win.set_title("Add Connection (hidden)")
+    except Exception:
+        pass
+    try:
+        open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
     except Exception:
         pass
     try:

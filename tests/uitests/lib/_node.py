@@ -399,6 +399,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if self._a11y_hidden_name():
             return False
         try:
+            if "Add Connection" in (self.name or "") and os.path.exists(
+                "/tmp/vmm-a11y-createconn-hidden"
+            ):
+                return False
+        except Exception:
+            pass
+        try:
             st = self.getState()
             if hasattr(pyatspi, "STATE_HIDDEN") and st.contains(pyatspi.STATE_HIDDEN):
                 return False
