@@ -447,8 +447,17 @@ class vmmCreateVM(vmmGObjectUI):
                 wid, name, src, window=self.topwin, radio=True
             )
             gtkcompat.set_accessible_name(src, ".%s-real" % wid)
+            try:
+                src.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+                src.update_state([Gtk.AccessibleState.HIDDEN], [True])
+            except Exception:
+                pass
             for child in gtkcompat.get_children(src):
                 gtkcompat.set_accessible_name(child, ".%s-child" % wid)
+                try:
+                    child.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+                except Exception:
+                    pass
             def _activate(_w, s=src):
                 try:
                     s.set_active(True)

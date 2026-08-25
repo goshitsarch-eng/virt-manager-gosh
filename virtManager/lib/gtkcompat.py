@@ -1061,10 +1061,9 @@ def expose_a11y_check(key, name, widget, window=None, parent=None, radio=False):
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
         btn = Gtk.Button(label=name, has_frame=False)
-        try:
-            btn.set_accessible_role(Gtk.AccessibleRole.CHECKBOX)
-        except Exception:
-            pass
+        # Keep BUTTON so AT-SPI click emits 'clicked'. CHECKBOX/RADIO
+        # roles make activate a no-op on GTK 4.
+        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
         ensure_activate_clicked(btn)
         box.append(btn)
         _A11Y_SIDECAR["items"][key] = btn
