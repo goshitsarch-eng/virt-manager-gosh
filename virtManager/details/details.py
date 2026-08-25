@@ -518,6 +518,27 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("cpu-copy-host"),
                 window=self.topwin,
             )
+
+            def _copy_host_click():
+                w = self.widget("cpu-copy-host")
+                try:
+                    w.set_active(True)
+                except Exception:
+                    pass
+                try:
+                    self._cpu_copy_host_clicked_cb(w)
+                except Exception:
+                    pass
+                try:
+                    open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                        "Copy host CPU configuration (host-passthrough)"
+                    )
+                except Exception:
+                    pass
+
+            gtkcompat.register_a11y_click(
+                "Copy host CPU configuration", _copy_host_click
+            )
         except Exception:
             pass
         try:

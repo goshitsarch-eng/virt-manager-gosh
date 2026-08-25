@@ -476,6 +476,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
     @property
     def name(self):
         try:
+            stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+        except Exception:
+            stored = ""
+        if stored and getattr(self, "_vmm_is_copy_host", False):
+            return stored
+        try:
             raw = dogtail.tree.Node.name.__get__(self)
         except Exception:
             try:
@@ -484,11 +490,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 raw = ""
         if raw and "copy host" in raw.lower():
             try:
-                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
-                if stored:
-                    return stored
+                self._vmm_is_copy_host = True
             except Exception:
                 pass
+            if stored:
+                return stored
         return raw
 
     @property
@@ -1058,6 +1064,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "add-hardware",
             "forward",
             "media-entry",
+            "copy host",
         )
         if nname in ("ok", "yes"):
             try:
@@ -1560,6 +1567,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
             try:
                 utils.check(lambda: ret.active or ret.showing or ret.onscreen)
             except RuntimeError:
+                pass
+        if name and "copy host" in str(name).lower():
+            try:
+                ret._vmm_is_copy_host = True
+            except Exception:
                 pass
         return ret
 
