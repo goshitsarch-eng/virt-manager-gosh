@@ -1298,7 +1298,10 @@ def attach_notebook_a11y(notebook):
             except Exception:
                 tlabel = ""
             tab = Gtk.Button(label=tlabel or _mnemonic_label(pname.replace("-tab", "") or pname))
-            tab.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            try:
+                tab.set_accessible_role(Gtk.AccessibleRole.TAB)
+            except Exception:
+                tab.set_accessible_role(Gtk.AccessibleRole.BUTTON)
             set_accessible_name(tab, tlabel or _mnemonic_label(pname))
             ensure_activate_clicked(tab)
 
@@ -1313,6 +1316,26 @@ def attach_notebook_a11y(notebook):
             tab.connect("clicked", _select)
             box.append(tab)
             widgets.append(tab)
+            try:
+                real_tab = notebook.get_tab_label(page)
+            except Exception:
+                real_tab = None
+            if real_tab is not None:
+                try:
+                    real_tab.install_action("click", None, lambda *_a, idx=i: _select(idx=idx))
+                except Exception:
+                    pass
+                if not getattr(real_tab, "_vmm_nb_tab_click", False):
+                    real_tab._vmm_nb_tab_click = True
+                    gest = Gtk.GestureClick()
+                    gest.connect("pressed", lambda *_a, idx=i: _select(idx=idx))
+                    real_tab.add_controller(gest)
+                    ensure_activate_clicked(real_tab)
+                set_accessible_name(real_tab, tlabel or _mnemonic_label(pname))
+                try:
+                    real_tab.set_accessible_role(Gtk.AccessibleRole.TAB)
+                except Exception:
+                    pass
             sidecar = page_map.get(pname)
             if sidecar is None:
                 sidecar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
