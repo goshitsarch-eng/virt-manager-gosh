@@ -955,6 +955,7 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-oslist-entry.txt",
             "/tmp/vmm-a11y-oslist-confirmed",
             "/tmp/vmm-a11y-os-select.txt",
+            "/tmp/vmm-a11y-detect-state.txt",
         ):
             try:
                 os.unlink(path)

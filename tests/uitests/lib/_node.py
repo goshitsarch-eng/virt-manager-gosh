@@ -1070,6 +1070,16 @@ class _SentinelDetectOs(object):
         return True
 
     def click(self, *args, **kwargs):
+        path = "/tmp/vmm-a11y-detect-state.txt"
+        try:
+            cur = open(path, "r").read().strip()
+        except Exception:
+            cur = "1"
+        nxt = "0" if cur == "1" else "1"
+        try:
+            open(path, "w").write(nxt)
+        except Exception:
+            pass
         try:
             open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
         except Exception:
@@ -1079,6 +1089,11 @@ class _SentinelDetectOs(object):
             open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
         except Exception:
             pass
+        if nxt == "1":
+            try:
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("Detecting...")
+            except Exception:
+                pass
 
 
 def _sentinel_url_widgets(name, roleName):
