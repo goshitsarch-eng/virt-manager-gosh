@@ -354,10 +354,13 @@ class vmmOSList(vmmGObjectUI):
 
         if not sensitive:
             self.search_entry.set_sensitive(False)
-            self.reset_state()
+            # Keep a chosen OS across detect-mode toggles and page hide.
+            if not self._selected_os:
+                self.reset_state()
         else:
             if self._selected_os:
                 self.select_os(self._selected_os)
-            else:
+            elif not self.search_entry.get_text():
                 self.reset_state()
             self.search_entry.set_sensitive(True)
+        self.refresh_a11y()

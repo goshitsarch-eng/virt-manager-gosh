@@ -412,7 +412,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
         try:
             t = self.queryEditableText().getText(0, -1)
             if t and not _is_labeller(t) and t.strip() != name.strip():
-                return t
+                if t.strip() not in ("oslist-entry", "oslist-popover"):
+                    return t
         except Exception:
             pass
         try:
@@ -420,13 +421,20 @@ class _VMMDogtailNode(dogtail.tree.Node):
             # GTK 4 Gtk.Entry often exposes the mnemonic labeller ("Name:")
             # or the full accessible name as AccessibleText.
             if t and not _is_labeller(t) and t.strip() != name.strip():
-                return t
+                if t.strip() not in ("oslist-entry", "oslist-popover"):
+                    return t
         except Exception:
             pass
         if ":" in name:
             rest = name.split(":", 1)[1].strip()
-            if rest:
+            if rest and rest not in ("oslist-entry", "oslist-popover"):
                 return rest
+        # oslist-entry children include the popover sidecar; that is not
+        # the OS label. Prefer an empty string over a sibling widget name.
+        if "oslist-entry" in name or name.startswith(
+            "Choose the operating system"
+        ):
+            return ""
         # GTK 4 buttons/cells often have no Text iface. Use the name plus
         # one child name (status) without extra AT-SPI queries.
         if self.roleName in (

@@ -391,6 +391,8 @@ class vmmCreateVM(vmmGObjectUI):
 
         # OS distro list
         self._os_list = vmmOSList()
+        self._last_osobj = None
+        self._os_list.connect("os-selected", self._os_selected)
         self.widget("install-os-align").add(self._os_list.search_entry)
         self.widget("os-label").set_mnemonic_widget(self._os_list.search_entry)
         self._init_create_a11y()
@@ -549,11 +551,16 @@ class vmmCreateVM(vmmGObjectUI):
                 window=self.topwin,
             )
 
+    def _os_selected(self, _src, osobj):
+        if osobj is not None:
+            self._last_osobj = osobj
+
     def _reset_state(self, urihint=None):
         """
         Reset all UI state to default values. Conn specific state is
         populated in _populate_conn_state
         """
+        self._last_osobj = None
         self.reset_finish_cursor()
 
         self.widget("create-pages").set_current_page(PAGE_NAME)
@@ -1571,8 +1578,9 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("create-finish").set_visible(pagenum == PAGE_FINISH)
         if pagenum == PAGE_INSTALL:
             try:
-                osobj = self._os_list.get_selected_os()
+                osobj = self._os_list.get_selected_os() or self._last_osobj
                 if osobj is not None:
+                    self._last_osobj = osobj
                     self._os_list.select_os(osobj)
                 self._os_list.refresh_a11y()
             except Exception:
