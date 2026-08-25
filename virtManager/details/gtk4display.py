@@ -220,8 +220,10 @@ class _DisplayBase(Gtk.DrawingArea):
 
 class VNCDisplay(_DisplayBase):
     """
-    Minimal RFB/VNC client painted on a GTK 4 DrawingArea.
-    Supports None and VNC-auth, 32-bit raw framebuffer updates.
+    RFB/VNC client painted on a GTK 4 DrawingArea.
+
+    Supports None and VNC-auth, 32-bit pixels, and the encodings QEMU
+    commonly sends: raw, CopyRect, RRE, Hextile, and DesktopSize.
     """
 
     def __init__(self, **kwargs):
@@ -234,6 +236,7 @@ class VNCDisplay(_DisplayBase):
         self._name = ""
         self._stop = False
         self._auth_event = threading.Event()
+        self._pixels = bytearray()
 
     def set_credential(self, cred, value):
         if cred == 0 or str(cred).endswith("PASSWORD"):
@@ -354,9 +357,35 @@ class VNCDisplay(_DisplayBase):
         width, height, _ppf = struct.unpack("!HH16s", self._recv_n(sock, 20))
         namelen = struct.unpack("!I", self._recv_n(sock, 4))[0]
         self._name = self._recv_n(sock, namelen).decode("utf-8", "replace")
-        # Request 32-bit little-endian pixels
-        sock.sendall(struct.pack("!BBBBHHHBBBxxx", 0, 32, 24, 0, 255, 255, 255, 16, 8, 0))
-        sock.sendall(struct.pack("!BxI", 2, 1) + struct.pack("!i", 0))  # raw only
+        # SetPixelFormat: 32-bit little-endian true-colour (20 bytes)
+        sock.sendall(
+            struct.pack(
+                "!BxxxBBBBHHHBBBxxx",
+                0,  # type
+                32,  # bits-per-pixel
+                24,  # depth
+                0,  # big-endian-flag
+                1,  # true-colour-flag
+                255,
+                255,
+                255,  # red/green/blue max
+                16,
+                8,
+                0,  # red/green/blue shift
+            )
+        )
+        # SetEncodings: nEncodings is U16. Advertise common QEMU encodings.
+        encodings = (
+            5,  # hextile
+            2,  # RRE
+            1,  # CopyRect
+            0,  # raw
+            -223,  # DesktopSize
+        )
+        sock.sendall(struct.pack("!BBH", 2, 0, len(encodings)))
+        for enc in encodings:
+            sock.sendall(struct.pack("!i", enc))
+        self._alloc_pixels(width, height)
         self._open = True
         GLib.idle_add(self.emit, "vnc-initialized")
         GLib.idle_add(self.emit, "vnc-desktop-resize", width, height)
@@ -370,7 +399,7 @@ class VNCDisplay(_DisplayBase):
             if not msg:
                 break
             if msg[0] == 0:
-                self._read_fb_update(sock, width, height)
+                width, height = self._read_fb_update(sock, width, height)
             elif msg[0] == 1:
                 self._recv_n(sock, 3)
                 n = struct.unpack("!H", self._recv_n(sock, 2))[0]
@@ -383,32 +412,110 @@ class VNCDisplay(_DisplayBase):
         GLib.idle_add(self.emit, "vnc-disconnected")
         self._open = False
 
+    def _alloc_pixels(self, width, height):
+        self._pixels = bytearray(max(width, 1) * max(height, 1) * 4)
+        self._fb_size = (width, height)
+
     def _request_update(self, sock, width, height):
         sock.sendall(struct.pack("!BBHHHH", 3, 0, 0, 0, width, height))
+
+    def _blit_raw(self, width, x, y, w, h, raw):
+        for row in range(h):
+            src = row * w * 4
+            dst = ((y + row) * width + x) * 4
+            self._pixels[dst : dst + w * 4] = raw[src : src + w * 4]
+
+    def _fill_rect(self, width, x, y, w, h, pixel):
+        rowbytes = pixel * w
+        for row in range(h):
+            dst = ((y + row) * width + x) * 4
+            self._pixels[dst : dst + w * 4] = rowbytes
+
+    def _copy_rect(self, width, height, x, y, w, h, srcx, srcy):
+        src = bytearray(self._pixels)
+        for row in range(h):
+            s = ((srcy + row) * width + srcx) * 4
+            d = ((y + row) * width + x) * 4
+            if s < 0 or d < 0:
+                continue
+            self._pixels[d : d + w * 4] = src[s : s + w * 4]
+        ignore = height
+
+    def _read_hextile(self, sock, width, x, y, w, h):
+        bg = b"\x00\x00\x00\x00"
+        fg = b"\x00\x00\x00\x00"
+        for ty in range(y, y + h, 16):
+            th = min(16, y + h - ty)
+            for tx in range(x, x + w, 16):
+                tw = min(16, x + w - tx)
+                sub = self._recv_n(sock, 1)[0]
+                raw = bool(sub & 1)
+                if sub & 2:
+                    bg = self._recv_n(sock, 4)
+                if sub & 4:
+                    fg = self._recv_n(sock, 4)
+                if raw:
+                    self._blit_raw(width, tx, ty, tw, th, self._recv_n(sock, tw * th * 4))
+                    continue
+                self._fill_rect(width, tx, ty, tw, th, bg)
+                if not (sub & 8):
+                    continue
+                nsub = self._recv_n(sock, 1)[0]
+                coloured = bool(sub & 16)
+                for _ in range(nsub):
+                    pix = self._recv_n(sock, 4) if coloured else fg
+                    xy = self._recv_n(sock, 1)[0]
+                    wh = self._recv_n(sock, 1)[0]
+                    sx = tx + ((xy >> 4) & 0xF)
+                    sy = ty + (xy & 0xF)
+                    sw = ((wh >> 4) & 0xF) + 1
+                    sh = (wh & 0xF) + 1
+                    self._fill_rect(width, sx, sy, sw, sh, pix)
+
+    def _read_rre(self, sock, width, x, y, w, h):
+        nsub = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        bg = self._recv_n(sock, 4)
+        self._fill_rect(width, x, y, w, h, bg)
+        for _ in range(nsub):
+            pix = self._recv_n(sock, 4)
+            sx, sy, sw, sh = struct.unpack("!HHHH", self._recv_n(sock, 8))
+            self._fill_rect(width, x + sx, y + sy, sw, sh, pix)
+
+    def _publish_fb(self, width, height):
+        if cairo is None:
+            return
+        surface = cairo.ImageSurface.create_for_data(
+            memoryview(self._pixels), cairo.FORMAT_ARGB32, width, height, width * 4
+        )
+        GLib.idle_add(self._set_framebuffer, surface, width, height)
 
     def _read_fb_update(self, sock, width, height):
         self._recv_n(sock, 1)
         nrects = struct.unpack("!H", self._recv_n(sock, 2))[0]
-        pixbuf = bytearray(width * height * 4)
         for _ in range(nrects):
             x, y, w, h, enc = struct.unpack("!HHHHi", self._recv_n(sock, 12))
-            if enc != 0:
+            if enc == -223:
+                width, height = w, h
+                self._alloc_pixels(width, height)
+                GLib.idle_add(self.emit, "vnc-desktop-resize", width, height)
+                continue
+            if enc == 0:
+                self._blit_raw(width, x, y, w, h, self._recv_n(sock, w * h * 4))
+            elif enc == 1:
+                srcx, srcy = struct.unpack("!HH", self._recv_n(sock, 4))
+                self._copy_rect(width, height, x, y, w, h, srcx, srcy)
+            elif enc == 2:
+                self._read_rre(sock, width, x, y, w, h)
+            elif enc == 5:
+                self._read_hextile(sock, width, x, y, w, h)
+            else:
                 raise RuntimeError("Unsupported VNC encoding %s" % enc)
-            raw = self._recv_n(sock, w * h * 4)
-            for row in range(h):
-                src = row * w * 4
-                dst = ((y + row) * width + x) * 4
-                pixbuf[dst : dst + w * 4] = raw[src : src + w * 4]
-        if cairo is None:
-            return
-        surface = cairo.ImageSurface.create_for_data(
-            memoryview(pixbuf), cairo.FORMAT_ARGB32, width, height, width * 4
-        )
-        GLib.idle_add(self._set_framebuffer, surface, width, height)
+        self._publish_fb(width, height)
         try:
             self._request_update(sock, width, height)
         except Exception:
             pass
+        return width, height
 
 
 def _vnc_auth_response(challenge, password):

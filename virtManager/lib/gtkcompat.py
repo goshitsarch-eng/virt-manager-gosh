@@ -997,6 +997,27 @@ def _patch_widget_methods():
     if hasattr(Gtk, "NativeDialog"):
         Gtk.NativeDialog.run = run_dialog
 
+    if not hasattr(Gtk.Dialog, "add_button"):
+
+        def add_button(self, label, response):
+            btn = Gtk.Button(label=label, use_underline=True)
+            self.add_action_widget(btn, response)
+            btn.set_visible(True)
+            return btn
+
+        Gtk.Dialog.add_button = add_button
+
+    def add_buttons(self, *args):
+        for idx in range(0, len(args), 2):
+            self.add_button(args[idx], args[idx + 1])
+
+    Gtk.Dialog.add_buttons = add_buttons
+
+    def format_secondary_text(self, text):
+        self.set_property("secondary-text", text or "")
+
+    Gtk.MessageDialog.format_secondary_text = format_secondary_text
+
     # FileChooser path helpers
     if hasattr(Gtk, "FileChooser"):
 
@@ -1183,6 +1204,39 @@ def _install_stock_and_enums():
     Gtk.EntryIconPosition = _EntryIconPosition
     Gtk.get_current_event = _get_current_event
     Gtk.accel_groups_from_object = lambda _obj: []
+
+    if not hasattr(Gdk, "SELECTION_CLIPBOARD"):
+        Gdk.SELECTION_CLIPBOARD = "CLIPBOARD"
+    if not hasattr(Gdk, "SELECTION_PRIMARY"):
+        Gdk.SELECTION_PRIMARY = "PRIMARY"
+
+    if not hasattr(Gtk, "Clipboard"):
+
+        class Clipboard:
+            def __init__(self, display=None):
+                self._display = display or Gdk.Display.get_default()
+                self._clip = self._display.get_clipboard() if self._display else None
+
+            @staticmethod
+            def get(_selection=None):
+                return Clipboard()
+
+            @staticmethod
+            def get_default(_display=None):
+                return Clipboard(_display)
+
+            def set_text(self, text, _length=-1):
+                if self._clip is None:
+                    return
+                try:
+                    self._clip.set(text or "")
+                except Exception:
+                    pass
+
+            def wait_for_text(self):
+                return None
+
+        Gtk.Clipboard = Clipboard
 
     class VScrollbar(Gtk.Scrollbar):
         __gtype_name__ = "GtkVScrollbar"
