@@ -11,6 +11,7 @@ from virtinst import DomainCpu
 from virtinst import log
 from virtinst import xmlutil
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .lib.inspection import vmmInspection
@@ -192,6 +193,26 @@ class vmmPreferences(vmmGObjectUI):
             self.widget("prefs-libguestfs").set_tooltip_text(
                 _("python libguestfs support is not installed")
             )
+
+        for wid, name in (
+            ("prefs-stats-enable-cpu", "Poll CPU"),
+            ("prefs-stats-enable-disk", "Poll Disk I/O"),
+            ("prefs-stats-enable-net", "Poll Network I/O"),
+            ("prefs-stats-enable-memory", "Poll Memory stats"),
+            ("prefs-system-tray", "Enable system tray icon"),
+            ("prefs-xmleditor", "Enable XML editing"),
+            ("prefs-libguestfs", "Enable libguestfs VM introspection"),
+            ("prefs-console-autoconnect", "Console autoconnect"),
+            ("prefs-confirm-forcepoweroff", "Force Poweroff"),
+            ("prefs-confirm-poweroff", "Poweroff/Reboot"),
+            ("prefs-confirm-pause", "Pause"),
+            ("prefs-confirm-removedev", "Device removal"),
+            ("prefs-confirm-unapplied", "Unapplied changes"),
+            ("prefs-confirm-delstorage", "Deleting storage"),
+        ):
+            src = self.widget(wid)
+            gtkcompat.set_accessible_name(src, name)
+            gtkcompat.expose_a11y_check("prefs-" + wid, name, src)
 
     #########################
     # Config Change Options #

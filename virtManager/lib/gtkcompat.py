@@ -414,6 +414,43 @@ def expose_a11y_text(key, name, text):
     return ent
 
 
+def expose_a11y_check(key, name, widget):
+    """Mirror a CheckButton so it stays findable when its notebook page hides."""
+    box = _a11y_sidecar_box()
+    btn = _A11Y_SIDECAR["items"].get(key)
+    if btn is None:
+        btn = Gtk.CheckButton(label=name)
+        btn.set_accessible_role(Gtk.AccessibleRole.CHECK_BOX)
+        box.append(btn)
+        _A11Y_SIDECAR["items"][key] = btn
+
+        def _sync_from_src(*_a, src=widget, dst=btn):
+            try:
+                if dst.get_active() != src.get_active():
+                    dst.set_active(src.get_active())
+            except Exception:
+                pass
+            return False
+
+        def _on_toggle(_b, src=widget, dst=btn):
+            try:
+                if src.get_active() != dst.get_active():
+                    src.set_active(dst.get_active())
+            except Exception:
+                pass
+
+        btn.connect("toggled", _on_toggle)
+        try:
+            widget.connect("notify::active", _sync_from_src)
+        except Exception:
+            pass
+        _sync_from_src()
+    set_accessible_name(btn, name)
+    sync_accessible_checked(btn)
+    btn.set_visible(True)
+    return btn
+
+
 def expose_a11y_button(key, name, callback):
     box = _a11y_sidecar_box()
     btn = _A11Y_SIDECAR["items"].get(key)
