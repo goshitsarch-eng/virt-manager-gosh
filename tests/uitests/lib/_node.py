@@ -440,6 +440,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
     @property
     def text(self):
         name = getattr(self, "name", None) or ""
+        if "oslist-entry" in name or name.startswith(
+            "Choose the operating system"
+        ):
+            try:
+                stored = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
+                return stored.strip()
+            except Exception:
+                return ""
         if "pagenum-label" in name:
             try:
                 stored = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
@@ -487,18 +495,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     return stored.strip()
             except Exception:
                 pass
-        if "oslist-entry" in name or name.startswith(
-            "Choose the operating system"
-        ):
-            try:
-                stored = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
-                if stored.strip():
-                    return stored.strip()
-            except Exception:
-                pass
-            # Overlay children include the popover sidecar name; that is
-            # not the OS label.
-            return ""
         # GTK 4 buttons/cells often have no Text iface. Use the name plus
         # one child name (status) without extra AT-SPI queries.
         if self.roleName in (

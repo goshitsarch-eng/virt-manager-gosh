@@ -29,6 +29,7 @@ class vmmOSList(vmmGObjectUI):
         self._filter_eol = True
         self._selected_os = None
         self._kept_os = None
+        self._os_confirmed = False
         self.search_entry = self.widget("os-name")
         self.search_entry.set_placeholder_text(_("Type to start searching..."))
         self.eol_text = self.widget("eol-warn").get_text()
@@ -147,7 +148,9 @@ class vmmOSList(vmmGObjectUI):
 
     def refresh_a11y(self):
         """Keep the oslist-entry sidecar name in sync after page hide/show."""
-        osobj = self._selected_os or self._kept_os
+        osobj = None
+        if getattr(self, "_os_confirmed", False):
+            osobj = self._selected_os or self._kept_os
         label = osobj.label if osobj is not None else ""
         if not label:
             try:
@@ -285,11 +288,15 @@ class vmmOSList(vmmGObjectUI):
         """
         Called when the search window is closed, like with Escape key
         """
-        osobj = self._selected_os or self._kept_os
+        osobj = None
+        if getattr(self, "_os_confirmed", False):
+            osobj = self._selected_os or self._kept_os
         if osobj:
             self._selected_os = osobj
             self.search_entry.set_text(osobj.label)
         else:
+            if not getattr(self, "_os_confirmed", False):
+                self._selected_os = None
             self.search_entry.set_text("")
         try:
             self.topwin.popdown()
@@ -308,6 +315,7 @@ class vmmOSList(vmmGObjectUI):
         self.refresh_a11y()
 
     def _os_selected_cb(self, src, path, column):
+        self._os_confirmed = True
         self._sync_os_selection()
 
     def _filter_os_cb(self, model, titer, ignore1):
@@ -334,7 +342,16 @@ class vmmOSList(vmmGObjectUI):
     def reset_state(self):
         self._selected_os = None
         self._kept_os = None
+        self._os_confirmed = False
         self.search_entry.set_text("")
+        try:
+            os.remove("/tmp/vmm-a11y-os-select.txt")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("")
+        except Exception:
+            pass
         self._clear_filter()
         self._sync_os_selection()
 
@@ -382,6 +399,7 @@ class vmmOSList(vmmGObjectUI):
         if vmosobj is not None:
             self._kept_os = vmosobj
             self._selected_os = vmosobj
+            self._os_confirmed = True
         self._clear_filter()
 
         os_list = self.widget("os-list")

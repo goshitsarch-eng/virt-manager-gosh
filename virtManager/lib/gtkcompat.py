@@ -1037,6 +1037,10 @@ def _oslist_load_search_from_file(oslist):
         return
     _oslist_apply_search_text(oslist, text)
     _oslist_show_popovers(oslist)
+    try:
+        oslist.refresh_a11y()
+    except Exception:
+        pass
 
 
 def _oslist_confirm_search(oslist):
