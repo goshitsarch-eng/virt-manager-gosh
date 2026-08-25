@@ -180,6 +180,12 @@ class vmmMediaCombo(vmmGObjectUI):
             model.append(row)
 
         self._combo.set_active(-1)
+        fill = getattr(self._combo, "_vmm_a11y_fill", None)
+        if fill is not None:
+            try:
+                fill()
+            except Exception:
+                pass
 
     def get_path(self, store_media=True):
         ret = uiutil.get_list_selection(self._combo, column=self.MEDIA_FIELD_PATH)

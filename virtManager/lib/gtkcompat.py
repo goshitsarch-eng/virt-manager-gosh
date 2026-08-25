@@ -969,6 +969,39 @@ def _append_createvm_status_labels(box, createvm):
         set_accessible_name(page_lab, "pagenum-label: %s" % page)
 
 
+def _append_createvm_media_controls(box, createvm):
+    if box is None or createvm is None or getattr(box, "_vmm_media_controls", False):
+        return
+    media = getattr(createvm, "_mediacombo", None)
+    if media is None or getattr(media, "_combo", None) is None:
+        return
+    box._vmm_media_controls = True
+    wrap = expose_a11y_combo(
+        "methods-media-combo", "media-combo", media._combo, parent=box
+    )
+    if wrap is not None:
+        wrap._vmm_combo_extra_parent = box
+        fill = getattr(wrap, "_vmm_combo_fill", None)
+        if fill is not None:
+            try:
+                fill()
+            except Exception:
+                pass
+    expose_a11y_entry(
+        "methods-media-entry",
+        "media-entry",
+        media._entry,
+        parent=box,
+        name_with_value=True,
+    )
+    expose_a11y_combo(
+        "methods-create-conn",
+        "create-conn",
+        createvm.widget("create-conn"),
+        parent=box,
+    )
+
+
 def _append_createvm_close_control(box, createvm, win):
     if box is None or getattr(box, "_vmm_newvm_close", False):
         return
@@ -1032,6 +1065,7 @@ def expose_createvm_methods_window(createvm):
                 )
                 _append_name_load_control(child, createvm)
                 _append_createvm_status_labels(child, createvm)
+                _append_createvm_media_controls(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:
                 pass
@@ -1107,6 +1141,7 @@ def expose_createvm_methods_window(createvm):
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _append_name_load_control(box, createvm)
     _append_createvm_status_labels(box, createvm)
+    _append_createvm_media_controls(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
     win.set_visible(True)
@@ -1978,21 +2013,23 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
         wrap._vmm_combo_inner = inner
         wrap._vmm_combo_src = combo
 
-        def _text_col(model):
-            if model is None:
-                return 0
-            last_str = 0
+        def _row_label(model, it):
+            parts = []
             try:
                 n = model.get_n_columns()
             except Exception:
-                return 0
+                n = 0
             for i in range(n):
                 try:
-                    if "gchararray" in str(model.get_column_type(i)):
-                        last_str = i
+                    val = model[it][i]
                 except Exception:
                     continue
-            return last_str
+                if val is None:
+                    continue
+                text = str(val)
+                if text and text not in parts:
+                    parts.append(text)
+            return " ".join(parts)
 
         def _fill(*_a, src=combo, dst=wrap):
             if getattr(dst, "_vmm_combo_filling", False):
@@ -2011,17 +2048,19 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                         pass
                     child = nxt
                 model = src.get_model()
-                col = _text_col(model)
                 idx = 0
                 try:
                     it = model.get_iter_first() if model is not None else None
                 except Exception:
                     it = None
+                lines = []
                 while it is not None:
                     try:
-                        label = str(model[it][col] or "")
+                        label = _row_label(model, it)
                     except Exception:
                         label = ""
+                    if label:
+                        lines.append(label)
                     item = Gtk.Button(label=label, has_frame=False)
                     try:
                         item.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
@@ -2043,14 +2082,48 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                         it = model.iter_next(it)
                     except Exception:
                         break
+                try:
+                    open("/tmp/vmm-a11y-combo-%s.txt" % name, "w").write(
+                        "\n".join(lines)
+                    )
+                except Exception:
+                    pass
+                extra = getattr(dst, "_vmm_combo_extra_parent", None)
+                if extra is not None:
+                    old = getattr(dst, "_vmm_combo_extra_items", [])
+                    for w in old:
+                        try:
+                            extra.remove(w)
+                        except Exception:
+                            pass
+                    copies = []
+                    for label in lines:
+                        if not label:
+                            continue
+                        btn = Gtk.Button(label=label, has_frame=False)
+                        btn.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
+                        ensure_activate_clicked(btn)
+                        set_accessible_name(btn, label)
+                        extra.append(btn)
+                        copies.append(btn)
+                    dst._vmm_combo_extra_items = copies
                 return False
             finally:
                 dst._vmm_combo_filling = False
 
         wrap._vmm_combo_fill = _fill
+        combo._vmm_a11y_fill = _fill
         try:
             combo.connect("notify::model", _fill)
             combo.connect("changed", _fill)
+        except Exception:
+            pass
+        try:
+            model = combo.get_model()
+            if model is not None and not getattr(model, "_vmm_combo_fill_watch", False):
+                model._vmm_combo_fill_watch = True
+                model.connect("row-inserted", _fill)
+                model.connect("row-deleted", _fill)
         except Exception:
             pass
         _fill()
