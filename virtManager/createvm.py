@@ -2035,14 +2035,6 @@ class vmmCreateVM(vmmGObjectUI):
             return
         if self._os_already_detected_for_media:
             return
-        # User already picked an OS (oslist-popover). Don't block Forward
-        # on media detection.
-        if (
-            self._os_list.get_selected_os()
-            or getattr(self._os_list, "_kept_os", None)
-            or self._last_osobj
-        ):
-            return
 
         self._do_start_detect_os(cdrom, location, forward_after_finish)
         return True
