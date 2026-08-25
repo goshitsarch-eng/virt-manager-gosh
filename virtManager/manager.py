@@ -137,7 +137,11 @@ class vmmManager(vmmGObjectUI):
         self.hostcpucol = None
         self.spacer_txt = None
         self.init_vmlist()
-        gtkcompat.set_accessible_name(self.widget("startup-error-label"), "error-label")
+        errlab = self.widget("startup-error-label")
+        gtkcompat.set_accessible_name(errlab, "error-label")
+        # GTK 4 does not expose hidden notebook pages. Mirror the startup
+        # error so DefaultStartup / CLI first-run can find error-label.
+        gtkcompat.expose_a11y_label("error-label", "error-label", errlab.get_text() or "error")
 
         self.init_stats()
         self.init_toolbar()
@@ -211,6 +215,8 @@ class vmmManager(vmmGObjectUI):
     def set_startup_error(self, msg):
         self.widget("vm-notebook").set_current_page(1)
         self.widget("startup-error-label").set_text(msg)
+        gtkcompat.set_accessible_name(self.widget("startup-error-label"), "error-label")
+        gtkcompat.expose_a11y_label("error-label", "error-label", msg or "error")
 
     ################
     # Init methods #

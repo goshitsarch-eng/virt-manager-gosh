@@ -161,6 +161,78 @@ def _strip_pango_markup(text):
     return re.sub(r"<[^>]+>", "", str(text or "")).replace("&amp;", "&")
 
 
+_A11Y_SIDECAR = {"win": None, "box": None, "items": {}}
+
+
+def _a11y_sidecar_box():
+    """
+    Always-mapped window for widgets GTK 4 keeps off the AT-SPI tree
+    (hidden notebook pages, some modal dialogs).
+    """
+    if _A11Y_SIDECAR["win"] is None:
+        win = Gtk.Window()
+        win.set_decorated(False)
+        win.set_resizable(False)
+        win.set_modal(False)
+        win.set_focusable(False)
+        win.set_opacity(0)
+        try:
+            win.set_accessible_role(Gtk.AccessibleRole.GROUP)
+        except Exception:
+            pass
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        win.set_child(box)
+        _A11Y_SIDECAR["win"] = win
+        _A11Y_SIDECAR["box"] = box
+        app = Gtk.Application.get_default()
+        if app is not None:
+            try:
+                app.add_window(win)
+            except Exception:
+                pass
+        win.set_visible(True)
+    return _A11Y_SIDECAR["box"]
+
+
+def expose_a11y_label(key, name, text):
+    box = _a11y_sidecar_box()
+    lab = _A11Y_SIDECAR["items"].get(key)
+    if lab is None:
+        lab = Gtk.Label(label=text or name or "")
+        lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        box.append(lab)
+        _A11Y_SIDECAR["items"][key] = lab
+    lab.set_text(text or name or "")
+    set_accessible_name(lab, name or text or "")
+    lab.set_visible(True)
+    return lab
+
+
+def expose_a11y_button(key, name, callback):
+    box = _a11y_sidecar_box()
+    btn = _A11Y_SIDECAR["items"].get(key)
+    if btn is None:
+        btn = Gtk.Button(label=name)
+        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        ensure_activate_clicked(btn)
+        btn.connect("clicked", lambda b: b._vmm_cb() if getattr(b, "_vmm_cb", None) else None)
+        box.append(btn)
+        _A11Y_SIDECAR["items"][key] = btn
+    btn._vmm_cb = callback
+    set_accessible_name(btn, name)
+    btn.set_visible(True)
+    return btn
+
+
+def hide_a11y_keys(prefix):
+    for key, widget in list(_A11Y_SIDECAR["items"].items()):
+        if key.startswith(prefix):
+            try:
+                widget.set_visible(False)
+            except Exception:
+                pass
+
+
 def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=None):
     """
     GTK 4 TreeView does not expose rows to AT-SPI. Mirror each row as a

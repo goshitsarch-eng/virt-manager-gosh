@@ -44,6 +44,17 @@ def _launch_dialog(
     dialog.format_secondary_text(secondary_text or None)
     dialog.set_title(title or "vmm dialog")
     gtkcompat.set_accessible_name(dialog, title or "vmm dialog")
+    gtkcompat.expose_a11y_label("err-primary", primary_text or "vmm dialog", primary_text or "")
+    if secondary_text:
+        gtkcompat.expose_a11y_label("err-secondary", secondary_text, secondary_text)
+    bbox = getattr(dialog, "_button_box", None)
+    if bbox is not None:
+        for child in gtkcompat.get_children(bbox):
+            label = gtkcompat._accessible_label_for_widget(child) or child.get_name()
+            if label:
+                gtkcompat.expose_a11y_button(
+                    "err-btn-" + label, label, lambda r=child: r.emit("clicked")
+                )
 
     if widget:
         dialog.get_content_area().add(widget)
@@ -52,6 +63,7 @@ def _launch_dialog(
     if modal:
         res = dialog.run()
         res = bool(res in [Gtk.ResponseType.YES, Gtk.ResponseType.OK])
+        gtkcompat.hide_a11y_keys("err-")
         if destroy:
             dialog.destroy()
     else:
@@ -435,5 +447,6 @@ class _errorDialog(Gtk.Window):
         if chktext:
             res = [res, bool(chkbox.get_active())]
         self.hide()
+        gtkcompat.hide_a11y_keys("err-")
 
         return res

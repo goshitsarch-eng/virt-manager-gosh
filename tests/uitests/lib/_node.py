@@ -328,7 +328,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
             role = self.roleName
         except Exception:
             return False
-        if role in ["frame", "window"]:
+        if role in ["frame", "window", "dialog", "alert"]:
+            return True
+        # GTK 4 Adw/Gtk windows often report as panel.
+        if role == "panel" and (self.name or "").strip():
             return True
         # Menubar File/Help items are role "menu" but must stay clickable.
         try:
