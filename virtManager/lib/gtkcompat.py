@@ -865,16 +865,25 @@ def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None
         view._vmm_xml_from_src = _from_src
         _from_src()
 
-        def _load_file(*_a, dst=view):
+        def _load_file(*_a, dst=view, src=srcbuff, real=srcview):
             path = os.environ.get("VMM_A11Y_XML_PATH", "/tmp/vmm-a11y-xml.txt")
             try:
                 text = open(path, "r").read()
             except Exception:
                 return
+            dst._vmm_xml_syncing = True
             try:
                 dst.set_text(text)
+                src.set_text(text)
+                try:
+                    real.set_editable(True)
+                    dst.set_editable(True)
+                except Exception:
+                    pass
             except Exception:
                 pass
+            dst._vmm_xml_syncing = False
+            _from_src()
 
         load = expose_a11y_button(
             key + "-load",
