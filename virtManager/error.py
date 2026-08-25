@@ -42,6 +42,12 @@ def _launch_dialog(
 
     primary_text = fix_text(primary_text)
     secondary_text = fix_text(secondary_text)
+    try:
+        open("/tmp/vmm-a11y-alert.txt", "w").write(
+            "%s\n%s" % (primary_text or "", secondary_text or "")
+        )
+    except Exception:
+        pass
 
     if hasattr(dialog, "_primary"):
         dialog._primary.set_text(primary_text or "")

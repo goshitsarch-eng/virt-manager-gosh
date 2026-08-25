@@ -272,6 +272,13 @@ def _sentinel_hw_cell(name, roleName):
     return _SentinelTableCell(matched, selected)
 
 
+def _write_overview_name(text):
+    try:
+        open("/tmp/vmm-a11y-overview-name.txt", "w").write(text if text is not None else "")
+    except Exception:
+        pass
+
+
 def _oslist_start_search():
     """Clear Escape/hide markers and allow the popover to reopen after a pick."""
     for marker in (
@@ -1217,7 +1224,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "media-entry",
             "copy host",
         )
-        if nname in ("ok", "yes"):
+        if nname in ("ok", "yes", "close", "no"):
             try:
                 with open("/tmp/vmm-a11y-click.txt", "w") as fh:
                     fh.write(raw or nname)
@@ -1401,6 +1408,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
             try:
                 if "oslist-entry" in (self.name or ""):
                     _oslist_start_search()
+                if (self.name or "").startswith("Name"):
+                    _write_overview_name(text)
                 with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                     fh.write(text)
                 if "oslist-entry" in (self.name or ""):
@@ -1432,6 +1441,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
         try:
             if "oslist-entry" in (self.name or ""):
                 _oslist_start_search()
+            if (self.name or "").startswith("Name"):
+                _write_overview_name(text)
             with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                 fh.write(text)
             base = (self.name or "").split(":", 1)[0].strip().rstrip(":")

@@ -4,6 +4,9 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
+from gi.repository import GLib
 from gi.repository import Gtk
 
 import libvirt
@@ -500,6 +503,25 @@ class vmmDetails(vmmGObjectUI):
             )
         except Exception:
             pass
+        if not getattr(self, "_vmm_name_poll", False):
+            self._vmm_name_poll = True
+
+            def _poll_overview_name():
+                path = "/tmp/vmm-a11y-overview-name.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.widget("overview-name").set_text(text)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_overview_name)
         try:
             gtkcompat.expose_a11y_entry(
                 "details-media-entry",

@@ -3018,6 +3018,10 @@ def present_a11y_alert(primary, buttons):
     lab.set_xalign(0)
     lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
     set_accessible_name(lab, primary or "")
+    try:
+        open("/tmp/vmm-a11y-alert.txt", "w").write(primary or "")
+    except Exception:
+        pass
     box.append(lab)
     btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     btnbox.set_halign(Gtk.Align.END)
@@ -4173,7 +4177,40 @@ def _run_modal(window, response_signal="response"):
     for _ in range(20):
         if not ctx.iteration(False):
             break
+
+    def _poll_alert_response():
+        path = "/tmp/vmm-a11y-alert-response.txt"
+        try:
+            if not os.path.exists(path):
+                return True
+            label = open(path, "r").read().strip()
+            os.remove(path)
+        except Exception:
+            return True
+        if not label or not loop.is_running():
+            return False
+        mapping = {
+            "yes": Gtk.ResponseType.YES,
+            "no": Gtk.ResponseType.NO,
+            "ok": Gtk.ResponseType.OK,
+            "close": Gtk.ResponseType.CLOSE,
+            "cancel": Gtk.ResponseType.CANCEL,
+        }
+        resp = mapping.get(label.lower())
+        if resp is None:
+            return True
+        try:
+            window.emit("response", resp)
+        except Exception:
+            on_response(window, resp)
+        return False
+
+    GLib.timeout_add(50, _poll_alert_response)
     loop.run()
+    try:
+        os.remove("/tmp/vmm-a11y-alert.txt")
+    except Exception:
+        pass
     if hid is not None:
         window.disconnect(hid)
     if close_hid is not None:

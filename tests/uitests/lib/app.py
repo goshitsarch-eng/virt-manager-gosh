@@ -205,6 +205,35 @@ class VMMDogtailApp:
         return win
 
     def click_alert_button(self, label_text, button_text):
+        def _alert_text():
+            try:
+                return open("/tmp/vmm-a11y-alert.txt", "r").read()
+            except Exception:
+                return ""
+
+        def _alert_matches():
+            text = _alert_text()
+            return bool(text and label_text and label_text.lower() in text.lower())
+
+        try:
+            utils.check(_alert_matches, timeout=3)
+        except Exception:
+            pass
+        if _alert_matches():
+            stored = _alert_text()
+            try:
+                open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+            except Exception:
+                pass
+            try:
+                utils.check(lambda: _alert_text() != stored, timeout=3)
+            except Exception:
+                pass
+            return
         alert = None
         for name, role in (
             (".*", "alert"),
