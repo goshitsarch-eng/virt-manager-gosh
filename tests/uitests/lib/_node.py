@@ -2839,14 +2839,3 @@ _bases = list(pyatspi.Accessibility.Accessible.__bases__)
 _bases.insert(_bases.index(dogtail.tree.Node), _VMMDogtailNode)
 _bases.remove(dogtail.tree.Node)
 pyatspi.Accessibility.Accessible.__bases__ = tuple(_bases)
-
-_orig_node_find = dogtail.tree.Node.find
-
-
-def _node_find_pagenum(self, name=None, *args, **kwargs):
-    if name and "pagenum" in str(name).lower():
-        return _SentinelPagenum()
-    return _orig_node_find(self, name, *args, **kwargs)
-
-
-dogtail.tree.Node.find = _node_find_pagenum
