@@ -394,10 +394,11 @@ class vmmCreateVM(vmmGObjectUI):
         gtkcompat.attach_notebook_a11y(self.widget("create-pages"))
         gtkcompat.attach_notebook_a11y(self.widget("install-method-pages"))
         gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        ptxt = self.widget("header-pagenum").get_text() or "pagenum-label"
         gtkcompat.expose_a11y_label(
             "create-pagenum",
-            "pagenum-label",
-            self.widget("header-pagenum").get_text() or "pagenum-label",
+            "pagenum-label: %s" % ptxt,
+            ptxt,
             window=self.topwin,
         )
         gtkcompat.expose_a11y_label(
@@ -1378,7 +1379,10 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("header-pagenum").set_markup(page_lbl)
         gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
         gtkcompat.expose_a11y_label(
-            "create-pagenum", "pagenum-label", page_lbl, window=self.topwin
+            "create-pagenum",
+            "pagenum-label: %s" % page_lbl,
+            page_lbl,
+            window=self.topwin,
         )
 
     def _change_os_detect(self, sensitive):

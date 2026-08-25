@@ -605,6 +605,21 @@ class _VMMDogtailNode(dogtail.tree.Node):
         )
         return submenu or self.roleName == "menu item"
 
+    def keyCombo(self, combo, *args, **kwargs):
+        """GTK 4 mnemonics often miss AT-SPI key events on sidecar buttons."""
+        try:
+            name = (self.name or "").strip().lower()
+        except Exception:
+            name = ""
+        combo_l = str(combo or "").lower()
+        if combo_l == "<alt>f" and name == "forward":
+            self.click()
+            return
+        if combo_l == "<alt>b" and name == "back":
+            self.click()
+            return
+        return super().keyCombo(combo, *args, **kwargs)
+
     def click(self, *args, **kwargs):
         """
         click wrapper, check some states first to reduce flakiness
