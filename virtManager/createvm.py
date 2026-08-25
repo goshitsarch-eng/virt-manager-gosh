@@ -10,6 +10,7 @@ import os
 import threading
 import time
 
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -1505,6 +1506,12 @@ class vmmCreateVM(vmmGObjectUI):
         return next_page
 
     def _forward_clicked(self, src_ignore=None):
+        # Validation alerts use dialog.run(); that must not run inside
+        # an AT-SPI click on the real _Forward button.
+        GLib.idle_add(self._forward_clicked_impl)
+        return True
+
+    def _forward_clicked_impl(self, *_a):
         notebook = self.widget("create-pages")
         curpage = notebook.get_current_page()
 
@@ -1512,10 +1519,10 @@ class vmmCreateVM(vmmGObjectUI):
             # Make sure we have detected the OS before validating the page
             did_start = self._start_detect_os_if_needed(forward_after_finish=True)
             if did_start:
-                return
+                return False
 
         if self._validate(curpage) is not True:
-            return
+            return False
 
         self.widget("create-forward").grab_focus()
         if curpage == PAGE_NAME:
@@ -1523,6 +1530,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         next_page = self._get_next_pagenum(curpage)
         notebook.set_current_page(next_page)
+        return False
 
     def _page_changed(self, ignore1, ignore2, pagenum):
         if self.builder is None:
@@ -1988,10 +1996,14 @@ class vmmCreateVM(vmmGObjectUI):
     ##########################
 
     def _finish_clicked(self, src_ignore):
+        GLib.idle_add(self._finish_clicked_impl)
+        return True
+
+    def _finish_clicked_impl(self, *_a):
         # Validate the final page
         page = self.widget("create-pages").get_current_page()
         if self._validate(page) is not True:
-            return
+            return False
 
         log.debug("Starting create finish() sequence")
         self._gdata.failed_guest = None
@@ -2008,14 +2020,15 @@ class vmmCreateVM(vmmGObjectUI):
 
             if not self.widget("summary-customize").get_active():
                 self._start_install(guest, installer)
-                return
+                return False
 
             log.debug("User requested 'customize', launching dialog")
             self._show_customize_dialog(guest, installer)
         except Exception as e:  # pragma: no cover
             self.reset_finish_cursor()
             self.err.show_err(_("Error starting installation: %s") % str(e))
-            return
+            return False
+        return False
 
     def _cleanup_customize_window(self):
         if not self._customize_window:
