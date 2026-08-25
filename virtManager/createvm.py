@@ -599,8 +599,7 @@ class vmmCreateVM(vmmGObjectUI):
             )
 
     def _os_selected(self, _src, osobj):
-        if osobj is not None:
-            self._last_osobj = osobj
+        self._last_osobj = osobj
 
     def _reset_state(self, urihint=None):
         """

@@ -271,6 +271,11 @@ class vmmOSList(vmmGObjectUI):
             searchname = self.search_entry.get_text().strip()
         except Exception:
             pass
+        _detect = (
+            _("None detected"),
+            _("Detecting..."),
+            _("Waiting for install media / source"),
+        )
         if not searchname:
             try:
                 sidecar = gtkcompat._A11Y_SIDECAR["items"].get("oslist-entry")
@@ -280,7 +285,11 @@ class vmmOSList(vmmGObjectUI):
                         self.search_entry.set_text(searchname)
             except Exception:
                 pass
+        if searchname in _detect or searchname.startswith("/"):
+            return
         if self.select_os_matching(searchname):
+            return
+        if not searchname:
             return
         os_list = self.widget("os-list")
         wrap = getattr(self, "_vmm_popover_box", None)
@@ -290,7 +299,7 @@ class vmmOSList(vmmGObjectUI):
                 a11y_open = (wrap.get_accessible_name() or "") == "oslist-popover"
             except Exception:
                 a11y_open = False
-        if not os_list.is_visible() and not a11y_open and not searchname:
+        if not os_list.is_visible() and not a11y_open:
             return  # pragma: no cover
 
         self._set_default_selection(force=True)
@@ -427,7 +436,13 @@ class vmmOSList(vmmGObjectUI):
     def select_os_matching(self, text):
         """Pick the best OS for a search string (name, label, then generic)."""
         want = (text or "").strip().lower()
-        if not want:
+        if not want or want.startswith("/"):
+            return False
+        if want in (
+            _("None detected").lower(),
+            _("Detecting...").lower(),
+            _("Waiting for install media / source").lower(),
+        ):
             return False
         try:
             all_os = virtinst.OSDB.list_os()

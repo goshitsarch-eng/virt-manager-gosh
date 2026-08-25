@@ -850,7 +850,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 typed = (self.text or "").strip()
             except Exception:
                 typed = ""
-            if typed or "generic" in nname:
+            _detect = (
+                "none detected",
+                "detecting...",
+                "waiting for install media / source",
+            )
+            if "generic" in nname or (
+                typed and typed.lower() not in _detect and not typed.startswith("/")
+            ):
                 try:
                     self._click_named_button(".oslist-activate")
                 except Exception:
