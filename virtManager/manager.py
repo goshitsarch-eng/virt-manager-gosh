@@ -328,6 +328,7 @@ class vmmManager(vmmGObjectUI):
             if cb:
                 item.connect("activate", cb)
             item.get_accessible().set_name("conn-%s" % idx)
+            gtkcompat.set_accessible_name(item, "conn-%s" % idx)
             self.connmenu.add(item)
             self.connmenu_items[idx] = item
 
@@ -999,6 +1000,7 @@ class vmmManager(vmmGObjectUI):
 
             self.connmenu._parent_widget = self.topwin
             self.connmenu.popup_at_pointer(event)
+            gtkcompat.expose_conn_menu_window(self)
 
     #################
     # Stats methods #

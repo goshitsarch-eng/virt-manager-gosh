@@ -1032,6 +1032,81 @@ def expose_createvm_methods_window(createvm):
     return win
 
 
+def expose_conn_menu_window(manager):
+    """Findable connection context menu after GetItems cache errors."""
+    if manager is None:
+        return None
+    win = getattr(manager, "_vmm_conn_menu_win", None)
+    if win is not None:
+        try:
+            _ensure_app_window(win)
+            win.set_visible(True)
+            return win
+        except Exception:
+            manager._vmm_conn_menu_win = None
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_modal(False)
+    win.set_default_size(200, 180)
+    try:
+        win.set_accessible_role(Gtk.AccessibleRole.MENU)
+    except Exception:
+        pass
+    set_accessible_name(win, "conn-menu")
+    try:
+        win.set_title("conn-menu")
+    except Exception:
+        pass
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    win.set_child(box)
+    items = getattr(manager, "connmenu_items", None) or {}
+    for idx in ("create", "connect", "disconnect", "delete", "details"):
+        src = items.get(idx)
+        name = "conn-%s" % idx
+        btn = Gtk.Button(label=name, has_frame=False)
+        try:
+            btn.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
+        except Exception:
+            btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        ensure_activate_clicked(btn)
+        set_accessible_name(btn, name)
+
+        def _act(_b, it=src):
+            if it is None:
+                return
+            try:
+                it.emit("activate")
+            except Exception:
+                try:
+                    it.activate()
+                except Exception:
+                    pass
+
+        btn.connect("clicked", _act)
+        box.append(btn)
+    _ensure_app_window(win)
+    win.set_visible(True)
+    manager._vmm_conn_menu_win = win
+    return win
+
+
+def hide_conn_menu_window(manager):
+    win = getattr(manager, "_vmm_conn_menu_win", None) if manager is not None else None
+    if win is None:
+        return
+    try:
+        app = Gtk.Application.get_default()
+        if app is not None:
+            app.remove_window(win)
+    except Exception:
+        pass
+    try:
+        win.close()
+    except Exception:
+        pass
+    manager._vmm_conn_menu_win = None
+
+
 def hide_createvm_methods_window(createvm):
     win = getattr(createvm, "_vmm_methods_win", None)
     if win is None:
