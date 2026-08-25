@@ -461,6 +461,10 @@ class vmmGObjectUI(vmmGObject):
             return False
 
         controller = Gtk.EventControllerKey()
+        try:
+            controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        except Exception:
+            pass
         controller.connect("key-pressed", close_on_escape)
         self.topwin.add_controller(controller)
 

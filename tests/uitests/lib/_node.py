@@ -660,17 +660,17 @@ class _VMMDogtailNode(dogtail.tree.Node):
             try:
                 return not bool(self.visible)
             except Exception:
-                return True
+                return False
 
         for name in ("Cancel", "Close"):
             try:
-                btn = self.find(name, "push button")
+                btn = self.find(name, "push button", timeout=0.4)
             except Exception:
                 continue
             try:
                 if btn.sensitive:
                     btn.click()
-                    utils.check(_closed)
+                    utils.check(_closed, timeout=1)
                     return
             except Exception:
                 continue
@@ -740,6 +740,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         check_active=True,
         recursive=True,
         focusable=False,
+        timeout=5,
     ):
         """
         Search root for any widget that contains the passed name/role regex
@@ -749,7 +750,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
         ret = None
-        deadline = time.time() + 5
+        deadline = time.time() + max(0.1, float(timeout))
         while ret is None and time.time() < deadline:
             if recursive:
                 ret = _walk_find(self, pred, False)
