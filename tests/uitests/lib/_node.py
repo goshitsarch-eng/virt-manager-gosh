@@ -19,8 +19,8 @@ _GTK4_ROLE_ALIASES = {
     "push button": "(button|push button)",
     ".*push button.*": ".*(button|push button).*",
     "button": "(button|push button)",
-    "frame": "(frame|window)",
-    "window": "(frame|window)",
+    "frame": "(frame|window|panel)",
+    "window": "(frame|window|panel)",
     "alert": "(alert|dialog)",
     "dialog": "(dialog|alert|window)",
     ".*dialog.*": ".*(dialog|alert|window).*",
@@ -40,7 +40,7 @@ _GTK4_ROLE_ALIASES = {
     "toggle button": "(toggle button|button|push button)",
 }
 
-_WINDOW_ROLES = ("frame", "window", "dialog", "alert", "file chooser")
+_WINDOW_ROLES = ("frame", "window", "dialog", "alert", "file chooser", "panel")
 
 
 def _alias_role(roleName):

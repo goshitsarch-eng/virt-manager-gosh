@@ -369,6 +369,12 @@ class vmmGObjectUI(vmmGObject):
             self.builder = builder
             self.topwin = topwin
 
+        if self.topwin is not None:
+            try:
+                self.topwin.set_accessible_role(Gtk.AccessibleRole.WINDOW)
+            except Exception:
+                pass
+
         self._err = None
 
     def _get_err(self):
