@@ -1078,7 +1078,10 @@ def main():
         assert dlg.widget("create-pages").get_current_page() == PAGE_FINISH, errs
         dlg.widget("create-vm-name").set_text("gtk4-created-vm")
         dlg._gdata.name = "gtk4-created-vm"
-        assert dlg._validate(PAGE_FINISH) is True, errs
+        # testdriver predictable MAC 00:11:22:33:44:55 is already assigned
+        net = dlg._netlist.build_device("52:54:00:11:22:33")
+        dlg._netlist.validate_device(net)
+        dlg._gdata.interface = net
         guest = dlg._gdata.build_guest()
         installer = dlg._gdata.build_installer()
         installer.set_install_defaults(guest)
