@@ -192,6 +192,12 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
         The actual search routine
         """
         try:
+            try:
+                nname = node.name or ""
+                if nname.startswith(".") and not str(self._name or "").startswith("."):
+                    return
+            except Exception:
+                pass
             if self._roleName and not self._role_pattern.match(node.roleName):
                 return
 
