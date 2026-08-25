@@ -207,14 +207,7 @@ def set_accessible_name(widget, name):
     widget._vmm_a11y_name = str(name)
 
 
-def _mark_toplevel_hidden(window, hidden):
-    """AT-SPI often keeps STATE_VISIBLE after Gtk.Window.hide().
-
-    GTK 4 windows expose the window title as the AT-SPI name, so LABEL
-    updates are not enough. Also suffix the title.
-    """
-    if window is None:
-        return
+def _toplevel_base_title(window):
     try:
         title = window.get_title() or ""
     except Exception:
@@ -223,13 +216,73 @@ def _mark_toplevel_hidden(window, hidden):
         name = window.get_accessible_name() or title
     except Exception:
         name = title
-    base = (
+    return (
         (title or name)
         .replace(" (hidden)", "")
         .replace("(hidden)", "")
         .strip()
     )
-    if not base:
+
+
+def _publish_window_state_marker(window, hidden):
+    """
+    Always-mapped sidecar label. AT-SPI cache often keeps the real
+    window STATE_VISIBLE after hide(); uitests look for this instead.
+    """
+    base = _toplevel_base_title(window)
+    if not base or base.startswith("."):
+        return
+    name = ".win-%s-%s" % ("hidden" if hidden else "open", base)
+    expose_a11y_label(
+        "winstate-%s" % id(window),
+        name,
+        name,
+        parent=_a11y_global_sidecar_box(),
+    )
+
+
+def _ensure_remote_close_button(window):
+    """Close control on the always-mapped sidecar, not the hidden window."""
+    if window is None or getattr(window, "_vmm_remote_close", False):
+        return
+    base = _toplevel_base_title(window) or "window"
+    if base.startswith("."):
+        return
+    window._vmm_remote_close = True
+
+    def _close(*_a):
+        try:
+            window.close()
+        except Exception:
+            pass
+        try:
+            if window.get_visible():
+                window.hide()
+        except Exception:
+            pass
+        _mark_toplevel_hidden(window, True)
+        return True
+
+    btn = expose_a11y_button(
+        "win-close-%s" % id(window),
+        ".win-close-%s" % base,
+        _close,
+        parent=_a11y_global_sidecar_box(),
+    )
+    window._vmm_remote_close_btn = btn
+
+
+def _mark_toplevel_hidden(window, hidden):
+    """AT-SPI often keeps STATE_VISIBLE after Gtk.Window.hide().
+
+    GTK 4 windows expose the window title as the AT-SPI name, so LABEL
+    updates are not enough. Also suffix the title and publish a marker
+    on the always-mapped sidecar.
+    """
+    if window is None:
+        return
+    base = _toplevel_base_title(window)
+    if not base or base.startswith("."):
         return
     shown = (base + " (hidden)") if hidden else base
     try:
@@ -238,6 +291,16 @@ def _mark_toplevel_hidden(window, hidden):
     except Exception:
         pass
     set_accessible_name(window, shown)
+    try:
+        _publish_window_state_marker(window, hidden)
+    except Exception:
+        pass
+    try:
+        btn = getattr(window, "_vmm_remote_close_btn", None)
+        if btn is not None:
+            set_accessible_name(btn, ".win-close-%s" % base)
+    except Exception:
+        pass
 
 
 def _ensure_toplevel_hidden_sync(window):
@@ -303,6 +366,10 @@ def set_toplevel_a11y_role(widget):
             continue
     _ensure_toplevel_hidden_sync(widget)
     _ensure_toplevel_close_action(widget)
+    try:
+        _ensure_remote_close_button(widget)
+    except Exception:
+        pass
 
 
 def _checked_tristate(active):
@@ -489,16 +556,18 @@ def _a11y_global_sidecar_box():
         win.set_modal(False)
         win.set_focusable(False)
         win.set_default_size(8, 8)
-        set_toplevel_a11y_role(win)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        win.set_child(box)
+        # Register before set_toplevel_a11y_role so remote-close helpers
+        # that create sidecar children do not recurse.
+        _A11Y_SIDECAR["win"] = win
+        _A11Y_SIDECAR["box"] = box
         set_accessible_name(win, ".a11y-sidecar")
         try:
             win.set_title(".a11y-sidecar")
         except Exception:
             pass
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        win.set_child(box)
-        _A11Y_SIDECAR["win"] = win
-        _A11Y_SIDECAR["box"] = box
+        set_toplevel_a11y_role(win)
         # Do not add this to Gtk.Application: extra windows keep the
         # process alive after the last real toplevel closes.
         win.set_visible(True)
@@ -610,8 +679,8 @@ def attach_entry_a11y_value(entry, label=None):
         _sync()
 
 
-def expose_a11y_label(key, name, text, window=None):
-    box = _a11y_sidecar_box(window)
+def expose_a11y_label(key, name, text, window=None, parent=None):
+    box = parent if parent is not None else _a11y_sidecar_box(window)
     lab = _A11Y_SIDECAR["items"].get(key)
     if lab is None:
         lab = Gtk.Label(label=text or name or "")

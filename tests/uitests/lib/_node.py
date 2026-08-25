@@ -685,9 +685,27 @@ class _VMMDogtailNode(dogtail.tree.Node):
     def window_close(self):
         assert self.roleName in list(_WINDOW_ROLES)
 
+        def _window_base_name():
+            try:
+                return (self.name or "").replace(" (hidden)", "").strip()
+            except Exception:
+                return ""
+
+        def _marker_closed():
+            base = _window_base_name()
+            if not base:
+                return False
+            app = _virt_manager_app()
+            if app is None:
+                return False
+            pred = _FuzzyPredicate(".win-hidden-" + base, None)
+            return _walk_find(app, pred, True) is not None
+
         def _closed():
             try:
                 if self._a11y_hidden_name():
+                    return True
+                if _marker_closed():
                     return True
                 if not bool(self.visible):
                     return True
@@ -716,6 +734,47 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 except Exception:
                     return None
             return None
+
+        def _click_remote_close():
+            base = _window_base_name()
+            if not base:
+                return False
+            app = _virt_manager_app()
+            if app is None:
+                return False
+            pred = _FuzzyPredicate(
+                ".win-close-" + base, _alias_role("push button")
+            )
+            btn = _walk_find(app, pred, True)
+            if btn is None:
+                return False
+            try:
+                btn.doActionNamed("click")
+            except Exception:
+                try:
+                    btn.click()
+                except Exception:
+                    return False
+            return True
+
+        try:
+            with open("/tmp/window_close_debug.log", "a") as _dbg:
+                _dbg.write(
+                    "close name=%r role=%s visible=%s showing=%s hidden_name=%s marker=%s\n"
+                    % (
+                        self.name,
+                        self.roleName,
+                        self.visible,
+                        self.showing,
+                        self._a11y_hidden_name(),
+                        _marker_closed(),
+                    )
+                )
+        except Exception:
+            pass
+        if _click_remote_close():
+            utils.check(_closed, timeout=2)
+            return
 
         def _find_local_all(name, roleName):
             pred = _FuzzyPredicate(name, _alias_role(roleName))
