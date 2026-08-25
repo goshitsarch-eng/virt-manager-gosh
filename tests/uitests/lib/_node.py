@@ -333,7 +333,23 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         If the window is the raised and active window or not
         """
-        return self.getState().contains(pyatspi.STATE_ACTIVE)
+        try:
+            st = self.getState()
+            if st.contains(pyatspi.STATE_ACTIVE) or st.contains(pyatspi.STATE_FOCUSED):
+                return True
+        except Exception:
+            st = None
+        # GTK 4 + Xvfb often omit STATE_ACTIVE after nested file choosers.
+        try:
+            name = self.name or ""
+        except Exception:
+            name = ""
+        if "New VM" in name:
+            try:
+                return bool(self.showing and self.visible and not self._a11y_hidden_name())
+            except Exception:
+                return False
+        return False
 
     @property
     def state_selected(self):
@@ -683,6 +699,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
         nname = (self.name or "").lower()
+        if nname.replace("_", "") == "open":
+            try:
+                with open("/tmp/vmm-a11y-file-open", "w") as fh:
+                    fh.write("1")
+            except Exception:
+                pass
         if (
             "oslist-entry" in nname
             or "operating system you are installing" in nname

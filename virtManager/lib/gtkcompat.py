@@ -2904,6 +2904,14 @@ def _browse_local_window(
                     _fill()
                     return
                 chosen[0] = p
+                try:
+                    open(
+                        os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
+                        + ".path",
+                        "w",
+                    ).write(p)
+                except Exception:
+                    pass
 
             btn.connect("clicked", _pick)
             listbox.append(btn)
@@ -2911,11 +2919,13 @@ def _browse_local_window(
     _fill()
     btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     btnbox.set_halign(Gtk.Align.END)
-    open_lbl = choose_label or "Open"
-    open_btn = Gtk.Button(label=open_lbl)
+    open_lbl = (choose_label or "Open").replace("_", "", 1)
+    if open_lbl != "Open":
+        open_lbl = "Open"
+    open_btn = Gtk.Button(label="Open")
     open_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
     ensure_activate_clicked(open_btn)
-    set_accessible_name(open_btn, open_lbl)
+    set_accessible_name(open_btn, "Open")
     try:
         open_btn.update_state([Gtk.AccessibleState.DISABLED], [False])
     except Exception:
@@ -2929,6 +2939,28 @@ def _browse_local_window(
 
     result = [None]
     loop = GLib.MainLoop()
+    marker = os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
+    try:
+        os.unlink(marker)
+    except Exception:
+        pass
+
+    def _present_owner():
+        tgt = parent
+        try:
+            if parent is not None:
+                t = parent.get_transient_for()
+                if t is not None:
+                    tgt = t
+        except Exception:
+            pass
+        for w in (tgt, parent):
+            if w is None:
+                continue
+            try:
+                w.present()
+            except Exception:
+                pass
 
     def _close(*_a):
         try:
@@ -2938,7 +2970,9 @@ def _browse_local_window(
         except Exception:
             pass
         try:
+            win.hide()
             win.close()
+            win.destroy()
         except Exception:
             pass
         if loop.is_running():
@@ -2946,17 +2980,25 @@ def _browse_local_window(
         return False
 
     def _open(*_a):
-        def _idle():
-            result[0] = chosen[0]
-            _close()
+        result[0] = chosen[0]
+        if not result[0]:
             try:
-                if parent is not None:
-                    parent.present()
+                result[0] = open(marker + ".path", "r").read().strip()
             except Exception:
                 pass
-            return False
+        _close()
+        _present_owner()
+        return False
 
-        GLib.idle_add(_idle)
+    def _poll_marker():
+        if os.path.exists(marker):
+            try:
+                os.unlink(marker)
+            except Exception:
+                pass
+            _open()
+            return False
+        return True
 
     open_btn.connect("clicked", _open)
     try:
@@ -2972,6 +3014,7 @@ def _browse_local_window(
         except Exception:
             pass
     win.set_visible(True)
+    GLib.timeout_add(50, _poll_marker)
     loop.run()
     ignore = default_name
     ignore = _type

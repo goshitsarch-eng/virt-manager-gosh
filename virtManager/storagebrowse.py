@@ -200,4 +200,14 @@ class vmmStorageBrowser(vmmGObjectUI):
     def _finish(self, path):
         if self._finish_cb:
             self._finish_cb(self, path)
+        parent = None
+        try:
+            parent = self.topwin.get_transient_for()
+        except Exception:
+            pass
         self.close()
+        if parent is not None:
+            try:
+                parent.present()
+            except Exception:
+                pass
