@@ -119,7 +119,7 @@ class VMMDogtailApp:
         return self._manager
 
     def find_details_window(self, vmname, click_details=False, shutdown=False):
-        win = self.find_window("%s on" % vmname, "(frame|window)")
+        win = self.find_window("%s on" % vmname, "(frame|window|dialog|panel)")
         if click_details:
             win.find("Details", "radio button").click()
         if shutdown:
