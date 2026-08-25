@@ -1039,80 +1039,65 @@ def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None
     return view
 
 
-def expose_a11y_check(key, name, widget, window=None, parent=None):
-    """Mirror a CheckButton so it stays findable when its notebook page hides."""
+def _sync_checked_state(widget, active):
+    try:
+        widget.update_state(
+            [Gtk.AccessibleState.CHECKED], [_checked_tristate(active)]
+        )
+    except Exception:
+        pass
+    try:
+        widget.update_state([Gtk.AccessibleState.PRESSED], [bool(active)])
+    except Exception:
+        pass
+
+
+def expose_a11y_check(key, name, widget, window=None, parent=None, radio=False):
+    """
+    Mirror a CheckButton as a Gtk.Button. GTK 4 CheckButton AT-SPI
+    activate does not toggle, but Button click does fire 'clicked'.
+    """
     box = parent if parent is not None else _a11y_sidecar_box(window)
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
-        btn = Gtk.CheckButton(label=name)
+        btn = Gtk.Button(label=name, has_frame=False)
         try:
             btn.set_accessible_role(Gtk.AccessibleRole.CHECKBOX)
         except Exception:
             pass
+        ensure_activate_clicked(btn)
         box.append(btn)
         _A11Y_SIDECAR["items"][key] = btn
+        btn._vmm_check_radio = bool(radio)
 
         def _sync_from_src(*_a, src=widget, dst=btn):
-            if getattr(dst, "_vmm_check_syncing", False):
-                return False
-            dst._vmm_check_syncing = True
             try:
-                if dst.get_active() != src.get_active():
-                    dst.set_active(src.get_active())
+                _sync_checked_state(dst, bool(src.get_active()))
             except Exception:
                 pass
-            dst._vmm_check_syncing = False
             return False
 
-        def _on_toggle(_b, src=widget, dst=btn):
-            if getattr(dst, "_vmm_check_syncing", False):
-                return
-            dst._vmm_check_syncing = True
+        def _on_clicked(_b, src=widget, dst=btn):
             try:
-                if src.get_active() != dst.get_active():
-                    src.set_active(dst.get_active())
+                if getattr(dst, "_vmm_check_radio", False):
+                    src.set_active(True)
+                else:
+                    src.set_active(not bool(src.get_active()))
             except Exception:
                 pass
-            dst._vmm_check_syncing = False
+            _sync_from_src()
 
-        btn.connect("toggled", _on_toggle)
+        btn.connect("clicked", _on_clicked)
         try:
             widget.connect("notify::active", _sync_from_src)
         except Exception:
             pass
-
-        def _on_click(*_a, src=widget, dst=btn):
-            dst._vmm_check_syncing = True
-            try:
-                grouped = False
-                try:
-                    grouped = bool(src.get_group())
-                except Exception:
-                    grouped = False
-                if grouped:
-                    src.set_active(True)
-                    dst.set_active(True)
-                else:
-                    val = not bool(src.get_active())
-                    src.set_active(val)
-                    dst.set_active(val)
-            except Exception:
-                pass
-            dst._vmm_check_syncing = False
-            sync_accessible_checked(dst)
-            try:
-                sync_accessible_checked(src)
-            except Exception:
-                pass
-            return True
-
-        try:
-            btn.install_action("click", None, lambda *_a: _on_click())
-        except Exception:
-            pass
         _sync_from_src()
     set_accessible_name(btn, name)
-    sync_accessible_checked(btn)
+    try:
+        _sync_checked_state(btn, bool(widget.get_active()))
+    except Exception:
+        pass
     btn.set_visible(True)
     return btn
 

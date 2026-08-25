@@ -442,9 +442,22 @@ class vmmCreateVM(vmmGObjectUI):
             ("method-manual", "Manual install"),
         ):
             src = self.widget(wid)
-            gtkcompat.set_accessible_name(src, name)
             gtkcompat.sync_accessible_checked(src)
-            gtkcompat.expose_a11y_check(wid, name, src, window=self.topwin)
+            gtkcompat.expose_a11y_check(
+                wid, name, src, window=self.topwin, radio=True
+            )
+            gtkcompat.set_accessible_name(src, ".%s-real" % wid)
+            for child in gtkcompat.get_children(src):
+                gtkcompat.set_accessible_name(child, ".%s-child" % wid)
+            def _activate(_w, s=src):
+                try:
+                    s.set_active(True)
+                except Exception:
+                    pass
+            try:
+                src.connect("activate", _activate)
+            except Exception:
+                pass
             sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
             if sidecar is not None:
                 gtkcompat.set_accessible_name(sidecar, name)
@@ -503,7 +516,9 @@ class vmmCreateVM(vmmGObjectUI):
                 src = self._addstorage.widget(wid)
                 gtkcompat.set_accessible_name(src, name)
                 gtkcompat.sync_accessible_checked(src)
-                gtkcompat.expose_a11y_check(wid, name, src, window=self.topwin)
+                gtkcompat.expose_a11y_check(
+                    wid, name, src, window=self.topwin, radio=True
+                )
                 sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
                 if sidecar is not None:
                     gtkcompat.set_accessible_name(sidecar, name)
