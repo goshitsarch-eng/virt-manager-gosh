@@ -8,14 +8,25 @@ import sys
 import textwrap
 import traceback
 
+from gi.repository import GObject
 from gi.repository import Gtk
 
 from virtinst import log
 
 from .baseclass import vmmGObject
+from .lib import gtkcompat
 
 
-def _launch_dialog(dialog, primary_text, secondary_text, title, widget=None, modal=True):
+def _launch_dialog(
+    dialog,
+    primary_text,
+    secondary_text,
+    title,
+    widget=None,
+    modal=True,
+    destroy=True,
+    clone_a11y=False,
+):
     def fix_text(t):
         if not t:
             return t
@@ -32,9 +43,31 @@ def _launch_dialog(dialog, primary_text, secondary_text, title, widget=None, mod
     primary_text = fix_text(primary_text)
     secondary_text = fix_text(secondary_text)
 
-    dialog.set_property("text", primary_text)
+    if hasattr(dialog, "_primary"):
+        dialog._primary.set_text(primary_text or "")
+        gtkcompat.set_accessible_name(dialog._primary, primary_text or "")
+    else:
+        dialog.set_property("text", primary_text)
     dialog.format_secondary_text(secondary_text or None)
-    dialog.set_title(title)
+    dialog.set_title(title or "vmm dialog")
+    gtkcompat.set_accessible_name(dialog, title or "vmm dialog")
+    gtkcompat.expose_a11y_label("err-primary", primary_text or "vmm dialog", primary_text or "")
+    if secondary_text:
+        gtkcompat.expose_a11y_label("err-secondary", secondary_text, secondary_text)
+    bbox = getattr(dialog, "_button_box", None)
+    alert_buttons = []
+    if bbox is not None:
+        for child in gtkcompat.get_children(bbox):
+            label = gtkcompat._accessible_label_for_widget(child) or child.get_name()
+            if label:
+                gtkcompat.expose_a11y_button(
+                    "err-btn-" + label, label, lambda r=child: r.emit("clicked")
+                )
+                alert_buttons.append((label, lambda r=child: r.emit("clicked")))
+    # Fresh AT-SPI clones help one-shot errors (run-fail). Reused Extra
+    # confirm windows already map; cloning those poisons GetItems.
+    if clone_a11y:
+        gtkcompat.present_a11y_alert(primary_text, alert_buttons)
 
     if widget:
         dialog.get_content_area().add(widget)
@@ -43,7 +76,9 @@ def _launch_dialog(dialog, primary_text, secondary_text, title, widget=None, mod
     if modal:
         res = dialog.run()
         res = bool(res in [Gtk.ResponseType.YES, Gtk.ResponseType.OK])
-        dialog.destroy()
+        gtkcompat.hide_a11y_keys("err-")
+        if destroy:
+            dialog.destroy()
     else:
 
         def response_destroy(src, ignore):
@@ -118,7 +153,12 @@ class vmmErrorDialog(vmmGObject):
         )
 
         return dialog.show_dialog(
-            primary_text=summary, secondary_text=text2, details=details, title=title, modal=modal
+            primary_text=summary,
+            secondary_text=text2,
+            details=details,
+            title=title,
+            modal=modal,
+            clone_a11y=True,
         )
 
     ###################################
@@ -127,19 +167,21 @@ class vmmErrorDialog(vmmGObject):
 
     def _simple_dialog(self, dialog_type, buttons, text1, text2, title, widget=None, modal=True):
 
-        dialog = Gtk.MessageDialog(
-            self.get_parent(),
-            flags=Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            message_type=dialog_type,
-            buttons=buttons,
+        dialog = _errorDialog(
+            parent=self.get_parent(), flags=0, message_type=dialog_type, buttons=buttons
         )
         if self._simple:
             self._simple.destroy()
         self._simple = dialog
-        self._simple.get_accessible().set_name("vmm dialog")
 
         return _launch_dialog(
-            self._simple, text1, text2 or "", title or "", widget=widget, modal=modal
+            self._simple,
+            text1,
+            text2 or "",
+            title or "",
+            widget=widget,
+            modal=modal,
+            clone_a11y=True,
         )
 
     def val_err(self, text1, text2=None, title=_("Input Error"), modal=True):
@@ -195,9 +237,18 @@ class vmmErrorDialog(vmmGObject):
     def warn_chkbox(self, text1, text2=None, chktext=None, buttons=None):
         dtype = Gtk.MessageType.WARNING
         buttons = buttons or Gtk.ButtonsType.OK_CANCEL
-        chkbox = _errorDialog(
-            parent=self.get_parent(), flags=0, message_type=dtype, buttons=buttons
-        )
+        # Reuse one confirm window per button set so Extra's many Yes/No
+        # prompts do not poison the AT-SPI GetItems cache.
+        cache = getattr(self, "_warn_dialogs", None)
+        if cache is None:
+            cache = {}
+            self._warn_dialogs = cache
+        chkbox = cache.get(buttons)
+        if chkbox is None:
+            chkbox = _errorDialog(
+                parent=self.get_parent(), flags=0, message_type=dtype, buttons=buttons
+            )
+            cache[buttons] = chkbox
         return chkbox.show_dialog(primary_text=text1, secondary_text=text2, chktext=chktext)
 
     def err_chkbox(self, text1, text2=None, chktext=None, buttons=None):
@@ -217,9 +268,22 @@ class vmmErrorDialog(vmmGObject):
 
         @default: What value to return if getcb tells us not to prompt
         """
+        if getattr(self, "_in_prompt", False):
+            return False
         do_prompt = getcb()
         if not do_prompt:
             return default
+        self._in_prompt = True
+        try:
+            return self._chkbox_helper_run(getcb, setcb, text1, text2, default, chktext)
+        finally:
+            self._in_prompt = False
+
+    def _chkbox_helper_run(
+        self, getcb, setcb, text1, text2, default, chktext
+    ):
+        ignore = getcb
+        ignore = default
 
         # pylint: disable=unpacking-non-sequence
         res = self.warn_chkbox(
@@ -248,62 +312,63 @@ class vmmErrorDialog(vmmGObject):
         @_type: File extension to filter by (e.g. "iso", "png")
         @dialog_type: Maps to FileChooserDialog 'action'
         """
-        if dialog_type is None:
-            dialog_type = Gtk.FileChooserAction.OPEN
-
-        fcdialog = Gtk.FileChooserNative.new(
-            title=dialog_name,
-            parent=self.get_parent(),
-            action=dialog_type,
-            accept_label=choose_label,
+        return gtkcompat.browse_local(
+            self.get_parent(),
+            dialog_name,
+            start_folder=start_folder,
+            _type=_type,
+            dialog_type=dialog_type,
+            choose_label=choose_label,
+            default_name=default_name,
+            confirm_overwrite=confirm_overwrite,
         )
 
-        if default_name:
-            fcdialog.set_current_name(default_name)
 
-        fcdialog.set_do_overwrite_confirmation(confirm_overwrite)
-
-        # Set file match pattern (ex. *.png)
-        if _type is not None:
-            pattern = _type
-            name = None
-            if isinstance(_type, tuple):
-                pattern = _type[0]
-                name = _type[1]
-
-            f = Gtk.FileFilter()
-            f.add_pattern("*." + pattern)
-            if name:
-                f.set_name(name)
-            fcdialog.set_filter(f)
-
-        if start_folder is not None:
-            if os.access(start_folder, os.R_OK):
-                fcdialog.set_current_folder(start_folder)
-
-        # Run the dialog and parse the response
-        ret = None
-        if fcdialog.run() == Gtk.ResponseType.ACCEPT:
-            ret = fcdialog.get_filename()
-        fcdialog.destroy()
-
-        return ret
-
-
-class _errorDialog(Gtk.MessageDialog):
+class _errorDialog(Gtk.Window):
     """
-    Custom error dialog with optional check boxes or details drop down
+    Custom error/confirm window. GTK 4 MessageDialog is not reliably
+    exposed to AT-SPI, so this is a regular window with role ALERT.
     """
 
-    def __init__(self, *args, **kwargs):
-        Gtk.MessageDialog.__init__(self, *args, **kwargs)
+    __gsignals__ = {
+        "response": (GObject.SignalFlags.RUN_FIRST, None, (int,)),
+    }
 
-        self.set_title("")
-        for child in self.get_message_area().get_children():
-            if hasattr(child, "set_max_width_chars"):
-                child.set_max_width_chars(40)
+    def __init__(self, parent=None, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.CLOSE):
+        ignore = flags
+        ignore = message_type
+        Gtk.Window.__init__(self)
+        self.set_transient_for(parent)
+        self.set_modal(True)
+        if parent is not None and hasattr(parent, "get_application"):
+            app = parent.get_application()
+            if app is not None:
+                app.add_window(self)
+        self.set_title("vmm dialog")
+        self.set_default_size(440, 180)
+        self.set_accessible_role(Gtk.AccessibleRole.ALERT)
+        gtkcompat.set_accessible_name(self, "vmm dialog")
 
-        self.get_accessible().set_name("vmm dialog")
+        self._content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self._content.set_margin_top(16)
+        self._content.set_margin_bottom(16)
+        self._content.set_margin_start(16)
+        self._content.set_margin_end(16)
+        self._primary = Gtk.Label()
+        self._primary.set_wrap(True)
+        self._primary.set_xalign(0)
+        self._primary.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        self._secondary = Gtk.Label()
+        self._secondary.set_wrap(True)
+        self._secondary.set_xalign(0)
+        self._secondary.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        self._content.append(self._primary)
+        self._content.append(self._secondary)
+        self._button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._button_box.set_halign(Gtk.Align.END)
+        self._add_buttons(buttons)
+        self._content.append(self._button_box)
+        self.set_child(self._content)
 
         self.chk_vbox = None
         self.init_chkbox()
@@ -312,20 +377,55 @@ class _errorDialog(Gtk.MessageDialog):
         self.buf_expander = None
         self.init_details()
 
+    def _emit_response(self, response):
+        self.emit("response", response)
+
+    def _add_buttons(self, buttons):
+        mapping = {
+            Gtk.ButtonsType.YES_NO: (
+                ("No", Gtk.ResponseType.NO),
+                ("Yes", Gtk.ResponseType.YES),
+            ),
+            Gtk.ButtonsType.OK_CANCEL: (
+                ("Cancel", Gtk.ResponseType.CANCEL),
+                ("OK", Gtk.ResponseType.OK),
+            ),
+            Gtk.ButtonsType.OK: (("OK", Gtk.ResponseType.OK),),
+            Gtk.ButtonsType.CLOSE: (("Close", Gtk.ResponseType.CLOSE),),
+        }
+        for label, response in mapping.get(buttons, (("Close", Gtk.ResponseType.CLOSE),)):
+            btn = Gtk.Button(label=label)
+            btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            gtkcompat.set_accessible_name(btn, label)
+            btn.connect("clicked", lambda _b, r=response: self._emit_response(r))
+            self._button_box.append(btn)
+
+    def get_content_area(self):
+        return self._content
+
+    def get_message_area(self):
+        return self._content
+
+    def format_secondary_text(self, text):
+        self._secondary.set_text(text or "")
+        if text:
+            gtkcompat.set_accessible_name(self._secondary, text)
+
+    def run(self):
+        return gtkcompat.run_dialog(self)
+
     def init_chkbox(self):
         # Init check items
-        self.chk_vbox = Gtk.VBox(False, False)
-        self.chk_vbox.set_spacing(0)
-
-        self.chk_vbox.show_all()
-        self.vbox.pack_start(self.chk_vbox, False, False, 0)  # pylint: disable=no-member
+        self.chk_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.chk_vbox.set_visible(True)
+        self.get_content_area().append(self.chk_vbox)
 
     def init_details(self):
         # Init details buffer
         self.buffer = Gtk.TextBuffer()
         self.buf_expander = Gtk.Expander.new(_("Details"))
         sw = Gtk.ScrolledWindow()
-        sw.set_shadow_type(Gtk.ShadowType.IN)
+        sw.set_has_frame(True)
         sw.set_size_request(400, 240)
         sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         details = Gtk.TextView.new_with_buffer(self.buffer)
@@ -333,14 +433,24 @@ class _errorDialog(Gtk.MessageDialog):
         details.set_overwrite(False)
         details.set_cursor_visible(False)
         details.set_wrap_mode(Gtk.WrapMode.WORD)
-        details.set_border_width(6)
-        sw.add(details)
-        self.buf_expander.add(sw)
-        self.vbox.pack_start(self.buf_expander, False, False, 0)  # pylint: disable=no-member
-        self.buf_expander.show_all()
+        details.set_margin_top(6)
+        details.set_margin_bottom(6)
+        details.set_margin_start(6)
+        details.set_margin_end(6)
+        sw.set_child(details)
+        self.buf_expander.set_child(sw)
+        self.get_content_area().append(self.buf_expander)
+        self.buf_expander.set_visible(True)
 
     def show_dialog(
-        self, primary_text, secondary_text="", title="", details="", chktext="", modal=True
+        self,
+        primary_text,
+        secondary_text="",
+        title="",
+        details="",
+        chktext="",
+        modal=True,
+        clone_a11y=False,
     ):
         chkbox = None
         res = None
@@ -357,13 +467,23 @@ class _errorDialog(Gtk.MessageDialog):
             self.buf_expander.show()
 
         if chktext:
-            chkbox = Gtk.CheckButton(chktext)
+            chkbox = Gtk.CheckButton(label=chktext)
             self.chk_vbox.add(chkbox)
             chkbox.show()
 
-        res = _launch_dialog(self, primary_text, secondary_text or "", title, modal=modal)
+        res = _launch_dialog(
+            self,
+            primary_text,
+            secondary_text or "",
+            title,
+            modal=modal,
+            destroy=False,
+            clone_a11y=clone_a11y,
+        )
 
         if chktext:
-            res = [res, chkbox.get_active()]
+            res = [res, bool(chkbox.get_active())]
+        self.hide()
+        gtkcompat.hide_a11y_keys("err-")
 
         return res

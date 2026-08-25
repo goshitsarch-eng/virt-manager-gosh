@@ -2,6 +2,7 @@ virtmanager_lib_sources = files(
   '__init__.py',
   'connectauth.py',
   'graphwidgets.py',
+  'gtkcompat.py',
   'inspection.py',
   'keyring.py',
   'libvirtenummap.py',

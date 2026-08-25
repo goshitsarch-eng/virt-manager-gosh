@@ -37,8 +37,10 @@ def _make_fake_data(vm):
 
     from gi.repository import Gtk
 
-    icontheme = Gtk.IconTheme.get_default()
-    icon = icontheme.lookup_icon("vm_new", Gtk.IconSize.LARGE_TOOLBAR, 0)
+    from gi.repository import Gdk
+
+    icontheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+    icon = icontheme.lookup_icon("vm_new", None, 32, 1, Gtk.TextDirection.NONE, 0)
     data.icon = open(icon.get_filename(), "rb").read()
 
     data.applications = []

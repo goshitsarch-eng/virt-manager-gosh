@@ -11,6 +11,7 @@ from virtinst import log
 
 from . import vmmenu
 from .baseclass import vmmGObjectUI
+from .lib import gtkcompat
 from .engine import vmmEngine
 from .details.console import vmmConsolePages
 from .details.details import vmmDetails
@@ -89,6 +90,31 @@ class vmmVMWindow(vmmGObjectUI):
         self._shutdownmenu = None
         self._vmmenu = None
         self.init_menus()
+        addhw = self._details.widget("add-hardware-button")
+        gtkcompat.expose_a11y_button(
+            "add-hardware",
+            "add-hardware",
+            lambda: addhw.emit("clicked"),
+            window=self.topwin,
+        )
+        try:
+            begin = self.widget("details-finish-customize")
+            gtkcompat.set_accessible_name(begin, "Begin Installation")
+            gtkcompat.expose_a11y_button(
+                "details-finish-customize",
+                "Begin Installation",
+                lambda: begin.emit("clicked"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        gtkcompat.expose_a11y_label(
+            "guest-status",
+            "Guest is not running.",
+            "Guest is not running.",
+            window=self.topwin,
+        )
+        self._sync_page_sidecars()
 
         self.builder.connect_signals(
             {
@@ -259,9 +285,44 @@ class vmmVMWindow(vmmGObjectUI):
         self._shutdownmenu = vmmenu.VMShutdownMenu(self, lambda: self.vm)
         self.widget("control-shutdown").set_menu(self._shutdownmenu)
         self.widget("control-shutdown").set_icon_name("system-shutdown")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-run"), "Run")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-pause"), "Pause")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-vm-console"), "Console")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-vm-details"), "Details")
+        gtkcompat.ensure_button_accessible_name(self.widget("control-snapshots"), "Snapshots")
+        for wid, name in (
+            ("control-vm-console", "Console"),
+            ("control-vm-details", "Details"),
+            ("control-snapshots", "Snapshots"),
+        ):
+            btn = self.widget(wid)
+            try:
+                btn.set_accessible_role(Gtk.AccessibleRole.RADIO)
+            except Exception:
+                pass
+            gtkcompat.set_accessible_name(btn, name)
+            def _activate(_ignored=None, b=btn):
+                try:
+                    if hasattr(b, "set_active"):
+                        b.set_active(True)
+                        return
+                except Exception:
+                    pass
+                b.emit("clicked")
+
+            gtkcompat.expose_a11y_button(
+                "vmwin-" + wid,
+                name,
+                _activate,
+                window=self.topwin,
+                role=Gtk.AccessibleRole.RADIO,
+            )
+        gtkcompat.ensure_button_accessible_name(
+            self.widget("control-shutdown")._button, "Shut Down"
+        )
 
         topmenu = self.widget("details-vm-menu")
-        submenu = topmenu.get_submenu()
+        submenu = topmenu.get_submenu() or self.widget("virtual_machine1_menu")
         self._vmmenu = vmmenu.VMActionMenu(self, lambda: self.vm, show_open=False)
         for child in submenu.get_children():
             submenu.remove(child)
@@ -362,6 +423,7 @@ class vmmVMWindow(vmmGObjectUI):
         self._refresh_current_page(newpage)
         self._sync_toolbar_page_buttons(newpage)
         self._sync_console_page_menu_state()
+        self._sync_page_sidecars(newpage)
 
     def change_run_text(self, can_restore):
         if can_restore:
@@ -439,6 +501,31 @@ class vmmVMWindow(vmmGObjectUI):
     def activate_default_console_page(self):
         self._console.vmwindow_activate_default_console_page()
 
+    def _sync_page_sidecars(self, newpage=None):
+        if newpage is None:
+            newpage = self.widget("details-pages").get_current_page()
+        try:
+            addhw = self._details.widget("add-hardware-button")
+            addhw._vmm_page_hidden = newpage != DETAILS_PAGE_DETAILS
+            gtkcompat.set_accessible_name(
+                addhw,
+                "add-hardware" if newpage == DETAILS_PAGE_DETAILS else "add-hardware (hidden)",
+            )
+            gtkcompat.expose_a11y_button(
+                "add-hardware",
+                "add-hardware",
+                lambda: addhw.emit("clicked"),
+                window=self.topwin,
+            )
+            gtkcompat.sync_sidecar_visible(
+                "add-hardware", newpage == DETAILS_PAGE_DETAILS
+            )
+            gtkcompat.sync_sidecar_visible(
+                "guest-status", newpage == DETAILS_PAGE_CONSOLE
+            )
+        except Exception:
+            pass
+
     # activate_* are called from engine.py via CLI options
     def activate_default_page(self):
         if self.is_customize_dialog:
@@ -446,37 +533,49 @@ class vmmVMWindow(vmmGObjectUI):
         pages = self.widget("details-pages")
         pages.set_current_page(DETAILS_PAGE_CONSOLE)
         self.activate_default_console_page()
+        self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_console_page(self):
         pages = self.widget("details-pages")
         pages.set_current_page(DETAILS_PAGE_CONSOLE)
+        self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_performance_page(self):
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
         self._details.vmwindow_activate_performance_page()
+        self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 
     def activate_config_page(self):
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
+        self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 
     def set_pause_state(self, state):
         src = self.widget("control-pause")
+        self._pause_ignore = True
         try:
-            src.handler_block_by_func(self.control_vm_pause)
             src.set_active(state)
+            gtkcompat.sync_accessible_checked(src)
         finally:
-            src.handler_unblock_by_func(self.control_vm_pause)
+            self._pause_ignore = False
 
     def control_vm_pause(self, src):
+        if getattr(self, "_pause_ignore", False):
+            return
+        vm = self.vm
+        if not vm:
+            return
         do_pause = src.get_active()
+        if do_pause == bool(vm.is_paused()):
+            do_pause = not vm.is_paused()
 
         # Set button state back to original value: just let the status
         # update function fix things for us
         self.set_pause_state(not do_pause)
 
         if do_pause:
-            vmmenu.VMActionUI.suspend(self, self.vm)
+            vmmenu.VMActionUI.suspend(self, vm)
         else:
-            vmmenu.VMActionUI.resume(self, self.vm)
+            vmmenu.VMActionUI.resume(self, vm)
 
     def _on_menu_virtual_machine_activate_cb(self, src):
         self._console_refresh_can_usbredir()

@@ -99,8 +99,26 @@ def set_list_selection(widget, value, column=0):
     """
     model = widget.get_model()
     _iter = None
+    want = value
+    want_l = want.lower() if isinstance(want, str) else None
     for row in model:
-        if row[column] == value:
+        cell = row[column]
+        if cell == value:
+            _iter = row.iter
+            break
+        if want_l is not None and isinstance(cell, str) and cell.lower() == want_l:
+            _iter = row.iter
+            break
+        try:
+            pretty = row[1]
+        except Exception:
+            pretty = None
+        if (
+            want_l is not None
+            and column != 1
+            and isinstance(pretty, str)
+            and pretty.lower() == want_l
+        ):
             _iter = row.iter
             break
 
@@ -128,9 +146,20 @@ def set_list_selection(widget, value, column=0):
 
 def child_get_property(parent, child, propname):
     """
-    Wrapper for child_get_property, which pygobject doesn't properly
-    introspect
+    GTK4 Grid stores attach coordinates on the layout child.
     """
+    if isinstance(parent, Gtk.Grid):
+        layout = parent.get_layout_manager()
+        child_layout = layout.get_layout_child(child)
+        if propname == "top-attach":
+            return child_layout.get_row()
+        if propname == "left-attach":
+            return child_layout.get_column()
+        if propname == "width":
+            return child_layout.get_column_span()
+        if propname == "height":
+            return child_layout.get_row_span()
+
     value = GObject.Value()
     value.init(GObject.TYPE_INT)
     parent.child_get_property(child, propname, value)
@@ -149,7 +178,9 @@ def set_grid_row_visible(child, visible):
         raise xmlutil.DevError("parent must be grid, not %s" % type(parent))
 
     row = child_get_property(parent, child, "top-attach")
-    for c in parent.get_children():
+    from . import gtkcompat
+
+    for c in gtkcompat.get_children(parent):
         if child_get_property(parent, c, "top-attach") == row:
             c.set_visible(visible)
 

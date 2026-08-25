@@ -8,6 +8,7 @@ import os
 
 import gi
 from gi.repository import Gio
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -137,34 +138,177 @@ class _SystrayIndicator(_Systray):  # pragma: no cover
 
 class _SystrayStatusIcon(_Systray):  # pragma: no cover
     """
-    UI backend for Gtk StatusIcon
+    GTK 4 no longer has Gtk.StatusIcon. Show a compact tray window that
+    still exposes the full connection/VM action menu.
     """
 
     def __init__(self):
-        self._icon = Gtk.StatusIcon()
-        self._icon.set_property("icon-name", "virt-manager")
-        self._icon.connect("activate", _toggle_manager)
-        self._icon.connect("popup-menu", self._popup_cb)
-        self._icon.set_tooltip_text(_("Virtual Machine Manager"))
+        self._window = Gtk.Window()
+        self._window.set_title(_("Virtual Machine Manager"))
+        self._window.set_default_size(48, 48)
+        self._window.set_decorated(True)
+        self._window.set_resizable(False)
+        button = Gtk.Button(icon_name="virt-manager")
+        button.set_tooltip_text(_("Virtual Machine Manager"))
+        button.connect("clicked", lambda *_a: _toggle_manager())
+        right = Gtk.GestureClick()
+        right.set_button(3)
+        right.connect("pressed", self._popup_menu)
+        button.add_controller(right)
+        self._window.set_child(button)
         self._menu = None
+        self._visible = False
 
     def is_embedded(self):
-        return self._icon.is_embedded()
+        return self._visible
 
     def set_menu(self, menu):
         self._menu = menu
 
-    def _popup_cb(self, src, button, event_time):
-        if button != 3:
-            return
-
-        self._menu.popup(None, None, Gtk.StatusIcon.position_menu, self._icon, 0, event_time)
+    def _popup_menu(self, *_args):
+        if self._menu:
+            self._menu.popup_at_widget(self._window)
 
     def show(self):
-        self._icon.set_visible(True)
+        self._visible = True
+        self._window.set_visible(True)
 
     def hide(self):
-        self._icon.set_visible(False)
+        self._visible = False
+        self._window.set_visible(False)
+
+
+_SNI_XML = """
+<node>
+  <interface name="org.kde.StatusNotifierItem">
+    <property name="Category" type="s" access="read"/>
+    <property name="Id" type="s" access="read"/>
+    <property name="Title" type="s" access="read"/>
+    <property name="Status" type="s" access="read"/>
+    <property name="WindowId" type="i" access="read"/>
+    <property name="IconName" type="s" access="read"/>
+    <property name="ItemIsMenu" type="b" access="read"/>
+    <property name="Menu" type="o" access="read"/>
+    <method name="ContextMenu">
+      <arg type="i" name="x" direction="in"/>
+      <arg type="i" name="y" direction="in"/>
+    </method>
+    <method name="Activate">
+      <arg type="i" name="x" direction="in"/>
+      <arg type="i" name="y" direction="in"/>
+    </method>
+    <method name="SecondaryActivate">
+      <arg type="i" name="x" direction="in"/>
+      <arg type="i" name="y" direction="in"/>
+    </method>
+    <method name="Scroll">
+      <arg type="i" name="delta" direction="in"/>
+      <arg type="s" name="orientation" direction="in"/>
+    </method>
+  </interface>
+</node>
+"""
+
+
+class _SystrayStatusNotifier(_Systray):  # pragma: no cover
+    """
+    Freedesktop/KDE StatusNotifierItem tray icon. This is the GTK 4
+    replacement for Gtk.StatusIcon and AppIndicator3 menus.
+    """
+
+    def __init__(self):
+        self._menu = None
+        self._status = "Passive"
+        self._bus = None
+        self._owner_id = 0
+        self._reg_id = 0
+        self._window = Gtk.Window()
+        self._window.set_title(_("Virtual Machine Manager"))
+        self._window.set_default_size(1, 1)
+        self._window.set_decorated(False)
+        try:
+            self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            node = Gio.DBusNodeInfo.new_for_xml(_SNI_XML)
+            self._reg_id = self._bus.register_object(
+                "/StatusNotifierItem",
+                node.interfaces[0],
+                self._on_method,
+                self._on_get_property,
+                None,
+            )
+            self._owner_id = Gio.bus_own_name_on_connection(
+                self._bus,
+                "org.kde.StatusNotifierItem-%s-1" % os.getpid(),
+                Gio.BusNameOwnerFlags.NONE,
+                self._on_name_acquired,
+                None,
+            )
+        except Exception:
+            log.debug("StatusNotifierItem setup failed", exc_info=True)
+
+    def _on_name_acquired(self, connection, name):
+        ignore = connection
+        try:
+            watcher = Gio.DBusProxy.new_sync(
+                self._bus,
+                0,
+                None,
+                "org.kde.StatusNotifierWatcher",
+                "/StatusNotifierWatcher",
+                "org.kde.StatusNotifierWatcher",
+                None,
+            )
+            watcher.RegisterStatusNotifierItem("(s)", name)
+        except Exception:
+            try:
+                watcher = Gio.DBusProxy.new_sync(
+                    self._bus,
+                    0,
+                    None,
+                    "org.freedesktop.StatusNotifierWatcher",
+                    "/StatusNotifierWatcher",
+                    "org.freedesktop.StatusNotifierWatcher",
+                    None,
+                )
+                watcher.RegisterStatusNotifierItem("(s)", name)
+            except Exception:
+                log.debug("No StatusNotifierWatcher to register with")
+
+    def _on_method(self, _conn, _sender, _path, _iface, method, params, invocation):
+        ignore = params
+        if method == "Activate":
+            _toggle_manager()
+        elif method in ("ContextMenu", "SecondaryActivate"):
+            if self._menu:
+                self._menu.popup_at_widget(self._window)
+        invocation.return_value(None)
+
+    def _on_get_property(self, _conn, _sender, _path, _iface, name):
+        values = {
+            "Category": GLib.Variant("s", "ApplicationStatus"),
+            "Id": GLib.Variant("s", "virt-manager"),
+            "Title": GLib.Variant("s", _("Virtual Machine Manager")),
+            "Status": GLib.Variant("s", self._status),
+            "WindowId": GLib.Variant("i", 0),
+            "IconName": GLib.Variant("s", "virt-manager"),
+            "ItemIsMenu": GLib.Variant("b", False),
+            "Menu": GLib.Variant("o", "/MenuBar"),
+        }
+        return values.get(name)
+
+    def is_embedded(self):
+        return self._status == "Active" and self._bus is not None
+
+    def set_menu(self, menu):
+        self._menu = menu
+
+    def show(self):
+        self._status = "Active"
+        self._window.set_visible(True)
+
+    def hide(self):
+        self._status = "Passive"
+        self._window.set_visible(False)
 
 
 class _SystrayWindow(_Systray):
@@ -179,13 +323,18 @@ class _SystrayWindow(_Systray):
         self._init_ui()
 
     def _init_ui(self):
-        button = Gtk.Button.new_from_stock(Gtk.STOCK_ADD)
-        button.connect("button-press-event", self._popup_cb)
+        button = Gtk.Button(icon_name="list-add")
+        gesture = Gtk.GestureClick()
+        gesture.set_button(0)
+        gesture.connect("pressed", self._popup_cb)
+        button.add_controller(gesture)
 
         self._window = Gtk.Window()
         self._window.set_size_request(100, 100)
-        self._window.get_accessible().set_name("vmm-fake-systray")
-        self._window.add(button)
+        from .lib import gtkcompat
+
+        gtkcompat.set_accessible_name(self._window, "vmm-fake-systray")
+        self._window.set_child(button)
 
     def is_embedded(self):
         return self._window.is_visible()
@@ -193,14 +342,15 @@ class _SystrayWindow(_Systray):
     def set_menu(self, menu):
         self._menu = menu
 
-    def _popup_cb(self, src, event):
-        if event.button == 1:
+    def _popup_cb(self, gesture, _n, _x, _y):
+        button = gesture.get_current_button()
+        if button == 1:
             _toggle_manager()
-        else:
-            self._menu.popup_at_pointer(event)
+        elif self._menu:
+            self._menu.popup_at_widget(self._window)
 
     def show(self):
-        self._window.show_all()
+        self._window.set_visible(True)
 
     def hide(self):
         self._window.hide()
@@ -461,6 +611,8 @@ class vmmSystray(vmmGObject):
                 self._systray = _SystrayWindow()
             elif _USING_APPINDICATOR:  # pragma: no cover
                 self._systray = _SystrayIndicator()
+            elif _has_appindicator_dbus():  # pragma: no cover
+                self._systray = _SystrayStatusNotifier()
             else:  # pragma: no cover
                 self._systray = _SystrayStatusIcon()
             self._init_mainmenu()

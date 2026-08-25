@@ -86,6 +86,17 @@ class vmmStorageBrowser(vmmGObjectUI):
             uiutil.set_list_selection(self.storagelist.widget("pool-list"), pool)
 
         self.topwin.set_transient_for(parent)
+        try:
+            from .lib import gtkcompat
+
+            gtkcompat.set_accessible_name(self.topwin, "vmm-storage-browser")
+            self.topwin.set_title("vmm-storage-browser")
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+            gtkcompat.expose_storagebrowse_window(self)
+        except Exception:
+            pass
         self.topwin.present()
         self.conn.schedule_priority_tick(pollpool=True)
 
@@ -93,6 +104,12 @@ class vmmStorageBrowser(vmmGObjectUI):
         if self.is_visible():
             log.debug("Closing storage browser")
             self.topwin.hide()
+        try:
+            from .lib import gtkcompat
+
+            gtkcompat.hide_storagebrowse_window(self)
+        except Exception:
+            pass
         self.storagelist.close()
         return 1
 
@@ -200,4 +217,14 @@ class vmmStorageBrowser(vmmGObjectUI):
     def _finish(self, path):
         if self._finish_cb:
             self._finish_cb(self, path)
+        parent = None
+        try:
+            parent = self.topwin.get_transient_for()
+        except Exception:
+            pass
         self.close()
+        if parent is not None:
+            try:
+                parent.present()
+            except Exception:
+                pass

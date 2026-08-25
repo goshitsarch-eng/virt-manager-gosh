@@ -12,8 +12,23 @@ from gi.repository import GObject
 
 import gi
 
-gi.require_version("GtkVnc", "2.0")
-from gi.repository import GtkVnc
+try:
+    gi.require_version("GtkVnc", "2.0")
+    from gi.repository import GtkVnc
+except (ValueError, ImportError) as _GTKVNC_IMPORT_ERROR:  # pragma: no cover
+    GtkVnc = None
+    GTKVNC_IMPORT_ERROR = str(_GTKVNC_IMPORT_ERROR)
+else:
+    GTKVNC_IMPORT_ERROR = None
+
+try:
+    gi.require_version("SpiceClientGLib", "2.0")
+    from gi.repository import SpiceClientGLib
+except (ValueError, ImportError) as _SPICE_GLIB_IMPORT_ERROR:  # pragma: no cover
+    SpiceClientGLib = None
+    _SPICE_GLIB_IMPORT_ERROR = str(_SPICE_GLIB_IMPORT_ERROR)
+else:
+    _SPICE_GLIB_IMPORT_ERROR = None
 
 try:
     SPICE_GTK_IMPORT_ERROR = None
@@ -22,9 +37,15 @@ try:
 
     gi.require_version("SpiceClientGtk", "3.0")
     from gi.repository import SpiceClientGtk
-    from gi.repository import SpiceClientGLib
 except (ValueError, ImportError) as _SPICE_GTK_IMPORT_ERROR:
-    SPICE_GTK_IMPORT_ERROR = str(_SPICE_GTK_IMPORT_ERROR)
+    SpiceClientGtk = None
+    if SpiceClientGLib is None:
+        SPICE_GTK_IMPORT_ERROR = _SPICE_GLIB_IMPORT_ERROR or str(_SPICE_GTK_IMPORT_ERROR)
+    else:
+        # GTK 4 uses SpiceClientGLib + gtk4display.SpiceDisplay
+        SPICE_GTK_IMPORT_ERROR = None
+
+from . import gtk4display
 
 from virtinst import log
 
@@ -40,6 +61,8 @@ _GTKVNC_SUPPORT_CACHE = {}
 
 
 def _gtkvnc_check_display_support(funcname):
+    if GtkVnc is None:
+        return False
     if funcname not in _GTKVNC_SUPPORT_CACHE:
         val = hasattr(GtkVnc.Display, funcname)
         log.debug("GtkVnc.Display %s support=%s", funcname, val)
@@ -116,7 +139,11 @@ class Viewer(vmmGObject):
         self._display.connect("size-allocate", self._make_signal_proxy("size-allocate"))
 
         self.emit("add-display-widget", self._display)
-        self._display.realize()
+        if hasattr(self._display, "realize") and self._display.get_root() is not None:
+            try:
+                self._display.realize()
+            except Exception:
+                pass
 
         self._connect_display_signals()
 
@@ -334,12 +361,14 @@ class VNCViewer(Viewer):
         self._display.connect("vnc-desktop-resize", self._desktop_resize_cb)
 
     def _init_display(self):
-        display = GtkVnc.Display()
-
-        display.set_pointer_grab(True)
-
-        if _gtkvnc_check_display_support("set_keep_aspect_ratio"):
-            display.set_keep_aspect_ratio(True)
+        if GtkVnc is not None:
+            display = GtkVnc.Display()
+            display.set_pointer_grab(True)
+            if _gtkvnc_check_display_support("set_keep_aspect_ratio"):
+                display.set_keep_aspect_ratio(True)
+        else:
+            display = gtk4display.VNCDisplay()
+            display.set_pointer_grab(True)
 
         self._set_display(display)
 
@@ -371,24 +400,28 @@ class VNCViewer(Viewer):
         for idx in range(int(credList.n_values)):
             values.append(credList.get_nth(idx))
 
+        cred_password = getattr(getattr(GtkVnc, "DisplayCredential", None), "PASSWORD", 1)
+        cred_username = getattr(getattr(GtkVnc, "DisplayCredential", None), "USERNAME", 0)
+        cred_client = getattr(getattr(GtkVnc, "DisplayCredential", None), "CLIENTNAME", 2)
+
         if self.config.CLITestOptions.fake_vnc_username:
-            values.append(GtkVnc.DisplayCredential.USERNAME)
+            values.append(cred_username)
 
         withUsername = False
         withPassword = False
         for cred in values:
             log.debug("Got credential request %s", cred)
-            if cred == GtkVnc.DisplayCredential.PASSWORD:
+            if cred == cred_password:
                 withPassword = True
-            elif cred == GtkVnc.DisplayCredential.USERNAME:
+            elif cred == cred_username:
                 withUsername = True
-            elif cred == GtkVnc.DisplayCredential.CLIENTNAME:  # pragma: no cover
+            elif cred == cred_client:  # pragma: no cover
                 self._display.set_credential(cred, "libvirt-vnc")
             else:  # pragma: no cover
                 errmsg = _(
                     "Unable to provide requested credentials to the VNC server.\n"
                     "The credential type %s is not supported"
-                ) % str(cred.value_name)
+                ) % str(getattr(cred, "value_name", cred))
                 self.emit("auth-error", errmsg, True)
                 return
 
@@ -419,17 +452,20 @@ class VNCViewer(Viewer):
             self._sync_force_size()
 
     def _set_grab_keys(self, keys):
-        seq = GtkVnc.GrabSequence.new(keys)
+        grab = GtkVnc.GrabSequence if GtkVnc is not None else gtk4display.GrabSequence
+        seq = grab.new(keys)
         self._display.set_grab_keys(seq)
 
     def _send_keys(self, keys):
         return self._display.send_keys([Gdk.keyval_from_name(k) for k in keys])
 
     def _set_username(self, cred):
-        self._display.set_credential(GtkVnc.DisplayCredential.USERNAME, cred)
+        kind = getattr(getattr(GtkVnc, "DisplayCredential", None), "USERNAME", 0)
+        self._display.set_credential(kind, cred)
 
     def _set_password(self, cred):
-        self._display.set_credential(GtkVnc.DisplayCredential.PASSWORD, cred)
+        kind = getattr(getattr(GtkVnc, "DisplayCredential", None), "PASSWORD", 1)
+        self._display.set_credential(kind, cred)
 
     def _set_resizeguest(self, val):
         if _gtkvnc_supports_resizeguest():
@@ -538,10 +574,18 @@ class SpiceViewer(Viewer):
         self._display.connect("keyboard-grab", self._keyboard_grab_cb)
 
     def _create_spice_session(self):
+        if SpiceClientGLib is None:
+            raise RuntimeError(
+                SPICE_GTK_IMPORT_ERROR or _("SPICE support is not available for this GTK version")
+            )
         self._spice_session = SpiceClientGLib.Session()
-        SpiceClientGLib.set_session_option(self._spice_session)
-        gtk_session = SpiceClientGtk.GtkSession.get(self._spice_session)
-        gtk_session.set_property("auto-clipboard", True)
+        if hasattr(SpiceClientGLib, "set_session_option"):
+            SpiceClientGLib.set_session_option(self._spice_session)
+        if SpiceClientGtk is not None:
+            gtk_session = SpiceClientGtk.GtkSession.get(self._spice_session)
+            gtk_session.set_property("auto-clipboard", True)
+        else:
+            gtk_session = None
 
         _SIGS.connect(self._spice_session, "channel-new", self._channel_new_cb)
 
@@ -553,7 +597,7 @@ class SpiceViewer(Viewer):
             _SIGS.connect(self._usbdev_manager, "device-error", self._usbdev_redirect_error)
 
             autoredir = self.config.get_auto_usbredir()
-            if autoredir:
+            if autoredir and gtk_session is not None:
                 gtk_session.set_property("auto-usbredir", True)
         except Exception:  # pragma: no cover
             self._usbdev_manager = None
@@ -633,11 +677,25 @@ class SpiceViewer(Viewer):
                 log.debug("Spice multi-head unsupported")
                 return
 
-            display = SpiceClientGtk.Display.new(self._spice_session, channel_id)
+            if SpiceClientGtk is not None:
+                display = SpiceClientGtk.Display.new(self._spice_session, channel_id)
+            else:
+                display = gtk4display.SpiceDisplay(self._spice_session, channel_id)
+                inputs = None
+                if isinstance(channel, SpiceClientGLib.DisplayChannel):
+                    for other in list(self._channels):
+                        if isinstance(other, SpiceClientGLib.InputsChannel):
+                            inputs = other
+                            break
+                    display.attach_channels(channel, inputs)
             self._set_display(display)
 
             _SIGS.connect_after(channel, "display-primary-create", self._display_primary_create_cb)
             self.emit("connected")
+
+        elif isinstance(channel, SpiceClientGLib.InputsChannel):
+            if isinstance(self._display, gtk4display.SpiceDisplay):
+                self._display.attach_channels(getattr(self._display, "_channel", None), channel)
 
         elif (
             type(channel) in [SpiceClientGLib.PlaybackChannel, SpiceClientGLib.RecordChannel]
@@ -678,13 +736,18 @@ class SpiceViewer(Viewer):
         return self._spice_session is not None
 
     def _set_grab_keys(self, keys):
-        seq = SpiceClientGtk.GrabSequence.new(keys)
-        self._display.set_grab_keys(seq)
+        if SpiceClientGtk is not None:
+            seq = SpiceClientGtk.GrabSequence.new(keys)
+        else:
+            seq = gtk4display.GrabSequence.new(keys)
+        if self._display:
+            self._display.set_grab_keys(seq)
 
     def _send_keys(self, keys):
-        return self._display.send_keys(
-            [Gdk.keyval_from_name(k) for k in keys], SpiceClientGtk.DisplayKeyEvent.CLICK
-        )
+        keyvals = [Gdk.keyval_from_name(k) for k in keys]
+        if SpiceClientGtk is not None:
+            return self._display.send_keys(keyvals, SpiceClientGtk.DisplayKeyEvent.CLICK)
+        return self._display.send_keys(keyvals)
 
     def _has_agent(self):
         if not self._main_channel:
@@ -751,7 +814,10 @@ class SpiceViewer(Viewer):
         if not self._spice_session:
             return  # pragma: no cover
 
-        usbwidget = SpiceClientGtk.UsbDeviceWidget.new(self._spice_session, None)
+        if SpiceClientGtk is not None:
+            usbwidget = SpiceClientGtk.UsbDeviceWidget.new(self._spice_session, None)
+        else:
+            usbwidget = gtk4display.UsbDeviceWidget.new(self._spice_session, None)
         usbwidget.connect("connect-failed", self._usbdev_redirect_error)
         return usbwidget
 

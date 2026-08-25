@@ -291,7 +291,7 @@ class vmmCloneVM(vmmGObjectUI):
         chkbox = Gtk.CellRendererToggle()
         chkbox.connect("toggled", self._storage_clone_toggled_cb)
         chkimg = Gtk.CellRendererPixbuf()
-        chkimg.set_property("stock-size", Gtk.IconSize.MENU)
+        chkimg.set_property("icon-size", Gtk.IconSize.NORMAL)
         cloneCol.pack_start(chkimg, False)
         cloneCol.pack_start(chkbox, False)
 
@@ -323,7 +323,7 @@ class vmmCloneVM(vmmGObjectUI):
         pathtxt.set_property("width-chars", 30)
         pathtxt.set_property("ellipsize", Pango.EllipsizeMode.MIDDLE)
         pathimg = Gtk.CellRendererPixbuf()
-        pathimg.set_property("stock-size", Gtk.IconSize.MENU)
+        pathimg.set_property("icon-size", Gtk.IconSize.NORMAL)
         pathimg.set_padding(3, 0)
         pathCol.pack_start(pathimg, False)
         pathCol.pack_start(pathtxt, True)

@@ -176,7 +176,7 @@ class vmmAddHardware(vmmGObjectUI):
         hw_col.set_min_width(165)
 
         icon = Gtk.CellRendererPixbuf()
-        icon.set_property("stock-size", Gtk.IconSize.BUTTON)
+        icon.set_property("icon-size", Gtk.IconSize.NORMAL)
         text = Gtk.CellRendererText()
         text.set_property("xpad", 6)
 
@@ -699,7 +699,7 @@ class vmmAddHardware(vmmGObjectUI):
         target_model = Gtk.ListStore(str, str, str)
         target_list.set_model(target_model)
         icon = Gtk.CellRendererPixbuf()
-        icon.set_property("stock-size", Gtk.IconSize.BUTTON)
+        icon.set_property("icon-size", Gtk.IconSize.NORMAL)
         target_list.pack_start(icon, False)
         target_list.add_attribute(icon, "icon-name", 1)
         text = Gtk.CellRendererText()

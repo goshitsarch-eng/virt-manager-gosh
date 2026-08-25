@@ -11,6 +11,7 @@ from virtinst import DomainCpu
 from virtinst import log
 from virtinst import xmlutil
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .lib.inspection import vmmInspection
@@ -188,11 +189,79 @@ class vmmPreferences(vmmGObjectUI):
         uiutil.init_combo_text_column(combo, 1)
 
         if not vmmInspection.libguestfs_installed():  # pragma: no cover
-            self.widget("prefs-libguestfs").set_sensitive(False)
             self.widget("prefs-libguestfs").set_tooltip_text(
                 _("python libguestfs support is not installed")
             )
 
+        gtkcompat.set_toplevel_a11y_role(self.topwin)
+        gtkcompat.set_accessible_name(self.topwin, "Preferences")
+        notebook = self.widget("prefs-pages")
+        gtkcompat.attach_notebook_a11y(notebook)
+        pages = {
+            "general-tab": gtkcompat.notebook_page_box(notebook, "general-tab"),
+            "polling-tab": gtkcompat.notebook_page_box(notebook, "polling-tab"),
+            "newvm-tab": gtkcompat.notebook_page_box(notebook, "newvm-tab"),
+            "console-tab": gtkcompat.notebook_page_box(notebook, "console-tab"),
+            "feedback-tab": gtkcompat.notebook_page_box(notebook, "feedback-tab"),
+        }
+        for wid, name, page in (
+            ("prefs-system-tray", "Enable system tray icon", "general-tab"),
+            ("prefs-xmleditor", "Enable XML editing", "general-tab"),
+            ("prefs-libguestfs", "Enable libguestfs VM introspection", "general-tab"),
+            ("prefs-stats-enable-cpu", "Poll CPU", "polling-tab"),
+            ("prefs-stats-enable-disk", "Poll Disk I/O", "polling-tab"),
+            ("prefs-stats-enable-net", "Poll Network I/O", "polling-tab"),
+            ("prefs-stats-enable-memory", "Poll Memory stats", "polling-tab"),
+            ("prefs-console-autoconnect", "Console autoconnect", "console-tab"),
+            ("prefs-confirm-forcepoweroff", "Force Poweroff", "feedback-tab"),
+            ("prefs-confirm-poweroff", "Poweroff/Reboot", "feedback-tab"),
+            ("prefs-confirm-pause", "Pause", "feedback-tab"),
+            ("prefs-confirm-removedev", "Device removal", "feedback-tab"),
+            ("prefs-confirm-unapplied", "Unapplied changes", "feedback-tab"),
+            ("prefs-confirm-delstorage", "Deleting storage", "feedback-tab"),
+        ):
+            src = self.widget(wid)
+            gtkcompat.set_accessible_name(src, name)
+            gtkcompat.expose_a11y_check(
+                "prefs-" + wid, name, src, window=self.topwin, parent=pages.get(page)
+            )
+        gtkcompat.set_accessible_name(self.widget("prefs-stats-update-interval"), "cpu-poll")
+        gtkcompat.expose_a11y_spin(
+            "cpu-poll",
+            "cpu-poll",
+            self.widget("prefs-stats-update-interval"),
+            window=self.topwin,
+            parent=pages.get("polling-tab"),
+        )
+        for wid, name, page in (
+            ("prefs-cpu-default", "CPU default:", "newvm-tab"),
+            ("prefs-storage-format", "Storage format:", "newvm-tab"),
+            ("prefs-graphics-type", "Graphics type", "newvm-tab"),
+            ("prefs-firmware-default", "x86 Firmware", "newvm-tab"),
+            ("prefs-console-autoredir", "SPICE USB Redirection:", "console-tab"),
+            ("prefs-console-resizeguest", "Resize guest with window:", "console-tab"),
+            ("prefs-console-scaling", "Graphical console scaling:", "console-tab"),
+        ):
+            src = self.widget(wid)
+            gtkcompat.set_accessible_name(src, name)
+            gtkcompat.expose_a11y_combo(
+                "prefs-" + wid, name, src, window=self.topwin, parent=pages.get(page)
+            )
+        gtkcompat.set_accessible_name(self.widget("prefs-keys-grab-changebtn"), "Change...")
+        gtkcompat.expose_a11y_button(
+            "prefs-change-grab",
+            "Change...",
+            lambda: self.widget("prefs-keys-grab-changebtn").emit("clicked"),
+            window=self.topwin,
+            parent=pages.get("console-tab"),
+        )
+        gtkcompat.set_accessible_name(self.widget("prefs-close"), "Close")
+        gtkcompat.expose_a11y_button(
+            "prefs-close",
+            "Close",
+            lambda: self.widget("prefs-close").emit("clicked"),
+            window=self.topwin,
+        )
     #########################
     # Config Change Options #
     #########################
@@ -334,14 +403,19 @@ class vmmPreferences(vmmGObjectUI):
         label.set_text(self.grabkeys_get_string(events))
 
     def change_grab_keys(self, src_ignore):
-        dialog = Gtk.Dialog(
-            _("Configure grab key combination"),
-            self.topwin,
-            Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.REJECT, Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT),
-        )
+        dialog = Gtk.Window()
+        dialog.set_title(_("Configure grab key combination"))
+        dialog.set_transient_for(self.topwin)
+        dialog.set_modal(True)
         dialog.set_default_size(325, 160)
-        dialog.set_border_width(6)
+        gtkcompat.set_toplevel_a11y_role(dialog)
+        gtkcompat.set_accessible_name(dialog, "Configure grab key combination")
+        app = Gtk.Application.get_default()
+        if app is not None:
+            try:
+                dialog.set_application(app)
+            except Exception:
+                pass
 
         infolabel = Gtk.Label(
             label=_(
@@ -352,23 +426,47 @@ class vmmPreferences(vmmGObjectUI):
         )
         keylabel = Gtk.Label(label=_("Please press desired grab key combination"))
 
-        vbox = Gtk.VBox()
-        vbox.set_spacing(12)
-        vbox.pack_start(infolabel, False, False, 0)
-        vbox.pack_start(keylabel, False, False, 0)
-        dialog.get_content_area().add(vbox)
+        ok = Gtk.Button(label=_("OK"), use_underline=True)
+        cancel = Gtk.Button(label=_("Cancel"), use_underline=True)
+        gtkcompat.set_accessible_name(ok, "OK")
+        gtkcompat.set_accessible_name(cancel, "Cancel")
+        gtkcompat.ensure_activate_clicked(ok)
+        gtkcompat.ensure_activate_clicked(cancel)
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        buttons.set_halign(Gtk.Align.END)
+        buttons.append(cancel)
+        buttons.append(ok)
+
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        vbox.set_margin_top(12)
+        vbox.set_margin_bottom(12)
+        vbox.set_margin_start(12)
+        vbox.set_margin_end(12)
+        vbox.append(infolabel)
+        vbox.append(keylabel)
+        vbox.append(buttons)
+        dialog.set_child(vbox)
 
         events = []
         dialog.connect("key-press-event", self.grabkeys_dlg_press, keylabel, events)
         dialog.connect("key-release-event", self.grabkeys_dlg_release, keylabel, events)
-        dialog.show_all()
-        result = dialog.run()
 
-        if result == Gtk.ResponseType.ACCEPT:
+        def _close(*_a):
+            dialog.hide()
+            return True
+
+        def _accept(*_a):
             self.config.set_keys_combination([e[1] for e in events])
+            self.refresh_grabkeys_combination()
+            dialog.hide()
+            return True
 
-        self.refresh_grabkeys_combination()
-        dialog.destroy()
+        ok.connect("clicked", _accept)
+        cancel.connect("clicked", _close)
+        dialog.connect("close-request", _close)
+        # Do not run a nested main loop: AT-SPI click must return so
+        # dogtail can find this window.
+        dialog.present()
 
     def change_view_system_tray(self, src):
         self.config.set_view_system_tray(src.get_active())

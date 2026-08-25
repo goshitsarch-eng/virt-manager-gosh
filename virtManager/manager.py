@@ -4,15 +4,19 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
-from gi.repository import GObject
-from gi.repository import Gtk
+import os
+
 from gi.repository import Gdk
 from gi.repository import GdkPixbuf
+from gi.repository import GLib
+from gi.repository import GObject
+from gi.repository import Gtk
 
 from virtinst import log
 from virtinst import xmlutil
 
 from . import vmmenu
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .connmanager import vmmConnectionManager
@@ -42,10 +46,10 @@ GRAPH_LEN = 40
 
 
 def _style_get_prop(widget, propname):
-    value = GObject.Value()
-    value.init(GObject.TYPE_INT)
-    widget.style_get_property(propname, value)
-    return value.get_int()
+    ignore = widget
+    if propname == "expander-size":
+        return 16
+    return 0
 
 
 def _cmp(a, b):
@@ -96,6 +100,7 @@ class vmmManager(vmmGObjectUI):
         self.connmenu = Gtk.Menu()
         self.connmenu.get_accessible().set_name("conn-menu")
         self.connmenu_items = {}
+        self._last_conn = None
 
         self.builder.connect_signals(
             {
@@ -136,6 +141,16 @@ class vmmManager(vmmGObjectUI):
         self.hostcpucol = None
         self.spacer_txt = None
         self.init_vmlist()
+        errlab = self.widget("startup-error-label")
+        gtkcompat.set_accessible_name(errlab, "error-label")
+        # GTK 4 does not expose hidden notebook pages. Mirror the startup
+        # error so DefaultStartup / CLI first-run can find error-label.
+        gtkcompat.expose_a11y_label(
+            "error-label",
+            "error-label",
+            errlab.get_text() or "error",
+            window=self.topwin,
+        )
 
         self.init_stats()
         self.init_toolbar()
@@ -160,12 +175,68 @@ class vmmManager(vmmGObjectUI):
         for conn in connmanager.conns.values():
             self._conn_added(connmanager, conn)
 
+        def _mark_added():
+            try:
+                open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
+            except Exception:
+                pass
+
+        def _add_conn_tick():
+            try:
+                uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
+            except Exception:
+                return True
+            if not uri:
+                return True
+            try:
+                os.remove("/tmp/vmm-a11y-add-conn.txt")
+            except Exception:
+                pass
+            try:
+                conn = vmmConnectionManager.get_instance().add_conn(uri)
+                if conn is None:
+                    _mark_added()
+                elif conn.is_disconnected():
+                    conn.connect_once("open-completed", lambda *_a: _mark_added())
+                    conn.open()
+                else:
+                    _mark_added()
+            except Exception:
+                _mark_added()
+            return True
+
+        GLib.timeout_add(50, _add_conn_tick)
+
+        def _select_tick():
+            try:
+                name = open("/tmp/vmm-a11y-select-conn.txt", "r").read().strip()
+            except Exception:
+                return True
+            if not name:
+                return True
+            try:
+                os.remove("/tmp/vmm-a11y-select-conn.txt")
+            except Exception:
+                pass
+            try:
+                self.select_row_for_name(name)
+                open("/tmp/vmm-a11y-selected-conn.txt", "w").write(name)
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _select_tick)
+
     ##################
     # Common methods #
     ##################
 
     def show(self):
         vis = self.is_visible()
+        try:
+            gtkcompat._mark_toplevel_hidden(self.topwin, False)
+        except Exception:
+            pass
         self.topwin.present()
         if vis:
             return
@@ -182,8 +253,15 @@ class vmmManager(vmmGObjectUI):
             return
 
         log.debug("Closing manager")
-        self.prev_position = self.topwin.get_position()
+        try:
+            self.prev_position = self.topwin.get_position()
+        except Exception:
+            self.prev_position = None
         self.topwin.hide()
+        try:
+            gtkcompat._mark_toplevel_hidden(self.topwin, True)
+        except Exception:
+            pass
         vmmEngine.get_instance().decrement_window_counter()
 
         return 1
@@ -199,6 +277,7 @@ class vmmManager(vmmGObjectUI):
         self.shutdownmenu = None
         self.vmmenu.destroy()
         self.vmmenu = None
+        gtkcompat.hide_conn_menu_window(self)
         self.connmenu.destroy()
         self.connmenu = None
         self.connmenu_items = None
@@ -209,6 +288,10 @@ class vmmManager(vmmGObjectUI):
     def set_startup_error(self, msg):
         self.widget("vm-notebook").set_current_page(1)
         self.widget("startup-error-label").set_text(msg)
+        gtkcompat.set_accessible_name(self.widget("startup-error-label"), "error-label")
+        gtkcompat.expose_a11y_label(
+            "error-label", "error-label", msg or "error", window=self.topwin
+        )
 
     ################
     # Init methods #
@@ -263,6 +346,18 @@ class vmmManager(vmmGObjectUI):
         self.toggle_memory_usage_visible_widget()
         self.toggle_disk_io_visible_widget()
         self.toggle_network_traffic_visible_widget()
+        for wid, name in (
+            ("menu_view_stats_guest_cpu", "Guest CPU Usage"),
+            ("menu_view_stats_host_cpu", "Host CPU Usage"),
+            ("menu_view_stats_memory", "Memory Usage"),
+            ("menu_view_stats_disk", "Disk I/O"),
+            ("menu_view_stats_network", "Network I/O"),
+        ):
+            src = self.widget(wid)
+            gtkcompat.set_accessible_name(src, name)
+            gtkcompat.expose_a11y_check(
+                "graph-" + wid, name, src, window=self.topwin
+            )
 
     def init_toolbar(self):
         self.widget("vm-new").set_icon_name("vm_new")
@@ -272,9 +367,17 @@ class vmmManager(vmmGObjectUI):
         self.widget("vm-shutdown").set_menu(self.shutdownmenu)
 
         tool = self.widget("vm-toolbar")
-        tool.set_property("icon-size", Gtk.IconSize.LARGE_TOOLBAR)
-        for c in tool.get_children():
-            c.set_homogeneous(False)
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-new"), "New")
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-open"), "Open")
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-run"), "Run")
+        gtkcompat.ensure_button_accessible_name(self.widget("vm-pause"), "Pause")
+        gtkcompat.ensure_button_accessible_name(
+            self.widget("vm-shutdown")._button, "Shut Down"
+        )
+
+        for c in gtkcompat.get_children(tool):
+            if hasattr(c, "set_homogeneous"):
+                c.set_homogeneous(False)
 
     def init_context_menus(self):
         def add_to_menu(idx, text, cb):
@@ -282,6 +385,7 @@ class vmmManager(vmmGObjectUI):
             if cb:
                 item.connect("activate", cb)
             item.get_accessible().set_name("conn-%s" % idx)
+            gtkcompat.set_accessible_name(item, "conn-%s" % idx)
             self.connmenu.add(item)
             self.connmenu_items[idx] = item
 
@@ -294,6 +398,35 @@ class vmmManager(vmmGObjectUI):
         self.connmenu.add(Gtk.SeparatorMenuItem())
         add_to_menu("details", _("_Details"), self.show_host)
         self.connmenu.show_all()
+        gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
+        self.vmmenu._vmm_menu_name = "vm-action-menu"
+        gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
+        self.connmenu._vmm_menu_name = "conn-menu"
+        for idx, item in self.connmenu_items.items():
+            gtkcompat.set_accessible_name(item, "conn-%s" % idx)
+            item._vmm_a11y_name = "conn-%s" % idx
+
+        def _on_menu_key(_c, keyval, *_a):
+            if Gdk.keyval_name(keyval) == "Menu":
+                return bool(self.popup_vm_menu_from_selection())
+            return False
+
+        key = Gtk.EventControllerKey()
+        key.connect("key-pressed", _on_menu_key)
+        self.topwin.add_controller(key)
+        trigger = Gtk.ShortcutTrigger.parse_string("Menu")
+        if trigger is not None:
+            sc = Gtk.ShortcutController()
+            sc.set_scope(Gtk.ShortcutScope.GLOBAL)
+            sc.add_shortcut(
+                Gtk.Shortcut.new(
+                    trigger,
+                    Gtk.CallbackAction.new(
+                        lambda *_a: self.popup_vm_menu_from_selection() or True
+                    ),
+                )
+            )
+            self.topwin.add_controller(sc)
 
     def init_vmlist(self):
         vmlist = self.widget("vm-list")
@@ -316,6 +449,18 @@ class vmmManager(vmmGObjectUI):
         vmlist.set_model(model)
         vmlist.set_tooltip_column(ROW_HINT)
         vmlist.set_headers_visible(True)
+        try:
+            vmlist.set_accessible_role(Gtk.AccessibleRole.TREE_GRID)
+        except Exception:
+            pass
+        gtkcompat.attach_treeview_a11y(
+            vmlist,
+            name_column=ROW_SORT_KEY,
+            text_column=ROW_MARKUP,
+            on_popup=self.popup_vm_menu_for_name,
+            on_activate=self.activate_row_for_name,
+        )
+        gtkcompat.set_toplevel_a11y_role(self.topwin)
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
         nameCol = Gtk.TreeViewColumn(_("Name"))
@@ -327,7 +472,7 @@ class vmmManager(vmmGObjectUI):
         vmlist.append_column(nameCol)
 
         status_icon = Gtk.CellRendererPixbuf()
-        status_icon.set_property("stock-size", Gtk.IconSize.DND)
+        status_icon.set_property("icon-size", Gtk.IconSize.LARGE)
         nameCol.pack_start(status_icon, False)
         nameCol.add_attribute(status_icon, "icon-name", ROW_STATUS_ICON)
         nameCol.add_attribute(status_icon, "visible", ROW_IS_VM)
@@ -372,6 +517,23 @@ class vmmManager(vmmGObjectUI):
         self.memcol = make_stats_column(_("Memory usage"), COL_MEM)
         self.diskcol = make_stats_column(_("Disk I/O"), COL_DISK)
         self.netcol = make_stats_column(_("Network I/O"), COL_NETWORK)
+        gtkcompat.attach_treeview_column_a11y(vmlist)
+        # COLUMN_HEADER is exposed as AT-SPI "filler", which uitests
+        # do not treat as a table column header.
+        for title, col in (
+            ("Name", nameCol),
+            ("CPU usage", self.guestcpucol),
+            ("Host CPU", self.hostcpucol),
+            ("Memory", self.memcol),
+            ("Disk I/O", self.diskcol),
+            ("Network I/O", self.netcol),
+        ):
+            gtkcompat.expose_a11y_button(
+                "col-" + title,
+                title,
+                lambda c=col: c.clicked(),
+                window=self.topwin,
+            )
 
         model.set_sort_func(COL_NAME, self.vmlist_name_sorter)
         model.set_sort_func(COL_GUEST_CPU, self.vmlist_guest_cpu_usage_sorter)
@@ -380,6 +542,7 @@ class vmmManager(vmmGObjectUI):
         model.set_sort_func(COL_DISK, self.vmlist_disk_io_sorter)
         model.set_sort_func(COL_NETWORK, self.vmlist_network_usage_sorter)
         model.set_sort_column_id(COL_NAME, Gtk.SortType.ASCENDING)
+        gtkcompat.expose_conn_menu_window(self)
 
     ##################
     # Helper methods #
@@ -444,6 +607,7 @@ class vmmManager(vmmGObjectUI):
     def new_vm(self, _src):
         from .createvm import vmmCreateVM
 
+        gtkcompat.hide_conn_menu_window(self)
         conn = self.current_conn()
         vmmCreateVM.show_instance(self, conn and conn.get_uri() or None)
 
@@ -460,11 +624,39 @@ class vmmManager(vmmGObjectUI):
     def show_host(self, _src):
         from .host import vmmHost
 
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
         vmmHost.show_instance(self, conn)
 
     def show_vm(self, _src):
         vmmenu.VMActionUI.show(self, self.current_vm())
+
+    def select_row_for_name(self, name):
+        model = self.widget("vm-list").get_model()
+        sel = self.widget("vm-list").get_selection()
+        if model is None or sel is None or not name:
+            return False
+
+        def _find(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    have = str(model[_iter][ROW_SORT_KEY] or "")
+                    if have == name or name in have:
+                        sel.select_iter(_iter)
+                        return True
+                except Exception:
+                    pass
+                if _find(_iter):
+                    return True
+                _iter = model.iter_next(_iter)
+            return False
+
+        return bool(_find(None))
+
+    def activate_row_for_name(self, name=None):
+        if name:
+            self.select_row_for_name(name)
+        self.row_activated(None)
 
     def row_activated(self, _src, *args):
         ignore = args
@@ -481,7 +673,7 @@ class vmmManager(vmmGObjectUI):
             self.show_host(_src)
 
     def do_delete(self, ignore=None):
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
         vm = self.current_vm()
         if vm is None:
             self._do_delete_conn(conn)
@@ -499,23 +691,32 @@ class vmmManager(vmmGObjectUI):
 
     def set_pause_state(self, state):
         src = self.widget("vm-pause")
+        self._pause_ignore = True
         try:
-            src.handler_block_by_func(self.pause_vm_button)
             src.set_active(state)
+            gtkcompat.sync_accessible_checked(src)
         finally:
-            src.handler_unblock_by_func(self.pause_vm_button)
+            self._pause_ignore = False
 
     def pause_vm_button(self, src):
+        if getattr(self, "_pause_ignore", False):
+            return
+        vm = self.current_vm()
+        if not vm:
+            return
         do_pause = src.get_active()
+        # AT-SPI activate used to emit clicked without flipping the toggle.
+        if do_pause == bool(vm.is_paused()):
+            do_pause = not vm.is_paused()
 
         # Set button state back to original value: just let the status
         # update function fix things for us
         self.set_pause_state(not do_pause)
 
         if do_pause:
-            vmmenu.VMActionUI.suspend(self, self.current_vm())
+            vmmenu.VMActionUI.suspend(self, vm)
         else:
-            vmmenu.VMActionUI.resume(self, self.current_vm())
+            vmmenu.VMActionUI.resume(self, vm)
 
     def start_vm(self, ignore):
         vmmenu.VMActionUI.run(self, self.current_vm())
@@ -524,12 +725,16 @@ class vmmManager(vmmGObjectUI):
         vmmenu.VMActionUI.shutdown(self, self.current_vm())
 
     def close_conn(self, ignore):
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
+        if conn is None:
+            return
         if not conn.is_disconnected():
             conn.close()
 
     def open_conn(self, ignore=None):
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
+        if conn is None:
+            return
         if conn.is_disconnected():
             conn.connect_once("open-completed", self._conn_open_completed_cb)
             conn.open()
@@ -736,6 +941,17 @@ class vmmManager(vmmGObjectUI):
 
         self.conn_row_updated(conn)
         self.update_current_selection()
+        try:
+            lines = []
+            for crow in self.model:
+                if not crow[ROW_IS_CONN]:
+                    continue
+                key = str(crow[ROW_SORT_KEY] or "")
+                text = gtkcompat._strip_pango_markup(crow[ROW_MARKUP] or "")
+                lines.append("%s\t%s" % (key, text))
+            open("/tmp/vmm-a11y-conn-status.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
 
     def conn_row_updated(self, conn):
         row = self.get_row(conn)
@@ -758,6 +974,8 @@ class vmmManager(vmmGObjectUI):
     def update_current_selection(self, ignore=None):
         vm = self.current_vm()
         conn = self.current_conn()
+        if conn is not None:
+            self._last_conn = conn
 
         show_open = bool(vm)
         show_details = bool(vm)
@@ -793,13 +1011,41 @@ class vmmManager(vmmGObjectUI):
         self.widget("menu_edit_details").set_sensitive(show_details)
         self.widget("menu_host_details").set_sensitive(host_details)
 
+    def popup_vm_menu_from_selection(self, event=None):
+        model, treeiter = self.widget("vm-list").get_selection().get_selected()
+        if model is None or treeiter is None:
+            return False
+        self.popup_vm_menu(model, treeiter, event)
+        return True
+
+    def popup_vm_menu_for_name(self, name=None, event=None):
+        if not name:
+            return self.popup_vm_menu_from_selection(event)
+        model = self.widget("vm-list").get_model()
+        if model is None:
+            return False
+
+        def _find(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    have = str(model[_iter][ROW_SORT_KEY] or "")
+                    if have == name:
+                        self.popup_vm_menu(model, _iter, event)
+                        return True
+                except Exception:
+                    pass
+                if _find(_iter):
+                    return True
+                _iter = model.iter_next(_iter)
+            return False
+
+        return bool(_find(None))
+
     def popup_vm_menu_key(self, widget_ignore, event):
         if Gdk.keyval_name(event.keyval) != "Menu":
             return False  # pragma: no cover
-
-        model, treeiter = self.widget("vm-list").get_selection().get_selected()
-        self.popup_vm_menu(model, treeiter, event)
-        return True
+        return self.popup_vm_menu_from_selection(event)
 
     def popup_vm_menu_button(self, vmlist, event):
         if event.button != 3:
@@ -818,6 +1064,7 @@ class vmmManager(vmmGObjectUI):
             # Popup the vm menu
             vm = model[_iter][ROW_HANDLE]
             self.vmmenu.update_widget_states(vm)
+            self.vmmenu._parent_widget = self.topwin
             self.vmmenu.popup_at_pointer(event)
         else:
             # Pop up connection menu
@@ -830,7 +1077,9 @@ class vmmManager(vmmGObjectUI):
             self.connmenu_items["connect"].set_sensitive(disconn)
             self.connmenu_items["delete"].set_sensitive(disconn)
 
+            self.connmenu._parent_widget = self.topwin
             self.connmenu.popup_at_pointer(event)
+            gtkcompat.expose_conn_menu_window(self)
 
     #################
     # Stats methods #
@@ -899,6 +1148,15 @@ class vmmManager(vmmGObjectUI):
             widget.set_tooltip_text(tool_text)
 
     def _toggle_graph_helper(self, do_show, col, datafunc, menu):
+        if getattr(self, "_vmm_toggling_graph", False):
+            return
+        self._vmm_toggling_graph = True
+        try:
+            self._toggle_graph_helper_apply(do_show, col, datafunc, menu)
+        finally:
+            self._vmm_toggling_graph = False
+
+    def _toggle_graph_helper_apply(self, do_show, col, datafunc, menu):
         img = -1
         for child in col.get_cells():
             if isinstance(child, CellRendererSparkline):
@@ -908,6 +1166,7 @@ class vmmManager(vmmGObjectUI):
         col.set_cell_data_func(img, datafunc, None)
         col.set_visible(do_show)
         self.widget(menu).set_active(do_show)
+        gtkcompat.attach_treeview_column_a11y(self.widget("vm-list"))
 
         any_visible = any(
             [

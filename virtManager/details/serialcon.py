@@ -11,13 +11,13 @@ from gi.repository import Gtk
 
 from virtinst import log
 
-# We can use either 2.91 or 2.90. This is just to silence runtime warnings
+# GTK4 VTE is API 3.91
 try:
+    gi.require_version("Vte", "3.91")
+    log.debug("Using VTE API 3.91")
+except ValueError:  # pragma: no cover
     gi.require_version("Vte", "2.91")
     log.debug("Using VTE API 2.91")
-except ValueError:  # pragma: no cover
-    gi.require_version("Vte", "2.90")
-    log.debug("Using VTE API 2.90")
 from gi.repository import Vte
 
 import libvirt
@@ -279,8 +279,8 @@ class vmmSerialConsole(vmmGObject):
         terminalbox.pack_start(evbox, True, True, 0)
         terminalbox.pack_start(scrollbar, False, False, 0)
 
-        self._box.append_page(terminalbox, Gtk.Label(""))
-        self._box.append_page(self._error_label, Gtk.Label(""))
+        self._box.append_page(terminalbox, Gtk.Label(label=""))
+        self._box.append_page(self._error_label, Gtk.Label(label=""))
         self._box.show_all()
 
         scrollbar.hide()

@@ -3,13 +3,26 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import gi
+
 from gi.repository import GObject
 from gi.repository import Gtk
+
+try:
+    gi.require_foreign("cairo")
+except (ImportError, ValueError):  # pragma: no cover
+    pass
 
 # pylint: disable=arguments-differ
 # Newer pylint can detect, but warns that overridden arguments are wrong
 
-BASECOLOR = Gtk.StyleContext().lookup_color("theme_base_color")[1]
+class _RGB:
+    red = 1.0
+    green = 1.0
+    blue = 1.0
+
+
+BASECOLOR = _RGB()
 
 
 def rect_print(name, rect):  # pragma: no cover
@@ -113,14 +126,23 @@ class CellRendererSparkline(Gtk.CellRenderer):
         self.reversed = False
         self.rgb = None
 
+    def do_snapshot(self, snapshot, widget, background_area, cell_area, flags):
+        from gi.repository import Graphene
+
+        rect = Graphene.Rect()
+        rect.init(cell_area.x, cell_area.y, cell_area.width, cell_area.height)
+        cr = snapshot.append_cairo(rect)
+        self._render_cairo(cr, widget, background_area, cell_area, flags)
+
     def do_render(self, cr, widget, background_area, cell_area, flags):
+        self._render_cairo(cr, widget, background_area, cell_area, flags)
+
+    def _render_cairo(self, cr, widget, background_area, cell_area, flags):
         # cr                : Cairo context
         # widget            : GtkWidget instance
         # background_area   : GdkRectangle: entire cell area
         # cell_area         : GdkRectangle: area normally rendered by cell
         # flags             : flags that affect rendering
-        # flags = Gtk.CELL_RENDERER_SELECTED, Gtk.CELL_RENDERER_PRELIT,
-        #         Gtk.CELL_RENDERER_INSENSITIVE or Gtk.CELL_RENDERER_SORTED
         ignore = widget
         ignore = background_area
         ignore = flags
@@ -218,21 +240,28 @@ class CellRendererSparkline(Gtk.CellRenderer):
         draw_fill(cr, cell_area.x, cell_area.y, cell_area.width, cell_area.height, points)
         return
 
-    def do_get_size(self, widget, cell_area=None):
-        ignore = widget
-        ignore = cell_area
-
-        FIXED_WIDTH = len(self.data_array)
+    def _fixed_size(self):
+        FIXED_WIDTH = max(1, len(self.data_array))
         FIXED_HEIGHT = 15
         xpad = self.get_property("xpad")
         ypad = self.get_property("ypad")
-        xoffset = 0
-        yoffset = 0
+        return (xpad * 2) + FIXED_WIDTH, (ypad * 2) + FIXED_HEIGHT
 
-        width = (xpad * 2) + FIXED_WIDTH
-        height = (ypad * 2) + FIXED_HEIGHT
+    def do_get_preferred_width(self, widget):
+        ignore = widget
+        width, _height = self._fixed_size()
+        return width, width
 
-        return (xoffset, yoffset, width, height)
+    def do_get_preferred_height(self, widget):
+        ignore = widget
+        _width, height = self._fixed_size()
+        return height, height
+
+    def do_get_size(self, widget, cell_area=None):
+        ignore = widget
+        ignore = cell_area
+        width, height = self._fixed_size()
+        return (0, 0, width, height)
 
     # Properties are passed to use with "-" in the name, but python
     # variables can't be named like that
@@ -300,7 +329,8 @@ class Sparkline(Gtk.DrawingArea):
         self.rgb = []
 
         ctxt = self.get_style_context()
-        ctxt.add_class(Gtk.STYLE_CLASS_ENTRY)
+        ctxt.add_class("entry")
+        self.set_draw_func(self._draw_func)
 
     def set_data_array(self, val):
         self._data_array = val
@@ -312,11 +342,10 @@ class Sparkline(Gtk.DrawingArea):
     data_array = property(get_data_array, set_data_array)
 
     def do_draw(self, cr):
-        cr.save()
+        self._draw_func(self, cr, self.get_width(), self.get_height(), None)
 
-        window = self.get_window()
-        w = window.get_width()
-        h = window.get_height()
+    def _draw_func(self, _area, cr, w, h, _data=None):
+        cr.save()
 
         points_per_set = len(self.data_array) // self.num_sets
         pixels_per_point = float(w) / (float((points_per_set - 1) or 1))

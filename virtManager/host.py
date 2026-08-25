@@ -175,7 +175,12 @@ class vmmHost(vmmGObjectUI):
             _("%(connection)s - Connection Details") % {"connection": self.conn.get_pretty_desc()}
         )
         if not self.widget("overview-name").has_focus():
-            self.widget("overview-name").set_text(self.conn.get_pretty_desc())
+            name = self.conn.get_pretty_desc()
+            self.widget("overview-name").set_text(name)
+            from .lib import gtkcompat
+
+            gtkcompat.attach_entry_a11y_value(self.widget("overview-name"), "Name:")
+            gtkcompat.expose_a11y_text("overview-name", "Name:", name, window=self.topwin)
 
         if conn_active:
             return

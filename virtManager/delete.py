@@ -567,7 +567,7 @@ def _prepare_storage_list(storage_list):
     infoCol.pack_start(info_img, False)
     infoCol.add_attribute(info_img, "visible", STORAGE_ROW_ICON_SHOW)
     infoCol.add_attribute(info_img, "icon-name", STORAGE_ROW_ICON)
-    infoCol.add_attribute(info_img, "stock-size", STORAGE_ROW_ICON_SIZE)
+    infoCol.add_attribute(info_img, "icon-size", STORAGE_ROW_ICON_SIZE)
     infoCol.set_sort_column_id(STORAGE_ROW_ICON)
 
 

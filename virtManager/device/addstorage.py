@@ -57,6 +57,13 @@ class vmmAddStorage(vmmGObjectUI):
         self.top_box = self.widget("storage-box")
         self.advanced_top_box = self.widget("storage-advanced-box")
         self._init_ui()
+        try:
+            from ..lib import gtkcompat
+
+            adv = self.widget("storage-advanced")
+            gtkcompat.set_accessible_name(adv, "Advanced options")
+        except Exception:
+            pass
 
     def _cleanup(self):
         self.conn = None

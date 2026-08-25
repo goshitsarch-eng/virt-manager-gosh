@@ -1,5 +1,9 @@
 # Virtual Machine Manager News
 
+## Release 5.2.0 (unreleased)
+- virt-manager: Rewrite the graphical application on GTK 4 and libadwaita
+  while keeping the existing feature set, windows, wizards, and actions
+
 ## Release 5.1.0 (August 26, 2025)
 - cli: Support --cpu maximum (Andrea Bolognani)
 - Prefer maximum mode for many emulated guests (Andrea Bolognani)

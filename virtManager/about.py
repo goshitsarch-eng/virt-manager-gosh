@@ -4,12 +4,16 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+from gi.repository import Gdk
+from gi.repository import Gtk
+
 from virtinst import log
 
-from .baseclass import vmmGObjectUI
+from .baseclass import vmmGObject
+from .lib import gtkcompat
 
 
-class vmmAbout(vmmGObjectUI):
+class vmmAbout(vmmGObject):
     @classmethod
     def show_instance(cls, parentobj):
         try:
@@ -20,26 +24,95 @@ class vmmAbout(vmmGObjectUI):
             parentobj.err.show_err(_("Error launching 'About' dialog: %s") % str(e))
 
     def __init__(self):
-        vmmGObjectUI.__init__(self, "about.ui", "vmm-about")
+        vmmGObject.__init__(self)
         self._cleanup_on_app_close()
-
-        self.builder.connect_signals(
-            {
-                "on_vmm_about_delete_event": self.close,
-                "on_vmm_about_response": self.close,
-            }
-        )
+        self._dialog = None
 
     def show(self, parent):
         log.debug("Showing about")
-        self.topwin.set_version(self.config.get_appversion())
-        self.topwin.set_transient_for(parent)
-        self.topwin.present()
+        if self._dialog:
+            self._dialog.set_transient_for(parent)
+            self._dialog.present()
+            return
+
+        # Use a plain Gtk.Window with role DIALOG. Gtk.AboutDialog's
+        # internal widgets are not reliably exposed to AT-SPI in GTK 4,
+        # and Adw.AboutDialog is an overlay sibling.
+        dialog = Gtk.Window()
+        dialog.set_transient_for(parent)
+        dialog.set_modal(True)
+        dialog.set_title("About")
+        dialog.set_default_size(420, 320)
+        if parent is not None and hasattr(parent, "get_application"):
+            app = parent.get_application()
+            if app is not None:
+                dialog.set_application(app)
+        dialog.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+        gtkcompat.set_accessible_name(dialog, "About")
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(18)
+        box.set_margin_bottom(18)
+        box.set_margin_start(18)
+        box.set_margin_end(18)
+
+        def _label(text, name=None):
+            lab = Gtk.Label(label=text)
+            lab.set_wrap(True)
+            lab.set_xalign(0)
+            lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+            if name:
+                gtkcompat.set_accessible_name(lab, name)
+            box.append(lab)
+            return lab
+
+        _label("Virtual Machine Manager", "Virtual Machine Manager")
+        _label(self.config.get_appversion())
+        _label(_("Powered by libvirt"))
+        _label("Copyright (C) 2006-2026 Red Hat Inc.", "Copyright")
+        _label("https://virt-manager.org/")
+        _label(
+            "Daniel P. Berrange, Cole Robinson, Hugh O. Brock"
+        )
+        dialog.set_child(box)
+
+        def _hide(*_a):
+            dialog.hide()
+            dialog.set_visible(False)
+            dialog.destroy()
+            self._dialog = None
+            return True
+
+        def _on_key(_c, keyval, _keycode, _state):
+            if keyval == Gdk.KEY_Escape:
+                return _hide()
+            return False
+
+        keyctl = Gtk.EventControllerKey()
+        keyctl.connect("key-pressed", _on_key)
+        dialog.add_controller(keyctl)
+        shortcut = Gtk.Shortcut.new(
+            Gtk.KeyvalTrigger.new(Gdk.KEY_Escape, 0),
+            Gtk.CallbackAction.new(lambda *_a: _hide()),
+        )
+        sctl = Gtk.ShortcutController()
+        sctl.add_shortcut(shortcut)
+        dialog.add_controller(sctl)
+        dialog.connect("close-request", lambda *_a: _hide())
+        self._dialog = dialog
+        dialog.present()
+        try:
+            dialog.grab_focus()
+        except Exception:
+            pass
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing about")
-        self.topwin.hide()
+        if self._dialog:
+            self._dialog.hide()
         return 1
 
     def _cleanup(self):
-        pass
+        if self._dialog:
+            self._dialog.destroy()
+        self._dialog = None

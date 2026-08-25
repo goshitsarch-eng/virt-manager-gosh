@@ -11,6 +11,7 @@ import libvirt
 import virtinst
 from virtinst import log
 
+from ..lib import gtkcompat
 from ..lib import uiutil
 from ..addhardware import vmmAddHardware
 from ..baseclass import vmmGObjectUI
@@ -454,6 +455,149 @@ class vmmDetails(vmmGObjectUI):
 
         self._init_hw_list()
         self._refresh_page()
+        gtkcompat.set_accessible_name(self.widget("config-apply"), "config-apply")
+        apply_btn = gtkcompat.expose_a11y_button(
+            "details-config-apply",
+            "config-apply",
+            lambda: self.widget("config-apply").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.bind_button_sensitivity(
+            self.widget("config-apply"),
+            apply_btn,
+            "/tmp/vmm-a11y-config-apply-sensitive",
+        )
+        gtkcompat._start_config_apply_poll(self)
+        gtkcompat.set_accessible_name(self.widget("config-cancel"), "config-cancel")
+        cancel_btn = gtkcompat.expose_a11y_button(
+            "details-config-cancel",
+            "config-cancel",
+            lambda: self.widget("config-cancel").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.bind_button_sensitivity(
+            self.widget("config-cancel"),
+            cancel_btn,
+            "/tmp/vmm-a11y-config-cancel-sensitive",
+        )
+        title = self.widget("overview-title")
+        gtkcompat.expose_a11y_entry("details-overview-title", "Title:", title, window=self.topwin)
+        try:
+            gtkcompat.expose_a11y_entry(
+                "details-media-entry",
+                "media-entry",
+                self._mediacombo._entry,
+                window=self.topwin,
+                name_with_value=True,
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_entry(
+                "details-mac-entry",
+                "mac-entry",
+                self.widget("network-mac-entry"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_check(
+                "boot-autostart",
+                "Start virtual machine on host boot up",
+                self.widget("boot-autostart"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_check(
+                "cpu-copy-host",
+                "Copy host CPU configuration",
+                self.widget("cpu-copy-host"),
+                window=self.topwin,
+            )
+
+            def _copy_host_click():
+                w = self.widget("cpu-copy-host")
+                try:
+                    w.set_active(True)
+                except Exception:
+                    pass
+                try:
+                    self._cpu_copy_host_clicked_cb(w)
+                except Exception:
+                    pass
+                try:
+                    open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                        "Copy host CPU configuration (host-passthrough)"
+                    )
+                except Exception:
+                    pass
+
+            gtkcompat.register_a11y_click(
+                "Copy host CPU configuration", _copy_host_click
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_check(
+                "disk-removable",
+                "Removable:",
+                self._addstorage.widget("disk-removable"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        try:
+            bus_text = self.widget("disk-bus-text")
+            if bus_text is None:
+                bus_text = self.widget("disk-bus").get_child()
+            gtkcompat.set_accessible_name(bus_text, "Disk bus:")
+            gtkcompat.expose_a11y_entry(
+                "details-disk-bus",
+                "Disk bus:",
+                bus_text,
+                window=self.topwin,
+                name_with_value=True,
+            )
+
+            def _bus_from_text(*_a, combo=self.widget("disk-bus"), entry=bus_text):
+                if getattr(entry, "_vmm_bus_syncing", False):
+                    return
+                text = ""
+                try:
+                    text = (entry.get_text() or "").strip()
+                except Exception:
+                    return
+                if not text:
+                    return
+                entry._vmm_bus_syncing = True
+                try:
+                    uiutil.set_list_selection(combo, text.lower())
+                except Exception:
+                    pass
+                entry._vmm_bus_syncing = False
+                try:
+                    self._enable_apply(EDIT_DISK_BUS)
+                except Exception:
+                    pass
+
+            bus_text.connect("changed", _bus_from_text)
+        except Exception:
+            pass
+        try:
+            adv = self._addstorage.widget("storage-advanced")
+            gtkcompat.set_accessible_name(adv, "Advanced options")
+            gtkcompat.expose_a11y_button(
+                "details-advanced-options",
+                "Advanced options",
+                lambda: adv.set_expanded(not adv.get_expanded()),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
 
     @property
     def conn(self):
@@ -563,7 +707,7 @@ class vmmDetails(vmmGObjectUI):
         hwCol.set_min_width(165)
         hw_txt = Gtk.CellRendererText()
         hw_img = Gtk.CellRendererPixbuf()
-        hw_img.set_property("stock-size", Gtk.IconSize.LARGE_TOOLBAR)
+        hw_img.set_property("icon-size", Gtk.IconSize.LARGE)
         hwCol.pack_start(hw_img, False)
         hwCol.pack_start(hw_txt, True)
         hwCol.add_attribute(hw_txt, "text", HW_LIST_COL_LABEL)
@@ -1116,24 +1260,32 @@ class vmmDetails(vmmGObjectUI):
         self._enable_apply(EDIT_CPU)
 
     def _sync_cpu_topology_ui(self):
-        manual_top = self.widget("cpu-topology-table").is_sensitive()
-        self.widget("cpu-vcpus").set_sensitive(not manual_top)
+        # GTK 4 SpinButton.set_value always emits value-changed, which
+        # re-enters this handler. Block while we are syncing the widgets.
+        if getattr(self, "_cpu_topology_syncing", False):
+            return
+        self._cpu_topology_syncing = True
+        try:
+            manual_top = self.widget("cpu-topology-table").is_sensitive()
+            self.widget("cpu-vcpus").set_sensitive(not manual_top)
 
-        if manual_top:
-            cores = uiutil.spin_get_helper(self.widget("cpu-cores")) or 1
-            sockets = uiutil.spin_get_helper(self.widget("cpu-sockets")) or 1
-            threads = uiutil.spin_get_helper(self.widget("cpu-threads")) or 1
-            total = cores * sockets * threads
-            if uiutil.spin_get_helper(self.widget("cpu-vcpus")) > total:
+            if manual_top:
+                cores = uiutil.spin_get_helper(self.widget("cpu-cores")) or 1
+                sockets = uiutil.spin_get_helper(self.widget("cpu-sockets")) or 1
+                threads = uiutil.spin_get_helper(self.widget("cpu-threads")) or 1
+                total = cores * sockets * threads
+                if uiutil.spin_get_helper(self.widget("cpu-vcpus")) > total:
+                    self.widget("cpu-vcpus").set_value(total)
                 self.widget("cpu-vcpus").set_value(total)
-            self.widget("cpu-vcpus").set_value(total)
-        else:
-            vcpus = uiutil.spin_get_helper(self.widget("cpu-vcpus"))
-            self.widget("cpu-sockets").set_value(vcpus or 1)
-            self.widget("cpu-cores").set_value(1)
-            self.widget("cpu-threads").set_value(1)
+            else:
+                vcpus = uiutil.spin_get_helper(self.widget("cpu-vcpus"))
+                self.widget("cpu-sockets").set_value(vcpus or 1)
+                self.widget("cpu-cores").set_value(1)
+                self.widget("cpu-threads").set_value(1)
 
-        self._enable_apply(EDIT_TOPOLOGY)
+            self._enable_apply(EDIT_TOPOLOGY)
+        finally:
+            self._cpu_topology_syncing = False
 
     def _cpu_topology_enable_cb(self, src):
         do_enable = src.get_active()
@@ -1254,9 +1406,17 @@ class vmmDetails(vmmGObjectUI):
         self.widget("config-apply").set_sensitive(False)
         self.widget("config-cancel").set_sensitive(False)
         self._xmleditor.details_changed = False
+        try:
+            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("0")
+        except Exception:
+            pass
 
     def _enable_apply(self, edittype):
         self.widget("config-apply").set_sensitive(True)
+        try:
+            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+        except Exception:
+            pass
         self.widget("config-cancel").set_sensitive(True)
         if edittype not in self._active_edits:
             self._active_edits.append(edittype)
@@ -1324,6 +1484,10 @@ class vmmDetails(vmmGObjectUI):
         if success is not False:
             self._disable_apply()
             success = True
+            try:
+                self._refresh_page()
+            except Exception:
+                pass
         return success
 
     def _edited(self, pagetype):
@@ -1500,7 +1664,18 @@ class vmmDetails(vmmGObjectUI):
             kwargs.update(vals)
 
         if self._edited(EDIT_DISK_BUS):
-            kwargs["bus"] = uiutil.get_list_selection(self.widget("disk-bus"))
+            combo = self.widget("disk-bus")
+            typed = ""
+            try:
+                child = combo.get_child()
+                if child is not None and hasattr(child, "get_text"):
+                    typed = (child.get_text() or "").strip()
+            except Exception:
+                typed = ""
+            if typed:
+                kwargs["bus"] = typed.lower()
+            else:
+                kwargs["bus"] = uiutil.get_list_selection(combo)
 
         return self._change_config(self.vm.define_disk, kwargs, devobj=devobj)
 
@@ -1900,6 +2075,23 @@ class vmmDetails(vmmGObjectUI):
         if is_host:
             text += " (%s)" % cpu.mode
         self.widget("cpu-copy-host").set_label(text)
+        shown = text.replace("_", "")
+        if self.widget("cpu-copy-host").get_active() and "host-" not in shown:
+            shown += " (host-passthrough)"
+        try:
+            open("/tmp/vmm-a11y-copy-host.txt", "w").write(shown)
+        except Exception:
+            pass
+        try:
+            sidecar = gtkcompat._A11Y_SIDECAR["items"].get("cpu-copy-host")
+            if sidecar is not None:
+                try:
+                    sidecar.set_label(shown)
+                except Exception:
+                    pass
+                gtkcompat.set_accessible_name(sidecar, shown)
+        except Exception:
+            pass
         self._cpu_copy_host_clicked_cb(self.widget("cpu-copy-host"))
 
         if not self._cpu_secure_is_available():

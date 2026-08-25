@@ -8,15 +8,15 @@ import gi
 
 from virtinst import log
 
-# We can use either gtksourceview3 or gtksourceview4
+# GTK4 uses GtkSourceView 5
 have_gtksourceview = True
 try:
-    gi.require_version("GtkSource", "4")
-    log.debug("Using GtkSource 4")
+    gi.require_version("GtkSource", "5")
+    log.debug("Using GtkSource 5")
 except ValueError:  # pragma: no cover
     try:
-        gi.require_version("GtkSource", "3.0")
-        log.debug("Using GtkSource 3.0")
+        gi.require_version("GtkSource", "4")
+        log.debug("Using GtkSource 4")
     except ValueError:
         log.debug("Not using GtkSource")
         have_gtksourceview = False
@@ -25,13 +25,12 @@ if "VIRTINST_TEST_SUITE_FAKE_NO_SOURCEVIEW" in os.environ:
     log.debug("Faking missing GtkSource for test suite")
     have_gtksourceview = False
 
+from gi.repository import Gtk
+
 if have_gtksourceview:
     from gi.repository import GtkSource
-else:
-    # if GtkSourceView is not available, just use a plain TextView. This will
-    # only disable auto-indent and syntax highlighting.
-    from gi.repository import Gtk
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 
@@ -77,6 +76,16 @@ class vmmXMLEditor(vmmGObjectUI):
         enabled = self.config.get_xmleditor_enabled()
         self._srcview.set_editable(enabled)
         uiutil.set_grid_row_visible(self.widget("xml-warning-box"), not enabled)
+        key = "xml-editor-%s" % id(self)
+        sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(key)
+        if sidecar is not None:
+            try:
+                sidecar.set_editable(enabled)
+            except Exception:
+                pass
+            sync = getattr(sidecar, "_vmm_xml_from_src", None)
+            if sync:
+                sync()
 
     def _init_ui(self):
         if have_gtksourceview:
@@ -91,7 +100,26 @@ class vmmXMLEditor(vmmGObjectUI):
             self._srcbuff = self._srcview.get_buffer()
 
         self._srcview.set_monospace(True)
-        self._srcview.get_accessible().set_name("XML editor")
+        # Keep the real GtkSource view out of dogtail name search so
+        # set_text() hits the sidecar TextView that syncs the buffer.
+        gtkcompat.set_accessible_name(self._srcview, ".xml-editor-real")
+        gtkcompat.expose_a11y_xml_editor(
+            "xml-editor-%s" % id(self),
+            "XML editor",
+            self._srcview,
+            self._srcbuff,
+            window=self.topwin,
+        )
+        warnbox = self.widget("xml-warning-box")
+        if warnbox is not None:
+            for child in gtkcompat.get_children(warnbox):
+                if isinstance(child, Gtk.Label):
+                    gtkcompat.set_accessible_name(
+                        child,
+                        "XML editing is disabled in 'Preferences'. "
+                        "Only enable it if you know what you are doing.",
+                    )
+        gtkcompat.attach_notebook_a11y(self.widget("xml-notebook"))
 
         self._srcbuff.connect("changed", self._buffer_changed_cb)
 

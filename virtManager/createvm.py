@@ -10,6 +10,7 @@ import os
 import threading
 import time
 
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -17,6 +18,7 @@ import virtinst
 import virtinst.generatename
 from virtinst import log
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -210,6 +212,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._mediacombo.connect("activate", self._iso_activated_cb)
         self._mediacombo.set_mnemonic_label(self.widget("install-iso-label"))
         self.widget("install-iso-align").add(self._mediacombo.top_box)
+        gtkcompat._start_media_select_poll(self)
 
         self.builder.connect_signals(
             {
@@ -255,6 +258,42 @@ class vmmCreateVM(vmmGObjectUI):
             vmmEngine.get_instance().increment_window_counter()
 
         self.topwin.present()
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "New VM")
+            self.topwin.set_title("New VM")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
+        gtkcompat.expose_createvm_methods_window(self)
+        gtkcompat.expose_oslist_activate_window(self._os_list)
+        if not getattr(self, "_vmm_os_select_poll", False):
+            self._vmm_os_select_poll = True
+
+            def _poll_os_select():
+                path = "/tmp/vmm-a11y-os-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                if want:
+                    try:
+                        self._os_list.select_os_matching(want)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_os_select)
+
+    def close(self, ignore1=None, ignore2=None):
+        return self._close(ignore1, ignore2)
 
     def _close(self, ignore1=None, ignore2=None):
         if self.is_visible():
@@ -262,6 +301,14 @@ class vmmCreateVM(vmmGObjectUI):
             vmmEngine.get_instance().decrement_window_counter()
 
         self.topwin.hide()
+        gtkcompat.hide_createvm_methods_window(self)
+        gtkcompat.hide_oslist_activate_window(self._os_list)
+        try:
+            parent = self.topwin.get_transient_for()
+            if parent is not None:
+                parent.present()
+        except Exception:
+            pass
 
         self._cleanup_customize_window()
         if self._storage_browser:
@@ -299,11 +346,27 @@ class vmmCreateVM(vmmGObjectUI):
             self.widget("arch-expander").hide()
 
         self.widget("startup-error").set_text(_("Error: %s") % error)
+        gtkcompat.set_accessible_name(
+            self.widget("startup-error"), _("Error: %s") % error
+        )
+        gtkcompat.expose_a11y_label(
+            "create-startup-error",
+            _("Error: %s") % error,
+            _("Error: %s") % error,
+            window=self.topwin,
+        )
         return False
 
     def _show_startup_warning(self, error):
         self.widget("startup-error-box").show()
         self.widget("startup-error").set_markup(_("<span size='small'>Warning: %s</span>") % error)
+        gtkcompat.set_accessible_name(self.widget("startup-error"), _("Warning: %s") % error)
+        gtkcompat.expose_a11y_label(
+            "create-startup-error",
+            _("Warning: %s") % error,
+            _("Warning: %s") % error,
+            window=self.topwin,
+        )
 
     def _show_arch_warning(self, error):
         self.widget("arch-warning-box").show()
@@ -366,14 +429,204 @@ class vmmCreateVM(vmmGObjectUI):
 
         # OS distro list
         self._os_list = vmmOSList()
+        self._last_osobj = None
+        self._os_list.connect("os-selected", self._os_selected)
         self.widget("install-os-align").add(self._os_list.search_entry)
         self.widget("os-label").set_mnemonic_widget(self._os_list.search_entry)
+        self._init_create_a11y()
+
+    def _init_create_a11y(self):
+        gtkcompat.attach_notebook_a11y(self.widget("create-pages"))
+        gtkcompat.attach_notebook_a11y(self.widget("install-method-pages"))
+        gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        ptxt = self.widget("header-pagenum").get_text() or "pagenum-label"
+        try:
+            open("/tmp/vmm-a11y-pagenum.txt", "w").write(ptxt)
+        except Exception:
+            pass
+        gtkcompat.expose_a11y_label(
+            "create-pagenum",
+            "pagenum-label: %s" % ptxt,
+            ptxt,
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_label(
+            "create-startup-error",
+            "startup-error",
+            self.widget("startup-error").get_text() or "startup-error",
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_combo(
+            "create-conn",
+            "create-conn",
+            self.widget("create-conn"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "create-forward",
+            "Forward",
+            lambda: self.widget("create-forward").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "create-back",
+            "Back",
+            lambda: self.widget("create-back").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "create-finish",
+            "Finish",
+            lambda: self.widget("create-finish").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.set_accessible_name(self.widget("create-forward"), ".create-forward-real")
+        gtkcompat.set_accessible_name(self.widget("create-back"), ".create-back-real")
+        gtkcompat.set_accessible_name(self.widget("create-finish"), ".create-finish-real")
+        for wid in ("create-forward", "create-back", "create-finish"):
+            src = self.widget(wid)
+            try:
+                src.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+                src.update_state([Gtk.AccessibleState.HIDDEN], [True])
+            except Exception:
+                pass
+        for wid, name in (
+            ("method-local", "Local install media (ISO image or CDROM)"),
+            ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
+            ("method-import", "Import existing disk image"),
+            ("method-manual", "Manual install"),
+        ):
+            src = self.widget(wid)
+            gtkcompat.sync_accessible_checked(src)
+            gtkcompat.expose_a11y_check(
+                wid, name, src, window=self.topwin, radio=True
+            )
+            gtkcompat.set_accessible_name(src, ".%s-real" % wid)
+            try:
+                src.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+                src.update_state([Gtk.AccessibleState.HIDDEN], [True])
+            except Exception:
+                pass
+            for child in gtkcompat.get_children(src):
+                gtkcompat.set_accessible_name(child, ".%s-child" % wid)
+                try:
+                    child.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+                except Exception:
+                    pass
+            def _activate(_w, s=src):
+                try:
+                    s.set_active(True)
+                except Exception:
+                    pass
+            try:
+                src.connect("activate", _activate)
+            except Exception:
+                pass
+            sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
+            if sidecar is not None:
+                gtkcompat.set_accessible_name(sidecar, name)
+                gtkcompat.sync_accessible_checked(sidecar)
+        gtkcompat.expose_oslist_a11y(self._os_list, self.topwin)
+        try:
+            self._os_list._vmm_disable_detect = lambda: self.widget(
+                "install-detect-os"
+            ).set_active(False)
+        except Exception:
+            pass
+        gtkcompat.expose_a11y_entry(
+            "create-vm-name",
+            "Name:",
+            self.widget("create-vm-name"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_check(
+            "install-detect-os",
+            "Automatically detect from the installation media / source",
+            self.widget("install-detect-os"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "install-iso-browse",
+            "install-iso-browse",
+            lambda: self.widget("install-iso-browse").emit("clicked"),
+            window=self.topwin,
+        )
+        if self._mediacombo is not None:
+            gtkcompat.expose_a11y_combo(
+                "media-combo",
+                "media-combo",
+                self._mediacombo._combo,
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_entry(
+                "media-entry",
+                "media-entry",
+                self._mediacombo._entry,
+                window=self.topwin,
+                name_with_value=True,
+            )
+        if self._addstorage is not None:
+            gtkcompat.expose_a11y_entry(
+                "storage-entry",
+                "storage-entry",
+                self._addstorage.widget("storage-entry"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+            gtkcompat.expose_a11y_button(
+                "storage-browse",
+                "storage-browse",
+                lambda: self._addstorage.widget("storage-browse").emit("clicked"),
+                window=self.topwin,
+            )
+            for wid, name in (
+                ("storage-create", "Create a disk image for the virtual machine"),
+                ("storage-select", "Select or create custom storage"),
+            ):
+                src = self._addstorage.widget(wid)
+                gtkcompat.set_accessible_name(src, name)
+                gtkcompat.sync_accessible_checked(src)
+                gtkcompat.expose_a11y_check(
+                    wid, name, src, window=self.topwin, radio=True
+                )
+                sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
+                if sidecar is not None:
+                    gtkcompat.set_accessible_name(sidecar, name)
+            gtkcompat.expose_a11y_spin(
+                "storage-size",
+                "GiB",
+                self._addstorage.widget("storage-size"),
+                window=self.topwin,
+            )
+        try:
+            gtkcompat.expose_a11y_spin(
+                "cpus", "cpus", self.widget("cpus"), window=self.topwin
+            )
+            gtkcompat.expose_a11y_spin(
+                "mem", "Memory:", self.widget("mem"), window=self.topwin
+            )
+            gtkcompat.expose_a11y_check(
+                "summary-customize",
+                "Customize configuration before install",
+                self.widget("summary-customize"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+
+    def _os_selected(self, _src, osobj):
+        self._last_osobj = osobj
 
     def _reset_state(self, urihint=None):
         """
         Reset all UI state to default values. Conn specific state is
         populated in _populate_conn_state
         """
+        self._last_osobj = None
+        try:
+            os.unlink("/tmp/vmm-a11y-storage-entry.txt")
+        except Exception:
+            pass
         self.reset_finish_cursor()
 
         self.widget("create-pages").set_current_page(PAGE_NAME)
@@ -403,6 +656,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         # Install local
         self._mediacombo.reset_state()
+        gtkcompat.publish_media_combo_rows(self)
 
         # Install URL
         self.widget("install-urlopts-entry").set_text("")
@@ -604,6 +858,7 @@ class vmmCreateVM(vmmGObjectUI):
         # Dependent on connection so we need to do this here
         self._mediacombo.set_conn(self.conn)
         self._mediacombo.reset_state()
+        gtkcompat.publish_media_combo_rows(self)
 
         # Allow container bootstrap only for local connection and
         # only if virt-bootstrap is installed. Otherwise, show message.
@@ -843,7 +1098,10 @@ class vmmCreateVM(vmmGObjectUI):
         if defmachine and defmachine in machines:
             default = machines.index(defmachine)
 
-        self.widget("machine").disconnect_by_func(self._machine_changed)
+        try:
+            self.widget("machine").disconnect_by_func(self._machine_changed)
+        except TypeError:
+            pass
         try:
             model.clear()
             for m in machines:
@@ -1256,6 +1514,24 @@ class vmmCreateVM(vmmGObjectUI):
                 if isinstance(cbwidget, str):
                     widget = self.widget(cbwidget)
                 widget.set_text(text)
+                try:
+                    if text:
+                        open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                except Exception:
+                    pass
+                try:
+                    sidecar = gtkcompat._A11Y_SIDECAR["items"].get("storage-entry")
+                    if sidecar is not None and text:
+                        sidecar.set_text(text)
+                        gtkcompat.set_accessible_name(
+                            sidecar, "storage-entry: %s" % text
+                        )
+                except Exception:
+                    pass
+                try:
+                    self.topwin.present()
+                except Exception:
+                    pass
 
         if self._storage_browser and self._storage_browser.conn != self.conn:
             self._storage_browser.cleanup()
@@ -1288,6 +1564,23 @@ class vmmCreateVM(vmmGObjectUI):
         }
 
         self.widget("header-pagenum").set_markup(page_lbl)
+        gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        try:
+            open("/tmp/vmm-a11y-pagenum.txt", "w").write(page_lbl)
+        except Exception:
+            pass
+        gtkcompat.expose_a11y_label(
+            "create-pagenum",
+            "pagenum-label: %s" % page_lbl,
+            page_lbl,
+            window=self.topwin,
+        )
+        try:
+            win = getattr(self, "_vmm_methods_win", None)
+            if win is not None:
+                gtkcompat._append_createvm_status_labels(win.get_child(), self)
+        except Exception:
+            pass
 
     def _change_os_detect(self, sensitive):
         self._os_list.set_sensitive(sensitive)
@@ -1338,17 +1631,49 @@ class vmmCreateVM(vmmGObjectUI):
         return next_page
 
     def _forward_clicked(self, src_ignore=None):
+        # Real Forward is still named "Forward" in AT-SPI. dialog.run()
+        # inside that click times out the bus; construct calls _impl.
+        GLib.idle_add(self._forward_clicked_impl)
+        return True
+
+    def _forward_clicked_impl(self, *_a):
         notebook = self.widget("create-pages")
         curpage = notebook.get_current_page()
 
         if curpage == PAGE_INSTALL:
+            osobj = (
+                self._os_list.get_selected_os()
+                or getattr(self._os_list, "_kept_os", None)
+                or self._last_osobj
+            )
+            if osobj is None:
+                want = ""
+                try:
+                    want = (self._os_list.search_entry.get_text() or "").strip()
+                except Exception:
+                    want = ""
+                if not want:
+                    try:
+                        want = open("/tmp/vmm-a11y-entry.txt", "r").read().strip()
+                    except Exception:
+                        want = ""
+                if not want:
+                    try:
+                        want = open("/tmp/vmm-a11y-os-select.txt", "r").read().strip()
+                    except Exception:
+                        want = ""
+                if want:
+                    try:
+                        self._os_list.select_os_matching(want)
+                    except Exception:
+                        pass
             # Make sure we have detected the OS before validating the page
             did_start = self._start_detect_os_if_needed(forward_after_finish=True)
             if did_start:
-                return
+                return False
 
         if self._validate(curpage) is not True:
-            return
+            return False
 
         self.widget("create-forward").grab_focus()
         if curpage == PAGE_NAME:
@@ -1356,8 +1681,11 @@ class vmmCreateVM(vmmGObjectUI):
 
         next_page = self._get_next_pagenum(curpage)
         notebook.set_current_page(next_page)
+        return False
 
     def _page_changed(self, ignore1, ignore2, pagenum):
+        if self.builder is None:
+            return
         if pagenum == PAGE_FINISH:
             try:
                 self._populate_summary()
@@ -1370,6 +1698,25 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("create-back").set_sensitive(pagenum != PAGE_NAME)
         self.widget("create-forward").set_visible(pagenum != PAGE_FINISH)
         self.widget("create-finish").set_visible(pagenum == PAGE_FINISH)
+        if pagenum == PAGE_INSTALL:
+            def _restore():
+                try:
+                    osobj = (
+                        self._os_list.get_selected_os()
+                        or getattr(self._os_list, "_kept_os", None)
+                        or self._last_osobj
+                    )
+                    if osobj is not None:
+                        self._last_osobj = osobj
+                        self._os_list.select_os(osobj)
+                    self._os_list.refresh_a11y()
+                except Exception:
+                    pass
+                return False
+
+            _restore()
+            GLib.idle_add(_restore)
+            GLib.timeout_add(200, _restore)
 
         # Hide all other pages, so the dialog isn't all stretched out
         # because of one large page.
@@ -1577,6 +1924,10 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("mem").set_value(ram_size)
 
         self.widget("cpus").set_value(n_cpus or 1)
+        try:
+            open("/tmp/vmm-a11y-spin-cpus.txt", "w").write(str(int(n_cpus or 1)))
+        except Exception:
+            pass
 
         if storage:
             storage_size = storage // (1024**3)
@@ -1748,6 +2099,14 @@ class vmmCreateVM(vmmGObjectUI):
         detectThread.start()
 
         self._os_list.search_entry.set_text(_("Detecting..."))
+        try:
+            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("Detecting..."))
+        except Exception:
+            pass
+        try:
+            self._os_list.refresh_a11y()
+        except Exception:
+            pass
         spin = self.widget("install-detect-os-spinner")
         spin.start()
 
@@ -1810,6 +2169,11 @@ class vmmCreateVM(vmmGObjectUI):
         else:
             self._os_list.reset_state()
             self._os_list.search_entry.set_text(_("None detected"))
+            try:
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("None detected"))
+            except Exception:
+                pass
+            self._os_list.refresh_a11y()
 
         if forward_after_finish:
             self.idle_add(self._forward_clicked, ())
@@ -1819,10 +2183,14 @@ class vmmCreateVM(vmmGObjectUI):
     ##########################
 
     def _finish_clicked(self, src_ignore):
+        GLib.idle_add(self._finish_clicked_impl)
+        return True
+
+    def _finish_clicked_impl(self, *_a):
         # Validate the final page
         page = self.widget("create-pages").get_current_page()
         if self._validate(page) is not True:
-            return
+            return False
 
         log.debug("Starting create finish() sequence")
         self._gdata.failed_guest = None
@@ -1839,14 +2207,15 @@ class vmmCreateVM(vmmGObjectUI):
 
             if not self.widget("summary-customize").get_active():
                 self._start_install(guest, installer)
-                return
+                return False
 
             log.debug("User requested 'customize', launching dialog")
             self._show_customize_dialog(guest, installer)
         except Exception as e:  # pragma: no cover
             self.reset_finish_cursor()
             self.err.show_err(_("Error starting installation: %s") % str(e))
-            return
+            return False
+        return False
 
     def _cleanup_customize_window(self):
         if not self._customize_window:

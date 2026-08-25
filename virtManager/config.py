@@ -17,22 +17,40 @@ from .lib.inspection import vmmInspection
 CSSDATA = """
 /* Lighter colored text in some wizard summary fields */
 .vmm-lighter {
-    color: @insensitive_fg_color
+    color: @insensitive_fg_color;
 }
 
 /* Text on the blue header in our wizards */
 .vmm-header-text {
-    color: white
+    color: white;
 }
 
 /* Subtext on the blue header in our wizards */
 .vmm-header-subtext {
-    color: #59B0E2
+    color: #59B0E2;
 }
 
 /* The blue header */
 .vmm-header {
-    background-color: #0072A8
+    background-color: #0072A8;
+}
+
+/* Parked menubar submenus stay in the AT-SPI tree but are not shown */
+.vmm-submenu {
+    opacity: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Visually hide labels that exist only so AT-SPI sees GTK 3 button names */
+.vmm-sr-only {
+    min-width: 1px;
+    min-height: 1px;
+    padding: 0;
+    margin: 0;
+    font-size: 0;
+    opacity: 0;
 }
 """
 
@@ -184,19 +202,17 @@ class vmmConfig:
     def _init_css(self):
         from gi.repository import Gdk
 
-        screen = Gdk.Screen.get_default()
+        display = Gdk.Display.get_default()
 
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(CSSDATA.encode("utf-8"))
 
-        context = Gtk.StyleContext()
-        context.add_provider_for_screen(screen, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+        Gtk.StyleContext.add_provider_for_display(
+            display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+        )
 
-        found, color = context.lookup_color("insensitive_fg_color")
-        if not found:  # pragma: no cover
-            log.debug("Didn't find insensitive_fg_color in theme")
-            return
-        self.color_insensitive = color.to_string()
+        # Adwaita does not expose theme colors via StyleContext.lookup_color
+        self.color_insensitive = "rgb(154,153,150)"
 
     # General app wide helpers (gsettings agnostic)
 

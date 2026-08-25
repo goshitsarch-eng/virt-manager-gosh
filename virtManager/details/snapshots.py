@@ -472,7 +472,7 @@ class vmmSnapshotPage(vmmGObjectUI):
         col.set_spacing(6)
 
         img = Gtk.CellRendererPixbuf()
-        img.set_property("stock-size", Gtk.IconSize.LARGE_TOOLBAR)
+        img.set_property("icon-size", Gtk.IconSize.LARGE)
         col.pack_start(img, False)
         col.add_attribute(img, "icon-name", 3)
 
@@ -482,7 +482,7 @@ class vmmSnapshotPage(vmmGObjectUI):
         col.add_attribute(txt, "markup", 1)
 
         img = Gtk.CellRendererPixbuf()
-        img.set_property("stock-size", Gtk.IconSize.MENU)
+        img.set_property("icon-size", Gtk.IconSize.NORMAL)
         img.set_property("icon-name", "emblem-default")
         img.set_property("xalign", 0.0)
         col.pack_start(img, False)

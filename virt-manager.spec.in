@@ -21,11 +21,13 @@ Source0: https://releases.pagure.org/%{name}/%{name}-%{version}.tar.xz
 
 Requires: virt-manager-common = %{verrel}
 Requires: python3-gobject >= 3.31.3
-Requires: gtk3 >= 3.22.0
+Requires: python3-cairo
+Requires: gtk4 >= 4.10.0
+Requires: libadwaita >= 1.5.0
 Requires: libvirt-glib >= 0.0.9
 Requires: gtk-vnc2
 %if %{have_spice}
-Requires: spice-gtk3
+Requires: spice-glib
 %endif
 
 # virt-manager is one of those apps that people will often install onto
@@ -47,9 +49,8 @@ Requires: dconf
 # no ambiguity.
 Requires: vte291
 
-# We can use GtkTextView, gtksourceview 3 or gtksourceview4, recommend
-# the latest one but don't make it a hard requirement
-Recommends: gtksourceview4
+# XML editor highlighting uses GtkSourceView 5 on GTK4
+Recommends: gtksourceview5
 
 # Weak dependencies for the common virt-manager usecase
 Recommends: (libvirt-daemon-kvm or libvirt-daemon-qemu)

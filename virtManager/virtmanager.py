@@ -10,10 +10,14 @@ import signal
 import sys
 import traceback
 
+# GTK 4 defaults to a11y backends that dogtail/AT-SPI cannot see.
+os.environ.setdefault("GTK_A11Y", "atspi")
+
 import gi
 
-gi.require_version("Gdk", "3.0")
-gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
 gi.require_version("LibvirtGLib", "1.0")
 from gi.repository import LibvirtGLib
 
@@ -55,17 +59,26 @@ def _import_gtk(leftovers):
     origargv = sys.argv
     try:
         sys.argv = origargv[:1] + leftovers[:]
+        from gi.repository import Adw
         from gi.repository import Gtk
 
         leftovers = sys.argv[1:]
+        from gi.repository import GLib
 
-        if Gtk.check_version(3, 22, 0):  # pragma: no cover
-            print("gtk3 3.22.0 or later is required.")
+        GLib.set_prgname("virt-manager")
+        GLib.set_application_name("virt-manager")
+
+        if Gtk.check_version(4, 10, 0):  # pragma: no cover
+            print("gtk4 4.10.0 or later is required.")
             sys.exit(1)
 
         # This will error if Gtk wasn't correctly initialized
-        Gtk.init()
+        Adw.init()
+        from .lib import gtkcompat
+
+        gtkcompat.install()
         globals()["Gtk"] = Gtk
+        globals()["Adw"] = Adw
 
         # This ensures we can init gsettings correctly
         from . import config
@@ -251,8 +264,11 @@ def main():
     config.vmmConfig.get_instance(BuildConfig, CLITestOptions)
 
     # Add our icon dir to icon theme
-    icon_theme = Gtk.IconTheme.get_default()
-    icon_theme.prepend_search_path(BuildConfig.icon_dir)
+    from gi.repository import Gdk
+
+    display = Gdk.Display.get_default()
+    icon_theme = Gtk.IconTheme.get_for_display(display)
+    icon_theme.add_search_path(BuildConfig.icon_dir)
 
     from .engine import vmmEngine
 

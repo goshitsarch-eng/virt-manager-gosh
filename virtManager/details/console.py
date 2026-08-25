@@ -171,14 +171,7 @@ class vmmOverlayToolbar:
         self.timed_revealer = _TimedRevealer(self._toolbar)
 
     def _on_send_key_button_clicked_cb(self, src):
-        event = Gtk.get_current_event()
-        win = self._toolbar.get_window()
-        rect = Gdk.Rectangle()
-
-        rect.y = win.get_height()
-        self._keycombo_menu.popup_at_rect(
-            win, rect, Gdk.Gravity.NORTH_WEST, Gdk.Gravity.NORTH_WEST, event
-        )
+        self._keycombo_menu.popup_at_widget(src)
 
     def cleanup(self):
         self._keycombo_menu.destroy()
@@ -579,6 +572,11 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_UNAVAILABLE)
         if msg:
             self.widget("console-unavailable").set_label("<b>" + msg + "</b>")
+            from virtManager.lib import gtkcompat
+
+            gtkcompat.expose_a11y_label(
+                "guest-status", msg, msg, window=self.topwin
+            )
         self._activate_gfx_unavailable_page(msg)
 
     def _activate_auth_page(self, withPassword, withUsername):

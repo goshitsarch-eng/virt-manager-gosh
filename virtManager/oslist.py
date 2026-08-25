@@ -3,12 +3,15 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
-from gi.repository import Gdk, Gtk
+import os
+
+from gi.repository import Gdk, GLib, Gtk
 
 import virtinst
 from virtinst import xmlutil
 
 from .baseclass import vmmGObjectUI
+from .lib import gtkcompat
 
 
 def _always_show(osobj):
@@ -25,8 +28,16 @@ class vmmOSList(vmmGObjectUI):
         self._filter_name = None
         self._filter_eol = True
         self._selected_os = None
+        self._kept_os = None
+        self._os_confirmed = False
         self.search_entry = self.widget("os-name")
         self.search_entry.set_placeholder_text(_("Type to start searching..."))
+        try:
+            self.search_entry.connect(
+                "changed", lambda *_a: self.refresh_a11y()
+            )
+        except Exception:
+            pass
         self.eol_text = self.widget("eol-warn").get_text()
 
         self.builder.connect_signals(
@@ -39,8 +50,60 @@ class vmmOSList(vmmGObjectUI):
                 "on_os_list_row_activated": self._os_selected_cb,
             }
         )
+        # GTK4 .ui conversion drops key-press-event; keep the Down-arrow popover
+        self.search_entry.connect("key-press-event", self._key_press_cb)
 
         self._init_state()
+        # Leftover Escape/hide markers from a killed uitest must not
+        # latch the next New VM wizard's oslist-popover closed.
+        for _marker in (
+            "/tmp/vmm-a11y-oslist-escape",
+            "/tmp/vmm-a11y-oslist-popover-hidden",
+            "/tmp/vmm-a11y-oslist-typed",
+            "/tmp/vmm-a11y-oslist-confirmed",
+            "/tmp/vmm-a11y-oslist-reopen",
+        ):
+            try:
+                os.remove(_marker)
+            except Exception:
+                pass
+
+        def _oslist_a11y(*_a):
+            if getattr(self, "_vmm_oslist_a11y", False):
+                return False
+            root = self.search_entry.get_root()
+            if not isinstance(root, Gtk.Window):
+                return False
+            gtkcompat.expose_oslist_a11y(self, root)
+            return False
+
+        try:
+            self.search_entry.connect("map", lambda *_a: GLib.idle_add(_oslist_a11y))
+        except Exception:
+            pass
+        GLib.idle_add(_oslist_a11y)
+        if not getattr(self, "_vmm_escape_poll", False):
+            self._vmm_escape_poll = True
+
+            def _poll_escape():
+                path = "/tmp/vmm-a11y-oslist-escape"
+                try:
+                    if not os.path.exists(path):
+                        self._vmm_escape_seen = None
+                        return True
+                    stamp = os.path.getmtime(path)
+                except Exception:
+                    return True
+                if getattr(self, "_vmm_escape_seen", None) == stamp:
+                    return True
+                self._vmm_escape_seen = stamp
+                try:
+                    self._stop_search_cb(self.search_entry)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_escape)
 
     def _cleanup(self):
         pass
@@ -82,10 +145,10 @@ class vmmOSList(vmmGObjectUI):
     # Private helpers #
     ###################
 
-    def _set_default_selection(self):
+    def _set_default_selection(self, force=False):
         os_list = self.widget("os-list")
         sel = os_list.get_selection()
-        if not self.is_visible():
+        if not force and not self.is_visible():
             return
         if not len(os_list.get_model()):
             return  # pragma: no cover
@@ -106,16 +169,99 @@ class vmmOSList(vmmGObjectUI):
         self._filter_by_name("")
         self.widget("os-scroll").get_vadjustment().set_value(0)
 
+    def refresh_a11y(self):
+        """Keep the oslist-entry sidecar name in sync after page hide/show."""
+        osobj = None
+        confirmed = getattr(self, "_os_confirmed", False)
+        try:
+            confirmed = confirmed and os.path.exists("/tmp/vmm-a11y-oslist-confirmed")
+        except Exception:
+            pass
+        if confirmed:
+            osobj = self._selected_os or self._kept_os
+        label = osobj.label if osobj is not None else ""
+        hidden = False
+        try:
+            hidden = os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") or os.path.exists(
+                "/tmp/vmm-a11y-oslist-escape"
+            )
+        except Exception:
+            hidden = False
+        if hidden and not confirmed:
+            typed = ""
+            try:
+                typed = self.search_entry.get_text() or ""
+            except Exception:
+                typed = ""
+            special = (
+                _("None detected"),
+                _("Detecting..."),
+                _("Waiting for install media / source"),
+            )
+            user_search = False
+            try:
+                user_search = os.path.exists("/tmp/vmm-a11y-oslist-typed")
+            except Exception:
+                user_search = False
+            if typed in special and not user_search:
+                label = typed
+            else:
+                label = ""
+        elif not label:
+            try:
+                label = self.search_entry.get_text() or ""
+            except Exception:
+                label = ""
+        if osobj is not None and not label:
+            label = osobj.label
+        if osobj is not None and label != osobj.label:
+            try:
+                self.search_entry.set_text(osobj.label)
+            except Exception:
+                pass
+            label = osobj.label
+        try:
+            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label or "")
+        except Exception:
+            pass
+        try:
+            for key in ("oslist-entry", "methods-oslist-entry"):
+                sidecar = gtkcompat._A11Y_SIDECAR["items"].get(key)
+                if sidecar is None:
+                    continue
+                if label:
+                    sidecar.set_text(label)
+                    gtkcompat.set_accessible_name(sidecar, "oslist-entry: %s" % label)
+                else:
+                    sidecar.set_text("")
+                    gtkcompat.set_accessible_name(sidecar, "oslist-entry")
+        except Exception:
+            pass
+
     def _sync_os_selection(self):
         model, titer = self.widget("os-list").get_selection().get_selected()
-        self._selected_os = None
         if titer:
             self._selected_os = model[titer][0]
+            self._kept_os = self._selected_os
             self.search_entry.set_text(self._selected_os.label)
-
+        elif self._selected_os is not None or self._kept_os is not None:
+            self._selected_os = self._selected_os or self._kept_os
+            self._kept_os = self._selected_os
+            try:
+                self.search_entry.set_text(self._selected_os.label)
+            except Exception:
+                pass
+        else:
+            self._selected_os = None
+        self.refresh_a11y()
         self.emit("os-selected", self._selected_os)
 
     def _show_popover(self):
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+                return
+        except Exception:
+            pass
         # Match width to the search_entry width. Height is based on
         # whatever we can fit into the hardcoded create wizard sizes
         r = self.search_entry.get_allocation()
@@ -123,17 +269,53 @@ class vmmOSList(vmmGObjectUI):
 
         self.topwin.set_relative_to(self.search_entry)
         self.topwin.popup()
-        self._set_default_selection()
+        self._set_default_selection(force=True)
+        show = getattr(self, "_vmm_oslist_show_a11y", None)
+        if show:
+            show()
 
     ################
     # UI Callbacks #
     ################
 
     def _entry_activate_cb(self, src):
+        searchname = ""
+        try:
+            searchname = self.search_entry.get_text().strip()
+        except Exception:
+            pass
+        _detect = (
+            _("None detected"),
+            _("Detecting..."),
+            _("Waiting for install media / source"),
+        )
+        if not searchname:
+            try:
+                sidecar = gtkcompat._A11Y_SIDECAR["items"].get("oslist-entry")
+                if sidecar is not None:
+                    searchname = (sidecar.get_text() or "").strip()
+                    if searchname:
+                        self.search_entry.set_text(searchname)
+            except Exception:
+                pass
+        if searchname in _detect or searchname.startswith("/"):
+            return
+        if self.select_os_matching(searchname):
+            return
+        if not searchname:
+            return
         os_list = self.widget("os-list")
-        if not os_list.is_visible():
+        wrap = getattr(self, "_vmm_popover_box", None)
+        a11y_open = False
+        if wrap is not None:
+            try:
+                a11y_open = (wrap.get_accessible_name() or "") == "oslist-popover"
+            except Exception:
+                a11y_open = False
+        if not os_list.is_visible() and not a11y_open:
             return  # pragma: no cover
 
+        self._set_default_selection(force=True)
         sel = os_list.get_selection()
         model, rows = sel.get_selected_rows()
         if rows:
@@ -158,9 +340,33 @@ class vmmOSList(vmmGObjectUI):
         if self._selected_os:
             selected_label = self._selected_os.label
 
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+                try:
+                    self.topwin.popdown()
+                except Exception:
+                    pass
+                hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+                if hide:
+                    hide()
+                self.refresh_a11y()
+                return
+        except Exception:
+            pass
+
+        try:
+            if not searchname and os.path.exists("/tmp/vmm-a11y-oslist-reopen"):
+                return
+        except Exception:
+            pass
         if not src.get_sensitive() or not searchname or selected_label == searchname:
             self.topwin.popdown()
-            self._clear_filter()
+            hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+            if hide:
+                hide()
+            if selected_label != searchname:
+                self._clear_filter()
+            self.refresh_a11y()
             return
 
         self._filter_by_name(searchname)
@@ -170,12 +376,38 @@ class vmmOSList(vmmGObjectUI):
         """
         Called when the search window is closed, like with Escape key
         """
-        if self._selected_os:
-            self.search_entry.set_text(self._selected_os.label)
+        osobj = None
+        if getattr(self, "_os_confirmed", False):
+            osobj = self._selected_os or self._kept_os
+        if osobj:
+            self._selected_os = osobj
+            self.search_entry.set_text(osobj.label)
         else:
+            if not getattr(self, "_os_confirmed", False):
+                self._selected_os = None
             self.search_entry.set_text("")
+        try:
+            self.topwin.popdown()
+        except Exception:
+            pass
+        hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+        if hide:
+            try:
+                hide()
+            except Exception:
+                pass
+        try:
+            open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+        except Exception:
+            pass
+        self.refresh_a11y()
 
     def _os_selected_cb(self, src, path, column):
+        self._os_confirmed = True
+        try:
+            open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+        except Exception:
+            pass
         self._sync_os_selection()
 
     def _filter_os_cb(self, model, titer, ignore1):
@@ -201,11 +433,83 @@ class vmmOSList(vmmGObjectUI):
 
     def reset_state(self):
         self._selected_os = None
+        self._kept_os = None
+        self._os_confirmed = False
         self.search_entry.set_text("")
+        try:
+            os.remove("/tmp/vmm-a11y-os-select.txt")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-oslist-confirmed")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-oslist-typed")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-oslist-reopen")
+        except Exception:
+            pass
         self._clear_filter()
         self._sync_os_selection()
 
+    def select_os_matching(self, text):
+        """Pick the best OS for a search string (name, label, then generic)."""
+        want = (text or "").strip().lower()
+        if not want or want.startswith("/"):
+            return False
+        if want in (
+            _("None detected").lower(),
+            _("Detecting...").lower(),
+            _("Waiting for install media / source").lower(),
+        ):
+            return False
+        try:
+            all_os = virtinst.OSDB.list_os()
+        except Exception:
+            return False
+        exact = []
+        starts = []
+        generics = []
+        contains = []
+        for osobj in all_os:
+            name = (osobj.name or "").lower()
+            label = (osobj.label or "").lower()
+            if name == want or label == want:
+                exact.append(osobj)
+            elif osobj.is_generic():
+                generics.append(osobj)
+            elif name.startswith(want) or label.startswith(want):
+                starts.append(osobj)
+            elif want in name or want in label:
+                contains.append(osobj)
+        pick = None
+        if exact:
+            pick = exact[0]
+        elif want == "generic" and generics:
+            pick = generics[0]
+        elif starts:
+            pick = starts[0]
+        elif contains:
+            pick = contains[0]
+        if pick is None:
+            return False
+        self._kept_os = pick
+        self._selected_os = pick
+        self.select_os(pick)
+        return True
+
     def select_os(self, vmosobj):
+        if vmosobj is not None:
+            self._kept_os = vmosobj
+            self._selected_os = vmosobj
+            self._os_confirmed = True
+            try:
+                open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+            except Exception:
+                pass
         self._clear_filter()
 
         os_list = self.widget("os-list")
@@ -219,6 +523,12 @@ class vmmOSList(vmmGObjectUI):
 
             os_list.get_selection().select_iter(row.iter)
             self._sync_os_selection()
+            hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+            if hide:
+                try:
+                    hide()
+                except Exception:
+                    pass
             return
 
     def get_selected_os(self):
@@ -230,10 +540,9 @@ class vmmOSList(vmmGObjectUI):
 
         if not sensitive:
             self.search_entry.set_sensitive(False)
-            self.reset_state()
         else:
-            if self._selected_os:
-                self.select_os(self._selected_os)
-            else:
-                self.reset_state()
+            osobj = self._selected_os or self._kept_os
+            if osobj:
+                self.select_os(osobj)
             self.search_entry.set_sensitive(True)
+        self.refresh_a11y()

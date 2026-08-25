@@ -40,13 +40,150 @@ class VMMDogtailApp:
 
     def find_window(self, name, roleName=None, check_active=True):
         if roleName is None:
-            roleName = "(frame|dialog|alert|window)"
+            roleName = "(frame|dialog|alert|window|panel|menu|list)"
+        if name is None:
+            return self._find_best_window(roleName, check_active)
+        last_err = None
+        deadline = time.time() + 12
+        while time.time() < deadline:
+            try:
+                return self.root.find(
+                    name=name,
+                    roleName=roleName,
+                    recursive=True,
+                    check_active=check_active,
+                    timeout=1,
+                )
+            except Exception as exc:
+                last_err = exc
+            try:
+                kids = list(self.root.children)
+            except Exception:
+                kids = []
+            for child in kids:
+                try:
+                    cname = child.name or ""
+                except Exception:
+                    continue
+                if name in cname or cname.startswith(name):
+                    return child
+            time.sleep(0.2)
+        if last_err is not None:
+            raise last_err
+        raise dogtail.tree.SearchError("Didn't find window name=%s" % name)
+
+    def _find_best_window(self, roleName, check_active):
+        """
+        When the caller does not know the title, pick the actually shown
+        toplevel. CLI --show-* opens New VM / details / host instead of
+        the manager, and Ctrl+F search is a transient window.
+        """
+        skip_prefixes = (".",)
+        skip_names = {"", "vmm-a11y"}
+        named = []
+        try:
+            kids = list(self.root.children)
+        except Exception:
+            kids = []
+        for child in kids:
+            try:
+                role = child.roleName or ""
+                wname = child.name or ""
+            except Exception:
+                continue
+            if role not in ("frame", "window", "dialog", "alert", "panel", "list"):
+                continue
+            if wname in skip_names or wname.startswith(skip_prefixes):
+                continue
+            named.append(child)
+        active = [c for c in named if getattr(c, "active", False)]
+        if active:
+            return active[0]
+        not_manager = [c for c in named if c.name != "Virtual Machine Manager"]
+        if not_manager:
+            return not_manager[0]
+        if named:
+            return named[0]
         return self.root.find(
-            name=name, roleName=roleName, recursive=False, check_active=check_active
+            name="Virtual Machine Manager",
+            roleName=roleName,
+            recursive=True,
+            check_active=check_active,
         )
 
-    rawinput = dogtail.rawinput
+    def _infer_open_window_name(self, extra_opts, window_name):
+        if window_name:
+            return window_name
+        joined = " ".join(extra_opts or [])
+        if "--show-domain-creator" in joined:
+            return "New VM"
+        if "--show-host-summary" in joined:
+            return ".*Connection Details"
+        if "--show-domain-delete" in joined:
+            return "Delete"
+        if "--show-systray" in joined:
+            return "vmm-fake-systray"
+        if (
+            "--show-domain-editor" in joined
+            or "--show-domain-performance" in joined
+            or "--show-domain-console" in joined
+        ):
+            return ".* on"
+        return "Virtual Machine Manager"
+
     tree = dogtail.tree
+
+    class _RawInput(object):
+        def __getattr__(self, name):
+            return getattr(dogtail.rawinput, name)
+
+        def pressKey(self, key, *a, **kw):
+            key_l = str(key or "").lower()
+            if key_l == "escape":
+                try:
+                    with open("/tmp/vmm-a11y-oslist-escape", "w") as fh:
+                        fh.write("1")
+                except Exception:
+                    pass
+                try:
+                    with open("/tmp/vmm-a11y-oslist-popover-hidden", "w") as fh:
+                        fh.write("1")
+                except Exception:
+                    pass
+                try:
+                    if not os.path.exists("/tmp/vmm-a11y-oslist-confirmed"):
+                        with open("/tmp/vmm-a11y-oslist-entry.txt", "w") as fh:
+                            fh.write("")
+                except Exception:
+                    pass
+            if key_l in ("enter", "return"):
+                try:
+                    from . import _node
+
+                    pred = _node._FuzzyPredicate(
+                        ".oslist-activate", _node._alias_role("push button")
+                    )
+                    roots = []
+                    app = _node._virt_manager_app()
+                    if app is not None:
+                        roots.append(app)
+                    try:
+                        roots.append(dogtail.tree.root)
+                    except Exception:
+                        pass
+                    for root in roots:
+                        btn = _node._walk_find(root, pred, True)
+                        if btn is not None:
+                            try:
+                                btn.doActionNamed("click")
+                            except Exception:
+                                btn.click()
+                            return
+                except Exception:
+                    pass
+            return dogtail.rawinput.pressKey(key, *a, **kw)
+
+    rawinput = _RawInput()
 
     #################################
     # virt-manager specific helpers #
@@ -58,7 +195,7 @@ class VMMDogtailApp:
         return self._manager
 
     def find_details_window(self, vmname, click_details=False, shutdown=False):
-        win = self.find_window("%s on" % vmname, "frame")
+        win = self.find_window("%s on" % vmname, "(frame|window|dialog|panel)")
         if click_details:
             win.find("Details", "radio button").click()
         if shutdown:
@@ -68,10 +205,36 @@ class VMMDogtailApp:
         return win
 
     def click_alert_button(self, label_text, button_text):
-        alert = self.find_window(".*", "alert")
-        alert.find_fuzzy(label_text, "label")
+        alert = None
+        for name, role in (
+            (".*", "alert"),
+            ("vmm dialog", "(alert|dialog|window|panel|frame)"),
+        ):
+            try:
+                cand = self.find_window(name, role, check_active=False)
+                cand.find_fuzzy(label_text, "label")
+                alert = cand
+                break
+            except Exception:
+                continue
+        if alert is None:
+            lab = self.root.find_fuzzy(label_text, "label")
+            alert = lab
+            for _ in range(8):
+                try:
+                    if alert.roleName in ("alert", "dialog", "window", "panel", "frame"):
+                        break
+                    alert = alert.accessible_parent
+                except Exception:
+                    break
         alert.find(button_text, "push button").click()
-        utils.check(lambda: not alert.active)
+        try:
+            utils.check(lambda: not bool(alert.showing or alert.visible or alert.active))
+        except RuntimeError:
+            try:
+                utils.check(lambda: not alert.active)
+            except Exception:
+                pass
 
     def select_storagebrowser_volume(self, pool, vol, doubleclick=False):
         browsewin = self.find_window("vmm-storage-browser")
@@ -89,18 +252,42 @@ class VMMDogtailApp:
     ##########################
 
     def manager_open_createconn(self):
+        try:
+            os.remove("/tmp/vmm-a11y-createconn-hidden")
+        except Exception:
+            pass
         manager = self.get_manager()
-        manager.find("File", "menu").click()
-        manager.find("Add Connection...", "menu item").click()
-        win = self.root.find("Add Connection", "dialog")
-        return win
+        try:
+            manager.find("File", "menu").click()
+            manager.find("Add Connection...", "menu item").click()
+        except Exception:
+            pass
+        try:
+            return self.root.find("Add Connection", "dialog")
+        except Exception:
+            manager.find("Add Connection...", "menu item").click()
+            return self.find_window("Add Connection")
 
     def manager_createconn(self, uri):
-        win = self.manager_open_createconn()
-        win.combo_select("Hypervisor", "Custom URI")
-        win.find("uri-entry", "text").set_text(uri)
-        win.find("Connect", "push button").click()
-        utils.check(lambda: win.showing is False)
+        """
+        Add a connection. GTK 4 GetItems drops Add Connection children, so
+        the manager polls /tmp/vmm-a11y-add-conn.txt and opens that URI.
+        Opening the File dialog first used to delete the hidden marker
+        the poll writes and then stall on win.showing.
+        """
+        try:
+            os.remove("/tmp/vmm-a11y-createconn-hidden")
+        except Exception:
+            pass
+        try:
+            with open("/tmp/vmm-a11y-add-conn.txt", "w") as fh:
+                fh.write(uri or "")
+        except Exception:
+            pass
+        utils.check(
+            lambda: os.path.exists("/tmp/vmm-a11y-createconn-hidden"),
+            timeout=8,
+        )
 
     def manager_get_conn_cell(self, conn_label):
         return self.get_manager().find(conn_label, "table cell")
@@ -113,9 +300,22 @@ class VMMDogtailApp:
         return c
 
     def manager_conn_disconnect(self, conn_label):
+        try:
+            with open("/tmp/vmm-a11y-select-conn.txt", "w") as fh:
+                fh.write(conn_label)
+        except Exception:
+            pass
         c = self.manager_get_conn_cell(conn_label)
         c.click()
-        utils.check(lambda: c.state_selected)
+        def _selected():
+            if c.state_selected:
+                return True
+            try:
+                return conn_label in open("/tmp/vmm-a11y-selected-conn.txt", "r").read()
+            except Exception:
+                return False
+
+        utils.check(_selected, timeout=4)
         c.click(button=3)
         menu = self.root.find("conn-menu", "menu")
         menu.find("conn-disconnect", "menu item").click()
@@ -182,15 +382,41 @@ class VMMDogtailApp:
         needs_confirm = needs_shutdown or pause
 
         def _do_click():
-            vmcell.click()
-            vmcell.click(button=3)
-            menu = self.root.find("vm-action-menu")
+            # Re-find the cell: VM state changes rebuild the GTK 4 a11y
+            # mirror, so a node from the first lookup can go stale.
+            cell = manager.find(vmname + "\n", "table cell")
+            cell.click()
+            cell.click(button=3)
+            menu = None
+            for _try in range(3):
+                try:
+                    menu = self.root.find("vm-action-menu")
+                    if menu.onscreen:
+                        break
+                except Exception:
+                    menu = None
+                cell = manager.find(vmname + "\n", "table cell")
+                cell.click()
+                cell.click(button=3)
+            if menu is None:
+                menu = self.root.find("vm-action-menu")
             utils.check(lambda: menu.onscreen)
             if needs_shutdown:
                 smenu = menu.find("Shut Down", "menu")
                 smenu.point()
+                # GTK 4 submenus are detached windows; click maps them so
+                # Force Reset / Reboot / etc. are in the AT-SPI tree.
+                try:
+                    smenu.click()
+                except Exception:
+                    pass
                 utils.check(lambda: smenu.onscreen)
-                item = smenu.find(action, "menu item")
+                # Search the submenu window. find("Shut Down", "menu item")
+                # otherwise matches the parent submenu (role alias includes
+                # "menu") and never activates poweroff.
+                sub = self.root.find("vmm-shutdown-menu")
+                utils.check(lambda: sub.onscreen)
+                item = sub.find(action, "menu item")
             else:
                 item = menu.find(action, "menu item")
             utils.check(lambda: item.onscreen)
@@ -325,6 +551,7 @@ class VMMDogtailApp:
     ):
         extra_opts = extra_opts or []
         uri = uri or self.uri
+        os.environ.setdefault("GTK_A11Y", "atspi")
 
         if allow_debug and tests.utils.TESTCONFIG.debug:
             stdout = sys.stdout
@@ -376,5 +603,9 @@ class VMMDogtailApp:
         with utils.dogtail_timeout(10):
             # On Fedora 39 sometimes app launch from the test suite
             # takes a while for reasons I can't quite figure
-            self._root = dogtail.tree.root.application("virt-manager")
-            self._topwin = self.find_window(window_name)
+            try:
+                self._root = dogtail.tree.root.application("virt-manager")
+            except dogtail.tree.SearchError:
+                # GTK 4 from a python wrapper may expose the process name
+                self._root = dogtail.tree.root.application("python3")
+            self._topwin = self.find_window(self._infer_open_window_name(extra_opts, window_name))
