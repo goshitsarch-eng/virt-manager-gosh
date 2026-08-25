@@ -203,6 +203,7 @@ def set_accessible_name(widget, name):
         return
     widget.update_property([Gtk.AccessibleProperty.LABEL], [str(name)])
     widget.set_name(str(name))
+    widget._vmm_a11y_name = str(name)
 
 
 def _checked_tristate(active):
