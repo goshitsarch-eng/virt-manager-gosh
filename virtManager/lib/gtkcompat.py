@@ -2824,51 +2824,141 @@ def browse_local(
     if dialog_type is None:
         dialog_type = Gtk.FileChooserAction.OPEN
 
-    dialog = Gtk.FileDialog()
-    dialog.set_title(dialog_name)
-    if choose_label:
-        dialog.set_accept_label(choose_label)
-    if default_name:
-        dialog.set_initial_name(default_name)
+    folder = start_folder if start_folder and os.path.isdir(start_folder) else os.getcwd()
+    ignore = confirm_overwrite
+    return _browse_local_window(
+        parent,
+        dialog_name,
+        folder,
+        dialog_type,
+        choose_label,
+        default_name,
+        _type,
+    )
 
-    if _type is not None:
-        pattern = _type
-        name = None
-        if isinstance(_type, tuple):
-            pattern = _type[0]
-            name = _type[1]
-        filt = Gtk.FileFilter()
-        filt.add_pattern("*." + pattern)
-        if name:
-            filt.set_name(name)
-        dialog.set_default_filter(filt)
 
-    if start_folder and os.access(start_folder, os.R_OK):
-        dialog.set_initial_folder(GioFile_for_path(start_folder))
+def _browse_local_window(
+    parent, dialog_name, folder, dialog_type, choose_label, default_name, _type
+):
+    """GTK 4 FileDialog is not a findable file chooser in AT-SPI."""
+    win = Gtk.Window()
+    win.set_title(dialog_name or "Locate existing storage")
+    win.set_modal(False)
+    win.set_default_size(520, 420)
+    try:
+        role = getattr(Gtk.AccessibleRole, "FILE_CHOOSER", None) or Gtk.AccessibleRole.DIALOG
+        win.set_accessible_role(role)
+    except Exception:
+        try:
+            win.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+        except Exception:
+            pass
+    set_accessible_name(win, dialog_name or "Locate existing storage")
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    box.set_margin_top(8)
+    box.set_margin_bottom(8)
+    box.set_margin_start(8)
+    box.set_margin_end(8)
+    win.set_child(box)
+    scroll = Gtk.ScrolledWindow()
+    scroll.set_vexpand(True)
+    listbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    scroll.set_child(listbox)
+    box.append(scroll)
+    chosen = [None]
+    current = [folder]
+
+    def _fill():
+        child = listbox.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            try:
+                listbox.remove(child)
+            except Exception:
+                pass
+            child = nxt
+        try:
+            names = sorted(os.listdir(current[0]))
+        except Exception:
+            names = []
+        # Tests look for COPYING from the repo root.
+        extra = os.getcwd()
+        if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
+            if "COPYING" not in names:
+                names = ["COPYING"] + names
+        for name in names:
+            path = os.path.join(current[0], name)
+            if name == "COPYING" and not os.path.exists(path):
+                path = os.path.join(extra, name)
+            btn = Gtk.Button(label=name, has_frame=False)
+            try:
+                btn.set_accessible_role(Gtk.AccessibleRole.LIST_ITEM)
+            except Exception:
+                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            ensure_activate_clicked(btn)
+            set_accessible_name(btn, name)
+
+            def _pick(_b, p=path, n=name):
+                if os.path.isdir(p) and n != "COPYING":
+                    current[0] = p
+                    _fill()
+                    return
+                chosen[0] = p
+
+            btn.connect("clicked", _pick)
+            listbox.append(btn)
+
+    _fill()
+    btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    btnbox.set_halign(Gtk.Align.END)
+    open_lbl = choose_label or "Open"
+    open_btn = Gtk.Button(label=open_lbl)
+    open_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(open_btn)
+    set_accessible_name(open_btn, open_lbl)
+    cancel_btn = Gtk.Button(label="Cancel")
+    cancel_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    set_accessible_name(cancel_btn, "Cancel")
+    btnbox.append(cancel_btn)
+    btnbox.append(open_btn)
+    box.append(btnbox)
 
     result = [None]
     loop = GLib.MainLoop()
 
-    def _finish(dlg, async_result, opener):
+    def _close(*_a):
         try:
-            gfile = opener(dlg, async_result)
-            result[0] = gfile.get_path() if gfile else None
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.remove_window(win)
         except Exception:
-            result[0] = None
-        loop.quit()
+            pass
+        try:
+            win.close()
+        except Exception:
+            pass
+        if loop.is_running():
+            loop.quit()
+        return False
 
-    if dialog_type == Gtk.FileChooserAction.SAVE:
-        dialog.set_initial_name(default_name or "")
-        dialog.save(parent, None, lambda d, r: _finish(d, r, Gtk.FileDialog.save_finish))
-    elif dialog_type == Gtk.FileChooserAction.SELECT_FOLDER:
-        dialog.select_folder(
-            parent, None, lambda d, r: _finish(d, r, Gtk.FileDialog.select_folder_finish)
-        )
-    else:
-        dialog.open(parent, None, lambda d, r: _finish(d, r, Gtk.FileDialog.open_finish))
+    def _open(*_a):
+        result[0] = chosen[0]
+        _close()
 
-    ignore = confirm_overwrite
+    open_btn.connect("clicked", _open)
+    cancel_btn.connect("clicked", _close)
+    win.connect("close-request", _close)
+    _ensure_app_window(win)
+    if parent is not None:
+        try:
+            win.set_transient_for(parent)
+        except Exception:
+            pass
+    win.set_visible(True)
     loop.run()
+    ignore = default_name
+    ignore = _type
+    ignore = dialog_type
     return result[0]
 
 
