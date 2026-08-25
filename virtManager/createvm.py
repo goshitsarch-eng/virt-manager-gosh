@@ -430,34 +430,14 @@ class vmmCreateVM(vmmGObjectUI):
             self._vmm_url_poll = True
 
             def _poll_url():
-                path = "/tmp/vmm-a11y-url-entry.txt"
-                try:
-                    if os.path.exists(path):
-                        text = open(path, "r").read()
-                        stamp = os.path.getmtime(path)
-                        if getattr(self, "_vmm_url_entry_seen", None) != stamp:
-                            self._vmm_url_entry_seen = stamp
-                            src = self.widget("install-url-entry")
-                            if src is not None:
-                                src.set_text(text)
-                except Exception:
-                    pass
-                opt = "/tmp/vmm-a11y-urlopts-entry.txt"
-                try:
-                    if os.path.exists(opt):
-                        text = open(opt, "r").read()
-                        stamp = os.path.getmtime(opt)
-                        if getattr(self, "_vmm_urlopts_seen", None) != stamp:
-                            self._vmm_urlopts_seen = stamp
-                            self.widget("install-urlopts-entry").set_text(text)
-                except Exception:
-                    pass
+                self._sync_url_from_sentinels()
                 if os.path.exists("/tmp/vmm-a11y-url-activate"):
                     try:
                         os.remove("/tmp/vmm-a11y-url-activate")
                     except Exception:
                         pass
                     try:
+                        self._sync_url_from_sentinels()
                         self._url_activated(self.widget("install-url-entry"))
                     except Exception:
                         pass
@@ -486,6 +466,32 @@ class vmmCreateVM(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_nav)
+        try:
+            gtkcompat.register_a11y_click("Forward", self._forward_clicked_impl)
+            gtkcompat.register_a11y_click("Back", lambda: self._back_clicked(None))
+        except Exception:
+            pass
+
+    def _sync_url_from_sentinels(self):
+        """Keep install-url widgets aligned with uitest files after GetItems."""
+        try:
+            src = self.widget("install-url-entry")
+            path = "/tmp/vmm-a11y-url-entry.txt"
+            if src is not None and os.path.exists(path):
+                text = open(path, "r").read()
+                if (src.get_text() or "") != text:
+                    src.set_text(text)
+        except Exception:
+            pass
+        try:
+            opt = self.widget("install-urlopts-entry")
+            path = "/tmp/vmm-a11y-urlopts-entry.txt"
+            if opt is not None and os.path.exists(path):
+                text = open(path, "r").read()
+                if (opt.get_text() or "") != text:
+                    opt.set_text(text)
+        except Exception:
+            pass
 
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
@@ -1872,6 +1878,10 @@ class vmmCreateVM(vmmGObjectUI):
     def _forward_clicked_impl(self, *_a):
         notebook = self.widget("create-pages")
         curpage = notebook.get_current_page()
+        try:
+            self._sync_url_from_sentinels()
+        except Exception:
+            pass
 
         if curpage == PAGE_INSTALL:
             osobj = (
