@@ -1363,6 +1363,7 @@ class _Accessible:
 
     def set_name(self, name):
         set_accessible_name(self._widget, name)
+        self._widget._vmm_menu_name = name
 
     def get_name(self):
         return self._widget.get_name()
@@ -1828,10 +1829,11 @@ class MenuItem(Gtk.Button):
             if menu.get_parent() is self:
                 menu.unparent()
             menu._parent_widget = self
-            parent_name = _mnemonic_label(self.get_label() or self.label or "")
-            if parent_name:
-                menu._vmm_menu_name = parent_name
-                set_accessible_name(menu, parent_name)
+            if not getattr(menu, "_vmm_menu_name", None):
+                parent_name = _mnemonic_label(self.get_label() or self.label or "")
+                if parent_name:
+                    menu._vmm_menu_name = parent_name
+                    set_accessible_name(menu, parent_name)
 
             def _map_menu():
                 menu._ensure_popover(self)
