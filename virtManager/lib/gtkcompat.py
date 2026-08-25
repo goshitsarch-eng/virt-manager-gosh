@@ -804,40 +804,41 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None):
 
 
 def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None):
-    """Mirror GtkSource/TextView XML so dogtail can read and edit it."""
+    """
+    Mirror XML in a Gtk.Entry. GTK 4 TextView AccessibleText does not
+    honor AT-SPI setTextContents, so dogtail set_text() was a no-op.
+    """
     box = parent if parent is not None else _a11y_sidecar_box(window)
     view = _A11Y_SIDECAR["items"].get(key)
     if view is None:
-        view = Gtk.TextView()
+        view = Gtk.Entry()
         try:
             view.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
         except Exception:
             pass
-        view.set_monospace(True)
-        view.set_wrap_mode(Gtk.WrapMode.NONE)
         box.append(view)
         _A11Y_SIDECAR["items"][key] = view
-        buf = view.get_buffer()
 
-        def _from_src(*_a, src=srcbuff, dst=buf, dstview=view, real=srcview):
-            if getattr(dstview, "_vmm_xml_syncing", False):
+        def _from_src(*_a, src=srcbuff, dst=view, real=srcview):
+            if getattr(dst, "_vmm_xml_syncing", False):
                 return False
-            dstview._vmm_xml_syncing = True
+            dst._vmm_xml_syncing = True
             try:
                 text = src.get_property("text") or ""
-                if dst.get_property("text") != text:
+                if dst.get_text() != text:
                     dst.set_text(text)
                 try:
-                    dstview.set_editable(bool(real.get_editable()))
+                    dst.set_editable(bool(real.get_editable()))
+                    dst.set_sensitive(True)
                 except Exception:
                     pass
             except Exception:
                 pass
-            dstview._vmm_xml_syncing = False
+            dst._vmm_xml_syncing = False
             return False
 
-        def _to_src(*_a, src=srcbuff, dst=buf, dstview=view, real=srcview):
-            if getattr(dstview, "_vmm_xml_syncing", False):
+        def _to_src(*_a, src=srcbuff, dst=view, real=srcview):
+            if getattr(dst, "_vmm_xml_syncing", False):
                 return
             try:
                 if not real.get_editable():
@@ -845,16 +846,16 @@ def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None
                     return
             except Exception:
                 pass
-            dstview._vmm_xml_syncing = True
+            dst._vmm_xml_syncing = True
             try:
-                text = dst.get_property("text") or ""
+                text = dst.get_text() or ""
                 if src.get_property("text") != text:
                     src.set_text(text)
             except Exception:
                 pass
-            dstview._vmm_xml_syncing = False
+            dst._vmm_xml_syncing = False
 
-        buf.connect("changed", _to_src)
+        view.connect("changed", _to_src)
         try:
             srcbuff.connect("changed", _from_src)
         except Exception:
@@ -862,10 +863,6 @@ def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None
         view._vmm_xml_from_src = _from_src
         _from_src()
     set_accessible_name(view, name)
-    try:
-        set_accessible_name(srcview, name)
-    except Exception:
-        pass
     view.set_visible(True)
     return view
 
