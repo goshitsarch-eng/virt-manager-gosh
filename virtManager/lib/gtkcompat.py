@@ -113,17 +113,18 @@ def attach_treeview_a11y(treeview, name_column=1):
     treeview._vmm_a11y_mirror = win
     treeview._vmm_a11y_box = box
 
-    def _select_handle(handle):
+    def _select_name(want):
         model = treeview.get_model()
         sel = treeview.get_selection()
-        if model is None or sel is None or handle is None:
+        if model is None or sel is None or not want:
             return
 
         def _find(parent):
             _iter = model.iter_children(parent) if parent else model.get_iter_first()
             while _iter is not None:
                 try:
-                    if model[_iter][0] == handle:
+                    have = _mnemonic_label(str(model[_iter][name_column] or ""))
+                    if have == want or model[_iter][0] == want:
                         sel.select_iter(_iter)
                         return True
                 except Exception:
@@ -154,16 +155,12 @@ def attach_treeview_a11y(treeview, name_column=1):
                 except Exception:
                     name = ""
                 name = _mnemonic_label(str(name or ""))
-                try:
-                    handle = model[_iter][0]
-                except Exception:
-                    handle = None
                 btn = Gtk.Button(label=name)
                 # Keep BUTTON so AT-SPI still has a click action. Uitests
                 # accept "button" as a table-cell alias.
                 btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
                 set_accessible_name(btn, name)
-                btn.connect("clicked", lambda _b, h=handle: _select_handle(h))
+                btn.connect("clicked", lambda _b, n=name: _select_name(n))
                 box.append(btn)
                 _walk(_iter)
                 _iter = model.iter_next(_iter)
@@ -185,7 +182,6 @@ def attach_treeview_a11y(treeview, name_column=1):
     if model is not None:
         model.connect("row-inserted", _on_model)
         model.connect("row-deleted", _on_model)
-        model.connect("row-changed", _on_model)
     def _attach_app(*_a):
         root = treeview.get_root()
         if root is not None:
