@@ -875,6 +875,90 @@ class _SentinelIncludeEol(object):
             pass
 
 
+class _SentinelNavButton(object):
+    """New VM Forward/Back/Finish after GetItems hides the methods window."""
+
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "push button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def check_sensitive(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+    def keyCombo(self, combo, *args, **kwargs):
+        self.click()
+
+
+class _SentinelPagenum(object):
+    name = "pagenum-label"
+    roleName = "label"
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-pagenum.txt", "r").read().strip()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelDetectOs(object):
+    name = "Automatically detect from the installation media / source"
+    roleName = "check box"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+
 def _sentinel_url_widgets(name, roleName):
     if not name:
         return None
@@ -891,6 +975,34 @@ def _sentinel_url_widgets(name, roleName):
         if role and "check" not in role and "button" not in role:
             return None
         return _SentinelIncludeEol()
+    return None
+
+
+def _sentinel_wizard_nav(name, roleName, root=None):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "").strip()
+    compact = raw.lower()
+    role = str(roleName or "").lower()
+    if compact in ("forward", "back", "finish"):
+        if role and "button" not in role:
+            return None
+        if compact == "finish":
+            root_name = ""
+            try:
+                root_name = str(getattr(root, "name", "") or "")
+            except Exception:
+                root_name = ""
+            if "new vm" not in root_name.lower():
+                return None
+        pretty = {"forward": "Forward", "back": "Back", "finish": "Finish"}[compact]
+        return _SentinelNavButton(pretty)
+    if "pagenum" in compact:
+        return _SentinelPagenum()
+    if "automatically detect" in compact:
+        if role and "check" not in role and "button" not in role:
+            return None
+        return _SentinelDetectOs()
     return None
 
 
@@ -2432,6 +2544,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_url_widgets(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_wizard_nav(name, roleName, self)
             if sent is not None:
                 return sent
         except Exception:

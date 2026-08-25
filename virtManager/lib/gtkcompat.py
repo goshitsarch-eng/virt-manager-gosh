@@ -1829,6 +1829,13 @@ def _append_detect_os_control(box, createvm):
     except Exception:
         pass
     try:
+        register_a11y_click(
+            "Automatically detect from the installation media / source", _toggle
+        )
+        register_a11y_click("Automatically detect", _toggle)
+    except Exception:
+        pass
+    try:
         detect.connect(
             "notify::active",
             lambda *_a, src=detect, dst=btn: _sync_checked_state(
