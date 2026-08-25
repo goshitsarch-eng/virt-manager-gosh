@@ -1097,7 +1097,22 @@ def expose_a11y_button(key, name, callback, window=None, role=None, parent=None)
         except Exception:
             btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
         ensure_activate_clicked(btn)
-        btn.connect("clicked", lambda b: b._vmm_cb() if getattr(b, "_vmm_cb", None) else None)
+        def _run(_b):
+            cb = getattr(_b, "_vmm_cb", None)
+            if cb is None:
+                return
+
+            def _idle():
+                try:
+                    cb()
+                except Exception:
+                    pass
+                return False
+
+            # Modal error dialogs must not run inside the AT-SPI click handler.
+            GLib.idle_add(_idle)
+
+        btn.connect("clicked", _run)
         box.append(btn)
         _A11Y_SIDECAR["items"][key] = btn
     btn._vmm_cb = callback
