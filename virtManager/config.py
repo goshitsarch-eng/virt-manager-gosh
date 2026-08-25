@@ -34,6 +34,14 @@ CSSDATA = """
 .vmm-header {
     background-color: #0072A8;
 }
+
+/* Parked menubar submenus stay in the AT-SPI tree but are not shown */
+.vmm-submenu {
+    opacity: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+}
 """
 
 

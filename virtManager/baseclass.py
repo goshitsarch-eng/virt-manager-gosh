@@ -57,6 +57,7 @@ class _VmmBuilder:
 
         for obj in self._builder.get_objects():
             gtkcompat.sync_builder_accessible(obj)
+            gtkcompat.attach_menubar_submenus(obj)
         return ret
 
     def get_object(self, name):
