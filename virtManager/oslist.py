@@ -501,6 +501,12 @@ class vmmOSList(vmmGObjectUI):
 
             os_list.get_selection().select_iter(row.iter)
             self._sync_os_selection()
+            hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+            if hide:
+                try:
+                    hide()
+                except Exception:
+                    pass
             return
 
     def get_selected_os(self):

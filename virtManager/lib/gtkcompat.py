@@ -962,6 +962,16 @@ def _oslist_show_popovers(oslist):
     except Exception:
         pass
     try:
+        selected = getattr(oslist, "_selected_os", None) or getattr(oslist, "_kept_os", None)
+        if (
+            getattr(oslist, "_os_confirmed", False)
+            and selected is not None
+            and (getattr(selected, "label", None) or "") == text
+        ):
+            return
+    except Exception:
+        pass
+    try:
         if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
             return
         os.remove("/tmp/vmm-a11y-oslist-popover-hidden")
