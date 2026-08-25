@@ -779,6 +779,14 @@ class MenuItem(Gtk.Button):
                 log.exception("menu activate failed")
             finally:
                 self._vmm_activate_queued = False
+                menu = getattr(self, "_vmm_menu", None)
+                while menu is not None:
+                    try:
+                        menu.popdown()
+                    except Exception:
+                        break
+                    parent = getattr(menu, "_parent_widget", None)
+                    menu = getattr(parent, "_vmm_menu", None) if parent else None
             return False
 
         GLib.idle_add(_activate)
@@ -940,6 +948,10 @@ class Menu(Gtk.Box):
         self._popover = None
         self._parent_widget = None
         self._opened = False
+        try:
+            self.update_state([Gtk.AccessibleState.HIDDEN], [True])
+        except Exception:
+            pass
 
     def add(self, item):
         self.insert(item, -1)
@@ -958,6 +970,7 @@ class Menu(Gtk.Box):
             self.insert_child_after(item, sibling.get_prev_sibling())
             self._items.insert(position, item)
         item.set_visible(True)
+        item._vmm_menu = self
 
     def remove(self, item):
         if item in self._items:
@@ -1025,7 +1038,21 @@ class Menu(Gtk.Box):
             return
         if not self._opened:
             self._popover.set_opacity(0)
+            self._set_menu_hidden(True)
         self._popover.set_visible(True)
+
+    def _set_menu_hidden(self, hidden):
+        try:
+            self.update_state([Gtk.AccessibleState.HIDDEN], [bool(hidden)])
+        except Exception:
+            pass
+        if self._popover is not None:
+            try:
+                self._popover.update_state(
+                    [Gtk.AccessibleState.HIDDEN], [bool(hidden)]
+                )
+            except Exception:
+                pass
 
     def popup(self, *_args, **_kwargs):
         parent = self._parent_widget
@@ -1033,6 +1060,7 @@ class Menu(Gtk.Box):
             return
         self._ensure_popover(parent)
         self._opened = True
+        self._set_menu_hidden(False)
         self._popover.set_opacity(1)
         self._ensure_mapped()
         try:
@@ -1042,6 +1070,7 @@ class Menu(Gtk.Box):
 
     def popdown(self, *_args, **_kwargs):
         self._opened = False
+        self._set_menu_hidden(True)
         if self._popover is not None:
             self._popover.set_opacity(0)
 

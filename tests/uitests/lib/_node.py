@@ -249,20 +249,20 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return t
         except Exception:
             pass
-        parts = []
-        if self.name:
-            parts.append(self.name)
-        try:
-            for child in self.children:
-                try:
-                    ct = child.queryText().getText(0, -1)
-                except Exception:
-                    ct = child.name
-                if ct:
-                    parts.append(ct)
-        except Exception:
-            pass
-        return "\n".join(parts)
+        # GTK 4 buttons/cells often have no Text iface. Use the name plus
+        # one child name (status) without extra AT-SPI queries.
+        if self.roleName in ("push button", "button", "table cell", "cell", "list item"):
+            parts = []
+            if self.name:
+                parts.append(self.name)
+            try:
+                child = self.children[0] if self.children else None
+                if child is not None and child.name and child.name != self.name:
+                    parts.append(child.name)
+            except Exception:
+                pass
+            return "\n".join(parts)
+        return None
 
     @text.setter
     def text(self, value):
@@ -275,6 +275,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # anywhere within the widget and clicks outside the screen bounds are
         # silently ignored.
         if self.roleName in ["frame", "window"]:
+            return True
+        # Closed GTK 4 menus stay mapped so items remain findable. Report
+        # onscreen from HIDDEN so tests can wait for popdown.
+        if self.roleName == "menu":
+            return not self.getState().contains(pyatspi.STATE_HIDDEN)
+        if self.is_menuitem() or self.roleName == "menu item":
             return True
         screen = Gdk.Screen.get_default()
         return (
