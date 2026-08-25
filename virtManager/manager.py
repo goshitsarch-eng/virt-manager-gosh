@@ -278,6 +278,18 @@ class vmmManager(vmmGObjectUI):
         self.toggle_memory_usage_visible_widget()
         self.toggle_disk_io_visible_widget()
         self.toggle_network_traffic_visible_widget()
+        for wid, name in (
+            ("menu_view_stats_guest_cpu", "Guest CPU Usage"),
+            ("menu_view_stats_host_cpu", "Host CPU Usage"),
+            ("menu_view_stats_memory", "Memory Usage"),
+            ("menu_view_stats_disk", "Disk I/O"),
+            ("menu_view_stats_network", "Network I/O"),
+        ):
+            src = self.widget(wid)
+            gtkcompat.set_accessible_name(src, name)
+            gtkcompat.expose_a11y_check(
+                "graph-" + wid, name, src, window=self.topwin
+            )
 
     def init_toolbar(self):
         self.widget("vm-new").set_icon_name("vm_new")

@@ -1816,6 +1816,10 @@ class MenuItem(Gtk.Button):
             if menu.get_parent() is self:
                 menu.unparent()
             menu._parent_widget = self
+            parent_name = _mnemonic_label(self.get_label() or self.label or "")
+            if parent_name:
+                menu._vmm_menu_name = parent_name
+                set_accessible_name(menu, parent_name)
 
             def _map_menu():
                 menu._ensure_popover(self)
@@ -2108,11 +2112,12 @@ class Menu(Gtk.Box):
             pass
 
     def popup(self, *_args, **_kwargs):
-        # Context menus (vm-action-menu, conn-menu) are not attached to a
-        # toolbar button, so they have no _parent_widget until first popup.
-        # Recreate the AT-SPI window each time: after popdown the cached
-        # name stays ".vm-action-menu" and Extra cannot find it again.
-        self._destroy_popover()
+        # Context menus have no parent until the first popup; recreate
+        # that AT-SPI window so Extra can find vm-action-menu again.
+        # Menubar submenus (Graph, File) keep their mapped popover so
+        # check items stay in the tree after View → Graph.
+        if self._parent_widget is None:
+            self._destroy_popover()
         self._opened = True
         self._ensure_popover(self._parent_widget)
         if self._popover is None:
