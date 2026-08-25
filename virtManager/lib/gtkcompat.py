@@ -38,14 +38,6 @@ def _mnemonic_label(text):
     return str(text).replace("_", "", 1)
 
 
-def attach_menubar_submenus(widget):
-    if widget is None or type(widget).__name__ not in ("MenuBar", "GtkMenuBar"):
-        return
-    for child in get_children(widget):
-        if hasattr(widget, "_attach_submenu"):
-            widget._attach_submenu(child)
-
-
 def sync_builder_accessible(widget):
     """
     GTK 4 often exposes tooltip text as the AT-SPI name for icon buttons.
@@ -488,9 +480,6 @@ class MenuItem(Gtk.Button):
             # every submenu label into this item's accessible name.
             if menu.get_parent() is self:
                 menu.unparent()
-            parent = self.get_parent()
-            if isinstance(parent, MenuBar):
-                parent._attach_submenu(self)
         self._sync_accessible_label()
 
     def get_submenu(self):
@@ -694,20 +683,6 @@ class MenuBar(Gtk.Box):
     def add(self, item):
         self.append(item)
         self._items.append(item)
-        self._attach_submenu(item)
-
-    def _attach_submenu(self, item):
-        # Keep submenu widgets in the menubar tree so AT-SPI/dogtail can
-        # find "About" / "Add Connection..." without relying on a popup.
-        submenu = item.get_submenu() if hasattr(item, "get_submenu") else None
-        if submenu is None:
-            return
-        if submenu.get_parent() is not None and submenu.get_parent() is not self:
-            submenu.unparent()
-        if submenu.get_parent() is None:
-            self.append(submenu)
-        submenu.set_visible(True)
-        show_all(submenu)
 
     def get_children(self):
         return get_children(self)
@@ -715,8 +690,6 @@ class MenuBar(Gtk.Box):
     def do_add(self, child):
         # Builder child packing
         self.append(child)
-        self._items.append(child)
-        self._attach_submenu(child)
 
 
 class Toolbar(Gtk.Box):

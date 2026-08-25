@@ -379,7 +379,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
             # GTK 4 dialogs often appear as new application-level frames.
             # Search the desktop when looking for a window-like role.
             role_str = str(roleName or "")
-            if any(r in role_str for r in ("dialog", "frame", "alert", "window")):
+            if any(
+                r in role_str
+                for r in ("dialog", "frame", "alert", "window", "menu item", "menu")
+            ):
                 try:
                     ret = dogtail.tree.root.findChild(pred, recursive=True)
                 except dogtail.tree.SearchError:
