@@ -399,6 +399,7 @@ class vmmManager(vmmGObjectUI):
             on_popup=self.popup_vm_menu_for_name,
             on_activate=self.activate_row_for_name,
         )
+        gtkcompat.set_toplevel_a11y_role(self.topwin)
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
         nameCol = Gtk.TreeViewColumn(_("Name"))

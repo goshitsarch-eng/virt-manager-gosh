@@ -1196,12 +1196,13 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     win.set_resizable(False)
     win.set_modal(False)
     win.set_focusable(False)
-    # GROUP is abstract and AT-SPI then reports a menu; dotted menus
-    # are skipped by the uitest walker, which hid every VM row.
+    # Do not use LIST here: AT-SPI then reports the transient parent
+    # manager window as a list, and find_window misses it. GENERIC
+    # keeps .a11y-tree walkable without changing the manager role.
     for role in (
-        Gtk.AccessibleRole.LIST,
         Gtk.AccessibleRole.GENERIC,
         Gtk.AccessibleRole.SECTION,
+        Gtk.AccessibleRole.GROUPING,
     ):
         try:
             win.set_accessible_role(role)
