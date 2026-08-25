@@ -1245,7 +1245,20 @@ def expose_conn_menu_window(manager):
             pass
 
     newbtn.connect("clicked", _new)
+    addconn = Gtk.Button(label="Add Connection...")
+    addconn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(addconn)
+    set_accessible_name(addconn, "Add Connection...")
+
+    def _addconn(*_a, mgr=manager):
+        try:
+            mgr.open_newconn(None)
+        except Exception:
+            pass
+
+    addconn.connect("clicked", _addconn)
     outer.append(newbtn)
+    outer.append(addconn)
     outer.append(host)
     manager._vmm_conn_menu_box = host
     return host
@@ -1266,6 +1279,88 @@ def hide_conn_menu_window(manager):
     except Exception:
         pass
     manager._vmm_conn_menu_win = None
+
+
+def expose_createconn_window(createconn):
+    """Findable Add Connection dialog after GetItems cache errors."""
+    if createconn is None:
+        return None
+    win = getattr(createconn, "_vmm_createconn_win", None)
+    if win is not None:
+        try:
+            _ensure_app_window(win)
+            set_accessible_name(win, "Add Connection")
+            try:
+                win.set_title("Add Connection")
+            except Exception:
+                pass
+            win.set_visible(True)
+            return win
+        except Exception:
+            createconn._vmm_createconn_win = None
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_modal(False)
+    win.set_default_size(360, 280)
+    try:
+        win.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+    except Exception:
+        pass
+    set_accessible_name(win, "Add Connection")
+    try:
+        win.set_title("Add Connection")
+    except Exception:
+        pass
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    win.set_child(box)
+    expose_a11y_combo(
+        "createconn-hypervisor",
+        "Hypervisor",
+        createconn.widget("hypervisor"),
+        parent=box,
+    )
+    expose_a11y_entry(
+        "createconn-uri",
+        "uri-entry",
+        createconn.widget("uri-entry"),
+        parent=box,
+    )
+    expose_a11y_button(
+        "createconn-connect",
+        "Connect",
+        lambda: createconn.open_conn(None),
+        parent=box,
+    )
+    _ensure_app_window(win)
+    win.set_visible(True)
+    createconn._vmm_createconn_win = win
+    return win
+
+
+def hide_createconn_window(createconn):
+    win = getattr(createconn, "_vmm_createconn_win", None) if createconn is not None else None
+    if win is None:
+        return
+    try:
+        set_accessible_name(win, "Add Connection (hidden)")
+        win.set_title("Add Connection (hidden)")
+    except Exception:
+        pass
+    try:
+        win.set_visible(False)
+    except Exception:
+        pass
+    try:
+        app = Gtk.Application.get_default()
+        if app is not None:
+            app.remove_window(win)
+    except Exception:
+        pass
+    try:
+        win.close()
+    except Exception:
+        pass
+    createconn._vmm_createconn_win = None
 
 
 def hide_createvm_methods_window(createvm):

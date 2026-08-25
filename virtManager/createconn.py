@@ -81,16 +81,34 @@ class vmmCreateConn(vmmGObjectUI):
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing open connection")
         self.topwin.hide()
+        from .lib import gtkcompat
+
+        gtkcompat.hide_createconn_window(self)
 
     def show(self, parent):
         log.debug("Showing open connection")
+        from .lib import gtkcompat
+
         if self.is_visible():
             self.topwin.present()
+            gtkcompat.expose_createconn_window(self)
             return
 
         self.reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.present()
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "Add Connection")
+            self.topwin.set_title("Add Connection")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
+        gtkcompat.expose_createconn_window(self)
 
     def _cleanup(self):
         pass
