@@ -12,8 +12,14 @@ from gi.repository import GObject
 
 import gi
 
-gi.require_version("GtkVnc", "2.0")
-from gi.repository import GtkVnc
+try:
+    gi.require_version("GtkVnc", "2.0")
+    from gi.repository import GtkVnc
+except (ValueError, ImportError) as _GTKVNC_IMPORT_ERROR:  # pragma: no cover
+    GtkVnc = None
+    GTKVNC_IMPORT_ERROR = str(_GTKVNC_IMPORT_ERROR)
+else:
+    GTKVNC_IMPORT_ERROR = None
 
 try:
     SPICE_GTK_IMPORT_ERROR = None
@@ -25,6 +31,8 @@ try:
     from gi.repository import SpiceClientGLib
 except (ValueError, ImportError) as _SPICE_GTK_IMPORT_ERROR:
     SPICE_GTK_IMPORT_ERROR = str(_SPICE_GTK_IMPORT_ERROR)
+    SpiceClientGtk = None
+    SpiceClientGLib = None
 
 from virtinst import log
 
@@ -40,6 +48,8 @@ _GTKVNC_SUPPORT_CACHE = {}
 
 
 def _gtkvnc_check_display_support(funcname):
+    if GtkVnc is None:
+        return False
     if funcname not in _GTKVNC_SUPPORT_CACHE:
         val = hasattr(GtkVnc.Display, funcname)
         log.debug("GtkVnc.Display %s support=%s", funcname, val)
@@ -116,7 +126,11 @@ class Viewer(vmmGObject):
         self._display.connect("size-allocate", self._make_signal_proxy("size-allocate"))
 
         self.emit("add-display-widget", self._display)
-        self._display.realize()
+        if hasattr(self._display, "realize"):
+            try:
+                self._display.realize()
+            except Exception:
+                pass
 
         self._connect_display_signals()
 
@@ -334,6 +348,10 @@ class VNCViewer(Viewer):
         self._display.connect("vnc-desktop-resize", self._desktop_resize_cb)
 
     def _init_display(self):
+        if GtkVnc is None:  # pragma: no cover
+            raise RuntimeError(
+                GTKVNC_IMPORT_ERROR or _("GTK-VNC is not available for this GTK version")
+            )
         display = GtkVnc.Display()
 
         display.set_pointer_grab(True)

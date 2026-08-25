@@ -42,10 +42,10 @@ GRAPH_LEN = 40
 
 
 def _style_get_prop(widget, propname):
-    value = GObject.Value()
-    value.init(GObject.TYPE_INT)
-    widget.style_get_property(propname, value)
-    return value.get_int()
+    ignore = widget
+    if propname == "expander-size":
+        return 16
+    return 0
 
 
 def _cmp(a, b):
@@ -272,9 +272,11 @@ class vmmManager(vmmGObjectUI):
         self.widget("vm-shutdown").set_menu(self.shutdownmenu)
 
         tool = self.widget("vm-toolbar")
-        tool.set_property("icon-size", Gtk.IconSize.LARGE_TOOLBAR)
-        for c in tool.get_children():
-            c.set_homogeneous(False)
+        from .lib import gtkcompat
+
+        for c in gtkcompat.get_children(tool):
+            if hasattr(c, "set_homogeneous"):
+                c.set_homogeneous(False)
 
     def init_context_menus(self):
         def add_to_menu(idx, text, cb):
@@ -327,7 +329,7 @@ class vmmManager(vmmGObjectUI):
         vmlist.append_column(nameCol)
 
         status_icon = Gtk.CellRendererPixbuf()
-        status_icon.set_property("stock-size", Gtk.IconSize.DND)
+        status_icon.set_property("icon-size", Gtk.IconSize.LARGE)
         nameCol.pack_start(status_icon, False)
         nameCol.add_attribute(status_icon, "icon-name", ROW_STATUS_ICON)
         nameCol.add_attribute(status_icon, "visible", ROW_IS_VM)
@@ -499,13 +501,15 @@ class vmmManager(vmmGObjectUI):
 
     def set_pause_state(self, state):
         src = self.widget("vm-pause")
+        self._pause_ignore = True
         try:
-            src.handler_block_by_func(self.pause_vm_button)
             src.set_active(state)
         finally:
-            src.handler_unblock_by_func(self.pause_vm_button)
+            self._pause_ignore = False
 
     def pause_vm_button(self, src):
+        if getattr(self, "_pause_ignore", False):
+            return
         do_pause = src.get_active()
 
         # Set button state back to original value: just let the status

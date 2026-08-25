@@ -7,6 +7,7 @@
 import queue
 import threading
 
+from gi.repository import Adw
 from gi.repository import Gio
 from gi.repository import GLib
 from gi.repository import Gtk
@@ -207,7 +208,9 @@ class vmmEngine(vmmGObject):
             self._application.add_window(Gtk.Window())
 
     def _init_gtk_application(self):
-        self._application = Gtk.Application(application_id="org.virt-manager.virt-manager", flags=0)
+        self._application = Adw.Application(
+            application_id="org.virt-manager.virt-manager", flags=Gio.ApplicationFlags.FLAGS_NONE
+        )
         self._application.register(None)
         self._application.connect("activate", self._on_gtk_application_activated)
 

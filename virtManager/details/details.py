@@ -563,7 +563,7 @@ class vmmDetails(vmmGObjectUI):
         hwCol.set_min_width(165)
         hw_txt = Gtk.CellRendererText()
         hw_img = Gtk.CellRendererPixbuf()
-        hw_img.set_property("stock-size", Gtk.IconSize.LARGE_TOOLBAR)
+        hw_img.set_property("icon-size", Gtk.IconSize.LARGE)
         hwCol.pack_start(hw_img, False)
         hwCol.pack_start(hw_txt, True)
         hwCol.add_attribute(hw_txt, "text", HW_LIST_COL_LABEL)

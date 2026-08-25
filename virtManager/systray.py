@@ -137,34 +137,36 @@ class _SystrayIndicator(_Systray):  # pragma: no cover
 
 class _SystrayStatusIcon(_Systray):  # pragma: no cover
     """
-    UI backend for Gtk StatusIcon
+    GTK4 no longer has Gtk.StatusIcon. Keep a hidden fallback window
+    so the tray menu and VM actions remain available when AppIndicator
+    cannot be used.
     """
 
     def __init__(self):
-        self._icon = Gtk.StatusIcon()
-        self._icon.set_property("icon-name", "virt-manager")
-        self._icon.connect("activate", _toggle_manager)
-        self._icon.connect("popup-menu", self._popup_cb)
-        self._icon.set_tooltip_text(_("Virtual Machine Manager"))
+        self._window = Gtk.Window()
+        self._window.set_title(_("Virtual Machine Manager"))
+        self._window.set_default_size(1, 1)
+        self._window.set_decorated(False)
+        button = Gtk.Button(icon_name="virt-manager")
+        button.set_tooltip_text(_("Virtual Machine Manager"))
+        button.connect("clicked", lambda *_a: _toggle_manager())
+        self._window.set_child(button)
         self._menu = None
+        self._visible = False
 
     def is_embedded(self):
-        return self._icon.is_embedded()
+        return self._visible
 
     def set_menu(self, menu):
         self._menu = menu
 
-    def _popup_cb(self, src, button, event_time):
-        if button != 3:
-            return
-
-        self._menu.popup(None, None, Gtk.StatusIcon.position_menu, self._icon, 0, event_time)
-
     def show(self):
-        self._icon.set_visible(True)
+        self._visible = True
+        self._window.set_visible(True)
 
     def hide(self):
-        self._icon.set_visible(False)
+        self._visible = False
+        self._window.set_visible(False)
 
 
 class _SystrayWindow(_Systray):
@@ -179,13 +181,18 @@ class _SystrayWindow(_Systray):
         self._init_ui()
 
     def _init_ui(self):
-        button = Gtk.Button.new_from_stock(Gtk.STOCK_ADD)
-        button.connect("button-press-event", self._popup_cb)
+        button = Gtk.Button(icon_name="list-add")
+        gesture = Gtk.GestureClick()
+        gesture.set_button(0)
+        gesture.connect("pressed", self._popup_cb)
+        button.add_controller(gesture)
 
         self._window = Gtk.Window()
         self._window.set_size_request(100, 100)
-        self._window.get_accessible().set_name("vmm-fake-systray")
-        self._window.add(button)
+        from .lib import gtkcompat
+
+        gtkcompat.set_accessible_name(self._window, "vmm-fake-systray")
+        self._window.set_child(button)
 
     def is_embedded(self):
         return self._window.is_visible()
@@ -193,14 +200,15 @@ class _SystrayWindow(_Systray):
     def set_menu(self, menu):
         self._menu = menu
 
-    def _popup_cb(self, src, event):
-        if event.button == 1:
+    def _popup_cb(self, gesture, _n, _x, _y):
+        button = gesture.get_current_button()
+        if button == 1:
             _toggle_manager()
-        else:
-            self._menu.popup_at_pointer(event)
+        elif self._menu:
+            self._menu.popup_at_widget(self._window)
 
     def show(self):
-        self._window.show_all()
+        self._window.set_visible(True)
 
     def hide(self):
         self._window.hide()

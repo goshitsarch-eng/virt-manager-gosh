@@ -8,15 +8,15 @@ import gi
 
 from virtinst import log
 
-# We can use either gtksourceview3 or gtksourceview4
+# GTK4 uses GtkSourceView 5
 have_gtksourceview = True
 try:
-    gi.require_version("GtkSource", "4")
-    log.debug("Using GtkSource 4")
+    gi.require_version("GtkSource", "5")
+    log.debug("Using GtkSource 5")
 except ValueError:  # pragma: no cover
     try:
-        gi.require_version("GtkSource", "3.0")
-        log.debug("Using GtkSource 3.0")
+        gi.require_version("GtkSource", "4")
+        log.debug("Using GtkSource 4")
     except ValueError:
         log.debug("Not using GtkSource")
         have_gtksourceview = False

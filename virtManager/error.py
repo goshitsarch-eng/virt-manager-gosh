@@ -13,6 +13,7 @@ from gi.repository import Gtk
 from virtinst import log
 
 from .baseclass import vmmGObject
+from .lib import gtkcompat
 
 
 def _launch_dialog(dialog, primary_text, secondary_text, title, widget=None, modal=True):
@@ -128,8 +129,9 @@ class vmmErrorDialog(vmmGObject):
     def _simple_dialog(self, dialog_type, buttons, text1, text2, title, widget=None, modal=True):
 
         dialog = Gtk.MessageDialog(
-            self.get_parent(),
-            flags=Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            transient_for=self.get_parent(),
+            modal=True,
+            destroy_with_parent=True,
             message_type=dialog_type,
             buttons=buttons,
         )
@@ -248,46 +250,16 @@ class vmmErrorDialog(vmmGObject):
         @_type: File extension to filter by (e.g. "iso", "png")
         @dialog_type: Maps to FileChooserDialog 'action'
         """
-        if dialog_type is None:
-            dialog_type = Gtk.FileChooserAction.OPEN
-
-        fcdialog = Gtk.FileChooserNative.new(
-            title=dialog_name,
-            parent=self.get_parent(),
-            action=dialog_type,
-            accept_label=choose_label,
+        return gtkcompat.browse_local(
+            self.get_parent(),
+            dialog_name,
+            start_folder=start_folder,
+            _type=_type,
+            dialog_type=dialog_type,
+            choose_label=choose_label,
+            default_name=default_name,
+            confirm_overwrite=confirm_overwrite,
         )
-
-        if default_name:
-            fcdialog.set_current_name(default_name)
-
-        fcdialog.set_do_overwrite_confirmation(confirm_overwrite)
-
-        # Set file match pattern (ex. *.png)
-        if _type is not None:
-            pattern = _type
-            name = None
-            if isinstance(_type, tuple):
-                pattern = _type[0]
-                name = _type[1]
-
-            f = Gtk.FileFilter()
-            f.add_pattern("*." + pattern)
-            if name:
-                f.set_name(name)
-            fcdialog.set_filter(f)
-
-        if start_folder is not None:
-            if os.access(start_folder, os.R_OK):
-                fcdialog.set_current_folder(start_folder)
-
-        # Run the dialog and parse the response
-        ret = None
-        if fcdialog.run() == Gtk.ResponseType.ACCEPT:
-            ret = fcdialog.get_filename()
-        fcdialog.destroy()
-
-        return ret
 
 
 class _errorDialog(Gtk.MessageDialog):
@@ -295,15 +267,26 @@ class _errorDialog(Gtk.MessageDialog):
     Custom error dialog with optional check boxes or details drop down
     """
 
-    def __init__(self, *args, **kwargs):
-        Gtk.MessageDialog.__init__(self, *args, **kwargs)
+    def __init__(self, parent=None, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.CLOSE):
+        ignore = flags
+        Gtk.MessageDialog.__init__(
+            self,
+            transient_for=parent,
+            modal=True,
+            destroy_with_parent=True,
+            message_type=message_type,
+            buttons=buttons,
+        )
 
         self.set_title("")
-        for child in self.get_message_area().get_children():
+        msg_area = self.get_message_area()
+        child = msg_area.get_first_child()
+        while child:
             if hasattr(child, "set_max_width_chars"):
                 child.set_max_width_chars(40)
+            child = child.get_next_sibling()
 
-        self.get_accessible().set_name("vmm dialog")
+        gtkcompat.set_accessible_name(self, "vmm dialog")
 
         self.chk_vbox = None
         self.init_chkbox()
@@ -314,18 +297,16 @@ class _errorDialog(Gtk.MessageDialog):
 
     def init_chkbox(self):
         # Init check items
-        self.chk_vbox = Gtk.VBox(False, False)
-        self.chk_vbox.set_spacing(0)
-
-        self.chk_vbox.show_all()
-        self.vbox.pack_start(self.chk_vbox, False, False, 0)  # pylint: disable=no-member
+        self.chk_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.chk_vbox.set_visible(True)
+        self.get_content_area().append(self.chk_vbox)
 
     def init_details(self):
         # Init details buffer
         self.buffer = Gtk.TextBuffer()
         self.buf_expander = Gtk.Expander.new(_("Details"))
         sw = Gtk.ScrolledWindow()
-        sw.set_shadow_type(Gtk.ShadowType.IN)
+        sw.set_has_frame(True)
         sw.set_size_request(400, 240)
         sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         details = Gtk.TextView.new_with_buffer(self.buffer)
@@ -333,11 +314,14 @@ class _errorDialog(Gtk.MessageDialog):
         details.set_overwrite(False)
         details.set_cursor_visible(False)
         details.set_wrap_mode(Gtk.WrapMode.WORD)
-        details.set_border_width(6)
-        sw.add(details)
-        self.buf_expander.add(sw)
-        self.vbox.pack_start(self.buf_expander, False, False, 0)  # pylint: disable=no-member
-        self.buf_expander.show_all()
+        details.set_margin_top(6)
+        details.set_margin_bottom(6)
+        details.set_margin_start(6)
+        details.set_margin_end(6)
+        sw.set_child(details)
+        self.buf_expander.set_child(sw)
+        self.get_content_area().append(self.buf_expander)
+        self.buf_expander.set_visible(True)
 
     def show_dialog(
         self, primary_text, secondary_text="", title="", details="", chktext="", modal=True

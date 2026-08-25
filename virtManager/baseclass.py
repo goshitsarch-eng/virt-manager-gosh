@@ -18,7 +18,47 @@ from gi.repository import Gtk
 from virtinst import log
 from virtinst import xmlutil
 
-from . import config
+class _VmmBuilderScope(GObject.GObject, Gtk.BuilderScope):
+    """
+    GTK4 Builder looks up signal handlers at parse time. Defer the
+    actual callback lookup until connect_signals() is invoked.
+    """
+
+    def __init__(self):
+        GObject.GObject.__init__(self)
+        self.handlers = {}
+
+    def do_create_closure(self, builder, func_name, flags, obj):
+        ignore = builder
+        ignore = flags
+        ignore = obj
+
+        def _cb(*args):
+            cb = self.handlers.get(func_name)
+            if cb is None:
+                return False
+            return cb(*args)
+
+        return _cb
+
+
+class _VmmBuilder:
+    def __init__(self):
+        self._scope = _VmmBuilderScope()
+        self._builder = Gtk.Builder()
+        self._builder.set_scope(self._scope)
+
+    def set_translation_domain(self, domain):
+        self._builder.set_translation_domain(domain)
+
+    def add_from_file(self, uifile):
+        return self._builder.add_from_file(uifile)
+
+    def get_object(self, name):
+        return self._builder.get_object(name)
+
+    def connect_signals(self, mapping):
+        self._scope.handlers.update(mapping)
 
 
 class vmmGObject(GObject.GObject):
@@ -308,13 +348,16 @@ class vmmGObjectUI(vmmGObject):
         if filename:
             uifile = os.path.join(self.config.get_ui_dir(), filename)
 
-            self.builder = Gtk.Builder()
+            self.builder = _VmmBuilder()
             self.builder.set_translation_domain("virt-manager")
             self.builder.add_from_file(uifile)
 
             if not topwin:
                 self.topwin = self.widget(windowname)
-                self.topwin.hide()
+                self.topwin.set_visible(False)
+                app = Gtk.Application.get_default()
+                if app and hasattr(self.topwin, "set_application"):
+                    self.topwin.set_application(app)
             else:
                 self.topwin = topwin
         else:
@@ -365,20 +408,23 @@ class vmmGObjectUI(vmmGObject):
         return bool(self.topwin and self.topwin.get_visible())
 
     def bind_escape_key_close(self):
-        def close_on_escape(src_ignore, event):
-            if Gdk.keyval_name(event.keyval) == "Escape":
+        def close_on_escape(_controller, keyval, _keycode, _state):
+            if Gdk.keyval_name(keyval) == "Escape":
                 self.close()
+            return False
 
-        self.topwin.connect("key-press-event", close_on_escape)
+        controller = Gtk.EventControllerKey()
+        controller.connect("key-pressed", close_on_escape)
+        self.topwin.add_controller(controller)
+
+    def destroy_topwin(self):
+        if self.topwin:
+            self.topwin.destroy()
 
     def _set_cursor(self, cursor_type):
-        gdk_window = self.topwin.get_window()
-        if not gdk_window:
-            return
-
         try:
-            cursor = Gdk.Cursor.new_from_name(gdk_window.get_display(), cursor_type)
-            gdk_window.set_cursor(cursor)
+            cursor = Gdk.Cursor.new_from_name(cursor_type)
+            self.topwin.set_cursor(cursor)
         except Exception:  # pragma: no cover
             # If a cursor icon theme isn't installed this can cause errors
             # https://bugzilla.redhat.com/show_bug.cgi?id=1516588
@@ -406,3 +452,7 @@ class vmmGObjectUI(vmmGObject):
                 return True
 
         connmanager.connect_opt_out("conn-removed", _cb)
+
+
+# Imported last to avoid a cycle: config -> inspection -> baseclass
+from . import config  # noqa: E402

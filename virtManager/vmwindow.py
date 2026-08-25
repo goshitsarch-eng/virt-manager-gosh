@@ -460,13 +460,15 @@ class vmmVMWindow(vmmGObjectUI):
 
     def set_pause_state(self, state):
         src = self.widget("control-pause")
+        self._pause_ignore = True
         try:
-            src.handler_block_by_func(self.control_vm_pause)
             src.set_active(state)
         finally:
-            src.handler_unblock_by_func(self.control_vm_pause)
+            self._pause_ignore = False
 
     def control_vm_pause(self, src):
+        if getattr(self, "_pause_ignore", False):
+            return
         do_pause = src.get_active()
 
         # Set button state back to original value: just let the status

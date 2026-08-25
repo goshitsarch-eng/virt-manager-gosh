@@ -335,13 +335,14 @@ class vmmPreferences(vmmGObjectUI):
 
     def change_grab_keys(self, src_ignore):
         dialog = Gtk.Dialog(
-            _("Configure grab key combination"),
-            self.topwin,
-            Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
-            (Gtk.STOCK_CANCEL, Gtk.ResponseType.REJECT, Gtk.STOCK_OK, Gtk.ResponseType.ACCEPT),
+            title=_("Configure grab key combination"),
+            transient_for=self.topwin,
+            modal=True,
+        )
+        dialog.add_buttons(
+            _("_Cancel"), Gtk.ResponseType.REJECT, _("_OK"), Gtk.ResponseType.ACCEPT
         )
         dialog.set_default_size(325, 160)
-        dialog.set_border_width(6)
 
         infolabel = Gtk.Label(
             label=_(
@@ -352,17 +353,18 @@ class vmmPreferences(vmmGObjectUI):
         )
         keylabel = Gtk.Label(label=_("Please press desired grab key combination"))
 
-        vbox = Gtk.VBox()
-        vbox.set_spacing(12)
-        vbox.pack_start(infolabel, False, False, 0)
-        vbox.pack_start(keylabel, False, False, 0)
-        dialog.get_content_area().add(vbox)
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        vbox.append(infolabel)
+        vbox.append(keylabel)
+        dialog.get_content_area().append(vbox)
 
         events = []
         dialog.connect("key-press-event", self.grabkeys_dlg_press, keylabel, events)
         dialog.connect("key-release-event", self.grabkeys_dlg_release, keylabel, events)
-        dialog.show_all()
-        result = dialog.run()
+        dialog.set_visible(True)
+        from .lib import gtkcompat
+
+        result = gtkcompat.run_dialog(dialog)
 
         if result == Gtk.ResponseType.ACCEPT:
             self.config.set_keys_combination([e[1] for e in events])
