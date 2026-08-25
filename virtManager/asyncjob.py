@@ -8,12 +8,14 @@ import threading
 import traceback
 
 from gi.repository import GLib
+from gi.repository import Gtk
 
 import libvirt
 
 import virtinst.progress
 
 from .baseclass import vmmGObjectUI
+from .lib import gtkcompat
 
 
 class _vmmMeter(virtinst.progress.Meter):
@@ -193,7 +195,14 @@ class vmmAsyncJob(vmmGObjectUI):
 
         # UI state
         self.topwin.set_title(title)
+        gtkcompat.set_accessible_name(self.topwin, title or "vmm-progress")
+        try:
+            self.topwin.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+        except Exception:
+            pass
         self.widget("pbar-text").set_text(text)
+        gtkcompat.set_accessible_name(self.widget("pbar-text"), text or "")
+        gtkcompat.ensure_button_accessible_name(self.widget("cancel-async-job"), "Cancel")
         self.widget("cancel-async-job").set_visible(bool(self.cancel_cb))
 
     ####################
@@ -250,6 +259,7 @@ class vmmAsyncJob(vmmGObjectUI):
         markup = "<small>%s</small>" % summary
         self.widget("warning-box").show()
         self.widget("warning-text").set_markup(markup)
+        gtkcompat.set_accessible_name(self.widget("warning-text"), summary)
 
     def _thread_finished(self):
         GLib.source_remove(self._timer)

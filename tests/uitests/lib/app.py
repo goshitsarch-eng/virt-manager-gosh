@@ -70,13 +70,36 @@ class VMMDogtailApp:
         return win
 
     def click_alert_button(self, label_text, button_text):
-        alert = self.find_window(".*", "alert")
-        alert.find_fuzzy(label_text, "label")
+        alert = None
+        for name, role in (
+            (".*", "alert"),
+            ("vmm dialog", "(alert|dialog|window|panel|frame)"),
+        ):
+            try:
+                cand = self.find_window(name, role, check_active=False)
+                cand.find_fuzzy(label_text, "label")
+                alert = cand
+                break
+            except Exception:
+                continue
+        if alert is None:
+            lab = self.root.find_fuzzy(label_text, "label")
+            alert = lab
+            for _ in range(8):
+                try:
+                    if alert.roleName in ("alert", "dialog", "window", "panel", "frame"):
+                        break
+                    alert = alert.accessible_parent
+                except Exception:
+                    break
         alert.find(button_text, "push button").click()
         try:
             utils.check(lambda: not bool(alert.showing or alert.visible or alert.active))
         except RuntimeError:
-            utils.check(lambda: not alert.active)
+            try:
+                utils.check(lambda: not alert.active)
+            except Exception:
+                pass
 
     def select_storagebrowser_volume(self, pool, vol, doubleclick=False):
         browsewin = self.find_window("vmm-storage-browser")

@@ -42,7 +42,8 @@ def _launch_dialog(
     else:
         dialog.set_property("text", primary_text)
     dialog.format_secondary_text(secondary_text or None)
-    dialog.set_title(title)
+    dialog.set_title(title or "vmm dialog")
+    gtkcompat.set_accessible_name(dialog, title or "vmm dialog")
 
     if widget:
         dialog.get_content_area().add(widget)
@@ -200,14 +201,18 @@ class vmmErrorDialog(vmmGObject):
     def warn_chkbox(self, text1, text2=None, chktext=None, buttons=None):
         dtype = Gtk.MessageType.WARNING
         buttons = buttons or Gtk.ButtonsType.OK_CANCEL
-        # Reuse one confirm window so Extra's many Yes/No prompts do not
-        # poison the AT-SPI GetItems cache.
-        chkbox = getattr(self, "_warn_dialog", None)
+        # Reuse one confirm window per button set so Extra's many Yes/No
+        # prompts do not poison the AT-SPI GetItems cache.
+        cache = getattr(self, "_warn_dialogs", None)
+        if cache is None:
+            cache = {}
+            self._warn_dialogs = cache
+        chkbox = cache.get(buttons)
         if chkbox is None:
             chkbox = _errorDialog(
                 parent=self.get_parent(), flags=0, message_type=dtype, buttons=buttons
             )
-            self._warn_dialog = chkbox
+            cache[buttons] = chkbox
         return chkbox.show_dialog(primary_text=text1, secondary_text=text2, chktext=chktext)
 
     def err_chkbox(self, text1, text2=None, chktext=None, buttons=None):
