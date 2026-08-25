@@ -398,7 +398,7 @@ class _errorDialog(Gtk.Window):
             self.buf_expander.show()
 
         if chktext:
-            chkbox = Gtk.CheckButton(chktext)
+            chkbox = Gtk.CheckButton(label=chktext)
             self.chk_vbox.add(chkbox)
             chkbox.show()
 

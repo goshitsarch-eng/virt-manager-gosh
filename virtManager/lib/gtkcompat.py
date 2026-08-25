@@ -655,7 +655,12 @@ class MenuItem(Gtk.Button):
         # AT-SPI click waits for this handler. If we run a modal dialog
         # here, dogtail never returns to look for the alert.
         def _activate():
-            self.emit("activate")
+            try:
+                self.emit("activate")
+            except Exception:
+                from virtinst import log
+
+                log.exception("menu activate failed")
             return False
 
         GLib.idle_add(_activate)
