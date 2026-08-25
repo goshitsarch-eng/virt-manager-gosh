@@ -955,6 +955,20 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     fh.write("1")
             except Exception:
                 pass
+        raw = self.name or ""
+        # Media combo rows: AT-SPI activate often times out after GetItems.
+        # The wizard polls this sentinel and calls set_path().
+        if "media-entry" not in nname and (
+            "/dev/sr" in raw
+            or "Fedora12_media" in raw
+            or "No media detected" in raw
+        ):
+            try:
+                with open("/tmp/vmm-a11y-media-select.txt", "w") as fh:
+                    fh.write(raw)
+            except Exception:
+                pass
+            return
         if (
             "oslist-entry" in nname
             or "operating system you are installing" in nname

@@ -1245,7 +1245,62 @@ def _append_createvm_media_controls(box, createvm):
     _append_detect_os_control(box, createvm)
     _append_iso_browse_control(box, createvm)
     publish_media_combo_rows(createvm, box)
+    _start_media_select_poll(createvm)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+
+
+def _start_media_select_poll(createvm):
+    """Apply /tmp/vmm-a11y-media-select.txt to the New VM media combo."""
+    if createvm is None or getattr(createvm, "_vmm_media_select_poll", False):
+        return
+    createvm._vmm_media_select_poll = True
+    path = "/tmp/vmm-a11y-media-select.txt"
+
+    def _tick(*_a, c=createvm):
+        try:
+            text = open(path, "r").read().strip()
+        except Exception:
+            text = ""
+        if not text:
+            return True
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        media = getattr(c, "_mediacombo", None)
+        if media is None:
+            return True
+        try:
+            model = media._combo.get_model()
+        except Exception:
+            model = None
+        try:
+            applied = False
+            it = model.get_iter_first() if model is not None else None
+            while it is not None:
+                label = str(model[it][1] or "")
+                dev = str(model[it][0] or "")
+                if (
+                    text == label
+                    or text.lower() in label.lower()
+                    or label.lower() in text.lower()
+                    or (dev and dev in text)
+                ):
+                    media.set_path(dev)
+                    applied = True
+                    break
+                it = model.iter_next(it)
+            if not applied and text.startswith("/"):
+                media.set_path(text)
+        except Exception:
+            pass
+        try:
+            publish_media_combo_rows(c)
+        except Exception:
+            pass
+        return True
+
+    GLib.timeout_add(50, _tick)
 
 
 def publish_media_combo_rows(createvm, box=None):
@@ -1304,9 +1359,16 @@ def publish_media_combo_rows(createvm, box=None):
             ensure_activate_clicked(btn)
             set_accessible_name(btn, label)
 
-            def _choose(_b, row=idx, combo=media._combo):
+            def _choose(_b, row=idx, combo=media._combo, mc=media):
                 try:
                     combo.set_active(row)
+                except Exception:
+                    pass
+                try:
+                    model = combo.get_model()
+                    path = model[row][0] if model is not None else ""
+                    if path:
+                        mc.set_path(path)
                 except Exception:
                     pass
 

@@ -212,6 +212,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._mediacombo.connect("activate", self._iso_activated_cb)
         self._mediacombo.set_mnemonic_label(self.widget("install-iso-label"))
         self.widget("install-iso-align").add(self._mediacombo.top_box)
+        gtkcompat._start_media_select_poll(self)
 
         self.builder.connect_signals(
             {
