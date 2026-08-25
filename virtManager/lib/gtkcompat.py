@@ -245,7 +245,22 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 set_accessible_name(btn, name)
                 btn._vmm_row_name = name
                 btn._vmm_row_label = lab
-                btn.connect("clicked", lambda _b, n=name: _select_name(n))
+                def _on_row_clicked(_b, n=name):
+                    already = False
+                    try:
+                        model = treeview.get_model()
+                        sel = treeview.get_selection()
+                        if model is not None and sel is not None:
+                            _iter = sel.get_selected()[1]
+                            if _iter is not None:
+                                already = _mnemonic_label(str(model[_iter][name_column] or "")) == n
+                    except Exception:
+                        already = False
+                    _select_name(n)
+                    if already and on_popup is not None:
+                        on_popup()
+
+                btn.connect("clicked", _on_row_clicked)
                 if on_popup is not None:
                     def _menu_action(_w, _an, _p, n=name):
                         _select_name(n)
