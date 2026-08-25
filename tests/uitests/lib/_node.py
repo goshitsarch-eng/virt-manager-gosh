@@ -560,6 +560,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = self.name or ""
             if name.startswith(".") or name.endswith(" (hidden)"):
                 return False
+            if "oslist-popover" in name:
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden"):
+                        return False
+                except Exception:
+                    pass
             # Sidecar entries live on opacity-0 / 0x0 surfaces.
             if any(
                 key in name

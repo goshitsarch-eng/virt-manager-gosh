@@ -950,6 +950,10 @@ def _oslist_fill_wrap(wrap, oslist):
 def _oslist_show_popovers(oslist):
     if oslist is None:
         return
+    try:
+        os.remove("/tmp/vmm-a11y-oslist-popover-hidden")
+    except Exception:
+        pass
     for wrap in _oslist_popover_wraps(oslist):
         try:
             _oslist_fill_wrap(wrap, oslist)
@@ -962,6 +966,10 @@ def _oslist_show_popovers(oslist):
 def _oslist_hide_popovers(oslist):
     if oslist is None:
         return
+    try:
+        open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+    except Exception:
+        pass
     for wrap in _oslist_popover_wraps(oslist):
         try:
             set_accessible_name(wrap, ".oslist-popover")
