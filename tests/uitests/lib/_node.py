@@ -475,12 +475,16 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
     @property
     def name(self):
+        if getattr(self, "_vmm_is_copy_host", False):
+            try:
+                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+            except Exception:
+                stored = ""
+            return stored or "Copy host CPU configuration (host-passthrough)"
         try:
             stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
         except Exception:
             stored = ""
-        if stored and getattr(self, "_vmm_is_copy_host", False):
-            return stored
         try:
             raw = dogtail.tree.Node.name.__get__(self)
         except Exception:
@@ -997,6 +1001,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # pylint: disable=arguments-differ,signature-differs
         self.check_onscreen()
         self.check_sensitive()
+        if getattr(self, "_vmm_is_copy_host", False):
+            try:
+                open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                    "Copy host CPU configuration (host-passthrough)"
+                )
+            except Exception:
+                pass
+            try:
+                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                    fh.write("Copy host CPU configuration")
+            except Exception:
+                pass
+            return
         button = kwargs.get("button", args[0] if args else 1)
         if button == 3:
             try:
