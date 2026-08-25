@@ -76,10 +76,14 @@ class vmmAbout(vmmGObject):
         )
         dialog.set_child(box)
 
+        def _hide(*_a):
+            dialog.hide()
+            dialog.set_visible(False)
+            return True
+
         def _on_key(_c, keyval, _keycode, _state):
             if keyval == Gdk.KEY_Escape:
-                dialog.hide()
-                return True
+                return _hide()
             return False
 
         keyctl = Gtk.EventControllerKey()
@@ -87,7 +91,7 @@ class vmmAbout(vmmGObject):
         dialog.add_controller(keyctl)
         shortcut = Gtk.Shortcut.new(
             Gtk.KeyvalTrigger.new(Gdk.KEY_Escape, 0),
-            Gtk.CallbackAction.new(lambda *_a: dialog.hide() or True),
+            Gtk.CallbackAction.new(lambda *_a: _hide()),
         )
         sctl = Gtk.ShortcutController()
         sctl.add_shortcut(shortcut)
