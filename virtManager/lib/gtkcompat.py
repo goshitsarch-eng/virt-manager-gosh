@@ -72,6 +72,8 @@ def ensure_activate_clicked(widget):
     """
     if widget is None or getattr(widget, "_vmm_activate_clicked", False):
         return
+    if not isinstance(widget, Gtk.Button):
+        return
     if not hasattr(widget, "set_activate_signal_from_name"):
         return
     try:
