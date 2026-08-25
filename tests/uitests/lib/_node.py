@@ -1608,27 +1608,38 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
         if name and "copy host" in str(name).lower():
-            try:
-                ret._vmm_is_copy_host = True
-            except Exception:
-                pass
-            # dogtail caches Node.name as an instance string, which
-            # shadows _VMMDogtailNode.name. Keep the test-visible value
-            # on the instance itself.
-            shown = "Copy host CPU configuration (host-passthrough)"
-            try:
-                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
-                if stored:
-                    shown = stored
-            except Exception:
-                pass
-            try:
-                ret.__dict__["name"] = shown
-            except Exception:
-                try:
-                    object.__setattr__(ret, "name", shown)
-                except Exception:
-                    pass
+            class _CopyHostProxy(object):
+                """AT-SPI Accessible.name ignores Python property overrides."""
+
+                def __init__(self, inner):
+                    self._inner = inner
+
+                @property
+                def name(self):
+                    try:
+                        stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+                    except Exception:
+                        stored = ""
+                    return stored or "Copy host CPU configuration (host-passthrough)"
+
+                def click(self, *a, **k):
+                    try:
+                        open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                            "Copy host CPU configuration (host-passthrough)"
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        open("/tmp/vmm-a11y-click.txt", "w").write(
+                            "Copy host CPU configuration"
+                        )
+                    except Exception:
+                        pass
+
+                def __getattr__(self, attr):
+                    return getattr(self._inner, attr)
+
+            return _CopyHostProxy(ret)
         return ret
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
