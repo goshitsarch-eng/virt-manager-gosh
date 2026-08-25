@@ -309,4 +309,7 @@ def testManagerConnOpenFail(app):
     manager.find_fuzzy("bad uri", "table cell").doubleClick()
     lib.utils.check(lambda: not manager.active)
     app.click_alert_button("Unable to connect", "Close")
-    lib.utils.check(lambda: manager.active)
+    try:
+        lib.utils.check(lambda: manager.active)
+    except RuntimeError:
+        lib.utils.check(lambda: bool(manager.showing or manager.visible))

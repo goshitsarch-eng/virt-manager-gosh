@@ -805,6 +805,12 @@ def _run_modal(window, response_signal="response"):
             parent.present()
         except Exception:
             pass
+        try:
+            child = parent.get_focus() if hasattr(parent, "get_focus") else None
+            if child is not None:
+                child.grab_focus()
+        except Exception:
+            pass
     return result[0]
 
 
