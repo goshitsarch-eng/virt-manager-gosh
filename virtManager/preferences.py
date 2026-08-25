@@ -403,14 +403,10 @@ class vmmPreferences(vmmGObjectUI):
         label.set_text(self.grabkeys_get_string(events))
 
     def change_grab_keys(self, src_ignore):
-        dialog = Gtk.Dialog(
-            title=_("Configure grab key combination"),
-            transient_for=self.topwin,
-            modal=True,
-        )
-        dialog.add_buttons(
-            _("_Cancel"), Gtk.ResponseType.REJECT, _("_OK"), Gtk.ResponseType.ACCEPT
-        )
+        dialog = Gtk.Window()
+        dialog.set_title(_("Configure grab key combination"))
+        dialog.set_transient_for(self.topwin)
+        dialog.set_modal(True)
         dialog.set_default_size(325, 160)
         gtkcompat.set_toplevel_a11y_role(dialog)
         gtkcompat.set_accessible_name(dialog, "Configure grab key combination")
@@ -430,24 +426,47 @@ class vmmPreferences(vmmGObjectUI):
         )
         keylabel = Gtk.Label(label=_("Please press desired grab key combination"))
 
+        ok = Gtk.Button(label=_("OK"), use_underline=True)
+        cancel = Gtk.Button(label=_("Cancel"), use_underline=True)
+        gtkcompat.set_accessible_name(ok, "OK")
+        gtkcompat.set_accessible_name(cancel, "Cancel")
+        gtkcompat.ensure_activate_clicked(ok)
+        gtkcompat.ensure_activate_clicked(cancel)
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        buttons.set_halign(Gtk.Align.END)
+        buttons.append(cancel)
+        buttons.append(ok)
+
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        vbox.set_margin_top(12)
+        vbox.set_margin_bottom(12)
+        vbox.set_margin_start(12)
+        vbox.set_margin_end(12)
         vbox.append(infolabel)
         vbox.append(keylabel)
-        dialog.get_content_area().append(vbox)
+        vbox.append(buttons)
+        dialog.set_child(vbox)
 
         events = []
         dialog.connect("key-press-event", self.grabkeys_dlg_press, keylabel, events)
         dialog.connect("key-release-event", self.grabkeys_dlg_release, keylabel, events)
-        dialog.set_visible(True)
-        from .lib import gtkcompat
 
-        result = gtkcompat.run_dialog(dialog)
+        def _close(*_a):
+            dialog.hide()
+            return True
 
-        if result == Gtk.ResponseType.ACCEPT:
+        def _accept(*_a):
             self.config.set_keys_combination([e[1] for e in events])
+            self.refresh_grabkeys_combination()
+            dialog.hide()
+            return True
 
-        self.refresh_grabkeys_combination()
-        dialog.destroy()
+        ok.connect("clicked", _accept)
+        cancel.connect("clicked", _close)
+        dialog.connect("close-request", _close)
+        # Do not run a nested main loop: AT-SPI click must return so
+        # dogtail can find this window.
+        dialog.present()
 
     def change_view_system_tray(self, src):
         self.config.set_view_system_tray(src.get_active())
