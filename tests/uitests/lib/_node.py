@@ -444,17 +444,25 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "Choose the operating system"
         ):
             try:
-                if os.path.exists("/tmp/vmm-a11y-oslist-escape") and not os.path.exists(
-                    "/tmp/vmm-a11y-oslist-confirmed"
+                stored = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
+                stored = stored.strip()
+            except Exception:
+                stored = ""
+            _DETECT_TEXT = (
+                "None detected",
+                "Detecting...",
+                "Waiting for install media / source",
+            )
+            try:
+                if (
+                    os.path.exists("/tmp/vmm-a11y-oslist-escape")
+                    and not os.path.exists("/tmp/vmm-a11y-oslist-confirmed")
+                    and stored not in _DETECT_TEXT
                 ):
                     return ""
             except Exception:
                 pass
-            try:
-                stored = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
-                return stored.strip()
-            except Exception:
-                return ""
+            return stored
         if "pagenum-label" in name:
             try:
                 stored = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
