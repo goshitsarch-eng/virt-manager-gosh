@@ -122,7 +122,7 @@
                     <property name="margin-start">18</property>
                     <property name="margin-end">18</property>
                     <property name="icon-name">drive-harddisk</property>
-                    <property name="icon_size">6</property>
+                    <property name="icon_size">large</property>
                     <layout>
                       <property name="column">0</property>
                       <property name="row">1</property>
@@ -236,7 +236,7 @@
                   <object class="GtkImage" id="image4">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_clone_wizard</property>
-                    <property name="icon_size">6</property>
+                    <property name="icon_size">large</property>
                   </object>
                 </child>
                 <child>

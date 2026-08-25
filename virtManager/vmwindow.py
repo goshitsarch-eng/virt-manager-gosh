@@ -261,7 +261,7 @@ class vmmVMWindow(vmmGObjectUI):
         self.widget("control-shutdown").set_icon_name("system-shutdown")
 
         topmenu = self.widget("details-vm-menu")
-        submenu = topmenu.get_submenu()
+        submenu = topmenu.get_submenu() or self.widget("virtual_machine1_menu")
         self._vmmenu = vmmenu.VMActionMenu(self, lambda: self.vm, show_open=False)
         for child in submenu.get_children():
             submenu.remove(child)

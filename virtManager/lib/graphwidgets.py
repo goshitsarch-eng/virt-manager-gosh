@@ -3,8 +3,15 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import gi
+
 from gi.repository import GObject
 from gi.repository import Gtk
+
+try:
+    gi.require_foreign("cairo")
+except (ImportError, ValueError):  # pragma: no cover
+    pass
 
 # pylint: disable=arguments-differ
 # Newer pylint can detect, but warns that overridden arguments are wrong
@@ -337,7 +344,7 @@ class Sparkline(Gtk.DrawingArea):
     def do_draw(self, cr):
         self._draw_func(self, cr, self.get_width(), self.get_height(), None)
 
-    def _draw_func(self, _area, cr, w, h, _data):
+    def _draw_func(self, _area, cr, w, h, _data=None):
         cr.save()
 
         points_per_set = len(self.data_array) // self.num_sets

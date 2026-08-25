@@ -62,6 +62,7 @@ def _pump(GLib, seconds=0.05):
 def _open_conn(GLib, uri, timeout=45):
     from virtManager.connmanager import vmmConnectionManager
 
+    print("OPEN start", uri, flush=True)
     conn = vmmConnectionManager.get_instance().add_conn(uri)
     done = []
 
@@ -73,7 +74,8 @@ def _open_conn(GLib, uri, timeout=45):
     deadline = time.monotonic() + timeout
     ctx = GLib.MainContext.default()
     while not done and time.monotonic() < deadline:
-        ctx.iteration(True)
+        if not ctx.iteration(False):
+            time.sleep(0.02)
     if not done:
         raise RuntimeError("Timed out opening %s" % uri)
     if done[0]:
@@ -82,10 +84,14 @@ def _open_conn(GLib, uri, timeout=45):
     return conn
 
 
-def _first_vm(conn):
+def _first_vm(conn, shutoff=False):
     vms = conn.list_vms()
     if not vms:
         raise RuntimeError("No VMs on testdriver connection")
+    if shutoff:
+        for vm in vms:
+            if not vm.is_active():
+                return vm
     return vms[0]
 
 
@@ -95,22 +101,31 @@ def _first_pool(conn):
 
 
 def main():
+    print("compile schemas", flush=True)
     _compile_schemas()
+    print("init gtk", flush=True)
     Adw, GLib, Gtk = _init_gtk()
+    print("init config", flush=True)
     from virtinst import BuildConfig
     from virtManager.config import vmmConfig
     from virtManager.lib.testmock import CLITestOptionsClass
 
     vmmConfig.get_instance(BuildConfig, CLITestOptionsClass([]))
 
+    print("init engine", flush=True)
     from virtManager.engine import vmmEngine
 
     engine = vmmEngine.get_instance()
-    ignore = engine
+    # Tick thread is normally started in app startup; construction needs it
+    # so connection open can finish object polling.
+    if not engine._tick_thread.is_alive():
+        engine._tick_thread.start()
+    print("engine ready", flush=True)
 
     testdriver = os.path.join(TOPDIR, "tests", "data", "testdriver", "testdriver.xml")
     uris = []
     if os.path.exists(testdriver):
+        uris.append("__virtinst_test__test://%s,predictable" % testdriver)
         uris.append("test://%s" % testdriver)
     uris.append("test:///default")
 
@@ -196,7 +211,7 @@ def main():
         from virtManager.clone import vmmCloneVM
 
         dlg = vmmCloneVM()
-        dlg.show(None, vm)
+        dlg.show(None, _first_vm(conn, shutoff=True))
 
     def migrate():
         from virtManager.migrate import vmmMigrateDialog
@@ -275,6 +290,50 @@ def main():
         dlg = vmmSnapshotNew(vm)
         dlg.show(None)
 
+    def vmwindow_pages():
+        from virtManager.vmwindow import vmmVMWindow
+
+        win = vmmVMWindow.get_instance(None, vm)
+        win.show()
+        pages = win.widget("details-pages")
+        for page in range(pages.get_n_pages()):
+            pages.set_current_page(page)
+            _pump(GLib, 0.02)
+        win._console.vmwindow_get_keycombo_menu()
+        win._console.vmwindow_get_console_list_menu()
+        win._details.vmwindow_refresh_vm_state(True)
+        win._snapshots.vmwindow_refresh_vm_state()
+
+    def viewers():
+        from gi.repository import Gdk
+        from virtManager.details import gtk4display
+        from virtManager.details.viewers import VNCViewer, SpiceViewer
+        from virtManager.details.sshtunnels import ConnectionInfo
+
+        ginfo = None
+        gfxvm = vm
+        for cand in conn.list_vms():
+            gdevs = list(cand.get_xmlobj().devices.graphics)
+            if gdevs:
+                gfxvm = cand
+                ginfo = ConnectionInfo(conn, gdevs[0])
+                break
+        display = gtk4display.VNCDisplay()
+        display.set_pointer_grab(True)
+        display.set_scaling(True)
+        display.send_keys([Gdk.keyval_from_name("a") or 97])
+        spice_display = gtk4display.SpiceDisplay(None)
+        spice_display.set_scaling(True)
+        usb = gtk4display.UsbDeviceWidget.new(None)
+        assert usb is not None
+        if ginfo is not None:
+            if ginfo.gtype == "vnc":
+                viewer = VNCViewer(gfxvm, ginfo)
+                viewer._init_display()
+            else:
+                viewer = SpiceViewer(gfxvm, ginfo)
+            assert viewer is not None
+
     for name, fn in [
         ("manager", manager),
         ("createconn", createconn),
@@ -296,6 +355,8 @@ def main():
         ("systray", systray),
         ("connectauth", connectauth),
         ("snapshots_new", snapshots_new),
+        ("vmwindow_pages", vmwindow_pages),
+        ("viewers", viewers),
     ]:
         _run(name, fn)
 

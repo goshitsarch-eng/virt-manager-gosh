@@ -142,19 +142,12 @@ def cleanup_xml(src: pathlib.Path, dest: pathlib.Path) -> None:
                 obj.remove(prop)
             elif name.startswith("AtkObject::"):
                 obj.remove(prop)
-            elif name in ("icon-size", "icon_size") and (prop.text or "").strip() in (
-                "1",
-                "2",
-                "3",
-                "4",
-                "5",
-                "6",
-                "menu",
-                "button",
-                "large-toolbar",
-                "dnd",
-            ):
-                obj.remove(prop)
+            elif name in ("icon-size", "icon_size"):
+                val = (prop.text or "").strip()
+                if val in ("1", "2", "3", "menu", "button"):
+                    prop.text = "normal"
+                elif val in ("4", "5", "6", "large-toolbar", "dnd", "dialog"):
+                    prop.text = "large"
 
         for sig in list(obj.findall("signal")):
             sname = sig.get("name")

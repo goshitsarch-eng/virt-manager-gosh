@@ -843,7 +843,10 @@ class vmmCreateVM(vmmGObjectUI):
         if defmachine and defmachine in machines:
             default = machines.index(defmachine)
 
-        self.widget("machine").disconnect_by_func(self._machine_changed)
+        try:
+            self.widget("machine").disconnect_by_func(self._machine_changed)
+        except TypeError:
+            pass
         try:
             model.clear()
             for m in machines:

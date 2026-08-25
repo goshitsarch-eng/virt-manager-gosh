@@ -20,7 +20,7 @@
                   <object class="GtkImage" id="image3">
                     <property name="halign">center</property>
                     <property name="icon-name">network-idle</property>
-                    <property name="icon_size">6</property>
+                    <property name="icon_size">large</property>
                   </object>
                 </child>
                 <child>

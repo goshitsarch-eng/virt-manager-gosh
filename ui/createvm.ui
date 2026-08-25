@@ -31,7 +31,7 @@
                   <object class="GtkImage" id="image5">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_new_wizard</property>
-                    <property name="icon_size">6</property>
+                    <property name="icon_size">large</property>
                   </object>
                 </child>
                 <child>
@@ -723,7 +723,7 @@ User shouldn't see this.</property>
                                             <child>
                                               <object class="GtkImage">
                                                 <property name="icon-name">dialog-information</property>
-                                                <property name="icon_size">3</property>
+                                                <property name="icon_size">normal</property>
                                               </object>
                                             </child>
                                             <child>

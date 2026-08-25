@@ -20,7 +20,7 @@
                   <object class="GtkImage" id="image2">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_delete_wizard</property>
-                    <property name="icon_size">6</property>
+                    <property name="icon_size">large</property>
                   </object>
                 </child>
                 <child>

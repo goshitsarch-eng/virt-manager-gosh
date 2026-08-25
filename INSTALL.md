@@ -30,6 +30,8 @@ Minimum version requirements of major components:
    - pygobject3 >= 3.31.3
    - libosinfo >= 0.2.10
    - gtksourceview >= 5
+   - spice-glib (optional, for SPICE consoles)
+   - python3-cairo (for performance graphs and GTK 4 console rendering)
 
 On Debian or Ubuntu based distributions, you need to install the
 `gobject-introspection` bindings for some dependencies like `libvirt-glib`

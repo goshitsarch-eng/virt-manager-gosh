@@ -411,10 +411,18 @@ class MenuItem(Gtk.Button):
     def set_submenu(self, menu):
         self._submenu = menu
         if menu is not None:
+            if menu.get_parent() is not None and menu.get_parent() is not self:
+                menu.unparent()
             menu.set_parent(self)
 
     def get_submenu(self):
         return self._submenu
+
+    def set_child(self, child):
+        if isinstance(child, Menu):
+            self.set_submenu(child)
+            return
+        Gtk.Button.set_child(self, child)
 
     def set_sensitive(self, val):
         Gtk.Button.set_sensitive(self, val)
@@ -490,6 +498,12 @@ class SeparatorMenuItem(Gtk.Separator):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, **kwargs)
         self.vmm_widget_name = None
 
+    def get_submenu(self):
+        return None
+
+    def set_submenu(self, _menu):
+        return None
+
 
 class Menu(Gtk.Box):
     __gtype_name__ = "GtkMenu"
@@ -508,6 +522,8 @@ class Menu(Gtk.Box):
         self.add(item)
 
     def insert(self, item, position):
+        if item.get_parent() is not None:
+            item.unparent()
         if position < 0 or position >= len(self._items):
             Gtk.Box.append(self, item)
             self._items.append(item)
@@ -924,6 +940,15 @@ def _patch_widget_methods():
     Gtk.Window.add_accel_group = add_accel_group
     Gtk.Window.remove_accel_group = remove_accel_group
 
+    def window_remove(self, child):
+        if hasattr(self, "get_child") and self.get_child() is child:
+            self.set_child(None)
+            return
+        if child is not None and child.get_parent() is self:
+            child.unparent()
+
+    Gtk.Window.remove = window_remove
+
     def set_relative_to(self, widget):
         parent = self.get_parent()
         if parent is not None and parent is not widget:
@@ -1201,6 +1226,22 @@ def _install_stock_and_enums():
 
     Gtk.Settings.get_property = settings_get_property
     Gtk.Settings.set_property = settings_set_property
+
+    orig_accel_parse = Gtk.accelerator_parse
+
+    def accelerator_parse(accel):
+        ret = orig_accel_parse(accel)
+        if isinstance(ret, tuple) and len(ret) == 3:
+            return ret[1], ret[2]
+        return ret
+
+    Gtk.accelerator_parse = accelerator_parse
+
+    def _emit_toggled(self):
+        self.emit("toggled")
+
+    Gtk.ToggleButton.toggled = _emit_toggled
+    Gtk.CheckButton.toggled = _emit_toggled
 
 
 def _install_css_helpers():

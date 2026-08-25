@@ -53,7 +53,8 @@ class vmmAbout(vmmGObject):
         dialog.set_copyright("Copyright (C) 2006-2020 Red Hat Inc.")
         dialog.set_comments(_("Powered by libvirt"))
         dialog.set_website("https://virt-manager.org/")
-        dialog.set_website_label("https://virt-manager.org/")
+        if hasattr(dialog, "set_website_label"):
+            dialog.set_website_label("https://virt-manager.org/")
         dialog.set_license_type(Gtk.License.GPL_2_0)
         dialog.set_accessible_role(Gtk.AccessibleRole.DIALOG)
         self._dialog = dialog

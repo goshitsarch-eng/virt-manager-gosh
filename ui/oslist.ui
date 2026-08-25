@@ -22,7 +22,7 @@
               <object class="GtkImage">
                 <property name="valign">start</property>
                 <property name="icon-name">dialog-information</property>
-                <property name="icon_size">3</property>
+                <property name="icon_size">normal</property>
               </object>
             </child>
             <child>
