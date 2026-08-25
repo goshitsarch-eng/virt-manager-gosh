@@ -12,6 +12,7 @@ event/dialog/file-chooser helpers that preserve the original feature set.
 """
 
 import os
+import re
 
 from gi.repository import Gdk
 from gi.repository import Gio
@@ -72,12 +73,16 @@ def ensure_activate_clicked(widget):
     """
     if widget is None or getattr(widget, "_vmm_activate_clicked", False):
         return
-    if not isinstance(widget, Gtk.Button):
+    if isinstance(widget, Gtk.Button):
+        signal = "clicked"
+    elif isinstance(widget, Gtk.CheckButton):
+        signal = "toggled"
+    else:
         return
     if not hasattr(widget, "set_activate_signal_from_name"):
         return
     try:
-        widget.set_activate_signal_from_name("clicked")
+        widget.set_activate_signal_from_name(signal)
         widget._vmm_activate_clicked = True
     except Exception:
         pass
@@ -152,7 +157,11 @@ def ensure_button_accessible_name(widget, name):
     GLib.idle_add(lambda: set_accessible_name(widget, name) or False)
 
 
-def attach_treeview_a11y(treeview, name_column=1):
+def _strip_pango_markup(text):
+    return re.sub(r"<[^>]+>", "", str(text or "")).replace("&amp;", "&")
+
+
+def attach_treeview_a11y(treeview, name_column=1, text_column=None):
     """
     GTK 4 TreeView does not expose rows to AT-SPI. Mirror each row as a
     mapped CELL button so dogtail can find VM/connection names.
@@ -205,19 +214,36 @@ def attach_treeview_a11y(treeview, name_column=1):
         if model is None:
             return False
 
+        def _cell_strings(_iter):
+            try:
+                name = _mnemonic_label(str(model[_iter][name_column] or ""))
+            except Exception:
+                name = ""
+            text = name
+            if text_column is not None:
+                try:
+                    stripped = _strip_pango_markup(model[_iter][text_column])
+                    if stripped:
+                        text = stripped
+                except Exception:
+                    pass
+            return name, text
+
         def _walk(parent):
             _iter = model.iter_children(parent) if parent else model.get_iter_first()
             while _iter is not None:
-                try:
-                    name = model[_iter][name_column]
-                except Exception:
-                    name = ""
-                name = _mnemonic_label(str(name or ""))
-                btn = Gtk.Button(label=name)
+                name, text = _cell_strings(_iter)
+                lab = Gtk.Label(label=text, xalign=0)
+                lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+                set_accessible_name(lab, text)
+                btn = Gtk.Button()
+                btn.set_child(lab)
                 # Keep BUTTON so AT-SPI still has a click action. Uitests
                 # accept "button" as a table-cell alias.
                 btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
                 set_accessible_name(btn, name)
+                btn._vmm_row_name = name
+                btn._vmm_row_label = lab
                 btn.connect("clicked", lambda _b, n=name: _select_name(n))
                 box.append(btn)
                 _walk(_iter)
@@ -235,11 +261,35 @@ def attach_treeview_a11y(treeview, name_column=1):
             GLib.source_remove(pending["src"])
         pending["src"] = GLib.timeout_add(150, _rebuild)
 
+    def _on_row_changed(model, _path, _iter):
+        try:
+            name = _mnemonic_label(str(model[_iter][name_column] or ""))
+        except Exception:
+            return
+        text = name
+        if text_column is not None:
+            try:
+                stripped = _strip_pango_markup(model[_iter][text_column])
+                if stripped:
+                    text = stripped
+            except Exception:
+                pass
+        child = box.get_first_child()
+        while child is not None:
+            if getattr(child, "_vmm_row_name", None) == name:
+                lab = getattr(child, "_vmm_row_label", None)
+                if lab is not None:
+                    lab.set_text(text)
+                    set_accessible_name(lab, text)
+                break
+            child = child.get_next_sibling()
+
     treeview.connect("notify::model", _on_model)
     model = treeview.get_model()
     if model is not None:
         model.connect("row-inserted", _on_model)
         model.connect("row-deleted", _on_model)
+        model.connect("row-changed", _on_row_changed)
     def _attach_app(*_a):
         root = treeview.get_root()
         if root is not None:

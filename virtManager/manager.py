@@ -329,7 +329,9 @@ class vmmManager(vmmGObjectUI):
             vmlist.set_accessible_role(Gtk.AccessibleRole.TREE_GRID)
         except Exception:
             pass
-        gtkcompat.attach_treeview_a11y(vmlist, name_column=ROW_SORT_KEY)
+        gtkcompat.attach_treeview_a11y(
+            vmlist, name_column=ROW_SORT_KEY, text_column=ROW_MARKUP
+        )
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
         nameCol = Gtk.TreeViewColumn(_("Name"))

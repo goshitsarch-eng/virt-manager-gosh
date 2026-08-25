@@ -242,6 +242,33 @@ class _VMMDogtailNode(dogtail.tree.Node):
         return st.contains(pyatspi.STATE_CHECKED) or st.contains(pyatspi.STATE_PRESSED)
 
     @property
+    def text(self):
+        try:
+            t = self.queryText().getText(0, -1)
+            if t:
+                return t
+        except Exception:
+            pass
+        parts = []
+        if self.name:
+            parts.append(self.name)
+        try:
+            for child in self.children:
+                try:
+                    ct = child.queryText().getText(0, -1)
+                except Exception:
+                    ct = child.name
+                if ct:
+                    parts.append(ct)
+        except Exception:
+            pass
+        return "\n".join(parts)
+
+    @text.setter
+    def text(self, value):
+        self.queryEditableText().setTextContents(value)
+
+    @property
     def onscreen(self):
         # We need to check that full widget is on screen because we use this
         # function to check whether we can click a widget. We may click
