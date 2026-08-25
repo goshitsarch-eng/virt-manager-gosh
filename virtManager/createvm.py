@@ -1577,14 +1577,24 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("create-forward").set_visible(pagenum != PAGE_FINISH)
         self.widget("create-finish").set_visible(pagenum == PAGE_FINISH)
         if pagenum == PAGE_INSTALL:
-            try:
-                osobj = self._os_list.get_selected_os() or self._last_osobj
-                if osobj is not None:
-                    self._last_osobj = osobj
-                    self._os_list.select_os(osobj)
-                self._os_list.refresh_a11y()
-            except Exception:
-                pass
+            def _restore():
+                try:
+                    osobj = (
+                        self._os_list.get_selected_os()
+                        or getattr(self._os_list, "_kept_os", None)
+                        or self._last_osobj
+                    )
+                    if osobj is not None:
+                        self._last_osobj = osobj
+                        self._os_list.select_os(osobj)
+                    self._os_list.refresh_a11y()
+                except Exception:
+                    pass
+                return False
+
+            _restore()
+            GLib.idle_add(_restore)
+            GLib.timeout_add(200, _restore)
 
         # Hide all other pages, so the dialog isn't all stretched out
         # because of one large page.

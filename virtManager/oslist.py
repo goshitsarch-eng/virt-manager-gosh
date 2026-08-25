@@ -26,6 +26,7 @@ class vmmOSList(vmmGObjectUI):
         self._filter_name = None
         self._filter_eol = True
         self._selected_os = None
+        self._kept_os = None
         self.search_entry = self.widget("os-name")
         self.search_entry.set_placeholder_text(_("Type to start searching..."))
         self.eol_text = self.widget("eol-warn").get_text()
@@ -126,7 +127,7 @@ class vmmOSList(vmmGObjectUI):
 
     def refresh_a11y(self):
         """Keep the oslist-entry sidecar name in sync after page hide/show."""
-        osobj = self._selected_os
+        osobj = self._selected_os or self._kept_os
         label = osobj.label if osobj is not None else ""
         if not label:
             try:
@@ -157,9 +158,11 @@ class vmmOSList(vmmGObjectUI):
         model, titer = self.widget("os-list").get_selection().get_selected()
         if titer:
             self._selected_os = model[titer][0]
+            self._kept_os = self._selected_os
             self.search_entry.set_text(self._selected_os.label)
-        elif self._selected_os is not None:
-            # _clear_filter() unselects the tree; keep the chosen OS.
+        elif self._selected_os is not None or self._kept_os is not None:
+            self._selected_os = self._selected_os or self._kept_os
+            self._kept_os = self._selected_os
             try:
                 self.search_entry.set_text(self._selected_os.label)
             except Exception:
@@ -256,10 +259,13 @@ class vmmOSList(vmmGObjectUI):
         """
         Called when the search window is closed, like with Escape key
         """
-        if self._selected_os:
-            self.search_entry.set_text(self._selected_os.label)
+        osobj = self._selected_os or self._kept_os
+        if osobj:
+            self._selected_os = osobj
+            self.search_entry.set_text(osobj.label)
         else:
             self.search_entry.set_text("")
+        self.refresh_a11y()
 
     def _os_selected_cb(self, src, path, column):
         self._sync_os_selection()
@@ -287,6 +293,7 @@ class vmmOSList(vmmGObjectUI):
 
     def reset_state(self):
         self._selected_os = None
+        self._kept_os = None
         self.search_entry.set_text("")
         self._clear_filter()
         self._sync_os_selection()
@@ -326,10 +333,15 @@ class vmmOSList(vmmGObjectUI):
             pick = contains[0]
         if pick is None:
             return False
+        self._kept_os = pick
+        self._selected_os = pick
         self.select_os(pick)
         return True
 
     def select_os(self, vmosobj):
+        if vmosobj is not None:
+            self._kept_os = vmosobj
+            self._selected_os = vmosobj
         self._clear_filter()
 
         os_list = self.widget("os-list")
@@ -354,13 +366,9 @@ class vmmOSList(vmmGObjectUI):
 
         if not sensitive:
             self.search_entry.set_sensitive(False)
-            # Keep a chosen OS across detect-mode toggles and page hide.
-            if not self._selected_os:
-                self.reset_state()
         else:
-            if self._selected_os:
-                self.select_os(self._selected_os)
-            elif not self.search_entry.get_text():
-                self.reset_state()
+            osobj = self._selected_os or self._kept_os
+            if osobj:
+                self.select_os(osobj)
             self.search_entry.set_sensitive(True)
         self.refresh_a11y()
