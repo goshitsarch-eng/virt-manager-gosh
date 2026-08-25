@@ -73,8 +73,15 @@ def container_remove(parent, child):
 
 
 def show_all(widget):
+    if isinstance(widget, Gtk.Popover):
+        return
     widget.set_visible(True)
+    # ComboBox popovers crash if realized outside a toplevel
+    if isinstance(widget, Gtk.ComboBox):
+        return
     for child in get_children(widget):
+        if isinstance(child, Gtk.Popover):
+            continue
         show_all(child)
 
 
@@ -467,9 +474,15 @@ class Menu(Gtk.Box):
         self._parent_widget = parent
 
     def popup(self, *_args, **_kwargs):
-        self._ensure_popover(self._parent_widget)
+        parent = self._parent_widget
+        if parent is None or parent.get_root() is None:
+            return
+        self._ensure_popover(parent)
         if self._popover.get_parent() is not None:
-            self._popover.popup()
+            try:
+                self._popover.popup()
+            except Exception:
+                pass
 
     def popup_at_pointer(self, event=None):
         ignore = event
