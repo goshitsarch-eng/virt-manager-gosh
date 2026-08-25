@@ -401,6 +401,19 @@ class MenuItem(Gtk.Button):
         self.connect("clicked", self._on_clicked)
         self.connect("notify::label", self._on_label_prop)
         self.vmm_widget_name = None
+        motion = Gtk.EventControllerMotion()
+        motion.connect("enter", self._on_pointer_enter)
+        motion.connect("leave", self._on_pointer_leave)
+        self.add_controller(motion)
+
+    def _set_selected(self, selected):
+        self.update_state([Gtk.AccessibleState.SELECTED], [bool(selected)])
+
+    def _on_pointer_enter(self, *_args):
+        self._set_selected(True)
+
+    def _on_pointer_leave(self, *_args):
+        self._set_selected(False)
 
     def _sync_accessible_label(self):
         text = ""
@@ -417,6 +430,7 @@ class MenuItem(Gtk.Button):
             self._sync_accessible_label()
 
     def _on_clicked(self, *_args):
+        self._set_selected(True)
         if self._submenu:
             self._submenu.popup_at_widget(self)
         else:
@@ -489,6 +503,10 @@ class CheckMenuItem(Gtk.CheckButton):
         self.vmm_widget_name = None
         if label:
             self.set_label(label)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("enter", lambda *_a: self.update_state([Gtk.AccessibleState.SELECTED], [True]))
+        motion.connect("leave", lambda *_a: self.update_state([Gtk.AccessibleState.SELECTED], [False]))
+        self.add_controller(motion)
 
     @classmethod
     def new_with_mnemonic(cls, label):

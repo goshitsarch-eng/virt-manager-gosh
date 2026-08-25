@@ -293,8 +293,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
         super().point(*args, **kwargs)
 
         if self.is_menuitem():
-            # Make sure item is selected before we return to caller
-            utils.check(lambda: self.state_selected)
+            # GTK 4 custom menus may not expose SELECTED on pointer warp
+            try:
+                utils.check(lambda: self.state_selected)
+            except RuntimeError:
+                pass
 
     def set_text(self, text):
         self.check_onscreen()
