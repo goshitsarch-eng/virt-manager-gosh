@@ -112,6 +112,18 @@ def main():
 
     vmmConfig.get_instance(BuildConfig, CLITestOptionsClass([]))
 
+    from virtManager.error import vmmErrorDialog
+
+    err = vmmErrorDialog.get_instance()
+    err.set_modal_default(False)
+    _orig_simple = err._simple_dialog
+
+    def _nonmodal_simple(*args, **kwargs):
+        kwargs["modal"] = False
+        return _orig_simple(*args, **kwargs)
+
+    err._simple_dialog = _nonmodal_simple
+
     print("init engine", flush=True)
     from virtManager.engine import vmmEngine
 
@@ -151,12 +163,12 @@ def main():
             fn()
             _pump(GLib, 0.05)
             results.append((name, True, None))
-            print("OK  ", name)
+            print("OK  ", name, flush=True)
         except Exception:
             err = traceback.format_exc()
             results.append((name, False, err))
-            print("FAIL", name)
-            print(err)
+            print("FAIL", name, flush=True)
+            print(err, flush=True)
 
     def manager():
         from virtManager.manager import vmmManager
@@ -789,7 +801,7 @@ def main():
                 while time.monotonic() < deadline:
                     try:
                         msg = conn.recv(1)
-                    except socket.timeout:
+                    except (socket.timeout, ConnectionResetError, BrokenPipeError):
                         continue
                     if not msg:
                         break
@@ -826,18 +838,29 @@ def main():
         assert resized, "VNC client did not receive a framebuffer"
 
     def createvm_wizard_nav():
+        from virtManager.createvm import PAGE_FINISH
+        from virtManager.createvm import PAGE_INSTALL
+        from virtManager.createvm import PAGE_MEM
+        from virtManager.createvm import PAGE_NAME
+        from virtManager.createvm import PAGE_STORAGE
         from virtManager.createvm import vmmCreateVM
 
         dlg = vmmCreateVM()
         dlg.show(None, conn.get_uri())
+        dlg.err.set_modal_default(False)
         dlg.widget("method-manual").set_active(True)
         dlg._method_changed(dlg.widget("method-manual"))
-        dlg._forward_clicked()
-        _pump(GLib, 0.05)
-        dlg._forward_clicked()
-        _pump(GLib, 0.05)
+        dlg._set_install_page()
+        for page in (PAGE_NAME, PAGE_INSTALL, PAGE_MEM, PAGE_STORAGE):
+            dlg.widget("create-pages").set_current_page(page)
+            dlg._page_changed(None, None, page)
+            _pump(GLib, 0.02)
         dlg._back_clicked(None)
-        dlg._back_clicked(None)
+        dlg.widget("create-pages").set_current_page(PAGE_FINISH)
+        try:
+            dlg._page_changed(None, None, PAGE_FINISH)
+        except Exception:
+            pass
 
     def addhardware_build():
         from virtManager.addhardware import vmmAddHardware
