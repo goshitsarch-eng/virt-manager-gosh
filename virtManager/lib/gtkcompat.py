@@ -938,22 +938,40 @@ class MenuToolButton(Gtk.Box):
         name = _mnemonic_label(self.label)
         if name:
             self._button._vmm_a11y_name = name
-        apply_accessible_label(self._button)
+            ensure_button_accessible_name(self._button, name)
+        else:
+            apply_accessible_label(self._button)
+
+    def _a11y_button_name(self):
+        return _mnemonic_label(self.label) or getattr(
+            self._button, "_vmm_a11y_name", None
+        )
 
     def _sync_icon(self, *_args):
-        if self.icon_name:
+        name = self._a11y_button_name()
+        if name:
+            ensure_button_accessible_name(self._button, name)
+        elif self.icon_name:
             self._button.set_icon_name(self.icon_name)
         apply_accessible_label(self._button)
 
     def set_icon_name(self, name):
         self.icon_name = name or ""
-        self._button.set_icon_name(name)
+        a11y = self._a11y_button_name()
+        if a11y:
+            ensure_button_accessible_name(self._button, a11y)
+        else:
+            self._button.set_icon_name(name)
         apply_accessible_label(self._button)
 
     def set_label(self, label):
         self.label = label or ""
         self._button.set_label(label)
-        apply_accessible_label(self._button)
+        name = _mnemonic_label(label)
+        if name:
+            ensure_button_accessible_name(self._button, name)
+        else:
+            apply_accessible_label(self._button)
 
     def _on_menu_toggled(self, button):
         if button.get_active() and self._menu is not None:

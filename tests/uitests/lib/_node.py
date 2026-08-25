@@ -49,6 +49,19 @@ def _alias_role(roleName):
     return _GTK4_ROLE_ALIASES.get(roleName, roleName)
 
 
+def _virt_manager_app():
+    try:
+        root = dogtail.tree.root
+    except Exception:
+        return None
+    for name in ("virt-manager", "python3"):
+        try:
+            return root.application(name)
+        except Exception:
+            continue
+    return None
+
+
 def _walk_find(node, pred, recursive=True, _seen=None):
     """
     Live AT-SPI walk. dogtail findChild uses a cache that often misses
@@ -422,23 +435,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
-        role_str = str(roleName or "")
-        desktop_roles = (
-            "dialog",
-            "frame",
-            "alert",
-            "window",
-            "menu item",
-            "menu",
-            "label",
-            "static",
-        )
         ret = None
         deadline = time.time() + 4
         while ret is None and time.time() < deadline:
             ret = _walk_find(self, pred, recursive=recursive)
-            if ret is None and any(r in role_str for r in desktop_roles):
-                ret = _walk_find(dogtail.tree.root, pred, True)
+            if ret is None:
+                app = _virt_manager_app()
+                if app is not None and app is not self:
+                    ret = _walk_find(app, pred, True)
             if ret is None:
                 time.sleep(0.1)
         if ret is None:

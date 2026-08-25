@@ -326,6 +326,10 @@ class vmmManager(vmmGObjectUI):
         vmlist.set_model(model)
         vmlist.set_tooltip_column(ROW_HINT)
         vmlist.set_headers_visible(True)
+        try:
+            vmlist.set_accessible_role(Gtk.AccessibleRole.TREE_GRID)
+        except Exception:
+            pass
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
         nameCol = Gtk.TreeViewColumn(_("Name"))
