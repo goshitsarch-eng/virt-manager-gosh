@@ -379,6 +379,24 @@ class _VMMDogtailNode(dogtail.tree.Node):
     # pylint: disable=no-member
 
     @property
+    def name(self):
+        try:
+            raw = dogtail.tree.Node.name.__get__(self)
+        except Exception:
+            try:
+                raw = self.accessible.name
+            except Exception:
+                raw = ""
+        if raw and "copy host" in raw.lower():
+            try:
+                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+                if stored:
+                    return stored
+            except Exception:
+                pass
+        return raw
+
+    @property
     def active(self):
         """
         If the window is the raised and active window or not

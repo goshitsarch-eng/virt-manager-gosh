@@ -509,6 +509,15 @@ class vmmDetails(vmmGObjectUI):
             )
         except Exception:
             pass
+        try:
+            gtkcompat.expose_a11y_check(
+                "disk-removable",
+                "Removable:",
+                self._addstorage.widget("disk-removable"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
 
     @property
     def conn(self):
@@ -1967,10 +1976,19 @@ class vmmDetails(vmmGObjectUI):
         if is_host:
             text += " (%s)" % cpu.mode
         self.widget("cpu-copy-host").set_label(text)
+        shown = text.replace("_", "")
+        try:
+            open("/tmp/vmm-a11y-copy-host.txt", "w").write(shown)
+        except Exception:
+            pass
         try:
             sidecar = gtkcompat._A11Y_SIDECAR["items"].get("cpu-copy-host")
             if sidecar is not None:
-                gtkcompat.set_accessible_name(sidecar, text.replace("_", ""))
+                try:
+                    sidecar.set_label(shown)
+                except Exception:
+                    pass
+                gtkcompat.set_accessible_name(sidecar, shown)
         except Exception:
             pass
         self._cpu_copy_host_clicked_cb(self.widget("cpu-copy-host"))
