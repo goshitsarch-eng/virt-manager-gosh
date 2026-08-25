@@ -637,6 +637,11 @@ def sync_sidecar_visible(key, visible):
         widget._vmm_show_name = base
     shown = base if visible else (base + " (hidden)" if base else "")
     if shown:
+        if hasattr(widget, "set_label"):
+            try:
+                widget.set_label(shown)
+            except Exception:
+                pass
         set_accessible_name(widget, shown)
     try:
         widget.update_state([Gtk.AccessibleState.HIDDEN], [not bool(visible)])
