@@ -199,7 +199,12 @@ class VMMDogtailApp:
                 except Exception:
                     pass
                 utils.check(lambda: smenu.onscreen)
-                item = smenu.find(action, "menu item")
+                # Search the submenu window. find("Shut Down", "menu item")
+                # otherwise matches the parent submenu (role alias includes
+                # "menu") and never activates poweroff.
+                sub = self.root.find("vmm-shutdown-menu")
+                utils.check(lambda: sub.onscreen)
+                item = sub.find(action, "menu item")
             else:
                 item = menu.find(action, "menu item")
             utils.check(lambda: item.onscreen)
