@@ -2383,11 +2383,20 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                     val = model[it][i]
                 except Exception:
                     continue
-                if val is None:
+                if val is None or isinstance(val, bool):
                     continue
-                text = str(val)
-                if text and text not in parts:
-                    parts.append(text)
+                text = str(val).strip()
+                if not text or text in parts:
+                    continue
+                parts.append(text)
+            if not parts:
+                return ""
+            # Media rows store path plus "No media detected (/dev/sr1)".
+            # Prefer the complete label so find() can re.match from the start.
+            parts.sort(key=len, reverse=True)
+            best = parts[0]
+            if any(p != best and p in best for p in parts):
+                return best
             return " ".join(parts)
 
         def _fill(*_a, src=combo, dst=wrap):
