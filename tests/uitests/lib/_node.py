@@ -680,6 +680,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "Copy host",
                     "Removable",
                     "Customize",
+                    "Disk bus:",
                 )
             ):
                 return True

@@ -518,6 +518,20 @@ class vmmDetails(vmmGObjectUI):
             )
         except Exception:
             pass
+        try:
+            bus_text = self.widget("disk-bus-text")
+            if bus_text is None:
+                bus_text = self.widget("disk-bus").get_child()
+            gtkcompat.set_accessible_name(bus_text, "Disk bus:")
+            gtkcompat.expose_a11y_entry(
+                "details-disk-bus",
+                "Disk bus:",
+                bus_text,
+                window=self.topwin,
+                name_with_value=True,
+            )
+        except Exception:
+            pass
 
     @property
     def conn(self):
