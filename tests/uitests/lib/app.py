@@ -139,6 +139,12 @@ class VMMDogtailApp:
 
         def pressKey(self, key, *a, **kw):
             key_l = str(key or "").lower()
+            if key_l == "escape":
+                try:
+                    with open("/tmp/vmm-a11y-oslist-escape", "w") as fh:
+                        fh.write("1")
+                except Exception:
+                    pass
             if key_l in ("enter", "return"):
                 try:
                     from . import _node

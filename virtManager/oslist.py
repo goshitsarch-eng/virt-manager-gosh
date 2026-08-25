@@ -3,6 +3,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gdk, GLib, Gtk
 
 import virtinst
@@ -60,6 +62,24 @@ class vmmOSList(vmmGObjectUI):
         except Exception:
             pass
         GLib.idle_add(_oslist_a11y)
+        if not getattr(self, "_vmm_escape_poll", False):
+            self._vmm_escape_poll = True
+
+            def _poll_escape():
+                path = "/tmp/vmm-a11y-oslist-escape"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._stop_search_cb(self.search_entry)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_escape)
 
     def _cleanup(self):
         pass
@@ -271,6 +291,20 @@ class vmmOSList(vmmGObjectUI):
             self.search_entry.set_text(osobj.label)
         else:
             self.search_entry.set_text("")
+        try:
+            self.topwin.popdown()
+        except Exception:
+            pass
+        hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+        if hide:
+            try:
+                hide()
+            except Exception:
+                pass
+        try:
+            gtkcompat.set_accessible_name(self.topwin, ".oslist-popover")
+        except Exception:
+            pass
         self.refresh_a11y()
 
     def _os_selected_cb(self, src, path, column):

@@ -967,6 +967,16 @@ def _oslist_hide_popovers(oslist):
             set_accessible_name(wrap, ".oslist-popover")
         except Exception:
             pass
+    try:
+        top = getattr(oslist, "topwin", None)
+        if top is not None:
+            set_accessible_name(top, ".oslist-popover")
+            try:
+                top.popdown()
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 def _append_oslist_popover(box, oslist):
