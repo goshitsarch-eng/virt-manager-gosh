@@ -38,6 +38,41 @@ def _mnemonic_label(text):
     return str(text).replace("_", "", 1)
 
 
+def _accessible_label_for_widget(widget):
+    label = None
+    if hasattr(widget, "get_label"):
+        try:
+            label = widget.get_label()
+        except TypeError:
+            label = None
+    if not label:
+        label = getattr(widget, "label", None)
+    return _mnemonic_label(label)
+
+
+def apply_accessible_label(widget):
+    """
+    Prefer the mnemonic-stripped widget label as the AT-SPI name.
+
+    GTK 4 icon buttons otherwise expose the tooltip (e.g. "Create a new
+    virtual machine" instead of "New").
+    """
+    if widget is None or not isinstance(widget, Gtk.Widget):
+        return
+    name = _accessible_label_for_widget(widget)
+    if not name:
+        return
+    set_accessible_name(widget, name)
+    tip = None
+    if hasattr(widget, "get_tooltip_text"):
+        try:
+            tip = widget.get_tooltip_text()
+        except Exception:
+            tip = None
+    if tip:
+        widget.update_property([Gtk.AccessibleProperty.DESCRIPTION], [str(tip)])
+
+
 def sync_builder_accessible(widget):
     """
     GTK 4 often exposes tooltip text as the AT-SPI name for icon buttons.
@@ -45,15 +80,26 @@ def sync_builder_accessible(widget):
     """
     if widget is None or not isinstance(widget, Gtk.Widget):
         return
-    label = None
-    if hasattr(widget, "get_label"):
+    apply_accessible_label(widget)
+    inner = getattr(widget, "_button", None)
+    if inner is not None:
+        apply_accessible_label(inner)
+    if getattr(widget, "_vmm_a11y_synced", False):
+        return
+    widget._vmm_a11y_synced = True
+
+    def _reapply(*_args):
+        apply_accessible_label(widget)
+        inner_btn = getattr(widget, "_button", None)
+        if inner_btn is not None:
+            apply_accessible_label(inner_btn)
+
+    widget.connect("map", _reapply)
+    for prop in ("tooltip-text", "label", "icon-name"):
         try:
-            label = widget.get_label()
+            widget.connect("notify::" + prop, _reapply)
         except TypeError:
-            label = None
-    name = _mnemonic_label(label)
-    if name:
-        set_accessible_name(widget, name)
+            pass
 
 
 def get_accessible_name(widget):
@@ -474,12 +520,20 @@ class MenuItem(Gtk.Button):
         self._submenu = menu
         if menu is not None:
             self.set_accessible_role(Gtk.AccessibleRole.MENU)
-        else:
-            self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
-            # Do not parent the menu onto the item: GTK 4 would concatenate
+            # Do not parent the menu onto the item: GTK 4 concatenates
             # every submenu label into this item's accessible name.
             if menu.get_parent() is self:
                 menu.unparent()
+            menu._parent_widget = self
+
+            def _map_menu():
+                menu._ensure_popover(self)
+                menu._ensure_mapped()
+                return False
+
+            GLib.idle_add(_map_menu)
+        else:
+            self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
         self._sync_accessible_label()
 
     def get_submenu(self):
@@ -586,6 +640,7 @@ class Menu(Gtk.Box):
         self._items = []
         self._popover = None
         self._parent_widget = None
+        self._opened = False
 
     def add(self, item):
         self.insert(item, -1)
@@ -624,18 +679,34 @@ class Menu(Gtk.Box):
     def _ensure_popover(self, parent):
         # Use a transient undecorated window so AT-SPI can see menu items.
         # Gtk.Popover often exposes only empty panels to dogtail.
+        if parent is not None:
+            self._parent_widget = parent
         if self._popover is None:
             self._popover = Gtk.Window()
             self._popover.set_decorated(False)
             self._popover.set_resizable(False)
-            self._popover.set_transient_for(parent.get_root() if parent else None)
+            self._popover.set_modal(False)
+            self._popover.set_focusable(False)
+            self._popover.set_focus_on_click(False)
             self._popover.set_accessible_role(Gtk.AccessibleRole.MENU)
             self._popover.add_css_class("menu")
+            try:
+                self._popover.set_default_size(220, max(32, 28 * max(1, len(self._items))))
+            except Exception:
+                pass
+        root = None
+        if self._parent_widget is not None and hasattr(self._parent_widget, "get_root"):
+            root = self._parent_widget.get_root()
+        if root is not None:
+            self._popover.set_transient_for(root)
+            if hasattr(root, "get_application"):
+                app = root.get_application()
+                if app is not None:
+                    app.add_window(self._popover)
         if self.get_parent() is not None and self.get_parent() != self._popover:
             self.unparent()
         if self._popover.get_child() is not self:
             self._popover.set_child(self)
-        self._parent_widget = parent
         self.remove_css_class("vmm-submenu")
         show_all(self)
         for item in self._items:
@@ -643,15 +714,37 @@ class Menu(Gtk.Box):
             if hasattr(item, "_sync_accessible_label"):
                 item._sync_accessible_label()
 
+    def _ensure_mapped(self):
+        """
+        Keep the menu window realized so dogtail can find items before click.
+        Closed menus stay mapped at opacity 0 with a real allocation so
+        AT-SPI click still activates them.
+        """
+        if self._popover is None:
+            self._ensure_popover(self._parent_widget)
+        if self._popover is None:
+            return
+        if not self._opened:
+            self._popover.set_opacity(0)
+        self._popover.set_visible(True)
+
     def popup(self, *_args, **_kwargs):
         parent = self._parent_widget
-        if parent is None:
+        if parent is None and self._popover is None:
             return
         self._ensure_popover(parent)
+        self._opened = True
+        self._popover.set_opacity(1)
+        self._ensure_mapped()
         try:
             self._popover.present()
         except Exception:
             pass
+
+    def popdown(self, *_args, **_kwargs):
+        self._opened = False
+        if self._popover is not None:
+            self._popover.set_opacity(0)
 
     def popup_at_pointer(self, event=None):
         ignore = event
@@ -766,44 +859,59 @@ class MenuToolButton(Gtk.Box):
     def __init__(self, **kwargs):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, **kwargs)
         self._button = Gtk.Button()
-        self._menu_button = Gtk.MenuButton()
+        self._menu_button = Gtk.ToggleButton()
         self._button.set_hexpand(True)
+        self._button.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        self._menu_button.set_accessible_role(Gtk.AccessibleRole.TOGGLE_BUTTON)
+        self._menu_button.set_icon_name("pan-down-symbolic")
+        set_accessible_name(self._menu_button, "Menu")
         self.append(self._button)
         self.append(self._menu_button)
         self._menu = None
         self.connect("notify::label", self._sync_label)
         self.connect("notify::icon-name", self._sync_icon)
         self._button.connect("clicked", lambda *_a: self.emit("clicked"))
+        self._menu_button.connect("toggled", self._on_menu_toggled)
 
     def _sync_label(self, *_args):
         self._button.set_label(self.label)
+        apply_accessible_label(self._button)
 
     def _sync_icon(self, *_args):
         if self.icon_name:
             self._button.set_icon_name(self.icon_name)
+        apply_accessible_label(self._button)
 
     def set_icon_name(self, name):
         self.icon_name = name or ""
         self._button.set_icon_name(name)
+        apply_accessible_label(self._button)
 
     def set_label(self, label):
         self.label = label or ""
         self._button.set_label(label)
+        apply_accessible_label(self._button)
+
+    def _on_menu_toggled(self, button):
+        if button.get_active() and self._menu is not None:
+            if hasattr(self._menu, "popup_at_widget"):
+                self._menu.popup_at_widget(button)
 
     def set_menu(self, menu):
         self._menu = menu
         if menu is None:
-            self._menu_button.set_popover(None)
             return
         if isinstance(menu, Gtk.Popover):
-            self._menu_button.set_popover(menu)
             return
-        popover = Gtk.Popover()
-        popover.set_has_arrow(False)
-        if menu.get_parent() is not None:
-            menu.unparent()
-        popover.set_child(menu)
-        self._menu_button.set_popover(popover)
+        if hasattr(menu, "_parent_widget"):
+            menu._parent_widget = self._menu_button
+
+            def _map_menu():
+                menu._ensure_popover(self._menu_button)
+                menu._ensure_mapped()
+                return False
+
+            GLib.idle_add(_map_menu)
 
     def get_menu(self):
         return self._menu
