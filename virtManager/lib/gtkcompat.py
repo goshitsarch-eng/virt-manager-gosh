@@ -2021,10 +2021,33 @@ class Menu(Gtk.Box):
             show_all(item)
 
     def _ensure_popover(self, parent):
-        # Use a transient undecorated window so AT-SPI can see menu items.
-        # Gtk.Popover often exposes only empty panels to dogtail.
+        # Menubar submenus (View → Graph) stay on the real toplevel
+        # overlay. Extra Gtk.Window popovers poison AT-SPI GetItems
+        # after a few open/close cycles. Context menus still use a
+        # transient window because they have no parent widget.
         if parent is not None:
             self._parent_widget = parent
+        root = None
+        if self._parent_widget is not None and hasattr(self._parent_widget, "get_root"):
+            try:
+                root = self._parent_widget.get_root()
+            except Exception:
+                root = None
+        if root is not None and isinstance(root, Gtk.Window):
+            box = ensure_window_a11y_box(root)
+            if self.get_parent() is not None and self.get_parent() is not box:
+                self.unparent()
+            if self.get_parent() is None:
+                box.append(self)
+            self._popover = None
+            self._sync_menu_a11y_name()
+            self.remove_css_class("vmm-submenu")
+            show_all(self)
+            for item in self._items:
+                show_all(item)
+                if hasattr(item, "_sync_accessible_label"):
+                    item._sync_accessible_label()
+            return
         if self._popover is None:
             self._popover = Gtk.Window()
             self._popover.set_decorated(False)
@@ -2038,31 +2061,9 @@ class Menu(Gtk.Box):
                 self._popover.set_default_size(220, max(32, 28 * max(1, len(self._items))))
             except Exception:
                 pass
-        root = None
-        if self._parent_widget is not None and hasattr(self._parent_widget, "get_root"):
-            try:
-                root = self._parent_widget.get_root()
-            except Exception:
-                root = None
         if root is not None:
             try:
                 self._popover.set_transient_for(root)
-            except Exception:
-                pass
-        app = None
-        if root is not None and hasattr(root, "get_application"):
-            try:
-                app = root.get_application()
-            except Exception:
-                app = None
-        if app is None:
-            try:
-                app = Gtk.Application.get_default()
-            except Exception:
-                app = None
-        if app is not None:
-            try:
-                app.add_window(self._popover)
             except Exception:
                 pass
         if self.get_parent() is not None and self.get_parent() != self._popover:
@@ -2079,13 +2080,13 @@ class Menu(Gtk.Box):
 
     def _ensure_mapped(self):
         """
-        Keep the menu window realized so dogtail can find items before click.
-        Closed menus stay mapped at opacity 0 with a real allocation so
-        AT-SPI click still activates them.
+        Keep the menu realized so dogtail can find items before click.
+        Menubar submenus live on the toplevel overlay. Context menus use
+        a window that stays mapped at opacity 0 when closed.
         """
+        self._ensure_popover(self._parent_widget)
         if self._popover is None:
-            self._ensure_popover(self._parent_widget)
-        if self._popover is None:
+            self._sync_menu_a11y_name()
             return
         if not self._opened:
             self._popover.set_opacity(0)
@@ -2104,8 +2105,9 @@ class Menu(Gtk.Box):
         name = self._menu_open_name()
         if not name:
             return
-        # Prefix closed menus so find("vm-action-menu") only matches when open.
-        shown = name if self._opened else "." + name
+        # Prefix closed context-menu windows so find("vm-action-menu")
+        # only matches when open. Overlay menubar submenus stay named.
+        shown = name if (self._opened or self._popover is None) else "." + name
         set_accessible_name(self, shown)
         if self._popover is not None:
             set_accessible_name(self._popover, shown)
@@ -2135,11 +2137,11 @@ class Menu(Gtk.Box):
             self._destroy_popover()
         self._opened = True
         self._ensure_popover(self._parent_widget)
+        self._ensure_mapped()
+        self._sync_menu_a11y_name()
         if self._popover is None:
             return
         self._popover.set_opacity(1)
-        self._ensure_mapped()
-        self._sync_menu_a11y_name()
         try:
             self._popover.present()
         except Exception:
