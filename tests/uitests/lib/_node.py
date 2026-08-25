@@ -317,16 +317,30 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # function to check whether we can click a widget. We may click
         # anywhere within the widget and clicks outside the screen bounds are
         # silently ignored.
-        if self.roleName in ["frame", "window"]:
+        try:
+            role = self.roleName
+        except Exception:
+            return False
+        if role in ["frame", "window"]:
             return True
         # Menubar File/Help items are role "menu" but must stay clickable.
-        if self.is_menuitem() or self.roleName == "menu item":
-            if (self.name or "").startswith("."):
+        if self.is_menuitem() or role == "menu item":
+            try:
+                if (self.name or "").startswith("."):
+                    return False
+            except Exception:
                 return False
             return True
         # Closed GTK 4 menus keep a leading "." so they are not onscreen.
-        if self.roleName == "menu":
-            return bool(self.name) and not (self.name or "").startswith(".")
+        # Destroyed popover windows raise on name/showing; treat as closed.
+        if role == "menu":
+            try:
+                name = self.name or ""
+                if not name or name.startswith("."):
+                    return False
+                return True
+            except Exception:
+                return False
         screen = Gdk.Screen.get_default()
         return (
             self.position[0] >= 0
