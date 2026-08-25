@@ -235,6 +235,10 @@ class VMMDogtailApp:
     ##########################
 
     def manager_open_createconn(self):
+        try:
+            os.remove("/tmp/vmm-a11y-createconn-hidden")
+        except Exception:
+            pass
         manager = self.get_manager()
         try:
             manager.find("File", "menu").click()
