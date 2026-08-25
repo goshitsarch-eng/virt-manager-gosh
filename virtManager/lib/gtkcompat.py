@@ -1732,6 +1732,10 @@ def expose_createvm_methods_window(createvm):
             GLib.idle_add(_idle)
 
         nav.connect("clicked", _nav)
+        try:
+            register_a11y_click(label, lambda w=emit_wid, c=createvm: _nav(None, w, c))
+        except Exception:
+            pass
         box.append(nav)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _append_detect_os_control(box, createvm)

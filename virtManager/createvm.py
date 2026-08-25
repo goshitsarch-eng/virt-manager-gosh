@@ -2256,6 +2256,10 @@ class vmmCreateVM(vmmGObjectUI):
 
         if error:
             error = _("Unable to complete install: '%s'") % error
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(error)
+            except Exception:
+                pass
             parentobj.err.show_err(error, details=details)
             self._gdata.failed_guest = guest
             return
