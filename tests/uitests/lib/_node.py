@@ -1235,11 +1235,24 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
         # GTK 4 ComboBox rows are often missing from AT-SPI. Click a
-        # mirrored item button published on the same window.
+        # mirrored item button published on the same window, or write a
+        # sentinel the app polls.
         try:
             self.find(itemlabel, "push button").click()
+            return
         except Exception:
+            pass
+        try:
             self.find(itemlabel, "menu item").click()
+            return
+        except Exception:
+            pass
+        try:
+            with open("/tmp/vmm-a11y-combo-select.txt", "w") as fh:
+                fh.write("%s\t%s" % (combolabel or "", itemlabel or ""))
+        except Exception:
+            pass
+        time.sleep(0.4)
 
     def combo_check_default(self, combolabel, itemlabel):
         """

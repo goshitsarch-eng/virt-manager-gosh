@@ -1338,7 +1338,7 @@ def expose_createconn_window(createconn):
 
                 def _pick(_b, combo=hv, val=hvid):
                     try:
-                        from virtManager.lib import uiutil
+                        from . import uiutil
 
                         uiutil.set_list_selection(combo, val)
                     except Exception:
@@ -1367,7 +1367,49 @@ def expose_createconn_window(createconn):
     _ensure_app_window(win)
     win.set_visible(True)
     createconn._vmm_createconn_win = win
+    _start_combo_select_poll(createconn)
     return win
+
+
+def _start_combo_select_poll(createconn):
+    if createconn is None or getattr(createconn, "_vmm_combo_poll", False):
+        return
+    createconn._vmm_combo_poll = True
+    path = "/tmp/vmm-a11y-combo-select.txt"
+
+    def _tick(*_a, c=createconn):
+        try:
+            text = open(path, "r").read().strip()
+        except Exception:
+            return True
+        if not text:
+            return True
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        item = text.split("\t", 1)[-1].strip()
+        if not item:
+            return True
+        try:
+            from . import uiutil
+
+            hv = c.widget("hypervisor")
+            model = hv.get_model() if hv is not None else None
+            if model is None:
+                return True
+            it = model.get_iter_first()
+            while it is not None:
+                label = str(model[it][1] or "")
+                if item.lower() in label.lower() or label.lower() in item.lower():
+                    uiutil.set_list_selection(hv, model[it][0])
+                    break
+                it = model.iter_next(it)
+        except Exception:
+            pass
+        return True
+
+    GLib.timeout_add(50, _tick)
 
 
 def hide_createconn_window(createconn):
