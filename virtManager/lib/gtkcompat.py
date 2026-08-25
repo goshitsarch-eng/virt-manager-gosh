@@ -384,20 +384,18 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 btn._vmm_row_label = lab
                 ensure_activate_clicked(btn)
 
-                clicks = {"t": 0.0}
-
                 def _on_row_clicked(_b, n=name):
                     _select_name(n)
-                    now = GLib.get_monotonic_time() / 1000000.0
-                    is_double = (now - clicks["t"]) < 0.6
-                    clicks["t"] = now
-                    if is_double and on_activate is not None:
-                        on_activate(n)
-                        return
                     if on_popup is not None:
                         on_popup(n)
 
                 btn.connect("clicked", _on_row_clicked)
+                if on_activate is not None:
+                    def _row_activate(_w, _an, _p, n=name):
+                        _select_name(n)
+                        on_activate(n)
+
+                    btn.install_action("row-activate", None, _row_activate)
                 if on_popup is not None:
                     def _menu_action(_w, _an, _p, n=name):
                         _select_name(n)

@@ -505,10 +505,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
         super().click(*args, **kwargs)
 
     def doubleClick(self, *args, **kwargs):
-        # Opacity-0 GTK 4 mirrors have bad coordinates; two AT-SPI clicks
-        # are treated as activate (open connection / VM).
-        self.click()
-        self.click()
+        # Opacity-0 GTK 4 mirrors have bad coordinates. Prefer the
+        # explicit row-activate action so Extra's click+right-click is
+        # not mistaken for a double-click.
+        try:
+            self.doActionNamed("row-activate")
+            return
+        except Exception:
+            pass
+        try:
+            self.doActionNamed("click")
+            self.doActionNamed("click")
+        except Exception:
+            super().doubleClick(*args, **kwargs)
 
     def point(self, *args, **kwargs):
         # pylint: disable=signature-differs
