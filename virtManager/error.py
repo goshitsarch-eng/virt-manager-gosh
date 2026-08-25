@@ -8,6 +8,7 @@ import sys
 import textwrap
 import traceback
 
+from gi.repository import GObject
 from gi.repository import Gtk
 
 from virtinst import log
@@ -33,7 +34,11 @@ def _launch_dialog(dialog, primary_text, secondary_text, title, widget=None, mod
     primary_text = fix_text(primary_text)
     secondary_text = fix_text(secondary_text)
 
-    dialog.set_property("text", primary_text)
+    if hasattr(dialog, "_primary"):
+        dialog._primary.set_text(primary_text or "")
+        gtkcompat.set_accessible_name(dialog._primary, primary_text or "")
+    else:
+        dialog.set_property("text", primary_text)
     dialog.format_secondary_text(secondary_text or None)
     dialog.set_title(title)
 
@@ -128,17 +133,12 @@ class vmmErrorDialog(vmmGObject):
 
     def _simple_dialog(self, dialog_type, buttons, text1, text2, title, widget=None, modal=True):
 
-        dialog = Gtk.MessageDialog(
-            transient_for=self.get_parent(),
-            modal=True,
-            destroy_with_parent=True,
-            message_type=dialog_type,
-            buttons=buttons,
+        dialog = _errorDialog(
+            parent=self.get_parent(), flags=0, message_type=dialog_type, buttons=buttons
         )
         if self._simple:
             self._simple.destroy()
         self._simple = dialog
-        self._simple.get_accessible().set_name("vmm dialog")
 
         return _launch_dialog(
             self._simple, text1, text2 or "", title or "", widget=widget, modal=modal
@@ -262,31 +262,47 @@ class vmmErrorDialog(vmmGObject):
         )
 
 
-class _errorDialog(Gtk.MessageDialog):
+class _errorDialog(Gtk.Window):
     """
-    Custom error dialog with optional check boxes or details drop down
+    Custom error/confirm window. GTK 4 MessageDialog is not reliably
+    exposed to AT-SPI, so this is a regular window with role ALERT.
     """
+
+    __gsignals__ = {
+        "response": (GObject.SignalFlags.RUN_FIRST, None, (int,)),
+    }
 
     def __init__(self, parent=None, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.CLOSE):
         ignore = flags
-        Gtk.MessageDialog.__init__(
-            self,
-            transient_for=parent,
-            modal=True,
-            destroy_with_parent=True,
-            message_type=message_type,
-            buttons=buttons,
-        )
-
+        ignore = message_type
+        Gtk.Window.__init__(self)
+        self.set_transient_for(parent)
+        self.set_modal(True)
         self.set_title("")
-        msg_area = self.get_message_area()
-        child = msg_area.get_first_child()
-        while child:
-            if hasattr(child, "set_max_width_chars"):
-                child.set_max_width_chars(40)
-            child = child.get_next_sibling()
-
+        self.set_default_size(440, 180)
+        self.set_accessible_role(Gtk.AccessibleRole.ALERT)
         gtkcompat.set_accessible_name(self, "vmm dialog")
+
+        self._content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self._content.set_margin_top(16)
+        self._content.set_margin_bottom(16)
+        self._content.set_margin_start(16)
+        self._content.set_margin_end(16)
+        self._primary = Gtk.Label()
+        self._primary.set_wrap(True)
+        self._primary.set_xalign(0)
+        self._primary.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        self._secondary = Gtk.Label()
+        self._secondary.set_wrap(True)
+        self._secondary.set_xalign(0)
+        self._secondary.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        self._content.append(self._primary)
+        self._content.append(self._secondary)
+        self._button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self._button_box.set_halign(Gtk.Align.END)
+        self._add_buttons(buttons)
+        self._content.append(self._button_box)
+        self.set_child(self._content)
 
         self.chk_vbox = None
         self.init_chkbox()
@@ -294,6 +310,43 @@ class _errorDialog(Gtk.MessageDialog):
         self.buffer = None
         self.buf_expander = None
         self.init_details()
+
+    def _emit_response(self, response):
+        self.emit("response", response)
+
+    def _add_buttons(self, buttons):
+        mapping = {
+            Gtk.ButtonsType.YES_NO: (
+                ("No", Gtk.ResponseType.NO),
+                ("Yes", Gtk.ResponseType.YES),
+            ),
+            Gtk.ButtonsType.OK_CANCEL: (
+                ("Cancel", Gtk.ResponseType.CANCEL),
+                ("OK", Gtk.ResponseType.OK),
+            ),
+            Gtk.ButtonsType.OK: (("OK", Gtk.ResponseType.OK),),
+            Gtk.ButtonsType.CLOSE: (("Close", Gtk.ResponseType.CLOSE),),
+        }
+        for label, response in mapping.get(buttons, (("Close", Gtk.ResponseType.CLOSE),)):
+            btn = Gtk.Button(label=label)
+            btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            gtkcompat.set_accessible_name(btn, label)
+            btn.connect("clicked", lambda _b, r=response: self._emit_response(r))
+            self._button_box.append(btn)
+
+    def get_content_area(self):
+        return self._content
+
+    def get_message_area(self):
+        return self._content
+
+    def format_secondary_text(self, text):
+        self._secondary.set_text(text or "")
+        if text:
+            gtkcompat.set_accessible_name(self._secondary, text)
+
+    def run(self):
+        return gtkcompat.run_dialog(self)
 
     def init_chkbox(self):
         # Init check items

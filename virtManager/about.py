@@ -85,6 +85,13 @@ class vmmAbout(vmmGObject):
         keyctl = Gtk.EventControllerKey()
         keyctl.connect("key-pressed", _on_key)
         dialog.add_controller(keyctl)
+        shortcut = Gtk.Shortcut.new(
+            Gtk.KeyvalTrigger.new(Gdk.KEY_Escape, 0),
+            Gtk.CallbackAction.new(lambda *_a: dialog.hide() or True),
+        )
+        sctl = Gtk.ShortcutController()
+        sctl.add_shortcut(shortcut)
+        dialog.add_controller(sctl)
         dialog.connect("close-request", lambda *_a: dialog.hide() or True)
         self._dialog = dialog
         dialog.present()
