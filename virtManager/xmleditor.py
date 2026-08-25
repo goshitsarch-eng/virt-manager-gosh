@@ -100,7 +100,9 @@ class vmmXMLEditor(vmmGObjectUI):
             self._srcbuff = self._srcview.get_buffer()
 
         self._srcview.set_monospace(True)
-        gtkcompat.set_accessible_name(self._srcview, "XML editor")
+        # Keep the real GtkSource view out of dogtail name search so
+        # set_text() hits the sidecar TextView that syncs the buffer.
+        gtkcompat.set_accessible_name(self._srcview, ".xml-editor-real")
         gtkcompat.expose_a11y_xml_editor(
             "xml-editor-%s" % id(self),
             "XML editor",
