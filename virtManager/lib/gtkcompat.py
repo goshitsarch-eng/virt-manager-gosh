@@ -3291,14 +3291,24 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         model = treeview.get_model()
         sel = treeview.get_selection()
         if model is None or sel is None or not want:
-            return
+            return False
 
         def _find(parent):
             _iter = model.iter_children(parent) if parent else model.get_iter_first()
             while _iter is not None:
                 try:
                     have = _mnemonic_label(str(model[_iter][name_column] or ""))
-                    if have == want or model[_iter][0] == want:
+                    col0 = ""
+                    try:
+                        col0 = str(model[_iter][0] or "")
+                    except Exception:
+                        col0 = ""
+                    if (
+                        have == want
+                        or col0 == want
+                        or (want and want in have)
+                        or (want and want in col0)
+                    ):
                         sel.select_iter(_iter)
                         return True
                 except Exception:
@@ -3308,9 +3318,14 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 _iter = model.iter_next(_iter)
             return False
 
-        _find(None)
-        treeview.grab_focus()
-        _sync_row_selected()
+        found = _find(None)
+        if found:
+            try:
+                treeview.grab_focus()
+            except Exception:
+                pass
+            _sync_row_selected()
+        return bool(found)
 
     def _sync_row_selected(*_a):
         sel = treeview.get_selection()
@@ -3527,14 +3542,16 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         except Exception:
             text = ""
         if text:
+            matched = False
             try:
-                os.remove(path)
+                matched = bool(_select_name(text))
             except Exception:
-                pass
-            try:
-                _select_name(text)
-            except Exception:
-                pass
+                matched = False
+            if matched:
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
         return True
 
     if not getattr(treeview, "_vmm_hw_select_poll", False):

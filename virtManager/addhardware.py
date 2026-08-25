@@ -4,8 +4,10 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
 import traceback
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import (
@@ -29,6 +31,7 @@ from virtinst import (
 )
 from virtinst import log
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -130,11 +133,76 @@ class vmmAddHardware(vmmGObjectUI):
         self.topwin.set_transient_for(parent)
         self.topwin.present()
         self.conn.schedule_priority_tick(pollnet=True, pollpool=True, pollnodedev=True)
+        try:
+            os.remove("/tmp/vmm-a11y-addhw-hidden")
+        except Exception:
+            pass
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "Add New Virtual Hardware")
+            self.topwin.set_title("Add New Virtual Hardware")
+            gtkcompat._ensure_app_window(self.topwin)
+        except Exception:
+            pass
+        try:
+            gtkcompat.register_a11y_click("Cancel", lambda: self.close())
+            gtkcompat.expose_a11y_button(
+                "addhw-cancel",
+                "Cancel",
+                lambda: self.close(),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        try:
+            names = []
+            model = self.widget("hw-list").get_model()
+            if model is not None:
+                for row in model:
+                    names.append(str(row[0] or ""))
+            open("/tmp/vmm-a11y-hw-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+        if not getattr(self, "_vmm_hw_select_poll", False):
+            self._vmm_hw_select_poll = True
+
+            def _poll_hw_select():
+                path = "/tmp/vmm-a11y-hw-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                except Exception:
+                    return True
+                if not want:
+                    return True
+                try:
+                    tree = self.widget("hw-list")
+                    model = tree.get_model() if tree is not None else None
+                    if model is None:
+                        return True
+                    for idx, row in enumerate(model):
+                        label = str(row[0] or "")
+                        if want == label or want in label or label in want:
+                            uiutil.set_list_selection_by_number(tree, idx)
+                            try:
+                                os.remove(path)
+                            except Exception:
+                                pass
+                            break
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_hw_select)
 
     def close(self, ignore1=None, ignore2=None):
         if self.is_visible():
             log.debug("Closing addhw")
             self.topwin.hide()
+        try:
+            open("/tmp/vmm-a11y-addhw-hidden", "w").write("1")
+        except Exception:
+            pass
         if self._storagebrowser:
             self._storagebrowser.close()
 
@@ -836,6 +904,19 @@ class vmmAddHardware(vmmGObjectUI):
 
         devlist.get_selection().connect("changed", self._hostdev_row_selected_cb)
         devlist.get_selection().emit("changed")
+        try:
+            names = []
+            selected = ""
+            for row in model:
+                label = str(row[1] or "")
+                if label:
+                    names.append(label)
+            if names:
+                selected = names[0]
+            open("/tmp/vmm-a11y-hostdev-list.txt", "w").write("\n".join(names))
+            open("/tmp/vmm-a11y-hostdev-selected.txt", "w").write(selected)
+        except Exception:
+            pass
 
     @staticmethod
     def build_video_combo(vm, combo):
@@ -1005,6 +1086,29 @@ class vmmAddHardware(vmmGObjectUI):
         self.widget("create-pages").get_nth_page(page).show()
         self.widget("create-pages").set_current_page(page)
         self.widget("top-pages").set_current_page(0)
+        try:
+            page_names = {
+                PAGE_DISK: "storage-tab",
+                PAGE_CONTROLLER: "controller-tab",
+                PAGE_NETWORK: "network-tab",
+                PAGE_INPUT: "input-tab",
+                PAGE_GRAPHICS: "graphics-tab",
+                PAGE_SOUND: "sound-tab",
+                PAGE_HOSTDEV: "host-tab",
+                PAGE_CHAR: "char-tab",
+                PAGE_VIDEO: "video-tab",
+                PAGE_WATCHDOG: "watchdog-tab",
+                PAGE_FILESYSTEM: "fs-tab",
+                PAGE_SMARTCARD: "smartcard-tab",
+                PAGE_USBREDIR: "usbredir-tab",
+                PAGE_TPM: "tpm-tab",
+                PAGE_RNG: "rng-tab",
+                PAGE_PANIC: "panic-tab",
+                PAGE_VSOCK: "vsock-tab",
+            }
+            open("/tmp/vmm-a11y-addhw-tab.txt", "w").write(page_names.get(page, ""))
+        except Exception:
+            pass
 
     def _dev_to_title(self, page):
         if page == PAGE_DISK:

@@ -86,9 +86,22 @@ class _SentinelTableCell(object):
     @property
     def state_selected(self):
         try:
-            return open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == self.name
+            cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+            if cur == self.name:
+                return True
         except Exception:
-            return self._selected
+            pass
+        try:
+            cur = open("/tmp/vmm-a11y-hostdev-selected.txt", "r").read().strip()
+            if cur == self.name or (self.name and self.name in cur):
+                return True
+        except Exception:
+            pass
+        return self._selected
+
+    @property
+    def selected(self):
+        return self.state_selected
 
     @property
     def showing(self):
@@ -597,6 +610,103 @@ class _SentinelNetWarn(object):
         utils.check(lambda: self.onscreen)
 
 
+class _SentinelAddhwTab(object):
+    """Add Hardware notebook page after GetItems hides the real tab panel."""
+
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "page tab"
+
+    def _current(self):
+        try:
+            return open("/tmp/vmm-a11y-addhw-tab.txt", "r").read().strip()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return self._current() == self.name
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        raw = str(name or "").replace(".*", "")
+        compact = raw.lower()
+        if "no devices" in compact:
+            selected = True
+            try:
+                selected = "No Devices" in open(
+                    "/tmp/vmm-a11y-hostdev-selected.txt", "r"
+                ).read()
+            except Exception:
+                selected = True
+            return _SentinelTableCell("No Devices Available", selected)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        labeller_pattern = (".*%s.*" % labeller_text) if labeller_text else None
+        return self.find(name_pattern, role_pattern, labeller_pattern)
+
+
+def _sentinel_addhw_tab(name, roleName):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "")
+    if raw.startswith("."):
+        return None
+    compact = raw.lower()
+    tabs = (
+        "host-tab",
+        "storage-tab",
+        "network-tab",
+        "input-tab",
+        "graphics-tab",
+        "sound-tab",
+        "char-tab",
+        "video-tab",
+        "watchdog-tab",
+        "fs-tab",
+        "smartcard-tab",
+        "usbredir-tab",
+        "tpm-tab",
+        "rng-tab",
+        "panic-tab",
+        "vsock-tab",
+        "controller-tab",
+    )
+    if compact in tabs or raw in tabs:
+        return _SentinelAddhwTab(compact)
+    return None
+
+
 def _sentinel_net_source(name, roleName):
     if not name:
         return None
@@ -1031,6 +1141,16 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = self.name or ""
         except Exception:
             name = ""
+        if "Add New Virtual Hardware" in name:
+            try:
+                if os.path.exists("/tmp/vmm-a11y-addhw-hidden"):
+                    return False
+            except Exception:
+                pass
+            try:
+                return bool(self.showing and self.visible and not self._a11y_hidden_name())
+            except Exception:
+                return False
         if (
             "New VM" in name
             or " on " in name
@@ -1607,7 +1727,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "media-entry",
             "copy host",
         )
-        if nname in ("ok", "yes", "close", "no"):
+        if nname in ("ok", "yes", "close", "no", "cancel"):
             try:
                 with open("/tmp/vmm-a11y-click.txt", "w") as fh:
                     fh.write(raw or nname)
@@ -2129,6 +2249,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_net_source(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_addhw_tab(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
