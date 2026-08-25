@@ -100,7 +100,15 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
             name = child.name or ""
         except Exception:
             return 3
-        if role in ("panel", "frame", "window", "group", "table", "tree table"):
+        if name.startswith(".a11y-tree") or role in (
+            "panel",
+            "frame",
+            "window",
+            "group",
+            "table",
+            "tree table",
+            "list",
+        ):
             return 0
         if role == "menu" and name.startswith("."):
             return 4
@@ -115,7 +123,10 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
     for idx, child in enumerate(kids):
         if recursive:
             try:
-                closed_menu = child.roleName == "menu" and (child.name or "").startswith(".")
+                cname = child.name or ""
+                closed_menu = child.roleName == "menu" and cname.startswith(".")
+                if closed_menu and cname.startswith(".a11y-tree"):
+                    closed_menu = False
             except Exception:
                 closed_menu = False
             if closed_menu:
@@ -757,21 +768,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     return False
             return True
 
-        try:
-            with open("/tmp/window_close_debug.log", "a") as _dbg:
-                _dbg.write(
-                    "close name=%r role=%s visible=%s showing=%s hidden_name=%s marker=%s\n"
-                    % (
-                        self.name,
-                        self.roleName,
-                        self.visible,
-                        self.showing,
-                        self._a11y_hidden_name(),
-                        _marker_closed(),
-                    )
-                )
-        except Exception:
-            pass
         if _click_remote_close():
             utils.check(_closed, timeout=2)
             return

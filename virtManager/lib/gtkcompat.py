@@ -1196,7 +1196,18 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     win.set_resizable(False)
     win.set_modal(False)
     win.set_focusable(False)
-    win.set_accessible_role(Gtk.AccessibleRole.GROUP)
+    # GROUP is abstract and AT-SPI then reports a menu; dotted menus
+    # are skipped by the uitest walker, which hid every VM row.
+    for role in (
+        Gtk.AccessibleRole.LIST,
+        Gtk.AccessibleRole.GENERIC,
+        Gtk.AccessibleRole.SECTION,
+    ):
+        try:
+            win.set_accessible_role(role)
+            break
+        except Exception:
+            continue
     win.set_default_size(240, 80)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     win.set_child(box)
