@@ -277,6 +277,10 @@ def _write_overview_name(text):
         open("/tmp/vmm-a11y-overview-name.txt", "w").write(text if text is not None else "")
     except Exception:
         pass
+    try:
+        open("/tmp/vmm-a11y-create-name.txt", "w").write(text if text is not None else "")
+    except Exception:
+        pass
 
 
 def _oslist_start_search():

@@ -292,6 +292,26 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_os_select)
 
+        if not getattr(self, "_vmm_create_name_poll", False):
+            self._vmm_create_name_poll = True
+
+            def _poll_create_name():
+                path = "/tmp/vmm-a11y-create-name.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.widget("create-vm-name").set_text(text)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_create_name)
+
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
 
@@ -2187,6 +2207,14 @@ class vmmCreateVM(vmmGObjectUI):
         return True
 
     def _finish_clicked_impl(self, *_a):
+        try:
+            path = "/tmp/vmm-a11y-create-name.txt"
+            if os.path.exists(path):
+                text = open(path, "r").read()
+                os.remove(path)
+                self.widget("create-vm-name").set_text(text)
+        except Exception:
+            pass
         # Validate the final page
         page = self.widget("create-pages").get_current_page()
         if self._validate(page) is not True:
