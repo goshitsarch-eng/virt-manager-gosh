@@ -29,6 +29,9 @@ class vmmAbout(vmmGObject):
 
     def show(self, parent):
         log.debug("Showing about")
+        if self._dialog:
+            self._dialog.present(parent)
+            return
         dialog = Adw.AboutDialog()
         dialog.set_application_name("Virtual Machine Manager")
         dialog.set_application_icon("virt-manager")

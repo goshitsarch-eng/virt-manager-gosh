@@ -376,10 +376,21 @@ class _VMMDogtailNode(dogtail.tree.Node):
         try:
             ret = self.findChild(pred, recursive=recursive)
         except dogtail.tree.SearchError:
-            raise dogtail.tree.SearchError(
-                "Didn't find widget with name='%s' "
-                "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
-            ) from None
+            # GTK 4 dialogs often appear as new application-level frames.
+            # Search the desktop when looking for a window-like role.
+            role_str = str(roleName or "")
+            if any(r in role_str for r in ("dialog", "frame", "alert", "window")):
+                try:
+                    ret = dogtail.tree.root.findChild(pred, recursive=True)
+                except dogtail.tree.SearchError:
+                    ret = None
+            else:
+                ret = None
+            if ret is None:
+                raise dogtail.tree.SearchError(
+                    "Didn't find widget with name='%s' "
+                    "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+                ) from None
 
         # Wait for independent windows to become active in the window manager
         # before we return them. This ensures the window is actually onscreen
