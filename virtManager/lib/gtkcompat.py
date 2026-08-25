@@ -173,6 +173,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     win.set_resizable(False)
     win.set_modal(False)
     win.set_focusable(False)
+    win.set_accessible_role(Gtk.AccessibleRole.GROUP)
     win.set_default_size(240, 80)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     win.set_child(box)
@@ -948,10 +949,6 @@ class Menu(Gtk.Box):
         self._popover = None
         self._parent_widget = None
         self._opened = False
-        try:
-            self.update_state([Gtk.AccessibleState.EXPANDED], [False])
-        except Exception:
-            pass
 
     def add(self, item):
         self.insert(item, -1)
@@ -1042,21 +1039,7 @@ class Menu(Gtk.Box):
             return
         if not self._opened:
             self._popover.set_opacity(0)
-            self._set_menu_expanded(False)
         self._popover.set_visible(True)
-
-    def _set_menu_expanded(self, expanded):
-        try:
-            self.update_state([Gtk.AccessibleState.EXPANDED], [bool(expanded)])
-        except Exception:
-            pass
-        if self._popover is not None:
-            try:
-                self._popover.update_state(
-                    [Gtk.AccessibleState.EXPANDED], [bool(expanded)]
-                )
-            except Exception:
-                pass
 
     def popup(self, *_args, **_kwargs):
         parent = self._parent_widget
@@ -1064,7 +1047,6 @@ class Menu(Gtk.Box):
             return
         self._ensure_popover(parent)
         self._opened = True
-        self._set_menu_expanded(True)
         self._popover.set_opacity(1)
         self._ensure_mapped()
         try:
@@ -1074,7 +1056,6 @@ class Menu(Gtk.Box):
 
     def popdown(self, *_args, **_kwargs):
         self._opened = False
-        self._set_menu_expanded(False)
         if self._popover is not None:
             self._popover.set_opacity(0)
 

@@ -6,7 +6,6 @@
 
 from gi.repository import Gdk
 from gi.repository import GdkPixbuf
-from gi.repository import Gio
 from gi.repository import GObject
 from gi.repository import Gtk
 
@@ -305,8 +304,6 @@ class vmmManager(vmmGObjectUI):
         add_to_menu("details", _("_Details"), self.show_host)
         self.connmenu.show_all()
         gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
-        self.vmmenu._ensure_popover(self.topwin)
-        self.vmmenu._ensure_mapped()
 
         def _on_menu_key(_c, keyval, *_a):
             if Gdk.keyval_name(keyval) == "Menu":
@@ -316,15 +313,6 @@ class vmmManager(vmmGObjectUI):
         key = Gtk.EventControllerKey()
         key.connect("key-pressed", _on_menu_key)
         self.topwin.add_controller(key)
-
-        app = self.topwin.get_application()
-        if app is None:
-            app = getattr(vmmEngine.get_instance(), "_application", None)
-        if app is not None and app.lookup_action("popup-vm-menu") is None:
-            action = Gio.SimpleAction.new("popup-vm-menu", None)
-            action.connect("activate", lambda *_a: self.popup_vm_menu_from_selection())
-            app.add_action(action)
-            app.set_accels_for_action("app.popup-vm-menu", ["Menu"])
 
     def init_vmlist(self):
         vmlist = self.widget("vm-list")
