@@ -293,6 +293,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
     @property
     def showing(self):
         try:
+            name = self.name or ""
+            if name.startswith(".") or name.endswith(" (hidden)"):
+                return False
+        except Exception:
+            pass
+        try:
             st = self.getState()
             if hasattr(pyatspi, "STATE_HIDDEN") and st.contains(pyatspi.STATE_HIDDEN):
                 return False
@@ -341,9 +347,16 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         parts.append(child.name)
             except Exception:
                 pass
-            # Entry sidecars keep the labeller as name and the value as a child.
-            if self.roleName in ("text", "entry", "text box", "spin button") and len(parts) > 1:
-                return parts[-1]
+            if self.roleName in ("text", "entry", "text box", "spin button"):
+                if len(parts) > 1:
+                    return parts[-1]
+                raw = parts[0] if parts else ""
+                # "Name: test default" sidecar/entry name → value only
+                if ":" in raw:
+                    rest = raw.split(":", 1)[1].strip()
+                    if rest:
+                        return rest
+                return raw
             return "\n".join(parts)
         return None
 

@@ -384,32 +384,28 @@ def expose_a11y_label(key, name, text):
 
 def expose_a11y_text(key, name, text):
     """
-    GTK 4 entries on hidden notebook pages have no AccessibleText.
-    Mirror as a TEXT_BOX whose name is the labeller and whose child
-    label is the value, matching find_fuzzy("Name:", "text").text.
+    Mirror an entry as a real Gtk.Entry so AccessibleText returns the
+    value, while the AT-SPI name stays the labeller ("Name:").
     """
     box = _a11y_sidecar_box()
     ent = _A11Y_SIDECAR["items"].get(key)
     if ent is None:
-        ent = Gtk.Button()
+        ent = Gtk.Entry()
         try:
             ent.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
         except Exception:
             pass
-        val = Gtk.Label(label=text or "")
-        val.set_accessible_role(Gtk.AccessibleRole.LABEL)
-        ent.set_child(val)
         box.append(ent)
         _A11Y_SIDECAR["items"][key] = ent
-        ent._vmm_value = val
-    valw = getattr(ent, "_vmm_value", None)
-    if valw is not None:
-        try:
-            valw.set_text(text or "")
-        except Exception:
-            pass
-        set_accessible_name(valw, text or "")
+    try:
+        ent.set_text(text or "")
+    except Exception:
+        pass
     set_accessible_name(ent, name or text or "")
+    try:
+        ent.update_property([Gtk.AccessibleProperty.PLACEHOLDER_TEXT], [name or ""])
+    except Exception:
+        pass
     ent.set_visible(True)
     return ent
 
@@ -472,8 +468,9 @@ def expose_a11y_button(key, name, callback):
 
 def sync_sidecar_visible(key, visible):
     """
-    Keep the sidecar mapped so dogtail can find it, but mark it hidden
-    so .showing is False on inactive notebook pages.
+    Keep the sidecar mapped so dogtail can find it. pyatspi has no
+    STATE_HIDDEN, so inactive pages get a " (hidden)" name suffix that
+    the uitest showing property treats as not showing.
     """
     widget = _A11Y_SIDECAR.get("items", {}).get(key)
     if widget is None:
@@ -483,6 +480,13 @@ def sync_sidecar_visible(key, visible):
         widget.set_opacity(1.0 if visible else 0.0)
     except Exception:
         pass
+    base = getattr(widget, "_vmm_show_name", None)
+    if not base:
+        base = (widget.get_name() or "").replace(" (hidden)", "").strip()
+        widget._vmm_show_name = base
+    shown = base if visible else (base + " (hidden)" if base else "")
+    if shown:
+        set_accessible_name(widget, shown)
     try:
         widget.update_state([Gtk.AccessibleState.HIDDEN], [not bool(visible)])
     except Exception:

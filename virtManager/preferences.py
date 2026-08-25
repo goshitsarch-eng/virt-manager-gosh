@@ -213,6 +213,8 @@ class vmmPreferences(vmmGObjectUI):
             src = self.widget(wid)
             gtkcompat.set_accessible_name(src, name)
             gtkcompat.expose_a11y_check("prefs-" + wid, name, src)
+        gtkcompat.set_accessible_name(self.widget("prefs-stats-update-interval"), "cpu-poll")
+        gtkcompat.expose_a11y_text("cpu-poll", "cpu-poll", "5")
 
     #########################
     # Config Change Options #

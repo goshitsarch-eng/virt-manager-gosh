@@ -179,7 +179,7 @@ class vmmHost(vmmGObjectUI):
             self.widget("overview-name").set_text(name)
             from .lib import gtkcompat
 
-            gtkcompat.set_accessible_name(self.widget("overview-name"), name)
+            gtkcompat.set_accessible_name(self.widget("overview-name"), "Name: %s" % name)
             gtkcompat.expose_a11y_text("overview-name", "Name:", name)
 
         if conn_active:
