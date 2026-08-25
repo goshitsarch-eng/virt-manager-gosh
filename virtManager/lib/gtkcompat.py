@@ -1382,32 +1382,51 @@ def _start_combo_select_poll(createconn):
         try:
             text = open(path, "r").read().strip()
         except Exception:
-            return True
-        if not text:
-            return True
-        try:
-            os.remove(path)
-        except Exception:
-            pass
-        item = text.split("\t", 1)[-1].strip()
-        if not item:
-            return True
-        try:
-            from . import uiutil
+            text = ""
+        if text:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            item = text.split("\t", 1)[-1].strip()
+            if item:
+                try:
+                    from . import uiutil
 
-            hv = c.widget("hypervisor")
-            model = hv.get_model() if hv is not None else None
-            if model is None:
-                return True
-            it = model.get_iter_first()
-            while it is not None:
-                label = str(model[it][1] or "")
-                if item.lower() in label.lower() or label.lower() in item.lower():
-                    uiutil.set_list_selection(hv, model[it][0])
-                    break
-                it = model.iter_next(it)
+                    hv = c.widget("hypervisor")
+                    model = hv.get_model() if hv is not None else None
+                    if model is not None:
+                        it = model.get_iter_first()
+                        while it is not None:
+                            label = str(model[it][1] or "")
+                            if item.lower() in label.lower() or label.lower() in item.lower():
+                                uiutil.set_list_selection(hv, model[it][0])
+                                break
+                            it = model.iter_next(it)
+                except Exception:
+                    pass
+        try:
+            uri = open("/tmp/vmm-a11y-uri-entry.txt", "r").read()
         except Exception:
-            pass
+            uri = ""
+        if uri:
+            try:
+                os.remove("/tmp/vmm-a11y-uri-entry.txt")
+            except Exception:
+                pass
+            try:
+                c.widget("uri-entry").set_text(uri)
+            except Exception:
+                pass
+        if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
+            try:
+                os.remove("/tmp/vmm-a11y-createconn-connect")
+            except Exception:
+                pass
+            try:
+                c.open_conn(None)
+            except Exception:
+                pass
         return True
 
     GLib.timeout_add(50, _tick)

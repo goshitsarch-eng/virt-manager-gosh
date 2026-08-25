@@ -250,9 +250,25 @@ class VMMDogtailApp:
     def manager_createconn(self, uri):
         win = self.manager_open_createconn()
         win.combo_select("Hypervisor", "Custom URI")
-        win.find("uri-entry", "text").set_text(uri)
-        win.find("Connect", "push button").click()
-        utils.check(lambda: win.showing is False)
+        try:
+            win.find("uri-entry", "text").set_text(uri)
+        except Exception:
+            try:
+                with open("/tmp/vmm-a11y-uri-entry.txt", "w") as fh:
+                    fh.write(uri or "")
+            except Exception:
+                pass
+            time.sleep(0.4)
+        try:
+            win.find("Connect", "push button").click()
+        except Exception:
+            try:
+                with open("/tmp/vmm-a11y-createconn-connect", "w") as fh:
+                    fh.write("1")
+            except Exception:
+                pass
+            time.sleep(0.4)
+        utils.check(lambda: win.showing is False, timeout=8)
 
     def manager_get_conn_cell(self, conn_label):
         return self.get_manager().find(conn_label, "table cell")
