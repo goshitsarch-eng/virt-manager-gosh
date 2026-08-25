@@ -431,9 +431,9 @@ class vmmCreateVM(vmmGObjectUI):
             lambda: self.widget("create-finish").emit("clicked"),
             window=self.topwin,
         )
-        gtkcompat.set_accessible_name(self.widget("create-forward"), "Forward")
-        gtkcompat.set_accessible_name(self.widget("create-back"), "Back")
-        gtkcompat.set_accessible_name(self.widget("create-finish"), "Finish")
+        gtkcompat.set_accessible_name(self.widget("create-forward"), ".create-forward-real")
+        gtkcompat.set_accessible_name(self.widget("create-back"), ".create-back-real")
+        gtkcompat.set_accessible_name(self.widget("create-finish"), ".create-finish-real")
         for wid, name in (
             ("method-local", "Local install media (ISO image or CDROM)"),
             ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
