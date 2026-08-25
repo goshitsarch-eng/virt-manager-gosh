@@ -1493,6 +1493,16 @@ def _append_createvm_storage_radios(box, createvm):
             register_a11y_click(name, lambda s=src: s.set_active(True))
         except Exception:
             pass
+    try:
+        expose_a11y_entry(
+            "methods-storage-entry",
+            "storage-entry",
+            storage.widget("storage-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
 
 
 def _append_createvm_resource_spins(box, createvm):

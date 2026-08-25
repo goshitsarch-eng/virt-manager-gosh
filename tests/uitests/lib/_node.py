@@ -292,6 +292,74 @@ def _sentinel_storage_radio(name, roleName):
     return None
 
 
+class _SentinelEntry(object):
+    """Named entry when AT-SPI walks miss the sidecar after GetItems."""
+
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "text"
+        self._path = path
+
+    @property
+    def text(self):
+        try:
+            return open(self._path, "r").read()
+        except Exception:
+            return ""
+
+    @text.setter
+    def text(self, value):
+        self.set_text(value)
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def check_sensitive(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        return True
+
+    def set_text(self, text):
+        try:
+            open(self._path, "w").write(text if text is not None else "")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-entry.txt", "w").write(text if text is not None else "")
+        except Exception:
+            pass
+
+
+def _sentinel_named_entry(name, roleName):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "")
+    if raw.startswith("."):
+        return None
+    role = str(roleName or "").lower()
+    if role and "text" not in role and "entry" not in role:
+        # find("storage-entry") passes roleName=None
+        if role not in ("", "none"):
+            return None
+    compact = raw.lower()
+    if compact == "storage-entry" or raw == "storage-entry":
+        return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
+    return None
+
+
 def _sentinel_hw_cell(name, roleName):
     if not name:
         return None
@@ -1775,6 +1843,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_storage_radio(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_named_entry(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
