@@ -550,18 +550,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
             if ret is None:
                 time.sleep(0.1)
         if ret is None:
-            try:
-                ret = self.findChild(pred, recursive=recursive)
-            except dogtail.tree.SearchError:
-                ret = None
-        if ret is None:
-            app = _virt_manager_app()
-            if app is not None:
-                try:
-                    ret = app.findChild(pred, recursive=True)
-                except dogtail.tree.SearchError:
-                    ret = None
-        if ret is None:
             raise dogtail.tree.SearchError(
                 "Didn't find widget with name='%s' "
                 "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
