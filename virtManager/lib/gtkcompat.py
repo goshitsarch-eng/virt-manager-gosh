@@ -422,11 +422,43 @@ def _a11y_sidecar_box(window=None):
     return _a11y_global_sidecar_box()
 
 
+def _clear_entry_mnemonic(entry):
+    """Drop mnemonic/labelled-by so our LABEL value can win."""
+    try:
+        entry.reset_relation(Gtk.AccessibleRelation.LABELLED_BY)
+    except Exception:
+        pass
+    try:
+        root = entry.get_root()
+    except Exception:
+        root = None
+    start = root or entry.get_parent()
+    if start is None:
+        return
+
+    def _walk(widget, depth=0):
+        if widget is None or depth > 10:
+            return
+        if isinstance(widget, Gtk.Label) and hasattr(widget, "get_mnemonic_widget"):
+            try:
+                if widget.get_mnemonic_widget() is entry:
+                    widget.set_mnemonic_widget(None)
+            except Exception:
+                pass
+        for child in get_children(widget):
+            _walk(child, depth + 1)
+
+    try:
+        _walk(start)
+    except Exception:
+        pass
+
+
 def attach_entry_a11y_value(entry, label=None):
     """
     GTK 4 labelled-by (mnemonic-widget) makes Gtk.Entry AccessibleText
-    the labeller ("Name:") instead of the buffer. Clear that relation
-    and publish "Name: <value>" so dogtail .text can recover the value.
+    the labeller ("Name:") instead of the buffer. Replace that relation
+    with a proxy label "Name: <value>" so dogtail .text can recover it.
     """
     if entry is None or not hasattr(entry, "get_text"):
         return
@@ -445,13 +477,32 @@ def attach_entry_a11y_value(entry, label=None):
                 lab = cached
             elif ":" in cached:
                 lab = cached.split(":", 1)[0].strip() + ":"
-        if lab and lab.endswith(":"):
-            name = ("%s %s" % (lab, value)).strip() if value else lab
+        if not (lab and lab.endswith(":")):
+            return False
+        name = ("%s %s" % (lab, value)).strip() if value else lab
+        _clear_entry_mnemonic(entry)
+        proxy = getattr(entry, "_vmm_a11y_value_label", None)
+        if proxy is None:
+            proxy = Gtk.Label(label=name)
             try:
-                entry.update_relation([Gtk.AccessibleRelation.LABELLED_BY], [])
+                proxy.set_accessible_role(Gtk.AccessibleRole.LABEL)
             except Exception:
                 pass
-            set_accessible_name(entry, name)
+            # Keep the proxy mapped on the same window overlay.
+            try:
+                root = entry.get_root()
+            except Exception:
+                root = None
+            box = _a11y_sidecar_box(root if isinstance(root, Gtk.Window) else None)
+            box.append(proxy)
+            entry._vmm_a11y_value_label = proxy
+        proxy.set_text(name)
+        set_accessible_name(proxy, name)
+        try:
+            entry.update_relation([Gtk.AccessibleRelation.LABELLED_BY], [proxy])
+        except Exception:
+            pass
+        set_accessible_name(entry, name)
         return False
 
     entry._vmm_sync_entry_a11y = _sync
@@ -500,7 +551,12 @@ def expose_a11y_text(key, name, text, window=None):
         ent.set_text(text or "")
     except Exception:
         pass
-    set_accessible_name(ent, name or text or "")
+    shown = name or text or ""
+    if text and name and str(name).endswith(":"):
+        shown = "%s %s" % (name, text)
+    set_accessible_name(ent, shown)
+    if name and str(name).endswith(":"):
+        attach_entry_a11y_value(ent, name)
     try:
         ent.update_property([Gtk.AccessibleProperty.PLACEHOLDER_TEXT], [name or ""])
     except Exception:
