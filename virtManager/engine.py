@@ -380,6 +380,24 @@ class vmmEngine(vmmGObject):
 
                 log.debug("Exiting app normally.")
             finally:
+                try:
+                    from .lib import gtkcompat
+
+                    gtkcompat.destroy_a11y_windows()
+                except Exception:
+                    pass
+                try:
+                    for win in list(self._application.get_windows() or []):
+                        try:
+                            self._application.remove_window(win)
+                        except Exception:
+                            pass
+                        try:
+                            win.destroy()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 self._application.quit()
 
         # We stick this in an idle callback, so the exit_app() caller

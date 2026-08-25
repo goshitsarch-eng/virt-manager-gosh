@@ -516,6 +516,29 @@ def _strip_pango_markup(text):
 _A11Y_SIDECAR = {"win": None, "box": None, "items": {}, "last_window": None}
 _A11Y_CLICK_CBS = {}
 _A11Y_CLICK_POLL = {"on": False}
+_A11Y_EXTRA_WINDOWS = []
+
+
+def destroy_a11y_windows():
+    """Drop sidecar/methods windows so Adw.Application can quit."""
+    try:
+        win = _A11Y_SIDECAR.get("win")
+        if win is not None:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            _A11Y_SIDECAR["win"] = None
+            _A11Y_SIDECAR["box"] = None
+    except Exception:
+        pass
+    extras = list(_A11Y_EXTRA_WINDOWS)
+    del _A11Y_EXTRA_WINDOWS[:]
+    for win in extras:
+        try:
+            win.destroy()
+        except Exception:
+            pass
 
 
 def ensure_window_a11y_box(window):
@@ -1602,6 +1625,8 @@ def _ensure_app_window(win):
         return
     try:
         app.add_window(win)
+        if win not in _A11Y_EXTRA_WINDOWS:
+            _A11Y_EXTRA_WINDOWS.append(win)
     except Exception:
         pass
 
@@ -2996,6 +3021,8 @@ def present_a11y_alert(primary, buttons):
     if app is not None:
         try:
             app.add_window(win)
+            if win not in _A11Y_EXTRA_WINDOWS:
+                _A11Y_EXTRA_WINDOWS.append(win)
         except Exception:
             pass
     win.set_visible(True)
@@ -3205,7 +3232,11 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             tname = treeview.get_accessible_name() or ""
         except Exception:
             tname = ""
-        if tname != "hw-list":
+        try:
+            wname = treeview.get_name() or ""
+        except Exception:
+            wname = ""
+        if tname != "hw-list" and wname != "hw-list":
             return
         try:
             open("/tmp/vmm-a11y-hw-list.txt", "w").write("\n".join(names))
