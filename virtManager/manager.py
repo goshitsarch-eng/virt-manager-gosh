@@ -6,6 +6,7 @@
 
 from gi.repository import Gdk
 from gi.repository import GdkPixbuf
+from gi.repository import GLib
 from gi.repository import GObject
 from gi.repository import Gtk
 
@@ -171,6 +172,33 @@ class vmmManager(vmmGObjectUI):
         connmanager.connect("conn-removed", self._conn_removed)
         for conn in connmanager.conns.values():
             self._conn_added(connmanager, conn)
+
+        def _add_conn_tick():
+            try:
+                uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
+            except Exception:
+                return True
+            if not uri:
+                return True
+            try:
+                import os
+
+                os.remove("/tmp/vmm-a11y-add-conn.txt")
+            except Exception:
+                pass
+            try:
+                conn = vmmConnectionManager.get_instance().add_conn(uri)
+                if conn is not None and conn.is_disconnected():
+                    conn.open()
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _add_conn_tick)
 
     ##################
     # Common methods #

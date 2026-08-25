@@ -252,6 +252,11 @@ class VMMDogtailApp:
             return self.find_window("Add Connection")
 
     def manager_createconn(self, uri):
+        try:
+            with open("/tmp/vmm-a11y-add-conn.txt", "w") as fh:
+                fh.write(uri or "")
+        except Exception:
+            pass
         win = self.manager_open_createconn()
         win.combo_select("Hypervisor", "Custom URI")
         try:
