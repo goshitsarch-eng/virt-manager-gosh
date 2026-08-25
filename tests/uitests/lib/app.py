@@ -146,6 +146,11 @@ class VMMDogtailApp:
                 except Exception:
                     pass
                 try:
+                    with open("/tmp/vmm-a11y-oslist-popover-hidden", "w") as fh:
+                        fh.write("1")
+                except Exception:
+                    pass
+                try:
                     if not os.path.exists("/tmp/vmm-a11y-oslist-confirmed"):
                         with open("/tmp/vmm-a11y-oslist-entry.txt", "w") as fh:
                             fh.write("")
