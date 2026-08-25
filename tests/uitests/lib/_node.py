@@ -143,8 +143,11 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                 return
 
             labeller = ""
-            if node.labeller:
-                labeller = node.labeller.text
+            try:
+                if node.labeller:
+                    labeller = node.labeller.text or ""
+            except Exception:
+                labeller = ""
             text = ""
             try:
                 text = node.text or ""
@@ -476,6 +479,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 ret = self.findChild(pred, recursive=recursive)
             except dogtail.tree.SearchError:
                 ret = None
+        if ret is None:
+            app = _virt_manager_app()
+            if app is not None:
+                try:
+                    ret = app.findChild(pred, recursive=True)
+                except dogtail.tree.SearchError:
+                    ret = None
         if ret is None:
             raise dogtail.tree.SearchError(
                 "Didn't find widget with name='%s' "
