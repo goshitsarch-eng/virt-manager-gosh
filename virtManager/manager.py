@@ -304,6 +304,9 @@ class vmmManager(vmmGObjectUI):
         add_to_menu("details", _("_Details"), self.show_host)
         self.connmenu.show_all()
         gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
+        self.vmmenu._vmm_menu_name = "vm-action-menu"
+        self.vmmenu._ensure_popover(self.topwin)
+        self.vmmenu._ensure_mapped()
 
         def _on_menu_key(_c, keyval, *_a):
             if Gdk.keyval_name(keyval) == "Menu":
@@ -313,6 +316,19 @@ class vmmManager(vmmGObjectUI):
         key = Gtk.EventControllerKey()
         key.connect("key-pressed", _on_menu_key)
         self.topwin.add_controller(key)
+        trigger = Gtk.ShortcutTrigger.parse_string("Menu")
+        if trigger is not None:
+            sc = Gtk.ShortcutController()
+            sc.set_scope(Gtk.ShortcutScope.GLOBAL)
+            sc.add_shortcut(
+                Gtk.Shortcut.new(
+                    trigger,
+                    Gtk.CallbackAction.new(
+                        lambda *_a: self.popup_vm_menu_from_selection() or True
+                    ),
+                )
+            )
+            self.topwin.add_controller(sc)
 
     def init_vmlist(self):
         vmlist = self.widget("vm-list")

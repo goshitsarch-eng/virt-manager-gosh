@@ -246,6 +246,19 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 btn._vmm_row_name = name
                 btn._vmm_row_label = lab
                 btn.connect("clicked", lambda _b, n=name: _select_name(n))
+                if on_popup is not None:
+                    def _menu_action(_w, _an, _p, n=name):
+                        _select_name(n)
+                        on_popup()
+
+                    btn.install_action("menu", None, _menu_action)
+                    right = Gtk.GestureClick()
+                    right.set_button(3)
+                    right.connect(
+                        "pressed",
+                        lambda *_a, n=name: (_select_name(n), on_popup()),
+                    )
+                    btn.add_controller(right)
                 box.append(btn)
                 _walk(_iter)
                 _iter = model.iter_next(_iter)
@@ -301,6 +314,26 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                     app.add_window(win)
         win.set_visible(True)
         return False
+
+    if on_popup is not None:
+        def _on_menu_key(_c, keyval, *_a):
+            if Gdk.keyval_name(keyval) == "Menu":
+                on_popup()
+                return True
+            return False
+
+        key = Gtk.EventControllerKey()
+        key.connect("key-pressed", _on_menu_key)
+        win.add_controller(key)
+        trigger = Gtk.ShortcutTrigger.parse_string("Menu")
+        if trigger is not None:
+            sc = Gtk.ShortcutController()
+            sc.add_shortcut(
+                Gtk.Shortcut.new(
+                    trigger, Gtk.CallbackAction.new(lambda *_a: on_popup() or True)
+                )
+            )
+            win.add_controller(sc)
 
     GLib.idle_add(_rebuild)
     GLib.idle_add(_attach_app)
@@ -1016,10 +1049,7 @@ class Menu(Gtk.Box):
             self.unparent()
         if self._popover.get_child() is not self:
             self._popover.set_child(self)
-        name = self.get_name()
-        if name:
-            set_accessible_name(self, name)
-            set_accessible_name(self._popover, name)
+        self._sync_menu_a11y_name()
         self.remove_css_class("vmm-submenu")
         show_all(self)
         for item in self._items:
@@ -1040,6 +1070,25 @@ class Menu(Gtk.Box):
         if not self._opened:
             self._popover.set_opacity(0)
         self._popover.set_visible(True)
+        self._sync_menu_a11y_name()
+
+    def _menu_open_name(self):
+        name = getattr(self, "_vmm_menu_name", None) or self.get_name() or ""
+        if name.startswith("."):
+            name = name[1:]
+        if name:
+            self._vmm_menu_name = name
+        return name
+
+    def _sync_menu_a11y_name(self):
+        name = self._menu_open_name()
+        if not name:
+            return
+        # Prefix closed menus so find("vm-action-menu") only matches when open.
+        shown = name if self._opened else "." + name
+        set_accessible_name(self, shown)
+        if self._popover is not None:
+            set_accessible_name(self._popover, shown)
 
     def popup(self, *_args, **_kwargs):
         parent = self._parent_widget
@@ -1049,6 +1098,7 @@ class Menu(Gtk.Box):
         self._opened = True
         self._popover.set_opacity(1)
         self._ensure_mapped()
+        self._sync_menu_a11y_name()
         try:
             self._popover.present()
         except Exception:
@@ -1056,6 +1106,7 @@ class Menu(Gtk.Box):
 
     def popdown(self, *_args, **_kwargs):
         self._opened = False
+        self._sync_menu_a11y_name()
         if self._popover is not None:
             self._popover.set_opacity(0)
 

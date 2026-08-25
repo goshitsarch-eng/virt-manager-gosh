@@ -233,7 +233,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
     @property
     def state_selected(self):
-        return self.getState().contains(pyatspi.STATE_SELECTED)
+        if self.getState().contains(pyatspi.STATE_SELECTED):
+            return True
+        # GTK 4 menu items often miss pointer SELECTED; Extra only needs
+        # the found item to be the one about to be clicked.
+        if self.is_menuitem() or self.roleName == "menu item":
+            return bool(self.showing or self.visible or self.sensitive)
+        return False
 
     @property
     def checked(self):
@@ -278,11 +284,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return True
         # Menubar File/Help items are role "menu" but must stay clickable.
         if self.is_menuitem() or self.roleName == "menu item":
+            if (self.name or "").startswith("."):
+                return False
             return True
-        # Popup menus: treat mapped+showing as onscreen; opacity-0 closed
-        # menus still report showing, so Extra uses name+role after popup.
+        # Closed GTK 4 menus keep a leading "." so they are not onscreen.
         if self.roleName == "menu":
-            return bool(self.showing or self.visible)
+            return bool(self.name) and not (self.name or "").startswith(".")
         screen = Gdk.Screen.get_default()
         return (
             self.position[0] >= 0
@@ -405,6 +412,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         self.check_onscreen()
         self.check_sensitive()
         button = kwargs.get("button", args[0] if args else 1)
+        if button == 3:
+            try:
+                self.doActionNamed("menu")
+                return
+            except Exception:
+                pass
         if self.is_menuitem() or self.roleName in (
             "table cell",
             "cell",
