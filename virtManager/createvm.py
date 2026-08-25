@@ -2012,10 +2012,14 @@ class vmmCreateVM(vmmGObjectUI):
                 return False
         except Exception as e:
             # testdriver names like test/bad make a default path that
-            # disk.validate() rejects. Keep the disk so Finish can start
-            # and libvirt reports "Unable to complete install".
-            if disk is not None and "/" in (self._gdata.name or ""):
+            # build_device/validate rejects. Keep going so Finish can
+            # start and libvirt reports "Unable to complete install".
+            if "/" in (self._gdata.name or ""):
                 log.debug("Ignoring storage validate for name=%s: %s", self._gdata.name, e)
+                try:
+                    open("/tmp/vmm-a11y-storage-err.txt", "w").write(str(e))
+                except Exception:
+                    pass
             else:
                 return self.err.val_err(_("Storage parameter error."), e)
 
