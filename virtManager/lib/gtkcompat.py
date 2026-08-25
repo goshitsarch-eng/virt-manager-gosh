@@ -1120,14 +1120,32 @@ class Menu(Gtk.Box):
         if self._popover is not None:
             set_accessible_name(self._popover, shown)
 
+    def _destroy_popover(self):
+        pop = self._popover
+        if pop is None:
+            return
+        self._popover = None
+        try:
+            if self.get_parent() is pop:
+                self.unparent()
+        except Exception:
+            pass
+        try:
+            pop.set_visible(False)
+            pop.destroy()
+        except Exception:
+            pass
+
     def popup(self, *_args, **_kwargs):
         # Context menus (vm-action-menu, conn-menu) are not attached to a
         # toolbar button, so they have no _parent_widget until first popup.
-        # Still create a standalone AT-SPI window so dogtail can find them.
+        # Recreate the AT-SPI window each time: after popdown the cached
+        # name stays ".vm-action-menu" and Extra cannot find it again.
+        self._destroy_popover()
+        self._opened = True
         self._ensure_popover(self._parent_widget)
         if self._popover is None:
             return
-        self._opened = True
         self._popover.set_opacity(1)
         self._ensure_mapped()
         self._sync_menu_a11y_name()
@@ -1139,8 +1157,7 @@ class Menu(Gtk.Box):
     def popdown(self, *_args, **_kwargs):
         self._opened = False
         self._sync_menu_a11y_name()
-        if self._popover is not None:
-            self._popover.set_opacity(0)
+        self._destroy_popover()
 
     def popup_at_pointer(self, event=None):
         ignore = event
