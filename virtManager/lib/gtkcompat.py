@@ -2030,11 +2030,31 @@ class Menu(Gtk.Box):
                 root = self._parent_widget.get_root()
             except Exception:
                 root = None
+        def _in_menubar(item):
+            cur = item
+            for _ in range(8):
+                if cur is None:
+                    return False
+                if isinstance(cur, MenuBar):
+                    return True
+                nxt = None
+                if hasattr(cur, "get_parent"):
+                    try:
+                        nxt = cur.get_parent()
+                    except Exception:
+                        nxt = None
+                if nxt is None:
+                    menu = getattr(cur, "_vmm_menu", None)
+                    nxt = getattr(menu, "_parent_widget", None) if menu else None
+                cur = nxt
+            return False
+
         if (
             root is not None
             and isinstance(root, Gtk.Window)
             and isinstance(self._parent_widget, MenuItem)
             and getattr(self._parent_widget, "get_submenu", lambda: None)() is self
+            and _in_menubar(self._parent_widget)
         ):
             box = ensure_window_a11y_box(root)
             if self.get_parent() is not None and self.get_parent() is not box:
