@@ -433,6 +433,26 @@ class vmmCreateVM(vmmGObjectUI):
         gtkcompat.set_accessible_name(self.widget("create-forward"), "Forward")
         gtkcompat.set_accessible_name(self.widget("create-back"), "Back")
         gtkcompat.set_accessible_name(self.widget("create-finish"), "Finish")
+        for wid, name in (
+            ("method-local", "Local install media (ISO image or CDROM)"),
+            ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
+            ("method-import", "Import existing disk image"),
+            ("method-manual", "Manual install"),
+        ):
+            src = self.widget(wid)
+            try:
+                src.set_accessible_role(Gtk.AccessibleRole.RADIO)
+            except Exception:
+                pass
+            gtkcompat.set_accessible_name(src, name)
+            gtkcompat.sync_accessible_checked(src)
+            gtkcompat.expose_a11y_check(wid, name, src, window=self.topwin)
+            sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
+            if sidecar is not None:
+                try:
+                    sidecar.set_accessible_role(Gtk.AccessibleRole.RADIO)
+                except Exception:
+                    pass
 
     def _reset_state(self, urihint=None):
         """

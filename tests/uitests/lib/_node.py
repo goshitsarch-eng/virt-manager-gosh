@@ -33,7 +33,9 @@ _GTK4_ROLE_ALIASES = {
     "spin button": "(spin button|spin|entry|text|text box)",
     "table cell": "(table cell|list item|cell|button|push button)",
     ".*table cell.*": ".*(table cell|list item|cell|button|push button).*",
-    "radio button": "(radio button|radio|toggle button|button|push button)",
+    "radio button": "(radio button|radio|toggle button|button|push button|check box|check button)",
+    "radio": "(radio button|radio|toggle button|button|push button|check box|check button)",
+    ".*radio.*": ".*(radio button|radio|toggle button|button|push button|check box|check button).*",
     "check button": "(check button|check box)",
     "check box": "(check box|check button)",
     "page tab": "(page tab|tab|button|push button)",
@@ -319,6 +321,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if self.roleName in ("table cell", "cell", "list item", "button", "push button"):
             if st.contains(pyatspi.STATE_FOCUSED) or st.contains(pyatspi.STATE_PRESSED):
                 return True
+            try:
+                if "(selected)" in (self.name or ""):
+                    return True
+            except Exception:
+                pass
         return False
 
     def _a11y_hidden_name(self):

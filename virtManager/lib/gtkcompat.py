@@ -1299,6 +1299,18 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 child.update_state([Gtk.AccessibleState.SELECTED], [bool(is_sel)])
             except Exception:
                 pass
+            base = getattr(child, "_vmm_row_label_text", None)
+            if not base:
+                try:
+                    base = (child.get_accessible_name() or "").replace(
+                        " (selected)", ""
+                    )
+                except Exception:
+                    base = getattr(child, "_vmm_row_name", "") or ""
+                child._vmm_row_label_text = base
+            shown = (base + " (selected)") if is_sel else base
+            if shown:
+                set_accessible_name(child, shown)
             if is_sel:
                 try:
                     child.grab_focus()
@@ -1349,6 +1361,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 set_accessible_name(btn, text or (name + "\n" if name else name))
                 btn._vmm_row_name = name
                 btn._vmm_row_label = lab
+                btn._vmm_row_label_text = text or (name + "\n" if name else name)
                 ensure_activate_clicked(btn)
 
                 def _on_row_clicked(_b, n=name):
