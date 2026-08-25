@@ -1028,23 +1028,14 @@ def _maybe_attach_treeview_a11y(widget):
 def attach_notebook_a11y(notebook):
     """
     GTK 4 Notebook hides inactive pages from AT-SPI. Mirror each page
-    (and its tab) so prefs/details/createvm tabs stay findable.
+    (and its tab) on the real toplevel so prefs/details/createvm tabs
+    stay findable. A separate opacity-0 GROUP window is invisible.
     """
     if notebook is None or not isinstance(notebook, Gtk.Notebook):
         return
     if getattr(notebook, "_vmm_nb_a11y", False):
         return
     notebook._vmm_nb_a11y = True
-    win = Gtk.Window()
-    win.set_decorated(False)
-    win.set_resizable(False)
-    win.set_modal(False)
-    win.set_focusable(False)
-    win.set_accessible_role(Gtk.AccessibleRole.GROUP)
-    win.set_default_size(160, 40)
-    win.set_opacity(0)
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-    win.set_child(box)
     pages = []
 
     def _page_name(idx, child):
@@ -1065,13 +1056,33 @@ def attach_notebook_a11y(notebook):
             pass
         return bid or ("page-%s" % idx)
 
+    def _box():
+        root = None
+        try:
+            root = notebook.get_root()
+        except Exception:
+            root = None
+        window = root if isinstance(root, Gtk.Window) else None
+        return _a11y_sidecar_box(window)
+
+    def _sync_page_visible(sidecar, pname, visible):
+        sidecar.set_visible(True)
+        shown = pname if visible else (pname + " (hidden)" if pname else "")
+        if shown:
+            set_accessible_name(sidecar, shown)
+            sidecar._vmm_show_name = pname
+
     def _rebuild(*_a):
-        child = box.get_first_child()
-        while child is not None:
-            nxt = child.get_next_sibling()
-            box.remove(child)
-            child = nxt
+        box = _box()
+        for old in list(getattr(notebook, "_vmm_nb_widgets", []) or []):
+            try:
+                parent = old.get_parent()
+                if parent is not None:
+                    parent.remove(old)
+            except Exception:
+                pass
         pages[:] = []
+        widgets = []
         try:
             n = notebook.get_n_pages()
         except Exception:
@@ -1087,53 +1098,37 @@ def attach_notebook_a11y(notebook):
                 continue
             pname = _page_name(i, page)
             set_accessible_name(page, pname)
-            tab = Gtk.Button(label=_mnemonic_label(pname.replace("-tab", "") or pname))
-            try:
-                tab.set_accessible_role(Gtk.AccessibleRole.TAB)
-            except Exception:
-                tab.set_accessible_role(Gtk.AccessibleRole.BUTTON)
             tlabel = ""
             try:
                 tlabel = _mnemonic_label(notebook.get_tab_label_text(page) or "")
             except Exception:
                 tlabel = ""
+            tab = Gtk.Button(label=tlabel or _mnemonic_label(pname.replace("-tab", "") or pname))
+            tab.set_accessible_role(Gtk.AccessibleRole.BUTTON)
             set_accessible_name(tab, tlabel or _mnemonic_label(pname))
             ensure_activate_clicked(tab)
             tab.connect("clicked", lambda _b, idx=i: notebook.set_current_page(idx))
             box.append(tab)
+            widgets.append(tab)
             sidecar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            sidecar.set_accessible_role(Gtk.AccessibleRole.GROUP)
-            set_accessible_name(sidecar, pname)
-            sidecar.set_visible(i == current)
+            try:
+                sidecar.set_accessible_role(Gtk.AccessibleRole.PANEL)
+            except Exception:
+                pass
+            _sync_page_visible(sidecar, pname, i == current)
             box.append(sidecar)
+            widgets.append(sidecar)
             pages.append((tab, sidecar, pname))
-        win.set_visible(True)
+        notebook._vmm_nb_widgets = widgets
         return False
 
     def _on_switch(_nb, _page, idx):
-        for i, (_tab, sidecar, _name) in enumerate(pages):
-            sidecar.set_visible(i == idx)
-        return False
-
-    def _attach_app(*_a):
-        root = notebook.get_root()
-        if root is not None:
-            try:
-                win.set_transient_for(root)
-            except Exception:
-                pass
-            set_accessible_name(win, ".a11y-notebook")
-            try:
-                win.set_title(".a11y-notebook")
-            except Exception:
-                pass
-        # Do not add_window: that keeps virt-manager running after Close.
-        win.set_visible(True)
+        for i, (_tab, sidecar, pname) in enumerate(pages):
+            _sync_page_visible(sidecar, pname, i == idx)
         return False
 
     notebook.connect("switch-page", _on_switch)
     GLib.idle_add(_rebuild)
-    GLib.idle_add(_attach_app)
     notebook.connect("map", lambda *_a: GLib.idle_add(_rebuild))
 
 

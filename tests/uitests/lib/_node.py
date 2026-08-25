@@ -36,7 +36,7 @@ _GTK4_ROLE_ALIASES = {
     "radio button": "(radio button|radio)",
     "check button": "(check button|check box)",
     "check box": "(check box|check button)",
-    "page tab": "(page tab|tab)",
+    "page tab": "(page tab|tab|button|push button)",
     "text": "(text|entry|text box)",
     "combo box": "(combo box|combo)",
     "file chooser": "(file chooser|dialog|window)",
