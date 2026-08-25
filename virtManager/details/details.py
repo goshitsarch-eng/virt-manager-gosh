@@ -483,6 +483,24 @@ class vmmDetails(vmmGObjectUI):
         title = self.widget("overview-title")
         gtkcompat.expose_a11y_entry("details-overview-title", "Title:", title, window=self.topwin)
         try:
+            gtkcompat.expose_a11y_label(
+                "details-overview-tab",
+                "overview-tab",
+                "overview-tab",
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_entry(
+                "details-overview-name",
+                "Name:",
+                self.widget("overview-name"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        try:
             gtkcompat.expose_a11y_entry(
                 "details-media-entry",
                 "media-entry",

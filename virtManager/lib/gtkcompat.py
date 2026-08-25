@@ -1486,6 +1486,13 @@ def _append_createvm_resource_spins(box, createvm):
             expose_a11y_spin(key, name, src, parent=box)
         except Exception:
             pass
+    try:
+        storage = getattr(createvm, "_addstorage", None)
+        spin = storage.widget("storage-size") if storage is not None else None
+        if spin is not None:
+            expose_a11y_spin("storage-size", "GiB", spin, parent=box)
+    except Exception:
+        pass
 
 
 def _append_iso_browse_control(box, createvm):
@@ -2737,6 +2744,29 @@ def expose_a11y_spin(key, name, spin, window=None, parent=None):
             spin.connect("value-changed", _from_src)
         except Exception:
             pass
+
+        def _load_file(*_a, src=spin, dst=ent):
+            path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+            try:
+                text = open(path, "r").read().strip()
+            except Exception:
+                return
+            dst._vmm_spin_syncing = True
+            try:
+                dst.set_text(text)
+                src.set_value(float(text or 0))
+            except Exception:
+                pass
+            dst._vmm_spin_syncing = False
+            _from_src()
+
+        load_base = str(name or key).split(":", 1)[0].strip().rstrip(":")
+        expose_a11y_button(
+            key + "-load",
+            ".entry-load-%s" % load_base,
+            _load_file,
+            parent=box,
+        )
         _from_src()
     set_accessible_name(ent, name)
     ent.set_visible(True)

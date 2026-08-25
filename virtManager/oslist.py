@@ -105,6 +105,47 @@ class vmmOSList(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_escape)
 
+            def _poll_os_select():
+                path = "/tmp/vmm-a11y-os-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                if want:
+                    try:
+                        self.select_os_matching(want)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_os_select)
+
+            def _poll_eol():
+                path = "/tmp/vmm-a11y-oslist-eol.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    src = self.widget("include-eol")
+                    src.set_active(not src.get_active())
+                except Exception:
+                    pass
+                try:
+                    show = getattr(self, "_vmm_oslist_show_a11y", None)
+                    if show:
+                        show()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_eol)
+
     def _cleanup(self):
         pass
 

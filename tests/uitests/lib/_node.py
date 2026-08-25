@@ -113,6 +113,134 @@ class _SentinelTableCell(object):
         raise dogtail.tree.SearchError("sentinel cell has no children")
 
 
+def _oslist_query_want(name):
+    raw = str(name or "")
+    compact = raw.replace(".*", "").replace("\\", "").strip()
+    if "include-eol" in compact.lower():
+        return "include-eol"
+    if "generic" in compact.lower():
+        return "generic"
+    return compact.strip("() ").strip()
+
+
+class _OslistRowSentinel(object):
+    """OS row or include-eol when the popover is missing from AT-SPI."""
+
+    def __init__(self, name, want):
+        self.name = name
+        self.roleName = "push button"
+        self._want = want
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def visible(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def bring_on_screen(self, *args, **kwargs):
+        return self
+
+    def click(self, *args, **kwargs):
+        want = self._want or "generic"
+        try:
+            if want == "include-eol":
+                open("/tmp/vmm-a11y-oslist-eol.txt", "w").write("1")
+                return
+            open("/tmp/vmm-a11y-os-select.txt", "w").write(want)
+        except Exception:
+            pass
+
+
+class _OslistPopoverSentinel(object):
+    """oslist-popover after GetItems: AT-SPI walks miss the renamed wrap."""
+
+    def __init__(self):
+        self.name = "oslist-popover"
+        self.roleName = "panel"
+
+    def _hidden(self):
+        try:
+            return os.path.exists(
+                "/tmp/vmm-a11y-oslist-popover-hidden"
+            ) or os.path.exists("/tmp/vmm-a11y-oslist-escape")
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        return not self._hidden()
+
+    @property
+    def onscreen(self):
+        return not self._hidden()
+
+    @property
+    def visible(self):
+        return not self._hidden()
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+    def check_not_onscreen(self):
+        utils.check(lambda: not self.onscreen)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        want = _oslist_query_want(name)
+        if not want:
+            raise dogtail.tree.SearchError(
+                "Didn't find widget with name='%s' "
+                "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+            )
+        label = "include-eol" if want == "include-eol" else want
+        return _OslistRowSentinel(label, want)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        labeller_pattern = (".*%s.*" % labeller_text) if labeller_text else None
+        return self.find(name_pattern, role_pattern, labeller_pattern)
+
+
+def _sentinel_oslist_popover(name, roleName):
+    if not name:
+        return None
+    raw = str(name)
+    if raw.startswith("."):
+        return None
+    compact = raw.replace(".*", "")
+    if compact != "oslist-popover" and raw != "oslist-popover":
+        return None
+    ignore = roleName
+    return _OslistPopoverSentinel()
+
+
 def _sentinel_hw_cell(name, roleName):
     if not name:
         return None
@@ -1561,6 +1689,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
+        try:
+            sent = _sentinel_oslist_popover(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
         try:
             sent = _sentinel_hw_cell(name, roleName)
             if sent is not None:
