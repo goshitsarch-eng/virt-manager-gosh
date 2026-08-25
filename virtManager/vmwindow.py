@@ -97,6 +97,17 @@ class vmmVMWindow(vmmGObjectUI):
             lambda: addhw.emit("clicked"),
             window=self.topwin,
         )
+        try:
+            begin = self.widget("details-finish-customize")
+            gtkcompat.set_accessible_name(begin, "Begin Installation")
+            gtkcompat.expose_a11y_button(
+                "details-finish-customize",
+                "Begin Installation",
+                lambda: begin.emit("clicked"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
         gtkcompat.expose_a11y_label(
             "guest-status",
             "Guest is not running.",

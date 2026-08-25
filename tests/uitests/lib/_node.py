@@ -379,6 +379,30 @@ class _VMMDogtailNode(dogtail.tree.Node):
     # pylint: disable=no-member
 
     @property
+    def sensitive(self):
+        try:
+            raw_name = dogtail.tree.Node.name.__get__(self) or ""
+        except Exception:
+            raw_name = getattr(self, "name", None) or ""
+        if "config-apply" in raw_name:
+            try:
+                stored = open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                if stored in ("0", "1"):
+                    return stored == "1"
+            except Exception:
+                pass
+        try:
+            return dogtail.tree.Node.sensitive.__get__(self)
+        except Exception:
+            try:
+                st = self.getState()
+                return st.contains(pyatspi.STATE_SENSITIVE) or st.contains(
+                    pyatspi.STATE_ENABLED
+                )
+            except Exception:
+                return True
+
+    @property
     def name(self):
         try:
             raw = dogtail.tree.Node.name.__get__(self)
@@ -681,6 +705,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "Removable",
                     "Customize",
                     "Disk bus:",
+                    "Advanced options",
+                    "Begin Installation",
                 )
             ):
                 return True
@@ -822,6 +848,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
         Helper for clicking expander, hitting the text part to actually
         open it. Basically clicks top left corner with some indent
         """
+        try:
+            if "Advanced options" in (self.name or ""):
+                try:
+                    self.doActionNamed("click")
+                    return
+                except Exception:
+                    pass
+        except Exception:
+            pass
         self.check_onscreen()
         self.check_sensitive()
         button = 1

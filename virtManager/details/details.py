@@ -456,18 +456,28 @@ class vmmDetails(vmmGObjectUI):
         self._init_hw_list()
         self._refresh_page()
         gtkcompat.set_accessible_name(self.widget("config-apply"), "config-apply")
-        gtkcompat.expose_a11y_button(
+        apply_btn = gtkcompat.expose_a11y_button(
             "details-config-apply",
             "config-apply",
             lambda: self.widget("config-apply").emit("clicked"),
             window=self.topwin,
         )
+        gtkcompat.bind_button_sensitivity(
+            self.widget("config-apply"),
+            apply_btn,
+            "/tmp/vmm-a11y-config-apply-sensitive",
+        )
         gtkcompat.set_accessible_name(self.widget("config-cancel"), "config-cancel")
-        gtkcompat.expose_a11y_button(
+        cancel_btn = gtkcompat.expose_a11y_button(
             "details-config-cancel",
             "config-cancel",
             lambda: self.widget("config-cancel").emit("clicked"),
             window=self.topwin,
+        )
+        gtkcompat.bind_button_sensitivity(
+            self.widget("config-cancel"),
+            cancel_btn,
+            "/tmp/vmm-a11y-config-cancel-sensitive",
         )
         title = self.widget("overview-title")
         gtkcompat.expose_a11y_entry("details-overview-title", "Title:", title, window=self.topwin)
@@ -549,6 +559,17 @@ class vmmDetails(vmmGObjectUI):
                 entry._vmm_bus_syncing = False
 
             bus_text.connect("changed", _bus_from_text)
+        except Exception:
+            pass
+        try:
+            adv = self._addstorage.widget("storage-advanced")
+            gtkcompat.set_accessible_name(adv, "Advanced options")
+            gtkcompat.expose_a11y_button(
+                "details-advanced-options",
+                "Advanced options",
+                lambda: adv.set_expanded(not adv.get_expanded()),
+                window=self.topwin,
+            )
         except Exception:
             pass
 
@@ -1359,9 +1380,17 @@ class vmmDetails(vmmGObjectUI):
         self.widget("config-apply").set_sensitive(False)
         self.widget("config-cancel").set_sensitive(False)
         self._xmleditor.details_changed = False
+        try:
+            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("0")
+        except Exception:
+            pass
 
     def _enable_apply(self, edittype):
         self.widget("config-apply").set_sensitive(True)
+        try:
+            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+        except Exception:
+            pass
         self.widget("config-cancel").set_sensitive(True)
         if edittype not in self._active_edits:
             self._active_edits.append(edittype)

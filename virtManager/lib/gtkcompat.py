@@ -154,6 +154,8 @@ _BUILDER_A11Y_NAMES = {
     "snapshot-start": "snapshot-start",
     "startup-error-label": "error-label",
     "storage-browse": "storage-browse",
+    "storage-advanced": "Advanced options",
+    "details-finish-customize": "Begin Installation",
     "storage-devtype": "Device Type Field",
     "storage-entry": "storage-entry",
     "storage-error-label": "pool-error-label",
@@ -2490,6 +2492,35 @@ def expose_a11y_button(key, name, callback, window=None, role=None, parent=None)
     set_accessible_name(btn, name)
     btn.set_visible(True)
     return btn
+
+
+def bind_button_sensitivity(src, sidecar, sentinel=None):
+    """Keep a sidecar button's sensitivity aligned with the real widget."""
+    if src is None or sidecar is None:
+        return
+
+    def _sync(*_a, real=src, dst=sidecar, path=sentinel):
+        try:
+            on = bool(real.get_sensitive())
+        except Exception:
+            on = True
+        try:
+            dst.set_sensitive(on)
+        except Exception:
+            pass
+        if path:
+            try:
+                open(path, "w").write("1" if on else "0")
+            except Exception:
+                pass
+        return False
+
+    sidecar._vmm_sens_src = src
+    try:
+        src.connect("notify::sensitive", _sync)
+    except Exception:
+        pass
+    _sync()
 
 
 def expose_a11y_spin(key, name, spin, window=None, parent=None):
