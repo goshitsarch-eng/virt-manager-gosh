@@ -345,7 +345,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = self.name or ""
         except Exception:
             name = ""
-        if "New VM" in name:
+        if "New VM" in name or " on " in name:
             try:
                 return bool(self.showing and self.visible and not self._a11y_hidden_name())
             except Exception:
