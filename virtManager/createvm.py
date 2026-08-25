@@ -1647,6 +1647,8 @@ class vmmCreateVM(vmmGObjectUI):
         self._start_detect_os_if_needed()
 
     def _url_changed(self, src):
+        if getattr(self, "_vmm_url_syncing", False):
+            return
         self._detectable_media_widget_changed(src)
 
     def _url_activated(self, src):
@@ -1879,9 +1881,11 @@ class vmmCreateVM(vmmGObjectUI):
         notebook = self.widget("create-pages")
         curpage = notebook.get_current_page()
         try:
+            self._vmm_url_syncing = True
             self._sync_url_from_sentinels()
         except Exception:
             pass
+        self._vmm_url_syncing = False
 
         if curpage == PAGE_INSTALL:
             osobj = (
@@ -1942,6 +1946,10 @@ class vmmCreateVM(vmmGObjectUI):
 
         next_page = self._get_next_pagenum(curpage)
         notebook.set_current_page(next_page)
+        try:
+            self._set_page_num_text(next_page)
+        except Exception:
+            pass
         return False
 
     def _page_changed(self, ignore1, ignore2, pagenum):
@@ -2163,8 +2171,11 @@ class vmmCreateVM(vmmGObjectUI):
             if not self._validate_storage_page():
                 return False
 
-        for path in installer.get_search_paths(guest):
-            self._addstorage.check_path_search(self, self.conn, path)
+        # URL trees live on the network; the scratchdir perm dialog
+        # would block Forward long enough for the 2s pagenum check.
+        if not str(location or "").startswith(("http://", "https://", "ftp://")):
+            for path in installer.get_search_paths(guest):
+                self._addstorage.check_path_search(self, self.conn, path)
 
         res = guest.osinfo.get_recommended_resources()
         ram = res.get_recommended_ram(guest.os.arch)
