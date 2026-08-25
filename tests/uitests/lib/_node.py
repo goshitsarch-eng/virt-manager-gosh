@@ -33,7 +33,7 @@ _GTK4_ROLE_ALIASES = {
     "spin button": "(spin button|spin|entry|text|text box)",
     "table cell": "(table cell|list item|cell|button|push button)",
     ".*table cell.*": ".*(table cell|list item|cell|button|push button).*",
-    "radio button": "(radio button|radio)",
+    "radio button": "(radio button|radio|toggle button|button|push button)",
     "check button": "(check button|check box)",
     "check box": "(check box|check button)",
     "page tab": "(page tab|tab|button|push button)",

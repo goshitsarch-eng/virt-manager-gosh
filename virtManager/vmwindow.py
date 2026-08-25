@@ -279,6 +279,24 @@ class vmmVMWindow(vmmGObjectUI):
         gtkcompat.ensure_button_accessible_name(self.widget("control-vm-console"), "Console")
         gtkcompat.ensure_button_accessible_name(self.widget("control-vm-details"), "Details")
         gtkcompat.ensure_button_accessible_name(self.widget("control-snapshots"), "Snapshots")
+        for wid, name in (
+            ("control-vm-console", "Console"),
+            ("control-vm-details", "Details"),
+            ("control-snapshots", "Snapshots"),
+        ):
+            btn = self.widget(wid)
+            try:
+                btn.set_accessible_role(Gtk.AccessibleRole.RADIO)
+            except Exception:
+                pass
+            gtkcompat.set_accessible_name(btn, name)
+            gtkcompat.expose_a11y_button(
+                "vmwin-" + wid,
+                name,
+                lambda b=btn: b.emit("clicked"),
+                window=self.topwin,
+                role=Gtk.AccessibleRole.RADIO,
+            )
         gtkcompat.ensure_button_accessible_name(
             self.widget("control-shutdown")._button, "Shut Down"
         )
