@@ -91,6 +91,20 @@ def ensure_button_accessible_name(widget, name):
         pass
     apply_accessible_label(widget)
     set_accessible_name(widget, name)
+    if hasattr(widget, "get_active"):
+        def _sync_checked(*_a):
+            try:
+                widget.update_state(
+                    [Gtk.AccessibleState.CHECKED], [bool(widget.get_active())]
+                )
+            except Exception:
+                pass
+            return False
+
+        if not getattr(widget, "_vmm_checked_synced", False):
+            widget._vmm_checked_synced = True
+            widget.connect("notify::active", _sync_checked)
+        _sync_checked()
     GLib.idle_add(lambda: set_accessible_name(widget, name) or False)
 
 
@@ -659,13 +673,14 @@ class MenuItem(Gtk.Button):
         # AT-SPI click waits for this handler. If we run a modal dialog
         # here, dogtail never returns to look for the alert.
         def _activate():
-            self._vmm_activate_queued = False
             try:
                 self.emit("activate")
             except Exception:
                 from virtinst import log
 
                 log.exception("menu activate failed")
+            finally:
+                self._vmm_activate_queued = False
             return False
 
         GLib.idle_add(_activate)
