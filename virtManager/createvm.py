@@ -507,6 +507,8 @@ class vmmCreateVM(vmmGObjectUI):
                         ):
                             # Validate/build_guest can take longer than 2s;
                             # publish the next step first so _nav can proceed.
+                            # Do not set _vmm_goto_page here: impl still
+                            # needs to validate the install page.
                             self._write_pagenum_file(self._get_next_pagenum(cur))
                         try:
                             self._forward_clicked_impl()
@@ -1955,21 +1957,9 @@ class vmmCreateVM(vmmGObjectUI):
             gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
         except Exception:
             pass
-        try:
-            gtkcompat.expose_a11y_label(
-                "create-pagenum",
-                "pagenum-label: %s" % page_lbl,
-                page_lbl,
-                window=self.topwin,
-            )
-        except Exception:
-            pass
-        try:
-            win = getattr(self, "_vmm_methods_win", None)
-            if win is not None:
-                gtkcompat._append_createvm_status_labels(win.get_child(), self)
-        except Exception:
-            pass
+        # Do not expose_a11y_label or rebuild methods-window labels here.
+        # After GetItems those GTK updates block the main loop long enough
+        # that Back misses the 2s pagenum check.
 
     def _change_os_detect(self, sensitive):
         self._os_list.set_sensitive(sensitive)
@@ -2392,7 +2382,12 @@ class vmmCreateVM(vmmGObjectUI):
             self._gdata.livecd = False
             self._gdata.osinfo = osobj and osobj.name or None
             guest = self._gdata.build_guest()
-            installer = self._gdata.build_installer()
+            # Installer(location=http) re-fetches .treeinfo and can exceed
+            # the 2s Forward/Back pagenum check. Search-path checks are
+            # already skipped for network trees.
+            installer = None
+            if not str(location or "").startswith(("http://", "https://", "ftp://")):
+                installer = self._gdata.build_installer()
         except Exception as e:
             msg = _("Error setting installer parameters.")
             return self.err.val_err(msg, e)
@@ -2414,7 +2409,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         # URL trees live on the network; the scratchdir perm dialog
         # would block Forward long enough for the 2s pagenum check.
-        if not str(location or "").startswith(("http://", "https://", "ftp://")):
+        if installer is not None:
             for path in installer.get_search_paths(guest):
                 self._addstorage.check_path_search(self, self.conn, path)
 
