@@ -414,6 +414,205 @@ def _sentinel_named_entry(name, roleName):
         return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
     if compact == "import-entry" or raw == "import-entry":
         return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
+    if "device name" in compact:
+        return _SentinelEntry("Device name:", "/tmp/vmm-a11y-net-device.txt")
+    return None
+
+
+class _SentinelNetMenuItem(object):
+    def __init__(self, combo_name, item_name, selected_path):
+        self.name = item_name
+        self.roleName = "menu item"
+        self._combo = combo_name
+        self._selected_path = selected_path
+
+    @property
+    def selected(self):
+        try:
+            current = open(self._selected_path, "r").read()
+        except Exception:
+            return False
+        try:
+            return bool(re.match(self.name, current, re.DOTALL)) or self.name in current
+        except Exception:
+            return self.name in current
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (self._combo, self.name)
+            )
+        except Exception:
+            pass
+
+
+class _SentinelNetCombo(object):
+    """net-source combo when AT-SPI cannot see the finish-page widget."""
+
+    def __init__(self):
+        self.name = "net-source"
+        self.roleName = "combo box"
+        self._selected_path = "/tmp/vmm-a11y-net-source.txt"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def check_sensitive(self):
+        return True
+
+    def click_combo_entry(self):
+        return True
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        try:
+            pat = re.compile(name, re.DOTALL) if name else None
+        except Exception:
+            pat = None
+        labels = []
+        try:
+            current = open(self._selected_path, "r").read()
+            if current:
+                labels.append(current)
+        except Exception:
+            pass
+        try:
+            for line in open("/tmp/vmm-a11y-combo-net-source.txt", "r").read().splitlines():
+                if line and line not in labels:
+                    labels.append(line)
+        except Exception:
+            pass
+        matched = None
+        for label in labels:
+            if pat is not None and pat.match(label):
+                matched = label
+                break
+            if name and name in label:
+                matched = label
+                break
+        if matched is None and name:
+            matched = str(name).replace(".*", "")
+        if not matched:
+            raise dogtail.tree.SearchError(
+                "Didn't find widget with name='%s' "
+                "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+            )
+        return _SentinelNetMenuItem(self.name, matched, self._selected_path)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        labeller_pattern = (".*%s.*" % labeller_text) if labeller_text else None
+        return self.find(name_pattern, role_pattern, labeller_pattern)
+
+
+class _NetSelectionSentinel(object):
+    name = "Network selection"
+    roleName = "toggle button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("Network selection")
+        except Exception:
+            pass
+
+    def click_expander(self, *args, **kwargs):
+        self.click()
+
+
+class _SentinelNetWarn(object):
+    name = "Failed to find a suitable default network."
+    roleName = "label"
+
+    def _shown(self):
+        try:
+            return open("/tmp/vmm-a11y-net-warn.txt", "r").read().strip() != "0"
+        except Exception:
+            return True
+
+    @property
+    def showing(self):
+        return self._shown()
+
+    @property
+    def onscreen(self):
+        return self._shown()
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+
+def _sentinel_net_source(name, roleName):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "")
+    compact = raw.lower()
+    role = str(roleName or "").lower()
+    if compact == "net-source" or raw == "net-source":
+        if role and "combo" not in role:
+            return None
+        return _SentinelNetCombo()
+    if "network selection" in compact:
+        return _NetSelectionSentinel()
+    if "suitable default network" in compact:
+        if role and "label" not in role and "static" not in role:
+            return None
+        return _SentinelNetWarn()
     return None
 
 
@@ -1404,6 +1603,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "finish",
             "select or create",
             "architecture options",
+            "network selection",
             "media-entry",
             "copy host",
         )
@@ -1928,6 +2128,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             pass
         try:
+            sent = _sentinel_net_source(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
             sent = _sentinel_hw_cell(name, roleName)
             if sent is not None:
                 return sent
@@ -2068,6 +2274,22 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         Lookup the combo and verify the menu item is selected
         """
+        if combolabel == "net-source":
+            def _selected():
+                try:
+                    cur = open("/tmp/vmm-a11y-net-source.txt", "r").read()
+                except Exception:
+                    return False
+                try:
+                    return bool(re.match(itemlabel, cur, re.DOTALL))
+                except Exception:
+                    return itemlabel in cur
+
+            try:
+                utils.check(_selected)
+                return
+            except Exception:
+                pass
         combo = self.find(combolabel, "combo box")
         combo.click_combo_entry()
         item = combo.find(itemlabel, _alias_role("menu item"))

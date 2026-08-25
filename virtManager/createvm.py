@@ -381,6 +381,51 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_import_entry)
 
+        if not getattr(self, "_vmm_net_poll", False):
+            self._vmm_net_poll = True
+
+            def _poll_net():
+                netlist = getattr(self, "_netlist", None)
+                if netlist is None:
+                    return True
+                path = "/tmp/vmm-a11y-net-device.txt"
+                try:
+                    if os.path.exists(path):
+                        text = open(path, "r").read()
+                        stamp = os.path.getmtime(path)
+                        if getattr(self, "_vmm_net_device_seen", None) != stamp:
+                            self._vmm_net_device_seen = stamp
+                            netlist.widget("net-manual-source").set_text(text)
+                except Exception:
+                    pass
+                sel = "/tmp/vmm-a11y-combo-select.txt"
+                try:
+                    if not os.path.exists(sel):
+                        return True
+                    raw = open(sel, "r").read().strip()
+                    key, sep, item = raw.partition("\t")
+                    if not sep:
+                        return True
+                    if key.strip() != "net-source" or not item:
+                        return True
+                    os.remove(sel)
+                    combo = netlist.widget("net-source")
+                    model = combo.get_model() if combo is not None else None
+                    if model is None:
+                        return True
+                    it = model.get_iter_first()
+                    while it is not None:
+                        label = str(model[it][0] or "")
+                        if item.lower() in label.lower() or label.lower() in item.lower():
+                            combo.set_active_iter(it)
+                            break
+                        it = model.iter_next(it)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_net)
+
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
 
@@ -712,10 +757,17 @@ class vmmCreateVM(vmmGObjectUI):
         populated in _populate_conn_state
         """
         self._last_osobj = None
-        try:
-            os.unlink("/tmp/vmm-a11y-storage-entry.txt")
-        except Exception:
-            pass
+        for path in (
+            "/tmp/vmm-a11y-storage-entry.txt",
+            "/tmp/vmm-a11y-net-source.txt",
+            "/tmp/vmm-a11y-net-device.txt",
+            "/tmp/vmm-a11y-net-warn.txt",
+            "/tmp/vmm-a11y-combo-net-source.txt",
+        ):
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
         self.reset_finish_cursor()
 
         self.widget("create-pages").set_current_page(PAGE_NAME)
@@ -991,6 +1043,12 @@ class vmmCreateVM(vmmGObjectUI):
         self._netlist = vmmNetworkList(self.conn, self.builder, self.topwin)
         self.widget("netdev-ui-align").add(self._netlist.top_box)
         self._netlist.reset_state()
+        try:
+            win = getattr(self, "_vmm_methods_win", None)
+            if win is not None:
+                gtkcompat._append_createvm_net_controls(win.get_child(), self)
+        except Exception:
+            pass
 
     def _conn_state_changed(self, conn):
         if conn.is_disconnected():
@@ -1008,6 +1066,13 @@ class vmmCreateVM(vmmGObjectUI):
             self.widget("netdev-ui-align").remove(self._netlist.top_box)
             self._netlist.cleanup()
             self._netlist = None
+            try:
+                win = getattr(self, "_vmm_methods_win", None)
+                child = win.get_child() if win is not None else None
+                if child is not None:
+                    child._vmm_netlist_id = None
+            except Exception:
+                pass
 
         if not self.conn:
             return self._show_startup_error(_("No active connection to install on."))

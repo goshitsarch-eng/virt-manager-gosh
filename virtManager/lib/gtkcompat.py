@@ -1470,6 +1470,71 @@ def _append_createvm_customize_check(box, createvm):
         pass
 
 
+def _append_createvm_net_controls(box, createvm):
+    """Finish-page net-source combo, device name, expander, and warning."""
+    if box is None or createvm is None:
+        return
+    netlist = getattr(createvm, "_netlist", None)
+    if netlist is None:
+        return
+    nid = id(netlist)
+    if getattr(box, "_vmm_netlist_id", None) == nid:
+        return
+    box._vmm_netlist_id = nid
+
+    def _toggle_net(*_a, cvm=createvm):
+        exp = cvm.widget("advanced-expander")
+        if exp is None:
+            return
+        try:
+            exp.set_expanded(not exp.get_expanded())
+        except Exception:
+            pass
+
+    try:
+        expose_a11y_button(
+            "advanced-expander",
+            "Network selection",
+            _toggle_net,
+            parent=box,
+        )
+        register_a11y_click("Network selection", _toggle_net)
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "net-source",
+            "net-source",
+            netlist.widget("net-source"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "net-manual-source",
+            "Device name:",
+            netlist.widget("net-manual-source"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_label(
+            "net-default-warn",
+            "Failed to find a suitable default network.",
+            "Failed to find a suitable default network.",
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        netlist._publish_a11y_state()
+    except Exception:
+        pass
+
+
 def _append_createvm_arch_controls(box, createvm):
     """Architecture expander, Xen type, and import path on the methods window."""
     if box is None or createvm is None or getattr(box, "_vmm_arch_controls", False):
@@ -1752,6 +1817,7 @@ def expose_createvm_methods_window(createvm):
                 _append_createvm_resource_spins(child, createvm)
                 _append_createvm_storage_radios(child, createvm)
                 _append_createvm_arch_controls(child, createvm)
+                _append_createvm_net_controls(child, createvm)
                 _append_createvm_customize_check(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:
@@ -1839,6 +1905,7 @@ def expose_createvm_methods_window(createvm):
     _append_createvm_resource_spins(box, createvm)
     _append_createvm_storage_radios(box, createvm)
     _append_createvm_arch_controls(box, createvm)
+    _append_createvm_net_controls(box, createvm)
     _append_createvm_customize_check(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
@@ -2930,6 +2997,7 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                 return False
             dst._vmm_combo_filling = True
             try:
+                src = getattr(dst, "_vmm_combo_src", src)
                 inner_box = getattr(dst, "_vmm_combo_inner", None)
                 if inner_box is None:
                     return False
@@ -2941,7 +3009,7 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                     except Exception:
                         pass
                     child = nxt
-                model = src.get_model()
+                model = src.get_model() if src is not None else None
                 idx = 0
                 try:
                     it = model.get_iter_first() if model is not None else None
@@ -2963,8 +3031,9 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                     set_accessible_name(item, label)
                     ensure_activate_clicked(item)
 
-                    def _choose(_it, row=idx, c=src, combo_name=name):
+                    def _choose(_it, row=idx, c=src, combo_name=name, dst=wrap):
                         try:
+                            c = getattr(dst, "_vmm_combo_src", c)
                             c.set_active(row)
                         except Exception:
                             pass
@@ -3040,6 +3109,19 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
             wrap.install_action("click", None, lambda *_a: _fill())
         except Exception:
             pass
+    elif combo is not None and getattr(wrap, "_vmm_combo_src", None) is not combo:
+        wrap._vmm_combo_src = combo
+        fill = getattr(wrap, "_vmm_combo_fill", None)
+        if fill is not None:
+            try:
+                combo.connect("notify::model", fill)
+                combo.connect("changed", fill)
+            except Exception:
+                pass
+            try:
+                fill()
+            except Exception:
+                pass
     set_accessible_name(wrap, name)
     try:
         set_accessible_name(combo, name)

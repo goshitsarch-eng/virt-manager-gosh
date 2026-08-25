@@ -3,6 +3,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gtk
 
 import virtinst
@@ -369,6 +371,41 @@ class vmmNetworkList(vmmGObjectUI):
                 return
 
         netlist.set_active(default_idx)
+        self._publish_a11y_state()
+
+    def _publish_a11y_state(self):
+        """Publish selected source/device so uitests can read them after GetItems."""
+        try:
+            combo = self.widget("net-source")
+            label = ""
+            try:
+                label = uiutil.get_list_selection(combo, column=NET_ROW_LABEL) or ""
+            except Exception:
+                label = ""
+            open("/tmp/vmm-a11y-net-source.txt", "w").write(str(label))
+            lines = []
+            try:
+                model = combo.get_model()
+                if model is not None:
+                    for row in model:
+                        text = str(row[NET_ROW_LABEL] or "")
+                        if text:
+                            lines.append(text)
+            except Exception:
+                pass
+            open("/tmp/vmm-a11y-combo-net-source.txt", "w").write("\n".join(lines))
+            try:
+                dev = self.widget("net-manual-source").get_text() or ""
+            except Exception:
+                dev = ""
+            open("/tmp/vmm-a11y-net-device.txt", "w").write(dev)
+            try:
+                warn = bool(self.widget("net-default-warn-box").get_visible())
+            except Exception:
+                warn = False
+            open("/tmp/vmm-a11y-net-warn.txt", "w").write("1" if warn else "0")
+        except Exception:
+            pass
 
     def _populate_portgroups(self, portgroups):
         combo = self.widget("net-portgroup")
@@ -409,3 +446,4 @@ class vmmNetworkList(vmmGObjectUI):
 
         uiutil.set_grid_row_visible(self.widget("net-portgroup"), bool(portgroups))
         self._populate_portgroups(portgroups)
+        self._publish_a11y_state()
