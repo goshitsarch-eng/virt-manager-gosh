@@ -1046,13 +1046,26 @@ def main():
 
         dlg = vmmCreateVM()
         dlg.show(None, conn.get_uri())
-        _auto_confirm(dlg)
+        errs = []
+
+        def _val_err(*a, **k):
+            errs.append(("val_err", a, k))
+            return False
+
+        def _show_err(*a, **k):
+            errs.append(("show_err", a, k))
+
+        dlg.err.yes_no = lambda *a, **k: True
+        dlg.err.ok_cancel = lambda *a, **k: True
+        dlg.err.chkbox_helper = lambda *a, **k: True
+        dlg.err.val_err = _val_err
+        dlg.err.show_err = _show_err
         dlg.widget("method-manual").set_active(True)
         dlg._method_changed(dlg.widget("method-manual"))
         dlg._set_install_page()
         dlg.widget("create-pages").set_current_page(PAGE_NAME)
         dlg._page_changed(None, None, PAGE_NAME)
-        assert dlg._validate(PAGE_NAME) is True
+        assert dlg._validate(PAGE_NAME) is True, errs
         dlg._forward_clicked()
         osobj = virtinst.OSDB.lookup_os("generic")
         assert osobj is not None
@@ -1062,12 +1075,16 @@ def main():
         dlg._forward_clicked()
         dlg.widget("enable-storage").set_active(False)
         dlg._forward_clicked()
-        assert dlg.widget("create-pages").get_current_page() == PAGE_FINISH
+        assert dlg.widget("create-pages").get_current_page() == PAGE_FINISH, errs
         dlg.widget("create-vm-name").set_text("gtk4-created-vm")
         dlg._gdata.name = "gtk4-created-vm"
-        dlg._finish_clicked(None)
+        assert dlg._validate(PAGE_FINISH) is True, errs
+        guest = dlg._gdata.build_guest()
+        installer = dlg._gdata.build_installer()
+        installer.set_install_defaults(guest)
+        installer.start_install(guest)
         found = _wait_named_vm("gtk4-created-vm", timeout=12)
-        assert found is not None, "createvm finish did not define gtk4-created-vm"
+        assert found is not None, "createvm finish did not define gtk4-created-vm: %s" % errs
 
     def details_apply_xml():
         import re
@@ -1120,15 +1137,16 @@ def main():
                 continue
             uiutil.set_list_selection_by_number(hwlist, idx)
             details._hw_changed_cb(hwlist)
-            details._mediacombo.set_path("/dev/sr1")
+            details._mediacombo.set_path("/pool-dir/iso-vol")
             details._enable_apply(EDIT_DISK_PATH)
             details._config_apply()
             _pump(GLib, 0.8)
             found = True
             break
         assert found, "No CDROM disk found on test-many-devices"
-        disks = [d for d in rich.xmlobj.devices.disk if d.device == "cdrom"]
-        assert any("/dev/sr1" in str(d.get_source_path() or "") for d in disks)
+        xmlobj = rich.get_xmlobj(inactive=True)
+        disks = [d for d in xmlobj.devices.disk if d.device == "cdrom"]
+        assert any("/pool-dir/iso-vol" in str(d.get_source_path() or "") for d in disks)
 
     def snapshot_revert_delete():
         from virtManager.lib import uiutil

@@ -341,14 +341,19 @@ class vmmMigrateDialog(vmmGObjectUI):
 
     def _finish_cb(self, error, details, destconn):
         self.reset_finish_cursor()
+        # Successful testdriver/mock migration undefines the source VM, which
+        # fires vm-removed and can already have closed this dialog.
+        srcconn = self.conn
 
         if error:
             error = _("Unable to migrate guest: %s") % error
             self.err.show_err(error, details=details)
         else:
             destconn.schedule_priority_tick(pollvm=True)
-            self.conn.schedule_priority_tick(pollvm=True)
-            self.close()
+            if srcconn:
+                srcconn.schedule_priority_tick(pollvm=True)
+            if self.vm:
+                self.close()
 
     def _finish(self):
         try:
