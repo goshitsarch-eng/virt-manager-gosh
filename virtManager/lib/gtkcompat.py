@@ -868,6 +868,12 @@ def _oslist_load_search_from_file(oslist):
     except Exception:
         return
     _oslist_apply_search_text(oslist, text)
+    show = getattr(oslist, "_vmm_oslist_show_a11y", None)
+    if show:
+        try:
+            show()
+        except Exception:
+            pass
 
 
 def _oslist_confirm_search(oslist):

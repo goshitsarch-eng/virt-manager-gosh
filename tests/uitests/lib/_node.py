@@ -673,7 +673,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return
             except Exception:
                 pass
-        if "oslist-entry" in (self.name or ""):
+        nname = (self.name or "").lower()
+        if (
+            "oslist-entry" in nname
+            or "operating system you are installing" in nname
+            or "unknown os" in nname
+            or "(generic)" in nname
+        ):
             try:
                 self.doActionNamed("click")
             except Exception:
@@ -681,13 +687,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     self.grabFocus()
                 except Exception:
                     pass
-            # Overlay click often does not fire install_action. Confirm
-            # via the dedicated .oslist-activate button when there is text.
+            # Overlay popover rows disappear after GetItems. Confirm
+            # via .oslist-activate so set_text("generic")+click selects.
             try:
                 typed = (self.text or "").strip()
             except Exception:
                 typed = ""
-            if typed:
+            if typed or "generic" in nname:
                 try:
                     self._click_named_button(".oslist-activate")
                 except Exception:
