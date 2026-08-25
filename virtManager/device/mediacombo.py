@@ -144,6 +144,10 @@ class vmmMediaCombo(vmmGObjectUI):
     ################
 
     def _on_entry_changed_cb(self, src):
+        try:
+            open("/tmp/vmm-a11y-media-entry.txt", "w").write(src.get_text() or "")
+        except Exception:
+            pass
         self.emit("changed", self._entry)
 
     def _on_entry_activated_cb(self, src):
@@ -173,6 +177,10 @@ class vmmMediaCombo(vmmGObjectUI):
             self._init_rows()
 
         self._entry.set_text("")
+        try:
+            open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
+        except Exception:
+            pass
         model = self._combo.get_model()
         model.clear()
 

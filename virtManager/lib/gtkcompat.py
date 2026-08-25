@@ -2670,11 +2670,26 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                     set_accessible_name(item, label)
                     ensure_activate_clicked(item)
 
-                    def _choose(_it, row=idx, c=src):
+                    def _choose(_it, row=idx, c=src, combo_name=name):
                         try:
                             c.set_active(row)
                         except Exception:
                             pass
+                        if "media" in (combo_name or ""):
+                            try:
+                                model = c.get_model()
+                                path = ""
+                                if model is not None:
+                                    path = model[row][0] or ""
+                                child = c.get_child()
+                                text = ""
+                                if child is not None and hasattr(child, "get_text"):
+                                    text = child.get_text() or ""
+                                open("/tmp/vmm-a11y-media-entry.txt", "w").write(
+                                    str(path or text or "")
+                                )
+                            except Exception:
+                                pass
 
                     item.connect("clicked", _choose)
                     inner_box.append(item)

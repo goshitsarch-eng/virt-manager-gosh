@@ -54,6 +54,19 @@ class vmmOSList(vmmGObjectUI):
         self.search_entry.connect("key-press-event", self._key_press_cb)
 
         self._init_state()
+        # Leftover Escape/hide markers from a killed uitest must not
+        # latch the next New VM wizard's oslist-popover closed.
+        for _marker in (
+            "/tmp/vmm-a11y-oslist-escape",
+            "/tmp/vmm-a11y-oslist-popover-hidden",
+            "/tmp/vmm-a11y-oslist-typed",
+            "/tmp/vmm-a11y-oslist-confirmed",
+            "/tmp/vmm-a11y-oslist-reopen",
+        ):
+            try:
+                os.remove(_marker)
+            except Exception:
+                pass
 
         def _oslist_a11y(*_a):
             if getattr(self, "_vmm_oslist_a11y", False):

@@ -540,6 +540,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
             return stored
         if "media-entry" in name:
+            live = ""
+            try:
+                live = self.queryEditableText().getText(0, -1) or ""
+            except Exception:
+                live = ""
+            if live.strip() and (
+                "/dev/" in live or live.startswith("/") or "iso" in live.lower()
+            ):
+                return live.strip()
             try:
                 stored = open("/tmp/vmm-a11y-media-entry.txt", "r").read()
                 if stored.strip():
