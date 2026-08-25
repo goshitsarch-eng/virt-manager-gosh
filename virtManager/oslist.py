@@ -39,6 +39,8 @@ class vmmOSList(vmmGObjectUI):
                 "on_os_list_row_activated": self._os_selected_cb,
             }
         )
+        # GTK4 .ui conversion drops key-press-event; keep the Down-arrow popover
+        self.search_entry.connect("key-press-event", self._key_press_cb)
 
         self._init_state()
 

@@ -171,14 +171,7 @@ class vmmOverlayToolbar:
         self.timed_revealer = _TimedRevealer(self._toolbar)
 
     def _on_send_key_button_clicked_cb(self, src):
-        event = Gtk.get_current_event()
-        win = self._toolbar.get_window()
-        rect = Gdk.Rectangle()
-
-        rect.y = win.get_height()
-        self._keycombo_menu.popup_at_rect(
-            win, rect, Gdk.Gravity.NORTH_WEST, Gdk.Gravity.NORTH_WEST, event
-        )
+        self._keycombo_menu.popup_at_widget(src)
 
     def cleanup(self):
         self._keycombo_menu.destroy()

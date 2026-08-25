@@ -67,12 +67,21 @@ class vmmMediaCombo(vmmGObjectUI):
         self._entry.get_accessible().set_name("media-entry")
         self._entry.connect("changed", self._on_entry_changed_cb)
         self._entry.connect("activate", self._on_entry_activated_cb)
-        self._entry.connect("icon-press", self._on_entry_icon_press_cb)
+
+        self._clear_btn = Gtk.Button()
+        self._clear_btn.set_icon_name("edit-clear-symbolic")
+        self._clear_btn.set_has_frame(False)
+        self._clear_btn.set_tooltip_text(_("Clear"))
+        self._clear_btn.get_accessible().set_name("media-clear")
+        self._clear_btn.connect("clicked", self._on_entry_icon_press_cb)
+        self._clear_btn.set_visible(False)
 
         self._browse = Gtk.Button()
 
-        self.top_box.add(self._combo)
+        self.top_box.append(self._combo)
+        self.top_box.append(self._clear_btn)
         self.top_box.show_all()
+        self._clear_btn.set_visible(False)
 
         # [path, label, has_media?, device key]
         store = Gtk.ListStore(str, str, bool, str)
@@ -131,7 +140,10 @@ class vmmMediaCombo(vmmGObjectUI):
     def _on_entry_activated_cb(self, src):
         self.emit("activate", self._entry)
 
-    def _on_entry_icon_press_cb(self, src, icon_pos, event):
+    def _on_entry_icon_press_cb(self, src, icon_pos=None, event=None):
+        ignore = icon_pos
+        ignore = event
+        ignore = src
         self._entry.set_text("")
 
     def _iso_paths_changed_cb(self):
@@ -183,6 +195,4 @@ class vmmMediaCombo(vmmGObjectUI):
         label.set_mnemonic_widget(self._entry)
 
     def show_clear_icon(self):
-        pos = Gtk.EntryIconPosition.SECONDARY
-        self._entry.set_icon_from_icon_name(pos, "edit-clear-symbolic")
-        self._entry.set_icon_activatable(pos, True)
+        self._clear_btn.set_visible(True)

@@ -57,12 +57,42 @@ def get_children(widget):
 
 
 def container_add(parent, child):
-    if hasattr(parent, "append"):
-        parent.append(child)
-    elif hasattr(parent, "set_child"):
+    if child is None:
+        return
+    if child.get_parent() is parent:
+        return
+    if child.get_parent() is not None:
+        child.unparent()
+    # Prefer set_child for GTK4 bin widgets (ScrolledWindow, Viewport, ...)
+    # even when they also expose a leftover append() from Gtk.Widget.
+    if type(parent).__name__ in (
+        "ScrolledWindow",
+        "Viewport",
+        "Revealer",
+        "Overlay",
+        "Frame",
+        "Expander",
+        "Window",
+        "ApplicationWindow",
+        "Popover",
+        "AspectFrame",
+        "Dialog",
+    ) and hasattr(parent, "set_child"):
         parent.set_child(child)
-    else:  # pragma: no cover
-        raise TypeError("Cannot add child to %s" % type(parent))
+        return
+    if hasattr(parent, "append") and not isinstance(parent, Gtk.Grid):
+        try:
+            parent.append(child)
+            return
+        except TypeError:
+            pass
+    if hasattr(parent, "set_child"):
+        parent.set_child(child)
+        return
+    if isinstance(parent, Gtk.Grid):
+        parent.attach(child, 0, 0, 1, 1)
+        return
+    raise TypeError("Cannot add child to %s" % type(parent))
 
 
 def container_remove(parent, child):
@@ -110,6 +140,49 @@ def _widget_get_children(self):
 
 def _widget_add(self, child):
     container_add(self, child)
+
+
+def _widget_modify_bg(self, _state=None, color=None):
+    r = g = b = 0
+    if color is not None:
+        r = getattr(color, "red", 0) or 0
+        g = getattr(color, "green", 0) or 0
+        b = getattr(color, "blue", 0) or 0
+        if r > 1 or g > 1 or b > 1:
+            r, g, b = r / 65535.0, g / 65535.0, b / 65535.0
+    css = ".vmm-modify-bg { background-color: rgb(%d,%d,%d); }" % (
+        int(r * 255),
+        int(g * 255),
+        int(b * 255),
+    )
+    self.add_css_class("vmm-modify-bg")
+    provider = Gtk.CssProvider()
+    provider.load_from_data(css.encode("utf-8"))
+    self.get_style_context().add_provider(provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+
+def _widget_get_window(self):
+    native = self.get_native() if hasattr(self, "get_native") else None
+    if native is not None and hasattr(native, "get_surface"):
+        surface = native.get_surface()
+        if surface is not None:
+            return surface
+    return self
+
+
+def _widget_get_pointer(self):
+    if hasattr(self, "_last_xy"):
+        return self._last_xy
+    return (0, 0)
+
+
+def _get_current_event():
+    return _FakeEvent()
+
+
+class _EntryIconPosition:
+    PRIMARY = 0
+    SECONDARY = 1
 
 
 def _box_pack_start(self, child, expand=True, fill=True, padding=0):
@@ -733,10 +806,19 @@ def _stock_to_label_icon(stock):
     return (str(stock), None)
 
 
+def _patch_bin_add(cls):
+    if cls is None:
+        return
+    cls.add = _widget_add
+
+
 def _patch_widget_methods():
     Gtk.Widget.get_accessible = _widget_get_accessible
     Gtk.Widget.show_all = _widget_show_all
     Gtk.Widget.get_children = _widget_get_children
+    Gtk.Widget.modify_bg = _widget_modify_bg
+    Gtk.Widget.get_window = _widget_get_window
+    Gtk.Widget.get_pointer = _widget_get_pointer
 
     orig_add = getattr(Gtk.Box, "add", None)
     ignore = orig_add
@@ -744,6 +826,22 @@ def _patch_widget_methods():
     Gtk.Box.pack_start = _box_pack_start
     Gtk.Box.pack_end = _box_pack_end
     Gtk.Box.get_children = _widget_get_children
+
+    for clsname in (
+        "ScrolledWindow",
+        "Viewport",
+        "Revealer",
+        "Overlay",
+        "Frame",
+        "Expander",
+        "Window",
+        "ApplicationWindow",
+        "Popover",
+        "AspectFrame",
+        "Dialog",
+        "MessageDialog",
+    ):
+        _patch_bin_add(getattr(Gtk, clsname, None))
 
     if not hasattr(Gtk.Window, "get_position"):
 
@@ -806,6 +904,43 @@ def _patch_widget_methods():
             return _Alloc(self)
 
         Gtk.Widget.get_allocation = get_allocation
+
+    def resize(self, width, height):
+        self.set_default_size(max(1, int(width)), max(1, int(height)))
+
+    Gtk.Window.resize = resize
+
+    def set_type_hint(self, *_args):
+        return None
+
+    Gtk.Window.set_type_hint = set_type_hint
+
+    def add_accel_group(self, *_args):
+        return None
+
+    def remove_accel_group(self, *_args):
+        return None
+
+    Gtk.Window.add_accel_group = add_accel_group
+    Gtk.Window.remove_accel_group = remove_accel_group
+
+    def set_relative_to(self, widget):
+        parent = self.get_parent()
+        if parent is not None and parent is not widget:
+            self.unparent()
+        if self.get_parent() is None and widget is not None:
+            self.set_parent(widget)
+
+    Gtk.Popover.set_relative_to = set_relative_to
+
+    def _entry_set_icon_from_icon_name(self, _pos, _name):
+        return None
+
+    def _entry_set_icon_activatable(self, _pos, _val):
+        return None
+
+    Gtk.Entry.set_icon_from_icon_name = _entry_set_icon_from_icon_name
+    Gtk.Entry.set_icon_activatable = _entry_set_icon_activatable
 
     orig_set_from_icon_name = Gtk.Image.set_from_icon_name
 
@@ -896,6 +1031,12 @@ def _patch_widget_methods():
             controller.connect(sig, _key)
             self.add_controller(controller)
             return id(controller)
+        if signal == "icon-press":
+
+            def _icon(*_a):
+                callback(self, Gtk.EntryIconPosition.SECONDARY, _FakeEvent(), *args)
+
+            return orig_connect(self, "activate", _icon)
         if signal in ("enter-notify-event", "leave-notify-event"):
             controller = Gtk.EventControllerMotion()
             evname = "enter" if signal == "enter-notify-event" else "leave"
@@ -978,6 +1119,88 @@ def _install_stock_and_enums():
                 return Gdk.Display.get_default()
 
         Gdk.Screen = _Screen
+
+    if not hasattr(Gdk, "Color"):
+
+        class Color:
+            def __init__(self, red=0, green=0, blue=0):
+                self.red = red
+                self.green = green
+                self.blue = blue
+
+        Gdk.Color = Color
+
+    if not hasattr(Gdk, "WindowTypeHint"):
+
+        class WindowTypeHint:
+            NORMAL = 0
+            DIALOG = 1
+            MENU = 2
+            TOOLBAR = 3
+            SPLASHSCREEN = 4
+            UTILITY = 5
+            DOCK = 6
+            DESKTOP = 7
+
+        Gdk.WindowTypeHint = WindowTypeHint
+
+    if not hasattr(Gtk, "StateType"):
+
+        class StateType:
+            NORMAL = 0
+            ACTIVE = 1
+            PRELIGHT = 2
+            SELECTED = 3
+            INSENSITIVE = 4
+
+        Gtk.StateType = StateType
+
+    Gtk.EntryIconPosition = _EntryIconPosition
+    Gtk.get_current_event = _get_current_event
+    Gtk.accel_groups_from_object = lambda _obj: []
+
+    class VScrollbar(Gtk.Scrollbar):
+        __gtype_name__ = "GtkVScrollbar"
+
+        def __init__(self, adjustment=None, **kwargs):
+            super().__init__(orientation=Gtk.Orientation.VERTICAL, **kwargs)
+            if adjustment is not None:
+                self.set_adjustment(adjustment)
+
+    class HScrollbar(Gtk.Scrollbar):
+        __gtype_name__ = "GtkHScrollbar"
+
+        def __init__(self, adjustment=None, **kwargs):
+            super().__init__(orientation=Gtk.Orientation.HORIZONTAL, **kwargs)
+            if adjustment is not None:
+                self.set_adjustment(adjustment)
+
+    Gtk.VScrollbar = VScrollbar
+    Gtk.HScrollbar = HScrollbar
+
+    orig_settings_get = Gtk.Settings.get_property
+    orig_settings_set = Gtk.Settings.set_property
+
+    def settings_get_property(self, name):
+        try:
+            return orig_settings_get(self, name)
+        except TypeError:
+            if name == "gtk-menu-bar-accel":
+                return "F10"
+            if name == "gtk-enable-mnemonics":
+                return True
+            raise
+
+    def settings_set_property(self, name, value):
+        try:
+            return orig_settings_set(self, name, value)
+        except TypeError:
+            if name in ("gtk-menu-bar-accel", "gtk-enable-mnemonics"):
+                return None
+            raise
+
+    Gtk.Settings.get_property = settings_get_property
+    Gtk.Settings.set_property = settings_set_property
 
 
 def _install_css_helpers():
