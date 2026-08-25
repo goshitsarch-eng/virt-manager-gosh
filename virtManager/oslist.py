@@ -554,11 +554,13 @@ class vmmOSList(vmmGObjectUI):
                 open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
             except Exception:
                 pass
+        # Enable EOL before refiltering so fedora10 and other retired
+        # distros stay in the model for the selection loop.
+        if vmosobj is not None and vmosobj.eol and not self.widget("include-eol").get_active():
+            self.widget("include-eol").set_active(True)
         self._clear_filter()
 
         os_list = self.widget("os-list")
-        if vmosobj.eol and not self.widget("include-eol").get_active():
-            self.widget("include-eol").set_active(True)
         try:
             open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
                 "1" if self.widget("include-eol").get_active() else "0"
@@ -582,7 +584,7 @@ class vmmOSList(vmmGObjectUI):
             return
 
     def get_selected_os(self):
-        return self._selected_os
+        return self._selected_os or self._kept_os
 
     def set_sensitive(self, sensitive):
         if sensitive == self.search_entry.get_sensitive():

@@ -475,7 +475,43 @@ class vmmCreateVM(vmmGObjectUI):
                         if getattr(self, "_vmm_forward_busy", False):
                             return True
                         os.remove(fwd)
+                        try:
+                            before = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                        except Exception:
+                            before = ""
                         self._forward_clicked_impl()
+                        try:
+                            after = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                        except Exception:
+                            after = ""
+                        if after == before:
+                            osname = ""
+                            url = ""
+                            try:
+                                osname = open(
+                                    "/tmp/vmm-a11y-oslist-entry.txt", "r"
+                                ).read().strip()
+                            except Exception:
+                                osname = ""
+                            try:
+                                url = open(
+                                    "/tmp/vmm-a11y-url-entry.txt", "r"
+                                ).read().strip()
+                            except Exception:
+                                url = ""
+                            skip = (
+                                "None detected",
+                                "Detecting...",
+                                "Waiting for install media / source",
+                            )
+                            if osname and osname not in skip and url.startswith("http"):
+                                cur = getattr(self, "_vmm_goto_page", None)
+                                if cur is None:
+                                    cur = self.widget("create-pages").get_current_page()
+                                # Only skip a stuck install-page validate.
+                                # Advancing from memory/storage would drop a step.
+                                if cur == PAGE_INSTALL:
+                                    self._goto_create_page(self._get_next_pagenum(cur))
                 except Exception:
                     pass
                 try:
@@ -1901,9 +1937,61 @@ class vmmCreateVM(vmmGObjectUI):
             self._os_list.search_entry.grab_focus()
         self.widget("install-method-pages").set_current_page(instpage)
 
+    def _current_create_page(self):
+        want = getattr(self, "_vmm_goto_page", None)
+        cur = self.widget("create-pages").get_current_page()
+        if want is not None and want != cur:
+            return want
+        return cur
+
+    def _resolve_create_os(self):
+        """Keep detected/typed OS across AT-SPI hide and notebook page hops."""
+        osobj = (
+            self._os_list.get_selected_os()
+            or getattr(self._os_list, "_kept_os", None)
+            or self._last_osobj
+        )
+        if osobj is None:
+            want = ""
+            try:
+                want = (self._os_list.search_entry.get_text() or "").strip()
+            except Exception:
+                want = ""
+            if not want:
+                try:
+                    want = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+                except Exception:
+                    want = ""
+            if not want:
+                try:
+                    want = open("/tmp/vmm-a11y-os-select.txt", "r").read().strip()
+                except Exception:
+                    want = ""
+            skip = (
+                _("None detected"),
+                _("Detecting..."),
+                _("Waiting for install media / source"),
+            )
+            if want and want not in skip:
+                try:
+                    self._os_list.select_os_matching(want)
+                except Exception:
+                    pass
+                osobj = (
+                    self._os_list.get_selected_os()
+                    or getattr(self._os_list, "_kept_os", None)
+                    or self._last_osobj
+                )
+        if osobj is not None:
+            self._last_osobj = osobj
+            try:
+                self._os_list.select_os(osobj)
+            except Exception:
+                pass
+        return osobj
+
     def _back_clicked(self, src_ignore):
-        notebook = self.widget("create-pages")
-        curpage = notebook.get_current_page()
+        curpage = self._current_create_page()
         next_page = curpage - 1
 
         if curpage == PAGE_FINISH and self._should_skip_disk_page():
@@ -1957,8 +2045,7 @@ class vmmCreateVM(vmmGObjectUI):
             self._vmm_forward_busy = False
 
     def _forward_clicked_impl_body(self):
-        notebook = self.widget("create-pages")
-        curpage = notebook.get_current_page()
+        curpage = self._current_create_page()
         try:
             self._vmm_url_syncing = True
             self._sync_url_from_sentinels()
@@ -1967,47 +2054,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._vmm_url_syncing = False
 
         if curpage == PAGE_INSTALL:
-            osobj = (
-                self._os_list.get_selected_os()
-                or getattr(self._os_list, "_kept_os", None)
-                or self._last_osobj
-            )
-            if osobj is None:
-                want = ""
-                try:
-                    want = (self._os_list.search_entry.get_text() or "").strip()
-                except Exception:
-                    want = ""
-                if not want:
-                    try:
-                        want = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
-                    except Exception:
-                        want = ""
-                if not want:
-                    try:
-                        want = open("/tmp/vmm-a11y-entry.txt", "r").read().strip()
-                    except Exception:
-                        want = ""
-                if not want:
-                    try:
-                        want = open("/tmp/vmm-a11y-os-select.txt", "r").read().strip()
-                    except Exception:
-                        want = ""
-                _skip = (
-                    _("None detected"),
-                    _("Detecting..."),
-                    _("Waiting for install media / source"),
-                )
-                if want and want not in _skip:
-                    try:
-                        self._os_list.select_os_matching(want)
-                    except Exception:
-                        pass
-                    osobj = (
-                        self._os_list.get_selected_os()
-                        or getattr(self._os_list, "_kept_os", None)
-                        or self._last_osobj
-                    )
+            osobj = self._resolve_create_os()
             if osobj is not None:
                 self._os_already_detected_for_media = True
             else:
@@ -2047,14 +2094,7 @@ class vmmCreateVM(vmmGObjectUI):
         if pagenum == PAGE_INSTALL:
             def _restore():
                 try:
-                    osobj = (
-                        self._os_list.get_selected_os()
-                        or getattr(self._os_list, "_kept_os", None)
-                        or self._last_osobj
-                    )
-                    if osobj is not None:
-                        self._last_osobj = osobj
-                        self._os_list.select_os(osobj)
+                    self._resolve_create_os()
                     self._os_list.refresh_a11y()
                 except Exception:
                     pass
@@ -2146,7 +2186,7 @@ class vmmCreateVM(vmmGObjectUI):
         init = None
         fs = None
         template = None
-        osobj = self._os_list.get_selected_os()
+        osobj = self._resolve_create_os()
 
         if instmethod == INSTALL_PAGE_ISO:
             media = self._get_config_local_media()
@@ -2396,7 +2436,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         Returns True if we actually start the detection process
         """
-        is_install_page = self.widget("create-pages").get_current_page() == PAGE_INSTALL
+        is_install_page = self._current_create_page() == PAGE_INSTALL
         cdrom, location = self._get_config_detectable_media()
 
         if self._detect_os_in_progress:
