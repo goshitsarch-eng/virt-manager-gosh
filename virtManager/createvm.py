@@ -446,7 +446,6 @@ class vmmCreateVM(vmmGObjectUI):
                 src.set_accessible_role(Gtk.AccessibleRole.RADIO)
             except Exception:
                 pass
-            gtkcompat.set_accessible_name(src, name)
             gtkcompat.sync_accessible_checked(src)
             gtkcompat.expose_a11y_check(wid, name, src, window=self.topwin)
             sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(wid)
@@ -455,6 +454,18 @@ class vmmCreateVM(vmmGObjectUI):
                     sidecar.set_accessible_role(Gtk.AccessibleRole.RADIO)
                 except Exception:
                     pass
+                gtkcompat.set_accessible_name(sidecar, name)
+            # Keep the real radio out of find(); GTK 4 RADIO activate
+            # does not toggle CheckButton, so dogtail must hit the sidecar.
+            gtkcompat.set_accessible_name(src, ".%s-real" % wid)
+            try:
+                src.install_action(
+                    "click",
+                    None,
+                    lambda *_a, s=src: (s.set_active(True), True)[-1],
+                )
+            except Exception:
+                pass
         gtkcompat.expose_oslist_a11y(self._os_list, self.topwin)
         gtkcompat.expose_a11y_entry(
             "create-vm-name",

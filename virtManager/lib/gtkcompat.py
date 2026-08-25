@@ -1080,6 +1080,36 @@ def expose_a11y_check(key, name, widget, window=None, parent=None):
             widget.connect("notify::active", _sync_from_src)
         except Exception:
             pass
+
+        def _on_click(*_a, src=widget, dst=btn):
+            dst._vmm_check_syncing = True
+            try:
+                grouped = False
+                try:
+                    grouped = bool(src.get_group())
+                except Exception:
+                    grouped = False
+                if grouped:
+                    src.set_active(True)
+                    dst.set_active(True)
+                else:
+                    val = not bool(src.get_active())
+                    src.set_active(val)
+                    dst.set_active(val)
+            except Exception:
+                pass
+            dst._vmm_check_syncing = False
+            sync_accessible_checked(dst)
+            try:
+                sync_accessible_checked(src)
+            except Exception:
+                pass
+            return True
+
+        try:
+            btn.install_action("click", None, lambda *_a: _on_click())
+        except Exception:
+            pass
         _sync_from_src()
     set_accessible_name(btn, name)
     sync_accessible_checked(btn)
