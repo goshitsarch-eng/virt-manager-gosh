@@ -820,11 +820,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
         os_short = re.search(r"\(([a-z0-9.+-]+)\)$", nname)
         if os_short and os_short.group(1) not in ("hidden", "generic"):
             try:
-                with open("/tmp/vmm-a11y-os-select.txt", "w") as fh:
-                    fh.write(os_short.group(1))
-            except Exception:
-                pass
-            try:
                 open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
                 open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
             except Exception:
@@ -966,6 +961,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 for marker in (
                     "/tmp/vmm-a11y-oslist-escape",
                     "/tmp/vmm-a11y-oslist-popover-hidden",
+                    "/tmp/vmm-a11y-os-select.txt",
                 ):
                     try:
                         os.remove(marker)
@@ -1016,6 +1012,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     for marker in (
                         "/tmp/vmm-a11y-oslist-escape",
                         "/tmp/vmm-a11y-oslist-popover-hidden",
+                        "/tmp/vmm-a11y-os-select.txt",
                     ):
                         try:
                             os.remove(marker)
@@ -1053,6 +1050,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 for marker in (
                     "/tmp/vmm-a11y-oslist-escape",
                     "/tmp/vmm-a11y-oslist-popover-hidden",
+                    "/tmp/vmm-a11y-os-select.txt",
                 ):
                     try:
                         os.remove(marker)
