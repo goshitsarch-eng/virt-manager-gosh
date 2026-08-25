@@ -924,8 +924,13 @@ def attach_treeview_column_a11y(treeview):
     GTK 4 TreeView column headers are often missing from AT-SPI.
     Mirror each title as a COLUMN_HEADER button that triggers sort.
     """
-    if treeview is None or getattr(treeview, "_vmm_col_a11y", False):
+    if treeview is None:
         return None
+    if getattr(treeview, "_vmm_col_a11y", False):
+        rebuild = getattr(treeview, "_vmm_col_rebuild", None)
+        if rebuild is not None:
+            GLib.idle_add(rebuild)
+        return True
     treeview._vmm_col_a11y = True
 
     def _rebuild(*_a):
@@ -952,6 +957,12 @@ def attach_treeview_column_a11y(treeview):
                 title = ""
             if not title:
                 continue
+            try:
+                if not getattr(col, "_vmm_col_vis_a11y", False):
+                    col._vmm_col_vis_a11y = True
+                    col.connect("notify::visible", lambda *_a: GLib.idle_add(_rebuild))
+            except Exception:
+                pass
             btn = Gtk.Button(label=title)
             try:
                 btn.set_accessible_role(Gtk.AccessibleRole.COLUMN_HEADER)
@@ -972,6 +983,7 @@ def attach_treeview_column_a11y(treeview):
         treeview._vmm_col_btns = btns
         return False
 
+    treeview._vmm_col_rebuild = _rebuild
     GLib.idle_add(_rebuild)
     treeview.connect("map", lambda *_a: GLib.idle_add(_rebuild))
     treeview.connect("notify::model", lambda *_a: GLib.idle_add(_rebuild))

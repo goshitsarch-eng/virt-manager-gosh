@@ -75,7 +75,7 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
     if _seen is None:
         _seen = set()
     if _budget is None:
-        _budget = [2500]
+        _budget = [4000]
     if _budget[0] <= 0:
         return None
     _budget[0] -= 1
@@ -114,6 +114,17 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
         pass
     for idx, child in enumerate(kids):
         if recursive:
+            try:
+                closed_menu = child.roleName == "menu" and (child.name or "").startswith(".")
+            except Exception:
+                closed_menu = False
+            if closed_menu:
+                try:
+                    if pred.satisfiedByNode(child):
+                        return child
+                except Exception:
+                    pass
+                continue
             try:
                 child_path = _path + (
                     idx,

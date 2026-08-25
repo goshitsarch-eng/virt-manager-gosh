@@ -444,6 +444,7 @@ class vmmManager(vmmGObjectUI):
         self.memcol = make_stats_column(_("Memory usage"), COL_MEM)
         self.diskcol = make_stats_column(_("Disk I/O"), COL_DISK)
         self.netcol = make_stats_column(_("Network I/O"), COL_NETWORK)
+        gtkcompat.attach_treeview_column_a11y(vmlist)
 
         model.set_sort_func(COL_NAME, self.vmlist_name_sorter)
         model.set_sort_func(COL_GUEST_CPU, self.vmlist_guest_cpu_usage_sorter)
@@ -1047,6 +1048,7 @@ class vmmManager(vmmGObjectUI):
         col.set_cell_data_func(img, datafunc, None)
         col.set_visible(do_show)
         self.widget(menu).set_active(do_show)
+        gtkcompat.attach_treeview_column_a11y(self.widget("vm-list"))
 
         any_visible = any(
             [
