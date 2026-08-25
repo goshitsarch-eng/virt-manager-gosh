@@ -420,7 +420,10 @@ def expose_a11y_check(key, name, widget):
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
         btn = Gtk.CheckButton(label=name)
-        btn.set_accessible_role(Gtk.AccessibleRole.CHECK_BOX)
+        try:
+            btn.set_accessible_role(Gtk.AccessibleRole.CHECKBOX)
+        except Exception:
+            pass
         box.append(btn)
         _A11Y_SIDECAR["items"][key] = btn
 
