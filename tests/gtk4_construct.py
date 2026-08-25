@@ -19,6 +19,7 @@ os.chdir(TOPDIR)
 
 os.environ.setdefault("GSETTINGS_BACKEND", "memory")
 os.environ.setdefault("VIRTINST_TEST_SUITE", "1")
+os.environ.setdefault("GTK_A11Y", "atspi")
 
 
 def _init_gtk():
@@ -1027,6 +1028,264 @@ def main():
         after = len(list(vmobj.xmlobj.devices.sound))
         assert after >= before
 
+    def _wait_named_vm(name, timeout=8):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            conn.schedule_priority_tick(pollvm=True, force=True)
+            _pump(GLib, 0.2)
+            for cand in conn.list_vms():
+                if cand.get_name() == name:
+                    return cand
+        return None
+
+    def createvm_finish():
+        import virtinst
+        from virtManager.createvm import PAGE_FINISH
+        from virtManager.createvm import PAGE_NAME
+        from virtManager.createvm import vmmCreateVM
+
+        dlg = vmmCreateVM()
+        dlg.show(None, conn.get_uri())
+        _auto_confirm(dlg)
+        dlg.widget("method-manual").set_active(True)
+        dlg._method_changed(dlg.widget("method-manual"))
+        dlg._set_install_page()
+        dlg.widget("create-pages").set_current_page(PAGE_NAME)
+        dlg._page_changed(None, None, PAGE_NAME)
+        assert dlg._validate(PAGE_NAME) is True
+        dlg._forward_clicked()
+        osobj = virtinst.OSDB.lookup_os("generic")
+        assert osobj is not None
+        dlg._os_list.select_os(osobj)
+        assert dlg._os_list.get_selected_os() is not None
+        dlg._forward_clicked()
+        dlg._forward_clicked()
+        dlg.widget("enable-storage").set_active(False)
+        dlg._forward_clicked()
+        assert dlg.widget("create-pages").get_current_page() == PAGE_FINISH
+        dlg.widget("create-vm-name").set_text("gtk4-created-vm")
+        dlg._gdata.name = "gtk4-created-vm"
+        dlg._finish_clicked(None)
+        found = _wait_named_vm("gtk4-created-vm", timeout=12)
+        assert found is not None, "createvm finish did not define gtk4-created-vm"
+
+    def details_apply_xml():
+        import re
+
+        from virtManager.config import vmmConfig
+        from virtManager.details.details import EDIT_XML
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmmConfig.get_instance().set_xmleditor_enabled(True)
+        vmobj = _named_vm("test-clone-simple")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        uiutil.set_list_selection_by_number(details.widget("hw-list"), 0)
+        details._hw_changed_cb(details.widget("hw-list"))
+        xml = vmobj.get_xml_to_define()
+        if re.search(r"<title>.*?</title>", xml):
+            newxml = re.sub(r"<title>.*?</title>", "<title>gtk4-xml-title</title>", xml, count=1)
+        else:
+            newxml = xml.replace("</name>", "</name>\n  <title>gtk4-xml-title</title>", 1)
+        details._xmleditor.set_xml(newxml)
+        details._enable_apply(EDIT_XML)
+        details._config_apply()
+        _pump(GLib, 0.8)
+        title = getattr(vmobj.xmlobj, "title", None) or vmobj.get_xml_to_define()
+        assert "gtk4-xml-title" in str(title)
+
+    def media_change():
+        from virtManager.details.details import EDIT_DISK_PATH
+        from virtManager.details.details import HW_LIST_COL_DEVICE
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_DISK
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        rich = _named_vm("test-many-devices")
+        win = vmmVMWindow.get_instance(None, rich)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        hwlist = details.widget("hw-list")
+        found = False
+        for idx, row in enumerate(hwlist.get_model()):
+            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
+                continue
+            dev = row[HW_LIST_COL_DEVICE]
+            if dev is None or getattr(dev, "device", None) != "cdrom":
+                continue
+            uiutil.set_list_selection_by_number(hwlist, idx)
+            details._hw_changed_cb(hwlist)
+            details._mediacombo.set_path("/dev/sr1")
+            details._enable_apply(EDIT_DISK_PATH)
+            details._config_apply()
+            _pump(GLib, 0.8)
+            found = True
+            break
+        assert found, "No CDROM disk found on test-many-devices"
+        disks = [d for d in rich.xmlobj.devices.disk if d.device == "cdrom"]
+        assert any("/dev/sr1" in str(d.get_source_path() or "") for d in disks)
+
+    def snapshot_revert_delete():
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        snapvm = _named_vm("test-snapshots")
+        win = vmmVMWindow.get_instance(None, snapvm)
+        win.show()
+        snapsui = win._snapshots
+        _auto_confirm(snapsui)
+        snapsui.vmwindow_refresh_vm_state()
+        snapsui._refresh_snapshots()
+        slist = snapsui.widget("snapshot-list")
+        model = slist.get_model()
+        assert len(model), "test-snapshots has no snapshots"
+        uiutil.set_list_selection_by_number(slist, 0)
+        snapsui._snapshot_selected(slist.get_selection())
+        selected = snapsui._get_selected_snapshots()
+        assert selected
+        name = selected[0].get_name()
+        snapsui._on_start_clicked(None)
+        _pump(GLib, 1.5)
+        snapvm._snapshot_list = None
+        current = [s.get_name() for s in snapvm.list_snapshots() if s.is_current()]
+        assert name in current or name in [s.get_name() for s in snapvm.list_snapshots()]
+
+        created = _named_vm("test-clone-simple")
+        names = [s.getName() for s in created.get_backend().listAllSnapshots()]
+        if "gtk4-live-snap" in names:
+            for snap in created.list_snapshots():
+                if snap.get_name() == "gtk4-live-snap":
+                    snap.delete()
+                    break
+            created._snapshot_list = None
+            leftover = [s.getName() for s in created.get_backend().listAllSnapshots()]
+            assert "gtk4-live-snap" not in leftover
+
+    def pool_start_stop():
+        from virtManager.host import vmmHost
+        from virtManager.lib import uiutil
+
+        vmmHost.show_instance(None, conn)
+        win = vmmHost._instances[conn.get_uri()]
+        storage = win._storagelist
+        _auto_confirm(storage)
+        storage.refresh_page()
+        pool_list = storage.widget("pool-list")
+        target = None
+        for idx, row in enumerate(pool_list.get_model()):
+            poolobj = row[0]
+            if poolobj and poolobj.get_name() == "pool-test-inactive":
+                uiutil.set_list_selection_by_number(pool_list, idx)
+                storage._pool_selected_cb(pool_list.get_selection())
+                target = poolobj
+                break
+        if target is None:
+            for cand in conn.list_pools():
+                if cand.get_name() == "pool-test-inactive":
+                    target = cand
+                    break
+        assert target is not None, "pool-test-inactive not found"
+        if not target.is_active():
+            storage._pool_start_cb(None)
+            _pump(GLib, 1.0)
+        assert target.is_active(), "pool-test-inactive did not start"
+        storage._pool_stop_cb(None)
+        _pump(GLib, 1.0)
+        assert not target.is_active(), "pool-test-inactive did not stop"
+        storage._pool_start_cb(None)
+        _pump(GLib, 1.0)
+        assert target.is_active(), "pool-test-inactive did not restart"
+
+    def createpool_finish():
+        from virtManager.createpool import vmmCreatePool
+
+        os.makedirs("/tmp/gtk4-created-pool", exist_ok=True)
+        dlg = vmmCreatePool(conn)
+        _auto_confirm(dlg)
+        dlg.show(None)
+        dlg.widget("pool-name").set_text("gtk4-created-pool")
+        dlg.widget("pool-target-path").set_text("/tmp/gtk4-created-pool")
+        dlg._finish()
+        deadline = time.monotonic() + 8
+        found = None
+        while time.monotonic() < deadline and found is None:
+            conn.schedule_priority_tick(pollpool=True, force=True)
+            _pump(GLib, 0.2)
+            for cand in conn.list_pools():
+                if cand.get_name() == "gtk4-created-pool":
+                    found = cand
+                    break
+        assert found is not None, "createpool finish did not define gtk4-created-pool"
+
+    def migrate_finish():
+        from virtManager.migrate import vmmMigrateDialog
+
+        dest = _open_conn(GLib, "test:///default")
+        src = _named_vm("gtk4-cloned-vm")
+        if src.get_name() != "gtk4-cloned-vm":
+            src = _wait_named_vm("gtk4-cloned-vm", timeout=2) or src
+        dlg = vmmMigrateDialog()
+        _auto_confirm(dlg)
+        dlg.show(None, src)
+        combo = dlg.widget("migrate-dest")
+        selected = False
+        for idx, row in enumerate(combo.get_model()):
+            if row[1] == dest.get_uri() and row[2]:
+                combo.set_active(idx)
+                dlg._destconn_changed(combo)
+                selected = True
+                break
+        assert selected, "No usable migrate destination connection"
+        dlg.widget("migrate-set-address").set_active(True)
+        dlg._set_address_toggled(dlg.widget("migrate-set-address"))
+        dlg.widget("migrate-address").set_text("TESTSUITE-FAKE")
+        dlg.widget("migrate-address").set_visible(True)
+        srcname = src.get_name()
+        dlg._finish()
+        deadline = time.monotonic() + 8
+        found = None
+        while time.monotonic() < deadline and found is None:
+            dest.schedule_priority_tick(pollvm=True, force=True)
+            _pump(GLib, 0.2)
+            for cand in dest.list_vms():
+                if cand.get_name() == srcname:
+                    found = cand
+                    break
+        assert found is not None, "migrate finish did not create the guest on the destination"
+
+    def delete_vm():
+        from virtManager.delete import vmmDeleteDialog
+
+        victim = _wait_named_vm("gtk4-created-vm", timeout=2)
+        if victim is None:
+            for name in ("gtk4-cloned-vm", "test-state-shutoff"):
+                cand = _named_vm(name)
+                if cand.get_name() == name:
+                    victim = cand
+                    break
+        assert victim is not None
+        name = victim.get_name()
+        dlg = vmmDeleteDialog()
+        _auto_confirm(dlg)
+        dlg.show(None, victim)
+        dlg.widget("delete-remove-storage").set_active(False)
+        dlg._finish()
+        deadline = time.monotonic() + 8
+        gone = False
+        while time.monotonic() < deadline:
+            conn.schedule_priority_tick(pollvm=True, force=True)
+            _pump(GLib, 0.2)
+            names = [cand.get_name() for cand in conn.list_vms()]
+            if name not in names:
+                gone = True
+                break
+        assert gone, "delete finish did not remove %s" % name
+
     for name, fn in [
         ("manager", manager),
         ("createconn", createconn),
@@ -1089,6 +1348,14 @@ def main():
         ("clone_share_finish", clone_share_finish),
         ("systray_menu_popup", systray_menu_popup),
         ("addhardware_finish_sound", addhardware_finish_sound),
+        ("createvm_finish", createvm_finish),
+        ("details_apply_xml", details_apply_xml),
+        ("media_change", media_change),
+        ("snapshot_revert_delete", snapshot_revert_delete),
+        ("pool_start_stop", pool_start_stop),
+        ("createpool_finish", createpool_finish),
+        ("migrate_finish", migrate_finish),
+        ("delete_vm", delete_vm),
     ]:
         _run(name, fn)
 

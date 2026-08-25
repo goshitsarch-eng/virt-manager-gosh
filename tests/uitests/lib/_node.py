@@ -12,6 +12,38 @@ from virtinst import log
 from . import utils
 
 
+# GTK4 AT-SPI role names differ from GTK3 in several common cases.
+# Keep the original uitest strings and expand them to accept both.
+_GTK4_ROLE_ALIASES = {
+    "push button": "(button|push button)",
+    ".*push button.*": "(button|push button)",
+    "button": "(button|push button)",
+    "frame": "(frame|window)",
+    "window": "(frame|window)",
+    "alert": "(alert|dialog)",
+    "dialog": "(dialog|alert|window)",
+    "menu item": "(menu item|menu)",
+    "table cell": "(table cell|list item|cell)",
+    "radio button": "(radio button|radio)",
+    "check button": "(check button|check box)",
+    "check box": "(check box|check button)",
+    "page tab": "(page tab|tab)",
+    "text": "(text|entry|text box)",
+    "combo box": "(combo box|combo)",
+    "file chooser": "(file chooser|dialog|window)",
+    "label": "(label|static)",
+    "toggle button": "(toggle button|button|push button)",
+}
+
+_WINDOW_ROLES = ("frame", "window", "dialog", "alert", "file chooser")
+
+
+def _alias_role(roleName):
+    if not roleName:
+        return roleName
+    return _GTK4_ROLE_ALIASES.get(roleName, roleName)
+
+
 class _FuzzyPredicate(dogtail.predicate.Predicate):
     """
     Object dogtail/pyatspi want for node searching.
@@ -129,7 +161,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # function to check whether we can click a widget. We may click
         # anywhere within the widget and clicks outside the screen bounds are
         # silently ignored.
-        if self.roleName in ["frame"]:
+        if self.roleName in ["frame", "window"]:
             return True
         screen = Gdk.Screen.get_default()
         return (
@@ -170,9 +202,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "push button",
             "toggle button",
             "check button",
+            "check box",
+            "radio button",
             "combo box",
             "menu item",
             "text",
+            "entry",
+            "text box",
             "menu",
         ]
         if self.roleName not in valid_types:
@@ -229,7 +265,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         Helper to click a window title bar, hitting the horizontal
         center of the bar
         """
-        if self.roleName not in ["frame", "alert"]:
+        if self.roleName not in ["frame", "alert", "window", "dialog"]:
             raise RuntimeError("Can't use click_title() on type=%s" % self.roleName)
         button = 1
         clickX, clickY = self.title_coordinates()
@@ -237,7 +273,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
     def is_menuitem(self):
         submenu = self.roleName == "menu" and (
-            not self.accessible_parent or self.accessible_parent.roleName == "menu"
+            not self.accessible_parent or self.accessible_parent.roleName in ["menu", "menu bar"]
         )
         return submenu or self.roleName == "menu item"
 
@@ -286,7 +322,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         return self
 
     def window_maximize(self):
-        assert self.roleName in ["frame", "dialog"]
+        assert self.roleName in ["frame", "dialog", "window"]
         self.grab_focus()
         s1 = self.size
         self.keyCombo("<alt>F10")
@@ -294,7 +330,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         self.grab_focus()
 
     def window_close(self):
-        assert self.roleName in ["frame", "alert", "dialog", "file chooser"]
+        assert self.roleName in list(_WINDOW_ROLES)
         self.grab_focus()
         self.keyCombo("<alt>F4")
         utils.check(lambda: not self.showing)
@@ -303,7 +339,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         return self.find(None, focusable=True)
 
     def grab_focus(self):
-        if self.roleName in ["frame", "alert", "dialog", "file chooser"]:
+        if self.roleName in list(_WINDOW_ROLES):
             child = self.window_find_focusable_child()
             child.grab_focus()
             utils.check(lambda: self.active)
@@ -331,9 +367,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         Search root for any widget that contains the passed name/role regex
         strings.
         """
-        # Somewhere in fedora 41 stack, `push button` became just `button`
-        if roleName in ["push button", ".*push button.*"]:
-            roleName = "(button|push button)"
+        roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
         try:
@@ -347,7 +381,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # Wait for independent windows to become active in the window manager
         # before we return them. This ensures the window is actually onscreen
         # so it sidesteps a lot of race conditions
-        if ret.roleName in ["frame", "dialog", "alert"] and check_active:
+        if ret.roleName in list(_WINDOW_ROLES) and check_active:
             utils.check(lambda: ret.active)
         return ret
 
@@ -377,7 +411,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         combo = self.find(combolabel, "combo box")
         combo.click_combo_entry()
-        combo.find(itemlabel, "menu item").click()
+        combo.find(itemlabel, _alias_role("menu item")).click()
 
     def combo_check_default(self, combolabel, itemlabel):
         """
@@ -385,7 +419,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         combo = self.find(combolabel, "combo box")
         combo.click_combo_entry()
-        item = combo.find(itemlabel, "menu item")
+        item = combo.find(itemlabel, _alias_role("menu item"))
         utils.check(lambda: item.selected)
         dogtail.rawinput.pressKey("Escape")
 

@@ -10,6 +10,9 @@ import signal
 import sys
 import traceback
 
+# GTK 4 defaults to a11y backends that dogtail/AT-SPI cannot see.
+os.environ.setdefault("GTK_A11Y", "atspi")
+
 import gi
 
 gi.require_version("Gdk", "4.0")

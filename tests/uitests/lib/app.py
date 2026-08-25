@@ -58,7 +58,7 @@ class VMMDogtailApp:
         return self._manager
 
     def find_details_window(self, vmname, click_details=False, shutdown=False):
-        win = self.find_window("%s on" % vmname, "frame")
+        win = self.find_window("%s on" % vmname, "(frame|window)")
         if click_details:
             win.find("Details", "radio button").click()
         if shutdown:
@@ -325,6 +325,7 @@ class VMMDogtailApp:
     ):
         extra_opts = extra_opts or []
         uri = uri or self.uri
+        os.environ.setdefault("GTK_A11Y", "atspi")
 
         if allow_debug and tests.utils.TESTCONFIG.debug:
             stdout = sys.stdout
