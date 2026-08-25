@@ -42,10 +42,69 @@ class VMMDogtailApp:
         if roleName is None:
             roleName = "(frame|dialog|alert|window|panel)"
         if name is None:
-            name = "Virtual Machine Manager"
+            return self._find_best_window(roleName, check_active)
         return self.root.find(
             name=name, roleName=roleName, recursive=True, check_active=check_active
         )
+
+    def _find_best_window(self, roleName, check_active):
+        """
+        When the caller does not know the title, pick the actually shown
+        toplevel. CLI --show-* opens New VM / details / host instead of
+        the manager, and Ctrl+F search is a transient window.
+        """
+        skip_prefixes = (".",)
+        skip_names = {"", "vmm-a11y"}
+        named = []
+        try:
+            kids = list(self.root.children)
+        except Exception:
+            kids = []
+        for child in kids:
+            try:
+                role = child.roleName or ""
+                wname = child.name or ""
+            except Exception:
+                continue
+            if role not in ("frame", "window", "dialog", "alert", "panel"):
+                continue
+            if wname in skip_names or wname.startswith(skip_prefixes):
+                continue
+            named.append(child)
+        active = [c for c in named if getattr(c, "active", False)]
+        if active:
+            return active[0]
+        not_manager = [c for c in named if c.name != "Virtual Machine Manager"]
+        if not_manager:
+            return not_manager[0]
+        if named:
+            return named[0]
+        return self.root.find(
+            name="Virtual Machine Manager",
+            roleName=roleName,
+            recursive=True,
+            check_active=check_active,
+        )
+
+    def _infer_open_window_name(self, extra_opts, window_name):
+        if window_name:
+            return window_name
+        joined = " ".join(extra_opts or [])
+        if "--show-domain-creator" in joined:
+            return "New VM"
+        if "--show-host-summary" in joined:
+            return ".*Connection Details"
+        if "--show-domain-delete" in joined:
+            return "Delete"
+        if "--show-systray" in joined:
+            return "vmm-fake-systray"
+        if (
+            "--show-domain-editor" in joined
+            or "--show-domain-performance" in joined
+            or "--show-domain-console" in joined
+        ):
+            return ".* on"
+        return "Virtual Machine Manager"
 
     rawinput = dogtail.rawinput
     tree = dogtail.tree
@@ -436,4 +495,4 @@ class VMMDogtailApp:
             except dogtail.tree.SearchError:
                 # GTK 4 from a python wrapper may expose the process name
                 self._root = dogtail.tree.root.application("python3")
-            self._topwin = self.find_window(window_name)
+            self._topwin = self.find_window(self._infer_open_window_name(extra_opts, window_name))

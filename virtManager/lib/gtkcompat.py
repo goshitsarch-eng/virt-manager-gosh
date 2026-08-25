@@ -25,6 +25,178 @@ try:
 except ImportError:  # pragma: no cover
     Adw = None
 
+# ATK names from the GTK 3 .ui files. gtk4-builder-tool dropped AtkObject
+# children; restore them so dogtail find("general-tab") etc. still works.
+_BUILDER_A11Y_NAMES = {
+    "add-hardware-button": "add-hardware",
+    "autoconnect": "Autoconnect",
+    "backing-store": "backing-store",
+    "boot-dtb-browse": "dtb-browse",
+    "boot-initrd-browse": "initrd-browse",
+    "boot-kernel-browse": "kernel-browse",
+    "boot-movedown": "boot-movedown",
+    "boot-moveup": "boot-moveup",
+    "box14": "os-tab",
+    "box2": "performance-tab",
+    "change-storage-new": "new-path",
+    "char-table": "char-tab",
+    "char-target-name": "char-target-name",
+    "config-apply": "config-apply",
+    "config-cancel": "config-cancel",
+    "config-remove": "config-remove",
+    "console-gfx-viewport": "console-gfx-viewport",
+    "console-pages": "console-pages",
+    "controller-model": "controller-model",
+    "cpu-model": "cpu-model",
+    "cpu-vcpus": "Virtual CPU Select",
+    "cpus": "cpus",
+    "create-conn": "create-conn",
+    "create-mac-address": "MAC Address Field",
+    "delete-storage-list": "storage-list",
+    "disk-source-label": "disk-source-path",
+    "frame1": "polling-tab",
+    "frame12": "controller-tab",
+    "frame16": "filesystem-tab",
+    "frame17": "panic-tab",
+    "frame19": "redir-tab",
+    "frame21": "rng-tab",
+    "frame25": "vsock-tab",
+    "frame3": "console-tab",
+    "frame4": "newvm-tab",
+    "frame5": "general-tab",
+    "frame6": "feedback-tab",
+    "fs-box": "filesystem-tab",
+    "graphics-align": "graphics-tab",
+    "graphics-password": "graphics-password",
+    "graphics-port": "graphics-port",
+    "graphics-port-auto": "graphics-port-auto",
+    "graphics-rendernode": "graphics-rendernode",
+    "grid1": "rng-tab",
+    "grid2": "panic-tab",
+    "grid5": "controller-tab",
+    "header-pagenum": "pagenum-label",
+    "hw-list": "hw-list",
+    "hypervisor": "Hypervisor Select",
+    "include-eol": "include-eol",
+    "inspection-apps": "inspection-apps",
+    "install-app-browse": "install-app-browse",
+    "install-import-browse": "install-import-browse",
+    "install-import-entry": "import-entry",
+    "install-iso-browse": "install-iso-browse",
+    "install-oscontainer-browse": "install-oscontainer-browse",
+    "install-oscontainer-rootpw": "install-oscontainer-root-passwd",
+    "install-oscontainer-source-passwd": "bootstrap-registry-password",
+    "install-oscontainer-source-url-entry": "install-oscontainer-source-uri",
+    "install-oscontainer-source-user": "bootstrap-registry-user",
+    "install-url-combo": "install-url-combo",
+    "install-url-entry": "install-url-entry",
+    "install-url-options": "install-urlopts-expander",
+    "install-urlopts-entry": "install-urlopts-entry",
+    "mac-address": "mac-address-enable",
+    "machine-type": "machine-combo",
+    "mem-maxmem": "Max Memory Select",
+    "mem-memory": "Memory Select",
+    "migrate-address": "address-text",
+    "migrate-dest": "conn-combo",
+    "migrate-set-address": "address-check",
+    "migrate-set-port": "port-check",
+    "net-add": "net-add",
+    "net-autostart": "net-autostart",
+    "net-delete": "net-delete",
+    "net-device": "net-device",
+    "net-dhcpv4-end": "ipv4-end",
+    "net-dhcpv4-start": "ipv4-start",
+    "net-dhcpv6-end": "ipv6-end",
+    "net-dhcpv6-start": "ipv6-start",
+    "net-domain-name": "domain-custom",
+    "net-forward-device": "net-forward",
+    "net-forward-manual": "net-device",
+    "net-forward-mode": "net-mode",
+    "net-hostdevs": "net-devicelist",
+    "net-ipv4-network": "ipv4-network",
+    "net-ipv6-network": "ipv6-network",
+    "net-list": "net-list",
+    "net-name": "net-name",
+    "net-source": "net-source",
+    "net-start": "net-start",
+    "net-stop": "net-stop",
+    "network-error-label": "net-error-label",
+    "network-mac-entry": "mac-entry",
+    "os-list": "os-list",
+    "os-name": "oslist-entry",
+    "pool-add": "pool-add",
+    "pool-autostart": "pool-autostart",
+    "pool-delete": "pool-delete",
+    "pool-iqn": "iqn-text",
+    "pool-list": "pool-list",
+    "pool-location": "pool-location",
+    "pool-name-entry": "pool-name",
+    "pool-refresh": "vol-refresh",
+    "pool-source-button": "source-browse",
+    "pool-source-name": "pool-source-name",
+    "pool-source-name-text": "pool-source-name-text",
+    "pool-source-path": "pool-source-path",
+    "pool-start": "pool-start",
+    "pool-stop": "pool-stop",
+    "pool-target-button": "target-browse",
+    "prefs-stats-update-interval": "cpu-poll",
+    "scrolledwindow5": "hw-list-scroll",
+    "serial-pages": "serial-pages",
+    "smartcard-mode": "smartcard-mode",
+    "snapshot-add": "snapshot-add",
+    "snapshot-apply": "snapshot-apply",
+    "snapshot-delete": "snapshot-delete",
+    "snapshot-description": "snapshot-description",
+    "snapshot-error-label": "snapshot-error-label",
+    "snapshot-list": "snapshot-list",
+    "snapshot-refresh": "snapshot-refresh",
+    "snapshot-start": "snapshot-start",
+    "startup-error-label": "error-label",
+    "storage-browse": "storage-browse",
+    "storage-devtype": "Device Type Field",
+    "storage-entry": "storage-entry",
+    "storage-error-label": "pool-error-label",
+    "storage-grid": "storage-grid",
+    "storage-list": "storage-list",
+    "table10": "smartcard-tab",
+    "table2": "sound-tab",
+    "table3": "host-tab",
+    "table33": "input-tab",
+    "table39": "usbredir-tab",
+    "table5": "video-tab",
+    "table6": "watchdog-tab",
+    "top-box": "tpm-tab",
+    "uri-entry": "uri-entry",
+    "uri-label": "uri-label",
+    "username-entry": "Username",
+    "vbox10": "storage-tab",
+    "vbox12": "watchdog-tab",
+    "vbox14": "cpu-tab",
+    "vbox16": "smartcard-tab",
+    "vbox17": "tpm-tab",
+    "vbox4": "boot-tab",
+    "vbox54": "network-tab",
+    "vbox55": "disk-tab",
+    "vbox56": "input-tab",
+    "vbox57": "graphics-tab",
+    "vbox58": "sound-tab",
+    "vbox59": "char-tab",
+    "vbox6": "overview-tab",
+    "vbox7": "memory-tab",
+    "vbox8": "host-tab",
+    "vbox9": "video-tab",
+    "vm-list": "vm-list",
+    "vmm-oslist": "oslist-popover",
+    "vmm-storage-browse": "vmm-storage-browser",
+    "vol-add": "vol-new",
+    "vol-delete": "vol-delete",
+    "vol-list": "vol-list",
+    "vsock-align": "vsock-tab",
+    "vsock-auto": "vsock-auto",
+    "vsock-cid": "vsock-cid",
+    "xmleditor-xml": "XML editor",
+}
+
 
 def set_accessible_name(widget, name):
     if not widget or name is None:
@@ -68,21 +240,22 @@ def sync_accessible_checked(widget):
 def ensure_activate_clicked(widget):
     """
     GTK 4 AT-SPI 'click' calls gtk_widget_activate(). ToggleButton's default
-    activate signal does not emit 'clicked' or flip active, so Pause/check
+    activate signal does not emit 'clicked' or flip active, so Pause
     widgets ignore accessibility clicks. Point activate at 'clicked'.
+
+    CheckButton's default activate already toggles; remapping it to
+    'toggled' would emit the signal without flipping active.
     """
     if widget is None or getattr(widget, "_vmm_activate_clicked", False):
         return
-    if isinstance(widget, Gtk.Button):
-        signal = "clicked"
-    elif isinstance(widget, Gtk.CheckButton):
-        signal = "toggled"
-    else:
+    if isinstance(widget, Gtk.CheckButton):
+        return
+    if not isinstance(widget, Gtk.Button):
         return
     if not hasattr(widget, "set_activate_signal_from_name"):
         return
     try:
-        widget.set_activate_signal_from_name(signal)
+        widget.set_activate_signal_from_name("clicked")
         widget._vmm_activate_clicked = True
     except Exception:
         pass
@@ -489,7 +662,310 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     GLib.idle_add(_rebuild)
     GLib.idle_add(_attach_app)
     treeview.connect("map", lambda *_a: GLib.idle_add(_rebuild))
+    GLib.idle_add(lambda: attach_treeview_column_a11y(treeview) or False)
     return win
+
+
+def attach_treeview_column_a11y(treeview):
+    """
+    GTK 4 TreeView column headers are often missing from AT-SPI.
+    Mirror each title as a COLUMN_HEADER button that triggers sort.
+    """
+    if treeview is None or getattr(treeview, "_vmm_col_a11y", None):
+        return None
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_resizable(False)
+    win.set_modal(False)
+    win.set_focusable(False)
+    win.set_accessible_role(Gtk.AccessibleRole.GROUP)
+    win.set_default_size(200, 32)
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+    win.set_child(box)
+    win.set_opacity(0)
+    treeview._vmm_col_a11y = win
+
+    def _rebuild(*_a):
+        child = box.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            box.remove(child)
+            child = nxt
+        for col in treeview.get_columns():
+            title = ""
+            try:
+                title = col.get_title() or ""
+            except Exception:
+                title = ""
+            if not title:
+                continue
+            btn = Gtk.Button(label=title)
+            try:
+                btn.set_accessible_role(Gtk.AccessibleRole.COLUMN_HEADER)
+            except Exception:
+                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            set_accessible_name(btn, title)
+            ensure_activate_clicked(btn)
+
+            def _sort(_b, c=col):
+                try:
+                    c.clicked()
+                except Exception:
+                    pass
+
+            btn.connect("clicked", _sort)
+            box.append(btn)
+        win.set_visible(True)
+        return False
+
+    def _attach_app(*_a):
+        root = treeview.get_root()
+        if root is not None:
+            win.set_transient_for(root)
+            if hasattr(root, "get_application"):
+                app = root.get_application()
+                if app is not None:
+                    app.add_window(win)
+        win.set_visible(True)
+        return False
+
+    GLib.idle_add(_rebuild)
+    GLib.idle_add(_attach_app)
+    treeview.connect("map", lambda *_a: GLib.idle_add(_rebuild))
+    treeview.connect("notify::model", lambda *_a: GLib.idle_add(_rebuild))
+    return win
+
+
+def _first_string_column(model):
+    if model is None:
+        return 0
+    try:
+        n = model.get_n_columns()
+    except Exception:
+        return 0
+    for i in range(n):
+        try:
+            if "gchararray" in str(model.get_column_type(i)):
+                return i
+        except Exception:
+            continue
+    return 0
+
+
+def _maybe_attach_treeview_a11y(widget):
+    if widget is None or not isinstance(widget, Gtk.TreeView):
+        return
+    if getattr(widget, "_vmm_a11y_mirror", None):
+        return
+
+    def _later(*_a):
+        if getattr(widget, "_vmm_a11y_mirror", None):
+            return False
+        attach_treeview_a11y(widget, name_column=_first_string_column(widget.get_model()))
+        return False
+
+    GLib.idle_add(_later)
+    try:
+        widget.connect("map", lambda *_a: GLib.idle_add(_later))
+    except Exception:
+        pass
+
+
+def attach_notebook_a11y(notebook):
+    """
+    GTK 4 Notebook hides inactive pages from AT-SPI. Mirror each page
+    (and its tab) so prefs/details/createvm tabs stay findable.
+    """
+    if notebook is None or not isinstance(notebook, Gtk.Notebook):
+        return
+    if getattr(notebook, "_vmm_nb_a11y", False):
+        return
+    notebook._vmm_nb_a11y = True
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_resizable(False)
+    win.set_modal(False)
+    win.set_focusable(False)
+    win.set_accessible_role(Gtk.AccessibleRole.GROUP)
+    win.set_default_size(160, 40)
+    win.set_opacity(0)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    win.set_child(box)
+    pages = []
+
+    def _page_name(idx, child):
+        bid = ""
+        if hasattr(child, "get_buildable_id"):
+            try:
+                bid = child.get_buildable_id() or ""
+            except Exception:
+                bid = ""
+        mapped = _BUILDER_A11Y_NAMES.get(bid)
+        if mapped:
+            return mapped
+        try:
+            text = notebook.get_tab_label_text(child)
+            if text:
+                return _mnemonic_label(text)
+        except Exception:
+            pass
+        return bid or ("page-%s" % idx)
+
+    def _rebuild(*_a):
+        child = box.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            box.remove(child)
+            child = nxt
+        pages[:] = []
+        try:
+            n = notebook.get_n_pages()
+        except Exception:
+            n = 0
+        current = 0
+        try:
+            current = notebook.get_current_page()
+        except Exception:
+            current = 0
+        for i in range(n):
+            page = notebook.get_nth_page(i)
+            if page is None:
+                continue
+            pname = _page_name(i, page)
+            set_accessible_name(page, pname)
+            tab = Gtk.Button(label=_mnemonic_label(pname.replace("-tab", "") or pname))
+            try:
+                tab.set_accessible_role(Gtk.AccessibleRole.TAB)
+            except Exception:
+                tab.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+            tlabel = ""
+            try:
+                tlabel = _mnemonic_label(notebook.get_tab_label_text(page) or "")
+            except Exception:
+                tlabel = ""
+            set_accessible_name(tab, tlabel or _mnemonic_label(pname))
+            ensure_activate_clicked(tab)
+            tab.connect("clicked", lambda _b, idx=i: notebook.set_current_page(idx))
+            box.append(tab)
+            sidecar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            sidecar.set_accessible_role(Gtk.AccessibleRole.GROUP)
+            set_accessible_name(sidecar, pname)
+            sidecar.set_visible(i == current)
+            box.append(sidecar)
+            pages.append((tab, sidecar, pname))
+        win.set_visible(True)
+        return False
+
+    def _on_switch(_nb, _page, idx):
+        for i, (_tab, sidecar, _name) in enumerate(pages):
+            sidecar.set_visible(i == idx)
+        return False
+
+    def _attach_app(*_a):
+        root = notebook.get_root()
+        if root is not None:
+            win.set_transient_for(root)
+            if hasattr(root, "get_application"):
+                app = root.get_application()
+                if app is not None:
+                    app.add_window(win)
+        win.set_visible(True)
+        return False
+
+    notebook.connect("switch-page", _on_switch)
+    GLib.idle_add(_rebuild)
+    GLib.idle_add(_attach_app)
+    notebook.connect("map", lambda *_a: GLib.idle_add(_rebuild))
+
+
+def attach_combobox_a11y(combo):
+    """
+    GTK 4 ComboBox popovers are often empty to AT-SPI. Mirror model
+    rows as menu items so combo_select() can click them.
+    """
+    if combo is None or not isinstance(combo, Gtk.ComboBox):
+        return
+    if getattr(combo, "_vmm_combo_a11y", False):
+        return
+    combo._vmm_combo_a11y = True
+    menu = Menu()
+    combo._vmm_combo_menu = menu
+    state = {"open": False}
+
+    def _text_col():
+        model = combo.get_model()
+        if model is None:
+            return 0
+        try:
+            n = model.get_n_columns()
+        except Exception:
+            return 0
+        last_str = 0
+        for i in range(n):
+            try:
+                if "gchararray" in str(model.get_column_type(i)):
+                    last_str = i
+            except Exception:
+                continue
+        return last_str
+
+    def _popup(*_a):
+        if state["open"]:
+            return
+        state["open"] = True
+        try:
+            combo.popup()
+        except Exception:
+            pass
+        model = combo.get_model()
+        for item in list(menu.get_children()):
+            try:
+                menu.remove(item)
+            except Exception:
+                pass
+        if model is None:
+            menu.popup()
+            return
+        col = _text_col()
+        idx = 0
+        try:
+            it = model.get_iter_first()
+        except Exception:
+            it = None
+        while it is not None:
+            try:
+                label = str(model[it][col] or "")
+            except Exception:
+                label = ""
+            item = MenuItem(label=label)
+            item._sync_accessible_label()
+
+            def _choose(_it, row=idx):
+                combo.set_active(row)
+
+            item.connect("activate", _choose)
+            menu.add(item)
+            idx += 1
+            it = model.iter_next(it)
+        menu._parent_widget = combo
+        menu.popup()
+        state["open"] = False
+
+    def _on_click(*_a):
+        _popup()
+        return True
+
+    try:
+        combo.install_action("click", None, lambda *_a: _popup())
+    except Exception:
+        pass
+    gesture = Gtk.GestureClick()
+    gesture.connect("pressed", lambda *_a: _popup())
+    combo.add_controller(gesture)
+    try:
+        combo.connect("notify::popup-shown", lambda *_a: _popup() if combo.get_popup_shown() else None)
+    except Exception:
+        pass
 
 
 def apply_accessible_label(widget):
@@ -541,15 +1017,19 @@ def sync_builder_accessible(widget):
     sync_accessible_checked(widget)
     # GTK 3 ATK used the builder id as the accessible name for unlabeled
     # widgets. Keep that so find("error-label") / similar still works.
-    if isinstance(widget, Gtk.Label) and hasattr(widget, "get_buildable_id"):
+    bid = None
+    if hasattr(widget, "get_buildable_id"):
         try:
             bid = widget.get_buildable_id()
         except Exception:
             bid = None
-        if bid == "startup-error-label":
-            set_accessible_name(widget, "error-label")
-        elif bid and bid.endswith("-label"):
-            set_accessible_name(widget, bid)
+    if bid and bid in _BUILDER_A11Y_NAMES:
+        set_accessible_name(widget, _BUILDER_A11Y_NAMES[bid])
+        widget._vmm_a11y_name = _BUILDER_A11Y_NAMES[bid]
+    elif isinstance(widget, Gtk.Label) and bid == "startup-error-label":
+        set_accessible_name(widget, "error-label")
+    elif isinstance(widget, Gtk.Label) and bid and bid.endswith("-label"):
+        set_accessible_name(widget, bid)
     inner = getattr(widget, "_button", None)
     if inner is not None:
         apply_accessible_label(inner)
@@ -558,12 +1038,17 @@ def sync_builder_accessible(widget):
     if getattr(widget, "_vmm_a11y_synced", False):
         return
     widget._vmm_a11y_synced = True
+    _maybe_attach_treeview_a11y(widget)
+    attach_notebook_a11y(widget)
+    attach_combobox_a11y(widget)
 
     def _reapply(*_args):
         apply_accessible_label(widget)
         inner_btn = getattr(widget, "_button", None)
         if inner_btn is not None:
             apply_accessible_label(inner_btn)
+        if bid and bid in _BUILDER_A11Y_NAMES:
+            set_accessible_name(widget, _BUILDER_A11Y_NAMES[bid])
         return False
 
     widget.connect("map", lambda *_a: GLib.idle_add(_reapply))
@@ -1090,6 +1575,31 @@ class CheckMenuItem(Gtk.CheckButton):
         motion.connect("enter", lambda *_a: self.update_state([Gtk.AccessibleState.SELECTED], [True]))
         motion.connect("leave", lambda *_a: self.update_state([Gtk.AccessibleState.SELECTED], [False]))
         self.add_controller(motion)
+        self.connect("toggled", self._on_toggled)
+        self.connect("notify::label", self._sync_accessible_label)
+        self._sync_accessible_label()
+        sync_accessible_checked(self)
+
+    def _sync_accessible_label(self, *_args):
+        text = _mnemonic_label(self.get_label() or self.label or "")
+        if text:
+            set_accessible_name(self, text)
+        self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
+
+    def _on_toggled(self, *_args):
+        sync_accessible_checked(self)
+        try:
+            self.emit("activate")
+        except Exception:
+            pass
+        menu = getattr(self, "_vmm_menu", None)
+        while menu is not None:
+            try:
+                menu.popdown()
+            except Exception:
+                break
+            parent = getattr(menu, "_parent_widget", None)
+            menu = getattr(parent, "_vmm_menu", None) if parent else None
 
     @classmethod
     def new_with_mnemonic(cls, label):
@@ -2174,6 +2684,10 @@ def _install_menuitem_activate_signal():
     if not GObject.signal_lookup("activate", MenuItem):
         GObject.signal_new(
             "activate", MenuItem, GObject.SignalFlags.RUN_FIRST, None, []
+        )
+    if not GObject.signal_lookup("activate", CheckMenuItem):
+        GObject.signal_new(
+            "activate", CheckMenuItem, GObject.SignalFlags.RUN_FIRST, None, []
         )
     if not GObject.signal_lookup("clicked", MenuToolButton):
         GObject.signal_new(

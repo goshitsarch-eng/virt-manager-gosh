@@ -25,7 +25,12 @@ _GTK4_ROLE_ALIASES = {
     "dialog": "(dialog|alert|window)",
     ".*dialog.*": ".*(dialog|alert|window).*",
     "menu item": "(menu item|menu)",
-    ".*menu item.*": ".*(menu item|menu).*",
+    ".*menu item.*": ".*(menu item|menu|check menu item).*",
+    "check menu item": "(check menu item|menu item|check box|check button)",
+    ".*check menu item.*": ".*(check menu item|menu item|check box|check button).*",
+    "table column header": "(table column header|column header)",
+    ".*table column header.*": ".*(table column header|column header).*",
+    "spin button": "(spin button|spin|entry|text|text box)",
     "table cell": "(table cell|list item|cell|button|push button)",
     ".*table cell.*": ".*(table cell|list item|cell|button|push button).*",
     "radio button": "(radio button|radio)",
@@ -328,10 +333,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
             role = self.roleName
         except Exception:
             return False
+        try:
+            showing = bool(self.showing or self.visible)
+        except Exception:
+            showing = False
         if role in ["frame", "window", "dialog", "alert"]:
             return True
+        # Hidden notebook-page sidecars stay in the tree but are not onscreen.
+        if role in ("grouping", "group", "filler", "section") and not showing:
+            return False
         # GTK 4 Adw/Gtk windows often report as panel.
         if role == "panel" and (self.name or "").strip():
+            if not showing:
+                return False
             return True
         # Menubar File/Help items are role "menu" but must stay clickable.
         try:
@@ -490,6 +504,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "push button",
             "button",
             "toggle button",
+            "check box",
+            "check button",
+            "check menu item",
+            "combo box",
+            "combo",
+            "column header",
+            "table column header",
+            "tab",
+            "page tab",
         ):
             # Opacity-0 GTK 4 menus/mirrors report bad coordinates.
             try:

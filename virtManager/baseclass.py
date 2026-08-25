@@ -375,6 +375,23 @@ class vmmGObjectUI(vmmGObject):
             except Exception:
                 pass
 
+            def _sync_title(*_a):
+                try:
+                    title = self.topwin.get_title()
+                except Exception:
+                    title = None
+                if title:
+                    from .lib import gtkcompat
+
+                    gtkcompat.set_accessible_name(self.topwin, title)
+                return False
+
+            try:
+                self.topwin.connect("notify::title", _sync_title)
+            except Exception:
+                pass
+            _sync_title()
+
         self._err = None
 
     def _get_err(self):
