@@ -1483,6 +1483,161 @@ def _start_combo_select_poll(createconn):
     GLib.timeout_add(50, _tick)
 
 
+def expose_storagebrowse_window(browser):
+    """Findable storage browser with pool/volume rows."""
+    if browser is None:
+        return None
+    win = getattr(browser, "_vmm_browse_win", None)
+    slist = getattr(browser, "storagelist", None)
+
+    def _rebuild(box=None):
+        host = box or (win.get_child() if win is not None else None)
+        if host is None or slist is None:
+            return
+        child = host.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            try:
+                host.remove(child)
+            except Exception:
+                pass
+            child = nxt
+        try:
+            pmodel = slist.widget("pool-list").get_model()
+        except Exception:
+            pmodel = None
+        try:
+            vmodel = slist.widget("vol-list").get_model()
+        except Exception:
+            vmodel = None
+        if pmodel is not None:
+            for row in pmodel:
+                try:
+                    handle = row[0]
+                    label = _strip_pango_markup(str(row[1] or ""))
+                    name = handle.get_name() if handle is not None else label
+                except Exception:
+                    name = ""
+                if not name:
+                    continue
+                btn = Gtk.Button(label=name, has_frame=False)
+                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+                ensure_activate_clicked(btn)
+                set_accessible_name(btn, name)
+
+                def _pick_pool(_b, pool=handle, lst=slist):
+                    try:
+                        from . import uiutil
+
+                        uiutil.set_list_selection(lst.widget("pool-list"), pool)
+                    except Exception:
+                        pass
+
+                btn.connect("clicked", _pick_pool)
+                host.append(btn)
+        if vmodel is not None:
+            for row in vmodel:
+                try:
+                    name = str(row[1] or "")
+                    handle = row[0]
+                except Exception:
+                    name = ""
+                    handle = None
+                if not name:
+                    continue
+                btn = Gtk.Button(label=name, has_frame=False)
+                btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+                ensure_activate_clicked(btn)
+                set_accessible_name(btn, name)
+
+                def _pick_vol(_b, vol=handle, lst=slist):
+                    try:
+                        from . import uiutil
+
+                        uiutil.set_list_selection(lst.widget("vol-list"), vol)
+                    except Exception:
+                        pass
+
+                btn.connect("clicked", _pick_vol)
+                host.append(btn)
+        choose = Gtk.Button(label="Choose Volume")
+        choose.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        ensure_activate_clicked(choose)
+        set_accessible_name(choose, "Choose Volume")
+
+        def _choose(*_a, lst=slist):
+            try:
+                lst.widget("choose-volume").emit("clicked")
+            except Exception:
+                pass
+
+        choose.connect("clicked", _choose)
+        host.append(choose)
+
+    if win is not None:
+        try:
+            _ensure_app_window(win)
+            set_accessible_name(win, "vmm-storage-browser")
+            win.set_title("vmm-storage-browser")
+            win.set_visible(True)
+            _rebuild()
+            return win
+        except Exception:
+            browser._vmm_browse_win = None
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_modal(False)
+    win.set_default_size(280, 320)
+    try:
+        win.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+    except Exception:
+        pass
+    set_accessible_name(win, "vmm-storage-browser")
+    try:
+        win.set_title("vmm-storage-browser")
+    except Exception:
+        pass
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    win.set_child(box)
+    _rebuild(box)
+    try:
+        if slist is not None:
+            slist.widget("pool-list").get_selection().connect(
+                "changed", lambda *_a: _rebuild()
+            )
+            slist.widget("vol-list").get_model().connect(
+                "row-inserted", lambda *_a: _rebuild()
+            )
+    except Exception:
+        pass
+    _ensure_app_window(win)
+    win.set_visible(True)
+    browser._vmm_browse_win = win
+    return win
+
+
+def hide_storagebrowse_window(browser):
+    win = getattr(browser, "_vmm_browse_win", None) if browser is not None else None
+    if win is None:
+        return
+    try:
+        set_accessible_name(win, "vmm-storage-browser (hidden)")
+        win.set_title("vmm-storage-browser (hidden)")
+    except Exception:
+        pass
+    try:
+        app = Gtk.Application.get_default()
+        if app is not None:
+            app.remove_window(win)
+    except Exception:
+        pass
+    try:
+        win.close()
+    except Exception:
+        pass
+    browser._vmm_browse_win = None
+
+
 def hide_createconn_window(createconn):
     win = getattr(createconn, "_vmm_createconn_win", None) if createconn is not None else None
     if win is None:
