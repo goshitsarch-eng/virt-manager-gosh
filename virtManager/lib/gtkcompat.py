@@ -1760,8 +1760,6 @@ class MenuItem(Gtk.Button):
             return
         self._vmm_activate_queued = True
 
-        # AT-SPI click waits for this handler. If we run a modal dialog
-        # here, dogtail never returns to look for the alert.
         def _activate():
             try:
                 self.emit("activate")
@@ -1781,7 +1779,32 @@ class MenuItem(Gtk.Button):
                     menu = getattr(parent, "_vmm_menu", None) if parent else None
             return False
 
-        GLib.idle_add(_activate)
+        # Menubar overlay items must activate now so Preferences/New VM
+        # exist before the next dogtail find. Context-menu actions that
+        # raise modal confirms stay idle so AT-SPI click can return.
+        in_menubar = False
+        cur = self
+        for _ in range(8):
+            if cur is None:
+                break
+            if isinstance(cur, MenuBar):
+                in_menubar = True
+                break
+            menu = getattr(cur, "_vmm_menu", None)
+            if menu is not None:
+                cur = getattr(menu, "_parent_widget", None) or menu
+                continue
+            if hasattr(cur, "get_parent"):
+                try:
+                    cur = cur.get_parent()
+                except Exception:
+                    break
+            else:
+                break
+        if in_menubar:
+            _activate()
+        else:
+            GLib.idle_add(_activate)
 
     @classmethod
     def new_with_mnemonic(cls, label):
