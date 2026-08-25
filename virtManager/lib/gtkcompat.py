@@ -953,10 +953,6 @@ def _oslist_show_popovers(oslist):
     try:
         if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
             return
-        if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") and os.path.exists(
-            "/tmp/vmm-a11y-oslist-confirmed"
-        ):
-            return
     except Exception:
         pass
     try:
