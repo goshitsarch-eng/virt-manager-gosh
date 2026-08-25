@@ -1226,6 +1226,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "add-hardware",
             "forward",
             "finish",
+            "select or create",
             "media-entry",
             "copy host",
         )

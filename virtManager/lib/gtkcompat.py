@@ -1470,6 +1470,31 @@ def _append_createvm_customize_check(box, createvm):
         pass
 
 
+def _append_createvm_storage_radios(box, createvm):
+    """Findable storage create/select radios on the New VM methods window."""
+    if box is None or createvm is None or getattr(box, "_vmm_storage_radios", False):
+        return
+    storage = getattr(createvm, "_addstorage", None)
+    if storage is None:
+        return
+    box._vmm_storage_radios = True
+    for wid, name in (
+        ("storage-create", "Create a disk image for the virtual machine"),
+        ("storage-select", "Select or create custom storage"),
+    ):
+        try:
+            src = storage.widget(wid)
+        except Exception:
+            src = None
+        if src is None:
+            continue
+        try:
+            expose_a11y_check(wid, name, src, parent=box, radio=True)
+            register_a11y_click(name, lambda s=src: s.set_active(True))
+        except Exception:
+            pass
+
+
 def _append_createvm_resource_spins(box, createvm):
     """Findable cpus/mem spins on the New VM methods window."""
     if box is None or createvm is None or getattr(box, "_vmm_resource_spins", False):
@@ -1745,6 +1770,7 @@ def expose_createvm_methods_window(createvm):
     _append_createvm_status_labels(box, createvm)
     _append_createvm_media_controls(box, createvm)
     _append_createvm_resource_spins(box, createvm)
+    _append_createvm_storage_radios(box, createvm)
     _append_createvm_customize_check(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
