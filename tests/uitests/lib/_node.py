@@ -385,7 +385,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # before we return them. This ensures the window is actually onscreen
         # so it sidesteps a lot of race conditions
         if ret.roleName in list(_WINDOW_ROLES) and check_active:
-            utils.check(lambda: ret.active)
+            try:
+                utils.check(lambda: ret.active)
+            except RuntimeError:
+                utils.check(lambda: bool(ret.showing or ret.onscreen))
         return ret
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
