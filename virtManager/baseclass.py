@@ -387,7 +387,10 @@ class vmmGObjectUI(vmmGObject):
 
                     hidden = False
                     try:
-                        hidden = not self.topwin.get_visible()
+                        hidden = (
+                            getattr(self.topwin, "_vmm_ever_shown", False)
+                            and not self.topwin.get_visible()
+                        )
                     except Exception:
                         hidden = False
                     gtkcompat.set_accessible_name(
