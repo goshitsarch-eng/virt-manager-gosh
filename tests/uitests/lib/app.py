@@ -43,9 +43,23 @@ class VMMDogtailApp:
             roleName = "(frame|dialog|alert|window|panel|menu|list)"
         if name is None:
             return self._find_best_window(roleName, check_active)
-        return self.root.find(
-            name=name, roleName=roleName, recursive=True, check_active=check_active
-        )
+        try:
+            return self.root.find(
+                name=name, roleName=roleName, recursive=True, check_active=check_active
+            )
+        except Exception:
+            try:
+                kids = list(self.root.children)
+            except Exception:
+                kids = []
+            for child in kids:
+                try:
+                    cname = child.name or ""
+                except Exception:
+                    continue
+                if name in cname or cname.startswith(name):
+                    return child
+            raise
 
     def _find_best_window(self, roleName, check_active):
         """
@@ -66,7 +80,7 @@ class VMMDogtailApp:
                 wname = child.name or ""
             except Exception:
                 continue
-            if role not in ("frame", "window", "dialog", "alert", "panel"):
+            if role not in ("frame", "window", "dialog", "alert", "panel", "list"):
                 continue
             if wname in skip_names or wname.startswith(skip_prefixes):
                 continue

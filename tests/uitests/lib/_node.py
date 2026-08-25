@@ -220,7 +220,15 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                 labeller = ""
             text = ""
             try:
-                text = node.text or ""
+                role = node.roleName or ""
+                # .text on GTK 4 windows/lists walks AccessibleText and
+                # often hangs after AT-SPI GetItems cache errors.
+                if role not in _WINDOW_ROLES and role not in (
+                    "application",
+                    "menu",
+                    "menu bar",
+                ):
+                    text = node.text or ""
             except Exception:
                 text = ""
 
