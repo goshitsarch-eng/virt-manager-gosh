@@ -2884,6 +2884,12 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     treeview._vmm_a11y_mirror = win
     treeview._vmm_a11y_box = box
     treeview._vmm_a11y_outer = outer
+    try:
+        tname = treeview.get_accessible_name() or ""
+        if tname and not tname.startswith("."):
+            set_accessible_name(box, tname)
+    except Exception:
+        pass
 
     def _select_name(want):
         model = treeview.get_model()
@@ -2991,6 +2997,10 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 btn._vmm_row_name = name
                 btn._vmm_row_label = lab
                 btn._vmm_row_label_text = text or (name + "\n" if name else name)
+                try:
+                    btn._vmm_row_path = model.get_path(_iter).to_string()
+                except Exception:
+                    btn._vmm_row_path = None
                 ensure_activate_clicked(btn)
 
                 def _on_row_clicked(_b, n=name):
@@ -3023,6 +3033,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         _walk(None)
         pending["src"] = 0
         win.set_visible(True)
+        _sync_row_selected()
         return False
 
     pending = {"src": 0}
@@ -3032,10 +3043,11 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             GLib.source_remove(pending["src"])
         pending["src"] = GLib.timeout_add(150, _rebuild)
 
-    def _on_row_changed(model, _path, _iter):
+    def _on_row_changed(model, path, _iter):
         try:
             name = _mnemonic_label(str(model[_iter][name_column] or ""))
         except Exception:
+            _on_model()
             return
         text = name
         if text_column is not None:
@@ -3045,16 +3057,35 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                     text = stripped
             except Exception:
                 pass
+        path_s = None
+        try:
+            path_s = path.to_string()
+        except Exception:
+            path_s = None
+        shown = text or (name + "\n" if name else name)
         child = box.get_first_child()
         while child is not None:
-            if getattr(child, "_vmm_row_name", None) == name:
+            same_path = path_s and getattr(child, "_vmm_row_path", None) == path_s
+            same_name = getattr(child, "_vmm_row_name", None) == name
+            if same_path or same_name:
+                if getattr(child, "_vmm_row_name", None) != name:
+                    # Keep click closures in sync with the new label.
+                    _on_model()
+                    return
                 lab = getattr(child, "_vmm_row_label", None)
                 if lab is not None:
                     lab.set_text(text)
                     set_accessible_name(lab, text)
-                set_accessible_name(child, text or (name + "\n" if name else name))
-                break
+                set_accessible_name(child, shown)
+                child._vmm_row_label_text = shown
+                if path_s:
+                    child._vmm_row_path = path_s
+                _sync_row_selected()
+                return
             child = child.get_next_sibling()
+        # Label changed (IDE Disk 2 -> USB Disk 1): rebuild so
+        # dogtail can find the new accessible name.
+        _on_model()
 
     treeview.connect("notify::model", _on_model)
     model = treeview.get_model()
@@ -3074,6 +3105,12 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             except Exception:
                 pass
             set_accessible_name(win, ".a11y-tree")
+        try:
+            tname = treeview.get_accessible_name() or ""
+            if tname and not tname.startswith("."):
+                set_accessible_name(box, tname)
+        except Exception:
+            pass
         win.set_visible(True)
         return False
 

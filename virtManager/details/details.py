@@ -557,6 +557,10 @@ class vmmDetails(vmmGObjectUI):
                 except Exception:
                     pass
                 entry._vmm_bus_syncing = False
+                try:
+                    self._enable_apply(EDIT_DISK_BUS)
+                except Exception:
+                    pass
 
             bus_text.connect("changed", _bus_from_text)
         except Exception:
@@ -1638,7 +1642,18 @@ class vmmDetails(vmmGObjectUI):
             kwargs.update(vals)
 
         if self._edited(EDIT_DISK_BUS):
-            kwargs["bus"] = uiutil.get_list_selection(self.widget("disk-bus"))
+            combo = self.widget("disk-bus")
+            typed = ""
+            try:
+                child = combo.get_child()
+                if child is not None and hasattr(child, "get_text"):
+                    typed = (child.get_text() or "").strip()
+            except Exception:
+                typed = ""
+            if typed:
+                kwargs["bus"] = typed.lower()
+            else:
+                kwargs["bus"] = uiutil.get_list_selection(combo)
 
         return self._change_config(self.vm.define_disk, kwargs, devobj=devobj)
 

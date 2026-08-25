@@ -99,8 +99,26 @@ def set_list_selection(widget, value, column=0):
     """
     model = widget.get_model()
     _iter = None
+    want = value
+    want_l = want.lower() if isinstance(want, str) else None
     for row in model:
-        if row[column] == value:
+        cell = row[column]
+        if cell == value:
+            _iter = row.iter
+            break
+        if want_l is not None and isinstance(cell, str) and cell.lower() == want_l:
+            _iter = row.iter
+            break
+        try:
+            pretty = row[1]
+        except Exception:
+            pretty = None
+        if (
+            want_l is not None
+            and column != 1
+            and isinstance(pretty, str)
+            and pretty.lower() == want_l
+        ):
             _iter = row.iter
             break
 

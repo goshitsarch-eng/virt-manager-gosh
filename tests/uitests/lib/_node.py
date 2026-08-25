@@ -1099,16 +1099,22 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
         if (self.text or "") == text:
-            # Sidecar AccessibleText can accept the string without
-            # opening oslist-popover. Always load the real SearchEntry.
-            if "oslist-entry" in (self.name or ""):
-                try:
+            # Sidecar AccessibleText / name_with_value can report the
+            # typed suffix even when the real Gtk buffer is unchanged.
+            # Always load the backing widget so Apply sees the new value.
+            try:
+                if "oslist-entry" in (self.name or ""):
                     _oslist_start_search()
-                    with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
-                        fh.write(text)
+                with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
+                    fh.write(text)
+                if "oslist-entry" in (self.name or ""):
                     self._click_named_button(".entry-load-oslist-entry")
-                except Exception:
-                    pass
+                else:
+                    base = (self.name or "").split(":", 1)[0].strip().rstrip(":")
+                    if base:
+                        self._click_named_button(".entry-load-" + base)
+            except Exception:
+                pass
             return
         # GTK 4 AccessibleText often ignores writes. Sidecar load
         # buttons apply /tmp files to the real Gtk buffers.
