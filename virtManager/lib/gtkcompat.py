@@ -652,9 +652,14 @@ class MenuItem(Gtk.Button):
             self._submenu.popup_at_widget(self)
             return
 
+        if getattr(self, "_vmm_activate_queued", False):
+            return
+        self._vmm_activate_queued = True
+
         # AT-SPI click waits for this handler. If we run a modal dialog
         # here, dogtail never returns to look for the alert.
         def _activate():
+            self._vmm_activate_queued = False
             try:
                 self.emit("activate")
             except Exception:

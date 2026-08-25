@@ -222,9 +222,22 @@ class vmmErrorDialog(vmmGObject):
 
         @default: What value to return if getcb tells us not to prompt
         """
+        if getattr(self, "_in_prompt", False):
+            return False
         do_prompt = getcb()
         if not do_prompt:
             return default
+        self._in_prompt = True
+        try:
+            return self._chkbox_helper_run(getcb, setcb, text1, text2, default, chktext)
+        finally:
+            self._in_prompt = False
+
+    def _chkbox_helper_run(
+        self, getcb, setcb, text1, text2, default, chktext
+    ):
+        ignore = getcb
+        ignore = default
 
         # pylint: disable=unpacking-non-sequence
         res = self.warn_chkbox(
@@ -285,7 +298,7 @@ class _errorDialog(Gtk.Window):
             app = parent.get_application()
             if app is not None:
                 app.add_window(self)
-        self.set_title("")
+        self.set_title("vmm dialog")
         self.set_default_size(440, 180)
         self.set_accessible_role(Gtk.AccessibleRole.ALERT)
         gtkcompat.set_accessible_name(self, "vmm dialog")
