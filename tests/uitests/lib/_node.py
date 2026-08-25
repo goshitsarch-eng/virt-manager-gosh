@@ -901,6 +901,16 @@ class _SentinelNavButton(object):
         return True
 
     def click(self, *args, **kwargs):
+        mapping = {
+            "Forward": "/tmp/vmm-a11y-create-forward",
+            "Back": "/tmp/vmm-a11y-create-back",
+            "Finish": "/tmp/vmm-a11y-click.txt",
+        }
+        path = mapping.get(self.name, "/tmp/vmm-a11y-click.txt")
+        try:
+            open(path, "w").write(self.name)
+        except Exception:
+            pass
         try:
             open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
         except Exception:

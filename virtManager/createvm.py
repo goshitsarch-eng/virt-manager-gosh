@@ -440,8 +440,6 @@ class vmmCreateVM(vmmGObjectUI):
                             src = self.widget("install-url-entry")
                             if src is not None:
                                 src.set_text(text)
-                                if (text or "").strip().startswith("http"):
-                                    self._url_activated(src)
                 except Exception:
                     pass
                 opt = "/tmp/vmm-a11y-urlopts-entry.txt"
@@ -466,6 +464,28 @@ class vmmCreateVM(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_url)
+
+        if not getattr(self, "_vmm_nav_poll", False):
+            self._vmm_nav_poll = True
+
+            def _poll_nav():
+                fwd = "/tmp/vmm-a11y-create-forward"
+                back = "/tmp/vmm-a11y-create-back"
+                try:
+                    if os.path.exists(fwd):
+                        os.remove(fwd)
+                        self._forward_clicked_impl()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists(back):
+                        os.remove(back)
+                        self._back_clicked(None)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_nav)
 
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
@@ -807,6 +827,8 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-url-entry.txt",
             "/tmp/vmm-a11y-urlopts-entry.txt",
             "/tmp/vmm-a11y-url-activate",
+            "/tmp/vmm-a11y-create-forward",
+            "/tmp/vmm-a11y-create-back",
         ):
             try:
                 os.unlink(path)
@@ -1865,6 +1887,11 @@ class vmmCreateVM(vmmGObjectUI):
                     want = ""
                 if not want:
                     try:
+                        want = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+                    except Exception:
+                        want = ""
+                if not want:
+                    try:
                         want = open("/tmp/vmm-a11y-entry.txt", "r").read().strip()
                     except Exception:
                         want = ""
@@ -1873,15 +1900,28 @@ class vmmCreateVM(vmmGObjectUI):
                         want = open("/tmp/vmm-a11y-os-select.txt", "r").read().strip()
                     except Exception:
                         want = ""
-                if want:
+                _skip = (
+                    _("None detected"),
+                    _("Detecting..."),
+                    _("Waiting for install media / source"),
+                )
+                if want and want not in _skip:
                     try:
                         self._os_list.select_os_matching(want)
                     except Exception:
                         pass
-            # Make sure we have detected the OS before validating the page
-            did_start = self._start_detect_os_if_needed(forward_after_finish=True)
-            if did_start:
-                return False
+                    osobj = (
+                        self._os_list.get_selected_os()
+                        or getattr(self._os_list, "_kept_os", None)
+                        or self._last_osobj
+                    )
+            if osobj is not None:
+                self._os_already_detected_for_media = True
+            else:
+                # Make sure we have detected the OS before validating the page
+                did_start = self._start_detect_os_if_needed(forward_after_finish=True)
+                if did_start:
+                    return False
 
         if self._validate(curpage) is not True:
             return False
