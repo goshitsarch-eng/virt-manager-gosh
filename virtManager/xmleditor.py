@@ -25,13 +25,12 @@ if "VIRTINST_TEST_SUITE_FAKE_NO_SOURCEVIEW" in os.environ:
     log.debug("Faking missing GtkSource for test suite")
     have_gtksourceview = False
 
+from gi.repository import Gtk
+
 if have_gtksourceview:
     from gi.repository import GtkSource
-else:
-    # if GtkSourceView is not available, just use a plain TextView. This will
-    # only disable auto-indent and syntax highlighting.
-    from gi.repository import Gtk
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 
@@ -77,6 +76,16 @@ class vmmXMLEditor(vmmGObjectUI):
         enabled = self.config.get_xmleditor_enabled()
         self._srcview.set_editable(enabled)
         uiutil.set_grid_row_visible(self.widget("xml-warning-box"), not enabled)
+        key = "xml-editor-%s" % id(self)
+        sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(key)
+        if sidecar is not None:
+            try:
+                sidecar.set_editable(enabled)
+            except Exception:
+                pass
+            sync = getattr(sidecar, "_vmm_xml_from_src", None)
+            if sync:
+                sync()
 
     def _init_ui(self):
         if have_gtksourceview:
@@ -91,7 +100,24 @@ class vmmXMLEditor(vmmGObjectUI):
             self._srcbuff = self._srcview.get_buffer()
 
         self._srcview.set_monospace(True)
-        self._srcview.get_accessible().set_name("XML editor")
+        gtkcompat.set_accessible_name(self._srcview, "XML editor")
+        gtkcompat.expose_a11y_xml_editor(
+            "xml-editor-%s" % id(self),
+            "XML editor",
+            self._srcview,
+            self._srcbuff,
+            window=self.topwin,
+        )
+        warnbox = self.widget("xml-warning-box")
+        if warnbox is not None:
+            for child in gtkcompat.get_children(warnbox):
+                if isinstance(child, Gtk.Label):
+                    gtkcompat.set_accessible_name(
+                        child,
+                        "XML editing is disabled in 'Preferences'. "
+                        "Only enable it if you know what you are doing.",
+                    )
+        gtkcompat.attach_notebook_a11y(self.widget("xml-notebook"))
 
         self._srcbuff.connect("changed", self._buffer_changed_cb)
 

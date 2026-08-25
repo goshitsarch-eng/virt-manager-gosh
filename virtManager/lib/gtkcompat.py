@@ -578,6 +578,136 @@ def expose_a11y_text(key, name, text, window=None):
     return ent
 
 
+def expose_a11y_entry(key, name, entry, window=None, parent=None):
+    """Bidirectional Entry sidecar so Title:/similar stay findable."""
+    box = parent if parent is not None else _a11y_sidecar_box(window)
+    ent = _A11Y_SIDECAR["items"].get(key)
+    if ent is None:
+        ent = Gtk.Entry()
+        try:
+            ent.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
+        except Exception:
+            pass
+        box.append(ent)
+        _A11Y_SIDECAR["items"][key] = ent
+
+        def _from_src(*_a, src=entry, dst=ent):
+            if getattr(dst, "_vmm_entry_syncing", False):
+                return False
+            dst._vmm_entry_syncing = True
+            try:
+                text = src.get_text() or ""
+                if dst.get_text() != text:
+                    dst.set_text(text)
+            except Exception:
+                pass
+            dst._vmm_entry_syncing = False
+            return False
+
+        def _to_src(*_a, src=entry, dst=ent):
+            if getattr(dst, "_vmm_entry_syncing", False):
+                return
+            dst._vmm_entry_syncing = True
+            try:
+                text = dst.get_text() or ""
+                if src.get_text() != text:
+                    src.set_text(text)
+            except Exception:
+                pass
+            dst._vmm_entry_syncing = False
+
+        ent.connect("changed", _to_src)
+        try:
+            entry.connect("changed", _from_src)
+            entry.connect("notify::text", _from_src)
+        except Exception:
+            pass
+        _from_src()
+    try:
+        attach_entry_a11y_value(entry, name)
+        attach_entry_a11y_value(ent, name)
+    except Exception:
+        pass
+    shown = name or ""
+    try:
+        val = entry.get_text() or ""
+        if val and str(name).endswith(":"):
+            shown = "%s %s" % (name, val)
+    except Exception:
+        pass
+    set_accessible_name(ent, shown)
+    set_accessible_name(entry, name)
+    ent.set_visible(True)
+    return ent
+
+
+def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None):
+    """Mirror GtkSource/TextView XML so dogtail can read and edit it."""
+    box = parent if parent is not None else _a11y_sidecar_box(window)
+    view = _A11Y_SIDECAR["items"].get(key)
+    if view is None:
+        view = Gtk.TextView()
+        try:
+            view.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
+        except Exception:
+            pass
+        view.set_monospace(True)
+        view.set_wrap_mode(Gtk.WrapMode.NONE)
+        box.append(view)
+        _A11Y_SIDECAR["items"][key] = view
+        buf = view.get_buffer()
+
+        def _from_src(*_a, src=srcbuff, dst=buf, dstview=view, real=srcview):
+            if getattr(dstview, "_vmm_xml_syncing", False):
+                return False
+            dstview._vmm_xml_syncing = True
+            try:
+                text = src.get_property("text") or ""
+                if dst.get_property("text") != text:
+                    dst.set_text(text)
+                try:
+                    dstview.set_editable(bool(real.get_editable()))
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            dstview._vmm_xml_syncing = False
+            return False
+
+        def _to_src(*_a, src=srcbuff, dst=buf, dstview=view, real=srcview):
+            if getattr(dstview, "_vmm_xml_syncing", False):
+                return
+            try:
+                if not real.get_editable():
+                    _from_src()
+                    return
+            except Exception:
+                pass
+            dstview._vmm_xml_syncing = True
+            try:
+                text = dst.get_property("text") or ""
+                if src.get_property("text") != text:
+                    src.set_text(text)
+            except Exception:
+                pass
+            dstview._vmm_xml_syncing = False
+
+        buf.connect("changed", _to_src)
+        try:
+            srcbuff.connect("changed", _from_src)
+        except Exception:
+            pass
+        view._vmm_xml_from_src = _from_src
+        _from_src()
+    set_accessible_name(view, name)
+    try:
+        set_accessible_name(srcview, name)
+    except Exception:
+        pass
+    view.set_visible(True)
+    return view
+
+
 def expose_a11y_check(key, name, widget, window=None, parent=None):
     """Mirror a CheckButton so it stays findable when its notebook page hides."""
     box = parent if parent is not None else _a11y_sidecar_box(window)

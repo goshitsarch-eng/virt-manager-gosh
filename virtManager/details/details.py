@@ -11,6 +11,7 @@ import libvirt
 import virtinst
 from virtinst import log
 
+from ..lib import gtkcompat
 from ..lib import uiutil
 from ..addhardware import vmmAddHardware
 from ..baseclass import vmmGObjectUI
@@ -454,6 +455,22 @@ class vmmDetails(vmmGObjectUI):
 
         self._init_hw_list()
         self._refresh_page()
+        gtkcompat.set_accessible_name(self.widget("config-apply"), "config-apply")
+        gtkcompat.expose_a11y_button(
+            "details-config-apply",
+            "config-apply",
+            lambda: self.widget("config-apply").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.set_accessible_name(self.widget("config-cancel"), "config-cancel")
+        gtkcompat.expose_a11y_button(
+            "details-config-cancel",
+            "config-cancel",
+            lambda: self.widget("config-cancel").emit("clicked"),
+            window=self.topwin,
+        )
+        title = self.widget("overview-title")
+        gtkcompat.expose_a11y_entry("details-overview-title", "Title:", title, window=self.topwin)
 
     @property
     def conn(self):

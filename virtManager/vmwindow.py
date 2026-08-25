@@ -290,10 +290,19 @@ class vmmVMWindow(vmmGObjectUI):
             except Exception:
                 pass
             gtkcompat.set_accessible_name(btn, name)
+            def _activate(_ignored=None, b=btn):
+                try:
+                    if hasattr(b, "set_active"):
+                        b.set_active(True)
+                        return
+                except Exception:
+                    pass
+                b.emit("clicked")
+
             gtkcompat.expose_a11y_button(
                 "vmwin-" + wid,
                 name,
-                lambda b=btn: b.emit("clicked"),
+                _activate,
                 window=self.topwin,
                 role=Gtk.AccessibleRole.RADIO,
             )
