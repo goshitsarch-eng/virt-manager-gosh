@@ -279,8 +279,8 @@ class vmmSerialConsole(vmmGObject):
         terminalbox.pack_start(evbox, True, True, 0)
         terminalbox.pack_start(scrollbar, False, False, 0)
 
-        self._box.append_page(terminalbox, Gtk.Label(""))
-        self._box.append_page(self._error_label, Gtk.Label(""))
+        self._box.append_page(terminalbox, Gtk.Label(label=""))
+        self._box.append_page(self._error_label, Gtk.Label(label=""))
         self._box.show_all()
 
         scrollbar.hide()

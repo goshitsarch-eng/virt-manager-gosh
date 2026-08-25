@@ -867,6 +867,14 @@ def _patch_widget_methods():
     Gtk.Box.pack_start = _box_pack_start
     Gtk.Box.pack_end = _box_pack_end
     Gtk.Box.get_children = _widget_get_children
+    orig_box_append = Gtk.Box.append
+
+    def box_append(self, child):
+        if child is not None and child.get_parent() is not None:
+            child.unparent()
+        return orig_box_append(self, child)
+
+    Gtk.Box.append = box_append
 
     for clsname in (
         "ScrolledWindow",
@@ -926,6 +934,16 @@ def _patch_widget_methods():
             self.set_wrap_mode(mode)
 
         Gtk.Label.set_line_wrap_mode = set_line_wrap_mode
+
+    _orig_label_new = Gtk.Label.__new__
+    _orig_label_init = Gtk.Label.__init__
+
+    def label_init(self, text=None, **kwargs):
+        if text is not None and "label" not in kwargs:
+            kwargs["label"] = text
+        return _orig_label_init(self, **kwargs)
+
+    Gtk.Label.__init__ = label_init
 
     def grab_default(self):
         root = self.get_root() if hasattr(self, "get_root") else None
