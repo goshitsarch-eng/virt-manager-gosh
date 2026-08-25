@@ -1027,6 +1027,39 @@ class _SentinelNavButton(object):
         self.click()
 
 
+class _SentinelProgressWindow(object):
+    """Creating Virtual Machine progress dialog after GetItems."""
+
+    def __init__(self, name="Creating Virtual Machine"):
+        self.name = name
+        self.roleName = "dialog"
+
+    def _state(self):
+        try:
+            return open("/tmp/vmm-a11y-progress.txt", "r").read().strip()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return self._state() == "1"
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return True
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def find(self, *args, **kwargs):
+        raise dogtail.tree.SearchError("progress window has no children")
+
+
 class _SentinelPagenum(object):
     name = "pagenum-label"
     roleName = "label"
@@ -2663,6 +2696,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
         if name and "pagenum" in str(name).lower():
             return _SentinelPagenum()
+        if name and "creating virtual machine" in str(name).lower():
+            return _SentinelProgressWindow(str(name).replace(".*", ""))
         try:
             sent = _sentinel_oslist_entry(name, roleName)
             if sent is not None:

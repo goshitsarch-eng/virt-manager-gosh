@@ -263,6 +263,10 @@ class vmmAsyncJob(vmmGObjectUI):
 
     def _thread_finished(self):
         GLib.source_remove(self._timer)
+        try:
+            open("/tmp/vmm-a11y-progress.txt", "w").write("0")
+        except Exception:
+            pass
         self.topwin.destroy()
         self.cleanup()
 
@@ -277,6 +281,10 @@ class vmmAsyncJob(vmmGObjectUI):
         self._timer = GLib.timeout_add(100, self._exit_if_necessary)
 
         if self.show_progress:
+            try:
+                open("/tmp/vmm-a11y-progress.txt", "w").write("1")
+            except Exception:
+                pass
             try:
                 gtkcompat._ensure_app_window(self.topwin)
             except Exception:
