@@ -949,7 +949,7 @@ class Menu(Gtk.Box):
         self._parent_widget = None
         self._opened = False
         try:
-            self.update_state([Gtk.AccessibleState.HIDDEN], [True])
+            self.update_state([Gtk.AccessibleState.EXPANDED], [False])
         except Exception:
             pass
 
@@ -1038,18 +1038,18 @@ class Menu(Gtk.Box):
             return
         if not self._opened:
             self._popover.set_opacity(0)
-            self._set_menu_hidden(True)
+            self._set_menu_expanded(False)
         self._popover.set_visible(True)
 
-    def _set_menu_hidden(self, hidden):
+    def _set_menu_expanded(self, expanded):
         try:
-            self.update_state([Gtk.AccessibleState.HIDDEN], [bool(hidden)])
+            self.update_state([Gtk.AccessibleState.EXPANDED], [bool(expanded)])
         except Exception:
             pass
         if self._popover is not None:
             try:
                 self._popover.update_state(
-                    [Gtk.AccessibleState.HIDDEN], [bool(hidden)]
+                    [Gtk.AccessibleState.EXPANDED], [bool(expanded)]
                 )
             except Exception:
                 pass
@@ -1060,7 +1060,7 @@ class Menu(Gtk.Box):
             return
         self._ensure_popover(parent)
         self._opened = True
-        self._set_menu_hidden(False)
+        self._set_menu_expanded(True)
         self._popover.set_opacity(1)
         self._ensure_mapped()
         try:
@@ -1070,7 +1070,7 @@ class Menu(Gtk.Box):
 
     def popdown(self, *_args, **_kwargs):
         self._opened = False
-        self._set_menu_hidden(True)
+        self._set_menu_expanded(False)
         if self._popover is not None:
             self._popover.set_opacity(0)
 

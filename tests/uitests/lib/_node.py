@@ -276,12 +276,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # silently ignored.
         if self.roleName in ["frame", "window"]:
             return True
-        # Closed GTK 4 menus stay mapped so items remain findable. Report
-        # onscreen from HIDDEN so tests can wait for popdown.
-        if self.roleName == "menu":
-            return not self.getState().contains(pyatspi.STATE_HIDDEN)
+        # Menubar File/Help items are role "menu" but must stay clickable.
         if self.is_menuitem() or self.roleName == "menu item":
             return True
+        # Closed GTK 4 menus stay mapped so items remain findable. Report
+        # onscreen from EXPANDED so tests can wait for popdown.
+        if self.roleName == "menu":
+            return self.getState().contains(pyatspi.STATE_EXPANDED)
         screen = Gdk.Screen.get_default()
         return (
             self.position[0] >= 0
