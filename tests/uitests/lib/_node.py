@@ -306,7 +306,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         # GTK 4 buttons/cells often have no Text iface. Use the name plus
         # one child name (status) without extra AT-SPI queries.
-        if self.roleName in ("push button", "button", "table cell", "cell", "list item"):
+        if self.roleName in (
+            "push button",
+            "button",
+            "table cell",
+            "cell",
+            "list item",
+            "text",
+            "entry",
+            "text box",
+            "spin button",
+            "label",
+            "static",
+        ):
             parts = []
             if self.name:
                 parts.append(self.name)
@@ -594,7 +606,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
     def window_close(self):
         assert self.roleName in list(_WINDOW_ROLES)
-        self.grab_focus()
+        try:
+            self.grab_focus()
+        except Exception:
+            pass
         self.keyCombo("<alt>F4")
         utils.check(lambda: not self.showing)
 
@@ -602,10 +617,30 @@ class _VMMDogtailNode(dogtail.tree.Node):
         return self.find(None, focusable=True)
 
     def grab_focus(self):
-        if self.roleName in list(_WINDOW_ROLES):
-            child = self.window_find_focusable_child()
-            child.grab_focus()
-            utils.check(lambda: self.active)
+        # Only treat real toplevels as windows. GTK 4 panels are in
+        # _WINDOW_ROLES for find_window(), but recursing into them here
+        # loops forever looking for a focusable child.
+        if self.roleName in ("frame", "window", "dialog", "alert"):
+            try:
+                child = self.window_find_focusable_child()
+            except Exception:
+                child = None
+            if (
+                child is not None
+                and child is not self
+                and getattr(child, "roleName", "")
+                not in ("frame", "window", "dialog", "alert", "panel")
+            ):
+                try:
+                    child.grabFocus()
+                    utils.check(lambda: self.active)
+                    return
+                except Exception:
+                    pass
+            try:
+                self.grabFocus()
+            except Exception:
+                pass
             return
 
         self.check_onscreen()

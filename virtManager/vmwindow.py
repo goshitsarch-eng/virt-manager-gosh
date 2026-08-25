@@ -371,6 +371,17 @@ class vmmVMWindow(vmmGObjectUI):
         self._refresh_current_page(newpage)
         self._sync_toolbar_page_buttons(newpage)
         self._sync_console_page_menu_state()
+        try:
+            addhw = self.widget("add-hardware-button")
+            gtkcompat.expose_a11y_button(
+                "add-hardware", "add-hardware", lambda: addhw.emit("clicked")
+            )
+            gtkcompat.sync_sidecar_visible("add-hardware", newpage == DETAILS_PAGE_DETAILS)
+            gtkcompat.sync_sidecar_visible(
+                "guest-status", newpage == DETAILS_PAGE_CONSOLE
+            )
+        except Exception:
+            pass
 
     def change_run_text(self, can_restore):
         if can_restore:

@@ -572,6 +572,9 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_UNAVAILABLE)
         if msg:
             self.widget("console-unavailable").set_label("<b>" + msg + "</b>")
+            from virtManager.lib import gtkcompat
+
+            gtkcompat.expose_a11y_label("guest-status", msg, msg)
         self._activate_gfx_unavailable_page(msg)
 
     def _activate_auth_page(self, withPassword, withUsername):

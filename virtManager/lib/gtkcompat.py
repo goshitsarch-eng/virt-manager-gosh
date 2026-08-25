@@ -381,6 +381,23 @@ def expose_a11y_label(key, name, text):
     return lab
 
 
+def expose_a11y_text(key, name, text):
+    box = _a11y_sidecar_box()
+    ent = _A11Y_SIDECAR["items"].get(key)
+    if ent is None:
+        ent = Gtk.Entry()
+        ent.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
+        box.append(ent)
+        _A11Y_SIDECAR["items"][key] = ent
+    try:
+        ent.set_text(text or "")
+    except Exception:
+        pass
+    set_accessible_name(ent, name or text or "")
+    ent.set_visible(True)
+    return ent
+
+
 def expose_a11y_button(key, name, callback):
     box = _a11y_sidecar_box()
     btn = _A11Y_SIDECAR["items"].get(key)
@@ -395,6 +412,16 @@ def expose_a11y_button(key, name, callback):
     set_accessible_name(btn, name)
     btn.set_visible(True)
     return btn
+
+
+def sync_sidecar_visible(key, visible):
+    widget = _A11Y_SIDECAR.get("items", {}).get(key)
+    if widget is None:
+        return
+    try:
+        widget.set_visible(bool(visible))
+    except Exception:
+        pass
 
 
 def hide_a11y_keys(prefix):
