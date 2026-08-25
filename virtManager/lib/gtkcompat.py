@@ -1678,6 +1678,24 @@ def _append_createvm_arch_controls(box, createvm):
     except Exception:
         pass
     try:
+        expose_a11y_combo(
+            "machine",
+            "Machine Type",
+            createvm.widget("machine"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "virt-type",
+            "Virt Type",
+            createvm.widget("virt-type"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
         expose_a11y_entry(
             "methods-import-entry",
             "import-entry",
@@ -1719,6 +1737,24 @@ def _append_createvm_storage_radios(box, createvm):
             storage.widget("storage-entry"),
             parent=box,
             name_with_value=True,
+        )
+    except Exception:
+        pass
+    try:
+        enable = createvm.widget("enable-storage")
+        expose_a11y_check(
+            "enable-storage",
+            "Enable storage for this virtual machine",
+            enable,
+            parent=box,
+        )
+        register_a11y_click(
+            "Enable storage for this virtual machine",
+            lambda src=enable: src.set_active(not bool(src.get_active())),
+        )
+        register_a11y_click(
+            "Enable storage",
+            lambda src=enable: src.set_active(not bool(src.get_active())),
         )
     except Exception:
         pass

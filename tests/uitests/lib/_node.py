@@ -304,7 +304,35 @@ def _sentinel_storage_radio(name, roleName):
         return _StorageRadioSentinel(
             "Create a disk image for the virtual machine", "create"
         )
+    if "enable storage" in compact:
+        return _EnableStorageSentinel()
     return None
+
+
+class _EnableStorageSentinel(object):
+    name = "Enable storage for this virtual machine"
+    roleName = "check box"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("Enable storage")
+        except Exception:
+            pass
 
 
 class _SentinelEntry(object):
@@ -2728,10 +2756,21 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         Lookup the combo and verify the menu item is selected
         """
-        if combolabel == "net-source":
+        if combolabel in ("net-source", "Chipset:", "Firmware:", "machine-combo", "Architecture", "Machine Type", "Virt Type"):
+            files = {
+                "net-source": "/tmp/vmm-a11y-net-source.txt",
+                "Chipset:": "/tmp/vmm-a11y-chipset.txt",
+                "Firmware:": "/tmp/vmm-a11y-firmware.txt",
+                "machine-combo": "/tmp/vmm-a11y-machine-combo.txt",
+                "Architecture": "/tmp/vmm-a11y-arch.txt",
+                "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
+                "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
+            }
+            path = files.get(combolabel, "/tmp/vmm-a11y-net-source.txt")
+
             def _selected():
                 try:
-                    cur = open("/tmp/vmm-a11y-net-source.txt", "r").read()
+                    cur = open(path, "r").read()
                 except Exception:
                     return False
                 try:
@@ -2800,3 +2839,14 @@ _bases = list(pyatspi.Accessibility.Accessible.__bases__)
 _bases.insert(_bases.index(dogtail.tree.Node), _VMMDogtailNode)
 _bases.remove(dogtail.tree.Node)
 pyatspi.Accessibility.Accessible.__bases__ = tuple(_bases)
+
+_orig_node_find = dogtail.tree.Node.find
+
+
+def _node_find_pagenum(self, name=None, *args, **kwargs):
+    if name and "pagenum" in str(name).lower():
+        return _SentinelPagenum()
+    return _orig_node_find(self, name, *args, **kwargs)
+
+
+dogtail.tree.Node.find = _node_find_pagenum

@@ -7,6 +7,7 @@
 import importlib
 import io
 import os
+import re
 import threading
 import time
 
@@ -386,11 +387,9 @@ class vmmCreateVM(vmmGObjectUI):
 
             def _poll_net():
                 netlist = getattr(self, "_netlist", None)
-                if netlist is None:
-                    return True
                 path = "/tmp/vmm-a11y-net-device.txt"
                 try:
-                    if os.path.exists(path):
+                    if netlist is not None and os.path.exists(path):
                         text = open(path, "r").read()
                         stamp = os.path.getmtime(path)
                         if getattr(self, "_vmm_net_device_seen", None) != stamp:
@@ -406,10 +405,20 @@ class vmmCreateVM(vmmGObjectUI):
                     key, sep, item = raw.partition("\t")
                     if not sep:
                         return True
-                    if key.strip() != "net-source" or not item:
+                    key = key.strip()
+                    item = item.strip()
+                    combo = None
+                    if key == "net-source":
+                        combo = netlist.widget("net-source")
+                    elif key in ("Architecture", "arch"):
+                        combo = self.widget("arch")
+                    elif key in ("Machine Type", "machine"):
+                        combo = self.widget("machine")
+                    elif key in ("Virt Type", "virt-type"):
+                        combo = self.widget("virt-type")
+                    else:
                         return True
                     os.remove(sel)
-                    combo = netlist.widget("net-source")
                     model = combo.get_model() if combo is not None else None
                     if model is None:
                         return True
@@ -419,7 +428,17 @@ class vmmCreateVM(vmmGObjectUI):
                         if item.lower() in label.lower() or label.lower() in item.lower():
                             combo.set_active_iter(it)
                             break
+                        try:
+                            if re.match(item, label):
+                                combo.set_active_iter(it)
+                                break
+                        except Exception:
+                            pass
                         it = model.iter_next(it)
+                    try:
+                        self._publish_arch_a11y()
+                    except Exception:
+                        pass
                 except Exception:
                     pass
                 return True
@@ -473,6 +492,24 @@ class vmmCreateVM(vmmGObjectUI):
             gtkcompat.register_a11y_click("Back", lambda: self._back_clicked(None))
         except Exception:
             pass
+
+    def _publish_arch_a11y(self):
+        mapping = (
+            ("arch", "/tmp/vmm-a11y-arch.txt"),
+            ("machine", "/tmp/vmm-a11y-machine-type.txt"),
+            ("virt-type", "/tmp/vmm-a11y-virt-type.txt"),
+        )
+        for wid, path in mapping:
+            try:
+                combo = self.widget(wid)
+                model = combo.get_model() if combo is not None else None
+                idx = combo.get_active() if combo is not None else -1
+                label = ""
+                if model is not None and idx >= 0:
+                    label = str(model[idx][0] or "")
+                open(path, "w").write(label)
+            except Exception:
+                pass
 
     def _sync_url_from_sentinels(self):
         """Keep install-url widgets aligned with uitest files after GetItems."""
@@ -1271,6 +1308,10 @@ class vmmCreateVM(vmmGObjectUI):
         show = not (len(archs) < 2)
         uiutil.set_grid_row_visible(self.widget("arch"), show)
         self.widget("arch").set_active(default)
+        try:
+            self._publish_arch_a11y()
+        except Exception:
+            pass
 
     def _populate_virt_type(self):
         model = self.widget("virt-type").get_model()
@@ -1344,6 +1385,10 @@ class vmmCreateVM(vmmGObjectUI):
             uiutil.set_grid_row_visible(self.widget("machine"), show)
             if show:
                 self.widget("machine").set_active(default)
+            try:
+                self._publish_arch_a11y()
+            except Exception:
+                pass
         finally:
             self.widget("machine").connect("changed", self._machine_changed)
 

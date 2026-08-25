@@ -5,6 +5,7 @@
 # See the COPYING file in the top-level directory.
 
 import os
+import re
 
 from gi.repository import GLib
 from gi.repository import Gtk
@@ -638,6 +639,100 @@ class vmmDetails(vmmGObjectUI):
             )
         except Exception:
             pass
+        try:
+            gtkcompat.expose_a11y_combo(
+                "overview-chipset",
+                "Chipset:",
+                self.widget("overview-chipset"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_combo(
+                "overview-firmware",
+                "Firmware:",
+                self.widget("overview-firmware"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_combo(
+                "machine-type",
+                "machine-combo",
+                self.widget("machine-type"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        if not getattr(self, "_vmm_overview_combo_poll", False):
+            self._vmm_overview_combo_poll = True
+
+            def _poll_overview_combo():
+                sel = "/tmp/vmm-a11y-combo-select.txt"
+                try:
+                    if not os.path.exists(sel):
+                        self._publish_overview_combos()
+                        return True
+                    raw = open(sel, "r").read().strip()
+                    key, sep, item = raw.partition("\t")
+                    if not sep:
+                        return True
+                    key = key.strip()
+                    item = item.strip()
+                    wid = {
+                        "Chipset:": "overview-chipset",
+                        "Firmware:": "overview-firmware",
+                        "machine-combo": "machine-type",
+                    }.get(key)
+                    if not wid:
+                        return True
+                    os.remove(sel)
+                    combo = self.widget(wid)
+                    model = combo.get_model() if combo is not None else None
+                    if model is None:
+                        return True
+                    it = model.get_iter_first()
+                    while it is not None:
+                        label = str(model[it][0] or "")
+                        extra = ""
+                        try:
+                            extra = str(model[it][1] or "")
+                        except Exception:
+                            extra = ""
+                        blob = "%s %s" % (label, extra)
+                        if (
+                            item.lower() in blob.lower()
+                            or label.lower() in item.lower()
+                        ):
+                            combo.set_active_iter(it)
+                            break
+                        try:
+                            if re.match(item, label) or re.match(item, blob):
+                                combo.set_active_iter(it)
+                                break
+                        except Exception:
+                            pass
+                        it = model.iter_next(it)
+                    self._publish_overview_combos()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_overview_combo)
+
+    def _publish_overview_combos(self):
+        mapping = (
+            ("overview-chipset", "/tmp/vmm-a11y-chipset.txt", 0),
+            ("overview-firmware", "/tmp/vmm-a11y-firmware.txt", 0),
+            ("machine-type", "/tmp/vmm-a11y-machine-combo.txt", 0),
+        )
+        for wid, path, col in mapping:
+            try:
+                combo = self.widget(wid)
+                model = combo.get_model() if combo is not None else None
+                idx = combo.get_active() if combo is not None else -1
+                label = ""
+                if model is not None and idx >= 0:
+                    label = str(model[idx][col] or "")
+                open(path, "w").write(label)
+            except Exception:
+                pass
 
     @property
     def conn(self):
@@ -1961,6 +2056,10 @@ class vmmDetails(vmmGObjectUI):
         self.widget("overview-chipset-label").set_text(chipset)
         if self.widget("overview-chipset").is_visible():
             uiutil.set_list_selection(self.widget("overview-chipset"), chipset)
+        try:
+            self._publish_overview_combos()
+        except Exception:
+            pass
 
     def _refresh_os_page(self):
         self._os_list.select_os(self.vm.xmlobj.osinfo)
