@@ -951,6 +951,17 @@ def _oslist_show_popovers(oslist):
     if oslist is None:
         return
     try:
+        if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+            return
+    except Exception:
+        pass
+    try:
+        text = (oslist.search_entry.get_text() or "").strip()
+        if not text:
+            return
+    except Exception:
+        pass
+    try:
         os.remove("/tmp/vmm-a11y-oslist-popover-hidden")
     except Exception:
         pass
@@ -1043,6 +1054,14 @@ def _oslist_load_search_from_file(oslist):
         text = open(path, "r").read()
     except Exception:
         return
+    for marker in (
+        "/tmp/vmm-a11y-oslist-escape",
+        "/tmp/vmm-a11y-oslist-popover-hidden",
+    ):
+        try:
+            os.remove(marker)
+        except Exception:
+            pass
     _oslist_apply_search_text(oslist, text)
     _oslist_show_popovers(oslist)
     try:
