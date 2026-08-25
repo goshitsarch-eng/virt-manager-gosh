@@ -3688,6 +3688,24 @@ def _patch_widget_methods():
 
     Gtk.Widget.connect = connect
 
+    def _checkbutton_do_activate(self, *_args):
+        """GTK 4 CheckButton activate is a no-op for AT-SPI click."""
+        try:
+            group = self.get_group()
+            members = list(group) if group else []
+        except Exception:
+            members = []
+        if len(members) > 1:
+            self.set_active(True)
+        else:
+            try:
+                self.set_active(not bool(self.get_active()))
+            except Exception:
+                pass
+        return True
+
+    Gtk.CheckButton.do_activate = _checkbutton_do_activate
+
 
 def _install_stock_and_enums():
     Gtk.STOCK_OK = "gtk-ok"
