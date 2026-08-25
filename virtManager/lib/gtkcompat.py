@@ -966,9 +966,13 @@ def expose_oslist_a11y(oslist, window=None):
         key.connect("key-pressed", _on_key)
         sidecar.add_controller(key)
 
-        def _focus(*_a, dst=sidecar):
+        def _focus(*_a, dst=sidecar, lst=oslist):
             try:
                 dst.grab_focus()
+            except Exception:
+                pass
+            try:
+                lst._entry_activate_cb(lst.search_entry)
             except Exception:
                 pass
             return True
