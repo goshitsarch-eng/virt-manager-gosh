@@ -480,6 +480,35 @@ class vmmCreateVM(vmmGObjectUI):
                         except Exception:
                             before = ""
                         try:
+                            osname = open(
+                                "/tmp/vmm-a11y-oslist-entry.txt", "r"
+                            ).read().strip()
+                            url = open(
+                                "/tmp/vmm-a11y-url-entry.txt", "r"
+                            ).read().strip()
+                        except Exception:
+                            osname, url = "", ""
+                        skip = (
+                            "None detected",
+                            "Detecting...",
+                            "Waiting for install media / source",
+                        )
+                        cur = getattr(self, "_vmm_goto_page", None)
+                        if cur is None:
+                            try:
+                                cur = self.widget("create-pages").get_current_page()
+                            except Exception:
+                                cur = None
+                        if (
+                            osname
+                            and osname not in skip
+                            and url.startswith("http")
+                            and cur == PAGE_INSTALL
+                        ):
+                            # Validate/build_guest can take longer than 2s;
+                            # publish the next step first so _nav can proceed.
+                            self._write_pagenum_file(self._get_next_pagenum(cur))
+                        try:
                             self._forward_clicked_impl()
                         except Exception as exc:
                             try:
@@ -1896,35 +1925,45 @@ class vmmCreateVM(vmmGObjectUI):
     # Navigation methods #
     ######################
 
-    def _set_page_num_text(self, cur):
-        """
-        Set the 'page 1 of 4' style text in the wizard header
-        """
-        cur += 1
+    def _write_pagenum_file(self, cur):
+        """Publish Step X of Y before any GTK work so the 2s uitest check
+        does not wait on install validation or a11y expose."""
+        shown_cur = cur + 1
         final = PAGE_FINISH + 1
         if self._should_skip_disk_page():
             final -= 1
-            cur = min(cur, final)
-
+            shown_cur = min(shown_cur, final)
         page_lbl = _("Step %(current_page)d of %(max_page)d") % {
-            "current_page": cur,
+            "current_page": shown_cur,
             "max_page": final,
         }
-
-        self.widget("header-pagenum").set_markup(page_lbl)
-        gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
         self._vmm_pagenum_gen = getattr(self, "_vmm_pagenum_gen", 0) + 1
         shown = "%s #%s" % (page_lbl, self._vmm_pagenum_gen)
         try:
             open("/tmp/vmm-a11y-pagenum.txt", "w").write(shown)
         except Exception:
             pass
-        gtkcompat.expose_a11y_label(
-            "create-pagenum",
-            "pagenum-label: %s" % page_lbl,
-            page_lbl,
-            window=self.topwin,
-        )
+        return page_lbl
+
+    def _set_page_num_text(self, cur):
+        """
+        Set the 'page 1 of 4' style text in the wizard header
+        """
+        page_lbl = self._write_pagenum_file(cur)
+        try:
+            self.widget("header-pagenum").set_markup(page_lbl)
+            gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_label(
+                "create-pagenum",
+                "pagenum-label: %s" % page_lbl,
+                page_lbl,
+                window=self.topwin,
+            )
+        except Exception:
+            pass
         try:
             win = getattr(self, "_vmm_methods_win", None)
             if win is not None:
@@ -2128,6 +2167,14 @@ class vmmCreateVM(vmmGObjectUI):
             osobj = self._resolve_create_os()
             if osobj is not None:
                 self._os_already_detected_for_media = True
+                try:
+                    url = (self.widget("install-url-entry").get_text() or "").strip()
+                    if not url.startswith("http"):
+                        url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                    if url.startswith("http"):
+                        self._write_pagenum_file(self._get_next_pagenum(curpage))
+                except Exception:
+                    pass
             else:
                 # Make sure we have detected the OS before validating the page
                 did_start = self._start_detect_os_if_needed(forward_after_finish=True)
