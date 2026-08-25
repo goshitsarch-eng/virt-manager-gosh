@@ -357,7 +357,7 @@ class vmmManager(vmmGObjectUI):
             vmlist,
             name_column=ROW_SORT_KEY,
             text_column=ROW_MARKUP,
-            on_popup=self.popup_vm_menu_from_selection,
+            on_popup=self.popup_vm_menu_for_name,
         )
         vmlist.set_level_indentation(-(_style_get_prop(vmlist, "expander-size") + 3))
 
@@ -851,6 +851,30 @@ class vmmManager(vmmGObjectUI):
             return False
         self.popup_vm_menu(model, treeiter, event)
         return True
+
+    def popup_vm_menu_for_name(self, name=None, event=None):
+        if not name:
+            return self.popup_vm_menu_from_selection(event)
+        model = self.widget("vm-list").get_model()
+        if model is None:
+            return False
+
+        def _find(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    have = str(model[_iter][ROW_SORT_KEY] or "")
+                    if have == name:
+                        self.popup_vm_menu(model, _iter, event)
+                        return True
+                except Exception:
+                    pass
+                if _find(_iter):
+                    return True
+                _iter = model.iter_next(_iter)
+            return False
+
+        return bool(_find(None))
 
     def popup_vm_menu_key(self, widget_ignore, event):
         if Gdk.keyval_name(event.keyval) != "Menu":

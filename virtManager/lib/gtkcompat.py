@@ -248,20 +248,20 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 def _on_row_clicked(_b, n=name):
                     _select_name(n)
                     if on_popup is not None:
-                        on_popup()
+                        on_popup(n)
 
                 btn.connect("clicked", _on_row_clicked)
                 if on_popup is not None:
                     def _menu_action(_w, _an, _p, n=name):
                         _select_name(n)
-                        on_popup()
+                        on_popup(n)
 
                     btn.install_action("menu", None, _menu_action)
                     right = Gtk.GestureClick()
                     right.set_button(3)
                     right.connect(
                         "pressed",
-                        lambda *_a, n=name: (_select_name(n), on_popup()),
+                        lambda *_a, n=name: (_select_name(n), on_popup(n)),
                     )
                     btn.add_controller(right)
                 box.append(btn)
