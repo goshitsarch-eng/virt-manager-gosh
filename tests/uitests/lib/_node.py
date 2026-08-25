@@ -395,13 +395,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             return False
         try:
+            name = self.name or ""
+            if name.startswith(".") or name.endswith(" (hidden)"):
+                return False
+        except Exception:
+            pass
+        try:
             showing = bool(self.showing or self.visible)
         except Exception:
             showing = False
         if role in ["frame", "window", "dialog", "alert"]:
             return True
         # Hidden notebook-page sidecars stay in the tree but are not onscreen.
-        if role in ("grouping", "group", "filler", "section") and not showing:
+        if role in ("grouping", "group", "filler", "section", "tab panel", "panel") and not showing:
             return False
         # GTK 4 Adw/Gtk windows often report as panel.
         if role == "panel" and (self.name or "").strip():
@@ -502,6 +508,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         self.check_onscreen()
         self.check_sensitive()
+        try:
+            self.doActionNamed("click")
+            return
+        except Exception:
+            pass
         button = 1
         clickX = self.position[0] + self.size[0] - self.size[1] / 4
         clickY = self.position[1] + self.size[1] / 2

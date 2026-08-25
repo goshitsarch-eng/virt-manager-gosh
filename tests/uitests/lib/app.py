@@ -40,7 +40,7 @@ class VMMDogtailApp:
 
     def find_window(self, name, roleName=None, check_active=True):
         if roleName is None:
-            roleName = "(frame|dialog|alert|window|panel)"
+            roleName = "(frame|dialog|alert|window|panel|menu)"
         if name is None:
             return self._find_best_window(roleName, check_active)
         return self.root.find(

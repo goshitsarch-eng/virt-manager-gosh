@@ -371,7 +371,9 @@ class vmmGObjectUI(vmmGObject):
 
         if self.topwin is not None:
             try:
-                self.topwin.set_accessible_role(Gtk.AccessibleRole.WINDOW)
+                from .lib import gtkcompat
+
+                gtkcompat.set_toplevel_a11y_role(self.topwin)
             except Exception:
                 pass
 

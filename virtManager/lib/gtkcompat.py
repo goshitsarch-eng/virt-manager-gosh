@@ -207,6 +207,25 @@ def set_accessible_name(widget, name):
     widget._vmm_a11y_name = str(name)
 
 
+def set_toplevel_a11y_role(widget):
+    """
+    Gtk.AccessibleRole.WINDOW is abstract in GTK 4 and AT-SPI then
+    reports the toplevel as a menu. DIALOG maps to a real window role
+    so find_window("Preferences") / similar can see it.
+    """
+    if widget is None:
+        return
+    for role in (
+        Gtk.AccessibleRole.DIALOG,
+        Gtk.AccessibleRole.ALERT_DIALOG,
+    ):
+        try:
+            widget.set_accessible_role(role)
+            return
+        except Exception:
+            continue
+
+
 def _checked_tristate(active):
     if bool(active):
         return Gtk.AccessibleTristate.TRUE
@@ -391,10 +410,7 @@ def _a11y_global_sidecar_box():
         win.set_modal(False)
         win.set_focusable(False)
         win.set_default_size(8, 8)
-        try:
-            win.set_accessible_role(Gtk.AccessibleRole.WINDOW)
-        except Exception:
-            pass
+        set_toplevel_a11y_role(win)
         set_accessible_name(win, ".a11y-sidecar")
         try:
             win.set_title(".a11y-sidecar")
@@ -562,9 +578,9 @@ def expose_a11y_text(key, name, text, window=None):
     return ent
 
 
-def expose_a11y_check(key, name, widget, window=None):
+def expose_a11y_check(key, name, widget, window=None, parent=None):
     """Mirror a CheckButton so it stays findable when its notebook page hides."""
-    box = _a11y_sidecar_box(window)
+    box = parent if parent is not None else _a11y_sidecar_box(window)
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
         btn = Gtk.CheckButton(label=name)
@@ -576,19 +592,27 @@ def expose_a11y_check(key, name, widget, window=None):
         _A11Y_SIDECAR["items"][key] = btn
 
         def _sync_from_src(*_a, src=widget, dst=btn):
+            if getattr(dst, "_vmm_check_syncing", False):
+                return False
+            dst._vmm_check_syncing = True
             try:
                 if dst.get_active() != src.get_active():
                     dst.set_active(src.get_active())
             except Exception:
                 pass
+            dst._vmm_check_syncing = False
             return False
 
         def _on_toggle(_b, src=widget, dst=btn):
+            if getattr(dst, "_vmm_check_syncing", False):
+                return
+            dst._vmm_check_syncing = True
             try:
                 if src.get_active() != dst.get_active():
                     src.set_active(dst.get_active())
             except Exception:
                 pass
+            dst._vmm_check_syncing = False
 
         btn.connect("toggled", _on_toggle)
         try:
@@ -602,8 +626,8 @@ def expose_a11y_check(key, name, widget, window=None):
     return btn
 
 
-def expose_a11y_button(key, name, callback, window=None, role=None):
-    box = _a11y_sidecar_box(window)
+def expose_a11y_button(key, name, callback, window=None, role=None, parent=None):
+    box = parent if parent is not None else _a11y_sidecar_box(window)
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
         btn = Gtk.Button(label=name)
@@ -619,6 +643,163 @@ def expose_a11y_button(key, name, callback, window=None, role=None):
     set_accessible_name(btn, name)
     btn.set_visible(True)
     return btn
+
+
+def expose_a11y_spin(key, name, spin, window=None, parent=None):
+    """Mirror a SpinButton so tab.find(..., 'spin button') can edit it."""
+    box = parent if parent is not None else _a11y_sidecar_box(window)
+    ent = _A11Y_SIDECAR["items"].get(key)
+    if ent is None:
+        ent = Gtk.Entry()
+        try:
+            ent.set_accessible_role(Gtk.AccessibleRole.SPIN_BUTTON)
+        except Exception:
+            pass
+        box.append(ent)
+        _A11Y_SIDECAR["items"][key] = ent
+
+        def _from_src(*_a, src=spin, dst=ent):
+            if getattr(dst, "_vmm_spin_syncing", False):
+                return False
+            dst._vmm_spin_syncing = True
+            try:
+                dst.set_text(str(int(src.get_value())))
+            except Exception:
+                try:
+                    dst.set_text(str(src.get_value()))
+                except Exception:
+                    pass
+            dst._vmm_spin_syncing = False
+            return False
+
+        def _to_src(*_a, src=spin, dst=ent):
+            if getattr(dst, "_vmm_spin_syncing", False):
+                return
+            dst._vmm_spin_syncing = True
+            try:
+                src.set_value(float(dst.get_text() or 0))
+            except Exception:
+                pass
+            dst._vmm_spin_syncing = False
+
+        ent.connect("changed", _to_src)
+        try:
+            spin.connect("value-changed", _from_src)
+        except Exception:
+            pass
+        _from_src()
+    set_accessible_name(ent, name)
+    ent.set_visible(True)
+    return ent
+
+
+def expose_a11y_combo(key, name, combo, window=None, parent=None):
+    """
+    Mirror a ComboBox as a combo-box node whose children are the model
+    rows, so combo_select() can find and click them inside a notebook tab.
+    """
+    box = parent if parent is not None else _a11y_sidecar_box(window)
+    wrap = _A11Y_SIDECAR["items"].get(key)
+    if wrap is None:
+        wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        try:
+            wrap.set_accessible_role(Gtk.AccessibleRole.COMBO_BOX)
+        except Exception:
+            pass
+        box.append(wrap)
+        _A11Y_SIDECAR["items"][key] = wrap
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        wrap.append(inner)
+        wrap._vmm_combo_inner = inner
+        wrap._vmm_combo_src = combo
+
+        def _text_col(model):
+            if model is None:
+                return 0
+            last_str = 0
+            try:
+                n = model.get_n_columns()
+            except Exception:
+                return 0
+            for i in range(n):
+                try:
+                    if "gchararray" in str(model.get_column_type(i)):
+                        last_str = i
+                except Exception:
+                    continue
+            return last_str
+
+        def _fill(*_a, src=combo, dst=wrap):
+            if getattr(dst, "_vmm_combo_filling", False):
+                return False
+            dst._vmm_combo_filling = True
+            try:
+                inner_box = getattr(dst, "_vmm_combo_inner", None)
+                if inner_box is None:
+                    return False
+                child = inner_box.get_first_child()
+                while child is not None:
+                    nxt = child.get_next_sibling()
+                    try:
+                        inner_box.remove(child)
+                    except Exception:
+                        pass
+                    child = nxt
+                model = src.get_model()
+                col = _text_col(model)
+                idx = 0
+                try:
+                    it = model.get_iter_first() if model is not None else None
+                except Exception:
+                    it = None
+                while it is not None:
+                    try:
+                        label = str(model[it][col] or "")
+                    except Exception:
+                        label = ""
+                    item = Gtk.Button(label=label, has_frame=False)
+                    try:
+                        item.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
+                    except Exception:
+                        pass
+                    set_accessible_name(item, label)
+                    ensure_activate_clicked(item)
+
+                    def _choose(_it, row=idx, c=src):
+                        try:
+                            c.set_active(row)
+                        except Exception:
+                            pass
+
+                    item.connect("clicked", _choose)
+                    inner_box.append(item)
+                    idx += 1
+                    try:
+                        it = model.iter_next(it)
+                    except Exception:
+                        break
+                return False
+            finally:
+                dst._vmm_combo_filling = False
+
+        wrap._vmm_combo_fill = _fill
+        try:
+            combo.connect("notify::model", _fill)
+            combo.connect("changed", _fill)
+        except Exception:
+            pass
+        _fill()
+        try:
+            wrap.install_action("click", None, lambda *_a: _fill())
+        except Exception:
+            pass
+    set_accessible_name(wrap, name)
+    try:
+        set_accessible_name(combo, name)
+    except Exception:
+        pass
+    wrap.set_visible(True)
+    return wrap
 
 
 def sync_sidecar_visible(key, visible):
@@ -1049,11 +1230,20 @@ def attach_notebook_a11y(notebook):
         if mapped:
             return mapped
         try:
-            text = notebook.get_tab_label_text(child)
-            if text:
-                return _mnemonic_label(text)
+            text = _mnemonic_label(notebook.get_tab_label_text(child) or "")
         except Exception:
-            pass
+            text = ""
+        tab_pages = {
+            "General": "general-tab",
+            "Polling": "polling-tab",
+            "New VM": "newvm-tab",
+            "Console": "console-tab",
+            "Feedback": "feedback-tab",
+        }
+        if text in tab_pages:
+            return tab_pages[text]
+        if text:
+            return text
         return bid or ("page-%s" % idx)
 
     def _box():
@@ -1074,7 +1264,11 @@ def attach_notebook_a11y(notebook):
 
     def _rebuild(*_a):
         box = _box()
+        page_map = getattr(notebook, "_vmm_nb_page_map", {}) or {}
+        keep = set(page_map.values())
         for old in list(getattr(notebook, "_vmm_nb_widgets", []) or []):
+            if old in keep:
+                continue
             try:
                 parent = old.get_parent()
                 if parent is not None:
@@ -1110,15 +1304,25 @@ def attach_notebook_a11y(notebook):
             tab.connect("clicked", lambda _b, idx=i: notebook.set_current_page(idx))
             box.append(tab)
             widgets.append(tab)
-            sidecar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            try:
-                sidecar.set_accessible_role(Gtk.AccessibleRole.PANEL)
-            except Exception:
-                pass
+            sidecar = page_map.get(pname)
+            if sidecar is None:
+                sidecar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+                try:
+                    sidecar.set_accessible_role(Gtk.AccessibleRole.TAB_PANEL)
+                except Exception:
+                    try:
+                        sidecar.set_accessible_role(Gtk.AccessibleRole.GROUP)
+                    except Exception:
+                        pass
+                page_map[pname] = sidecar
+            if sidecar.get_parent() is not None and sidecar.get_parent() is not box:
+                sidecar.unparent()
+            if sidecar.get_parent() is None:
+                box.append(sidecar)
             _sync_page_visible(sidecar, pname, i == current)
-            box.append(sidecar)
             widgets.append(sidecar)
             pages.append((tab, sidecar, pname))
+        notebook._vmm_nb_page_map = page_map
         notebook._vmm_nb_widgets = widgets
         return False
 
@@ -1128,8 +1332,50 @@ def attach_notebook_a11y(notebook):
         return False
 
     notebook.connect("switch-page", _on_switch)
-    GLib.idle_add(_rebuild)
+    _rebuild()
     notebook.connect("map", lambda *_a: GLib.idle_add(_rebuild))
+
+
+def notebook_page_box(notebook, page_name):
+    """Return the AT-SPI sidecar for a notebook page, creating it if needed."""
+    attach_notebook_a11y(notebook)
+    page_map = getattr(notebook, "_vmm_nb_page_map", None) or {}
+    box = page_map.get(page_name)
+    if box is not None:
+        return box
+    try:
+        n = notebook.get_n_pages()
+    except Exception:
+        n = 0
+    for i in range(n):
+        page = notebook.get_nth_page(i)
+        if page is None:
+            continue
+        bid = ""
+        if hasattr(page, "get_buildable_id"):
+            try:
+                bid = page.get_buildable_id() or ""
+            except Exception:
+                bid = ""
+        mapped = _BUILDER_A11Y_NAMES.get(bid)
+        if mapped == page_name or bid == page_name:
+            sidecar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            try:
+                sidecar.set_accessible_role(Gtk.AccessibleRole.TAB_PANEL)
+            except Exception:
+                pass
+            set_accessible_name(sidecar, page_name)
+            root = None
+            try:
+                root = notebook.get_root()
+            except Exception:
+                root = None
+            window = root if isinstance(root, Gtk.Window) else None
+            _a11y_sidecar_box(window).append(sidecar)
+            page_map[page_name] = sidecar
+            notebook._vmm_nb_page_map = page_map
+            return sidecar
+    return None
 
 
 def attach_combobox_a11y(combo):
@@ -1750,6 +1996,35 @@ class MenuItem(Gtk.Button):
             self._label_widget.set_text_with_mnemonic(self.label)
             self._sync_accessible_label()
 
+    def _item_in_menubar(self):
+        cur = self
+        seen = set()
+        for _ in range(12):
+            if cur is None:
+                return False
+            ident = id(cur)
+            if ident in seen:
+                break
+            seen.add(ident)
+            if isinstance(cur, MenuBar):
+                return True
+            nxt = None
+            if hasattr(cur, "get_parent"):
+                try:
+                    nxt = cur.get_parent()
+                except Exception:
+                    nxt = None
+            if nxt is None:
+                menu = getattr(cur, "_vmm_menu", None)
+                if menu is not None and id(menu) not in seen:
+                    nxt = getattr(menu, "_parent_widget", None)
+            if nxt is None and getattr(cur, "_submenu", None) is not None:
+                # Walk through this item's parent menu, not its submenu.
+                menu = getattr(cur, "_vmm_menu", None)
+                nxt = getattr(menu, "_parent_widget", None) if menu else None
+            cur = nxt
+        return False
+
     def _on_clicked(self, *_args):
         self._set_selected(True)
         if self._submenu:
@@ -1770,7 +2045,9 @@ class MenuItem(Gtk.Button):
             finally:
                 self._vmm_activate_queued = False
                 menu = getattr(self, "_vmm_menu", None)
-                while menu is not None:
+                seen = set()
+                while menu is not None and id(menu) not in seen:
+                    seen.add(id(menu))
                     try:
                         menu.popdown()
                     except Exception:
@@ -1782,26 +2059,7 @@ class MenuItem(Gtk.Button):
         # Menubar overlay items must activate now so Preferences/New VM
         # exist before the next dogtail find. Context-menu actions that
         # raise modal confirms stay idle so AT-SPI click can return.
-        in_menubar = False
-        cur = self
-        for _ in range(8):
-            if cur is None:
-                break
-            if isinstance(cur, MenuBar):
-                in_menubar = True
-                break
-            menu = getattr(cur, "_vmm_menu", None)
-            if menu is not None:
-                cur = getattr(menu, "_parent_widget", None) or menu
-                continue
-            if hasattr(cur, "get_parent"):
-                try:
-                    cur = cur.get_parent()
-                except Exception:
-                    break
-            else:
-                break
-        if in_menubar:
+        if self._item_in_menubar():
             _activate()
         else:
             GLib.idle_add(_activate)
