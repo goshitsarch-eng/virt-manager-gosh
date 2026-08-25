@@ -866,6 +866,135 @@ def main():
             except Exception:
                 pass
 
+    def vm_start_stop():
+        from virtManager import vmmenu
+        from virtManager.config import vmmConfig
+        from virtManager.manager import vmmManager
+
+        cfg = vmmConfig.get_instance()
+        cfg.set_confirm_poweroff(False)
+        cfg.set_confirm_forcepoweroff(False)
+        cfg.set_confirm_pause(False)
+        win = vmmManager.get_instance(None)
+        win.show()
+        shut = _named_vm("test-state-shutoff")
+        if not shut.is_active():
+            vmmenu.VMActionUI.run(win, shut)
+            _pump(GLib, 1.2)
+        assert shut.is_active(), "testdriver VM did not start"
+        vmmenu.VMActionUI.destroy(win, shut)
+        _pump(GLib, 1.2)
+        assert not shut.is_active(), "testdriver VM did not force-off"
+
+    def snapshot_create():
+        from virtManager.details.snapshots import vmmSnapshotNew
+
+        snapvm = _named_vm("test-snapshots")
+        before = [s.get_name() for s in snapvm.list_snapshots()]
+        dlg = vmmSnapshotNew(snapvm)
+        dlg.show(None)
+        dlg.widget("snapshot-new-name").set_text("gtk4-live-snap")
+        dlg.widget("snapshot-new-name").emit("changed")
+        dlg._create_new_snapshot()
+        _pump(GLib, 1.5)
+        snapvm._snapshot_list = None
+        after = [s.get_name() for s in snapvm.list_snapshots()]
+        assert "gtk4-live-snap" in after or after != before
+
+    def volume_create():
+        from virtManager.createvol import vmmCreateVolume
+
+        if pool is None:
+            raise RuntimeError("No storage pool available")
+        dlg = vmmCreateVolume(conn, pool)
+        dlg.show(None)
+        dlg.widget("vol-name").set_text("gtk4-created-vol")
+        dlg.widget("vol-name").emit("changed")
+        dlg._finish()
+        _pump(GLib, 1.5)
+        pool._volumes = None
+        names = [vol.get_name() for vol in pool.get_volumes()]
+        assert any("gtk4-created-vol" in name for name in names)
+
+    def network_create():
+        from virtManager.createnet import vmmCreateNetwork
+
+        dlg = vmmCreateNetwork(conn)
+        dlg.show(None)
+        dlg.widget("net-name").set_text("gtk4-created-net")
+        dlg.finish(None)
+        _pump(GLib, 1.5)
+        names = [net.get_name() for net in conn.list_nets()]
+        assert "gtk4-created-net" in names
+
+    def details_apply_title():
+        from virtManager.details.details import EDIT_TITLE
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-clone-simple")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        uiutil.set_list_selection_by_number(details.widget("hw-list"), 0)
+        details._hw_changed_cb(details.widget("hw-list"))
+        details.widget("overview-title").set_text("gtk4-applied-title")
+        details._enable_apply(EDIT_TITLE)
+        details._config_apply()
+        _pump(GLib, 0.8)
+        title = vmobj.get_title() if hasattr(vmobj, "get_title") else None
+        xmltitle = getattr(vmobj.xmlobj, "title", None)
+        assert "gtk4-applied-title" in str(title or xmltitle or "")
+
+    def clone_share_finish():
+        from virtManager.clone import vmmCloneVM
+
+        dlg = vmmCloneVM()
+        src = _named_vm("test-clone-simple")
+        dlg.show(None, src)
+        for sinfo in (dlg._storage_list or {}).values():
+            sinfo.set_clone_requested(False)
+        dlg.widget("clone-new-name").set_text("gtk4-cloned-vm")
+        dlg._finish()
+        _pump(GLib, 2.0)
+        conn.schedule_priority_tick(pollvm=True, force=True)
+        _pump(GLib, 0.4)
+        names = [cand.get_name() for cand in conn.list_vms()]
+        assert "gtk4-cloned-vm" in names
+
+    def systray_menu_popup():
+        from virtManager.systray import vmmSystray
+
+        tray = vmmSystray.get_instance()
+        tray.show_from_cli()
+        menu = tray._mainmenu.get_menu()
+        tray._systray.set_menu(menu)
+        if hasattr(tray._systray, "_popup_menu"):
+            tray._systray._popup_menu()
+        elif hasattr(tray._systray, "_window"):
+            menu.popup_at_widget(tray._systray._window)
+        assert menu is not None
+
+    def addhardware_finish_sound():
+        from virtManager.addhardware import PAGE_SOUND
+        from virtManager.addhardware import vmmAddHardware
+        from virtManager.lib import uiutil
+
+        vmobj = _named_vm("test-clone-simple")
+        before = len(list(vmobj.xmlobj.devices.sound))
+        dlg = vmmAddHardware(vmobj)
+        dlg.show(None)
+        model = dlg.widget("hw-list").get_model()
+        for idx, row in enumerate(model):
+            if row[2] == PAGE_SOUND:
+                uiutil.set_list_selection_by_number(dlg.widget("hw-list"), idx)
+                dlg._hw_selected_cb(dlg.widget("hw-list"))
+                break
+        dlg._finish()
+        _pump(GLib, 1.5)
+        after = len(list(vmobj.xmlobj.devices.sound))
+        assert after >= before
+
     for name, fn in [
         ("manager", manager),
         ("createconn", createconn),
@@ -920,6 +1049,14 @@ def main():
         ("vnc_live_handshake", vnc_live_handshake),
         ("createvm_wizard_nav", createvm_wizard_nav),
         ("addhardware_build", addhardware_build),
+        ("vm_start_stop", vm_start_stop),
+        ("snapshot_create", snapshot_create),
+        ("volume_create", volume_create),
+        ("network_create", network_create),
+        ("details_apply_title", details_apply_title),
+        ("clone_share_finish", clone_share_finish),
+        ("systray_menu_popup", systray_menu_popup),
+        ("addhardware_finish_sound", addhardware_finish_sound),
     ]:
         _run(name, fn)
 

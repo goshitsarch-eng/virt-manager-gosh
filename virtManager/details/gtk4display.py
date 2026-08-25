@@ -237,6 +237,7 @@ class VNCDisplay(_DisplayBase):
         self._stop = False
         self._auth_event = threading.Event()
         self._pixels = bytearray()
+        self._zdec = None
 
     def set_credential(self, cred, value):
         if cred == 0 or str(cred).endswith("PASSWORD"):
@@ -376,6 +377,7 @@ class VNCDisplay(_DisplayBase):
         )
         # SetEncodings: nEncodings is U16. Advertise common QEMU encodings.
         encodings = (
+            6,  # zlib
             5,  # hextile
             2,  # RRE
             1,  # CopyRect
@@ -472,6 +474,15 @@ class VNCDisplay(_DisplayBase):
                     sh = (wh & 0xF) + 1
                     self._fill_rect(width, sx, sy, sw, sh, pix)
 
+    def _read_zlib(self, sock, width, x, y, w, h):
+        import zlib
+
+        n = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        if self._zdec is None:
+            self._zdec = zlib.decompressobj()
+        raw = self._zdec.decompress(self._recv_n(sock, n))
+        self._blit_raw(width, x, y, w, h, raw)
+
     def _read_rre(self, sock, width, x, y, w, h):
         nsub = struct.unpack("!I", self._recv_n(sock, 4))[0]
         bg = self._recv_n(sock, 4)
@@ -508,6 +519,8 @@ class VNCDisplay(_DisplayBase):
                 self._read_rre(sock, width, x, y, w, h)
             elif enc == 5:
                 self._read_hextile(sock, width, x, y, w, h)
+            elif enc == 6:
+                self._read_zlib(sock, width, x, y, w, h)
             else:
                 raise RuntimeError("Unsupported VNC encoding %s" % enc)
         self._publish_fb(width, height)
