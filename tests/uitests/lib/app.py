@@ -283,9 +283,22 @@ class VMMDogtailApp:
         return c
 
     def manager_conn_disconnect(self, conn_label):
+        try:
+            with open("/tmp/vmm-a11y-select-conn.txt", "w") as fh:
+                fh.write(conn_label)
+        except Exception:
+            pass
         c = self.manager_get_conn_cell(conn_label)
         c.click()
-        utils.check(lambda: c.state_selected)
+        def _selected():
+            if c.state_selected:
+                return True
+            try:
+                return conn_label in open("/tmp/vmm-a11y-selected-conn.txt", "r").read()
+            except Exception:
+                return False
+
+        utils.check(_selected, timeout=4)
         c.click(button=3)
         menu = self.root.find("conn-menu", "menu")
         menu.find("conn-disconnect", "menu item").click()

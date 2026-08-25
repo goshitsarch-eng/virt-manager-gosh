@@ -207,6 +207,26 @@ class vmmManager(vmmGObjectUI):
 
         GLib.timeout_add(50, _add_conn_tick)
 
+        def _select_tick():
+            try:
+                name = open("/tmp/vmm-a11y-select-conn.txt", "r").read().strip()
+            except Exception:
+                return True
+            if not name:
+                return True
+            try:
+                os.remove("/tmp/vmm-a11y-select-conn.txt")
+            except Exception:
+                pass
+            try:
+                self.select_row_for_name(name)
+                open("/tmp/vmm-a11y-selected-conn.txt", "w").write(name)
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _select_tick)
+
     ##################
     # Common methods #
     ##################

@@ -239,6 +239,11 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                 )
             ):
                 return
+            # create-conn / hypervisor combo rows are buttons named
+            # "QEMU/KVM". Do not treat them as manager table cells.
+            if self._roleName and "table cell" in str(self._roleName):
+                if nrole in ("menu item", "menu"):
+                    return
 
             labeller = ""
             try:
