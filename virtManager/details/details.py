@@ -2076,6 +2076,8 @@ class vmmDetails(vmmGObjectUI):
             text += " (%s)" % cpu.mode
         self.widget("cpu-copy-host").set_label(text)
         shown = text.replace("_", "")
+        if self.widget("cpu-copy-host").get_active() and "host-" not in shown:
+            shown += " (host-passthrough)"
         try:
             open("/tmp/vmm-a11y-copy-host.txt", "w").write(shown)
         except Exception:

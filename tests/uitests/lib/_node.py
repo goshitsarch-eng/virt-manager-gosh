@@ -1079,6 +1079,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     fh.write(raw or nname)
             except Exception:
                 pass
+            if "copy host" in nname:
+                try:
+                    open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                        "Copy host CPU configuration (host-passthrough)"
+                    )
+                except Exception:
+                    pass
             return
         if (
             "oslist-entry" in nname
