@@ -175,7 +175,13 @@ class vmmErrorDialog(vmmGObject):
         self._simple = dialog
 
         return _launch_dialog(
-            self._simple, text1, text2 or "", title or "", widget=widget, modal=modal
+            self._simple,
+            text1,
+            text2 or "",
+            title or "",
+            widget=widget,
+            modal=modal,
+            clone_a11y=True,
         )
 
     def val_err(self, text1, text2=None, title=_("Input Error"), modal=True):

@@ -1360,6 +1360,12 @@ def present_a11y_alert(primary, buttons):
                     call()
             finally:
                 try:
+                    app2 = Gtk.Application.get_default()
+                    if app2 is not None:
+                        app2.remove_window(w)
+                except Exception:
+                    pass
+                try:
                     w.close()
                 except Exception:
                     pass
