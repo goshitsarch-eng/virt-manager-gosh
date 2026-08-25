@@ -62,14 +62,7 @@ def _virt_manager_app():
     return None
 
 
-def _node_walk_key(node):
-    try:
-        return (node.roleName, node.name or "", tuple(node.position), tuple(node.size))
-    except Exception:
-        return id(node)
-
-
-def _walk_find(node, pred, recursive=True, _seen=None, _budget=None):
+def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
     """
     Live AT-SPI walk. dogtail findChild uses a cache that often misses
     GTK 4 windows and freshly mapped labels.
@@ -81,7 +74,8 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None):
     if _budget[0] <= 0:
         return None
     _budget[0] -= 1
-    key = _node_walk_key(node)
+    # Index path, not geometry: many GTK 4 panels share 0x0 and were skipped.
+    key = _path
     if key in _seen:
         return None
     _seen.add(key)
@@ -113,7 +107,7 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None):
         kids.sort(key=_walk_prio)
     except Exception:
         pass
-    for child in kids:
+    for idx, child in enumerate(kids):
         if recursive:
             try:
                 closed_menu = child.roleName == "menu" and (child.name or "").startswith(".")
@@ -126,7 +120,8 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None):
                 except Exception:
                     pass
                 continue
-            ret = _walk_find(child, pred, True, _seen, _budget)
+            child_path = _path + (idx, getattr(child, "roleName", ""), getattr(child, "name", "") or "")
+            ret = _walk_find(child, pred, True, _seen, _budget, child_path)
         else:
             try:
                 ret = child if pred.satisfiedByNode(child) else None
