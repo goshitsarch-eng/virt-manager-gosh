@@ -208,7 +208,11 @@ def set_accessible_name(widget, name):
 
 
 def _mark_toplevel_hidden(window, hidden):
-    """AT-SPI often keeps STATE_VISIBLE after Gtk.Window.hide()."""
+    """AT-SPI often keeps STATE_VISIBLE after Gtk.Window.hide().
+
+    GTK 4 windows expose the window title as the AT-SPI name, so LABEL
+    updates are not enough. Also suffix the title.
+    """
     if window is None:
         return
     try:
@@ -219,10 +223,21 @@ def _mark_toplevel_hidden(window, hidden):
         name = window.get_accessible_name() or title
     except Exception:
         name = title
-    base = name.replace(" (hidden)", "").replace("(hidden)", "").strip() or title
+    base = (
+        (title or name)
+        .replace(" (hidden)", "")
+        .replace("(hidden)", "")
+        .strip()
+    )
     if not base:
         return
-    set_accessible_name(window, (base + " (hidden)") if hidden else base)
+    shown = (base + " (hidden)") if hidden else base
+    try:
+        if window.get_title() != shown:
+            window.set_title(shown)
+    except Exception:
+        pass
+    set_accessible_name(window, shown)
 
 
 def _ensure_toplevel_hidden_sync(window):

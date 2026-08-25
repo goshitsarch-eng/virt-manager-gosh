@@ -717,9 +717,67 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     return None
             return None
 
-        def _find_local(name, roleName):
+        def _find_local_all(name, roleName):
             pred = _FuzzyPredicate(name, _alias_role(roleName))
-            return _walk_find(self, pred, True)
+            found = []
+            seen = set()
+            budget = [2500]
+
+            def _walk(node, path=()):
+                if budget[0] <= 0 or path in seen:
+                    return
+                seen.add(path)
+                budget[0] -= 1
+                try:
+                    if pred.satisfiedByNode(node):
+                        found.append(node)
+                except Exception:
+                    pass
+                try:
+                    kids = list(node.children)
+                except Exception:
+                    return
+                for idx, child in enumerate(kids):
+                    try:
+                        role = child.roleName or ""
+                        cname = child.name or ""
+                    except Exception:
+                        continue
+                    if child is not self and role in _WINDOW_ROLES:
+                        continue
+                    if "(hidden)" in cname:
+                        continue
+                    _walk(
+                        child,
+                        path + (idx, role, cname),
+                    )
+
+            _walk(self)
+            return found
+
+        for name in ("Cancel", "Close"):
+            for btn in _find_local_all(name, "push button"):
+                owner = _owning_window(btn)
+                if owner is not None and owner is not self:
+                    continue
+                try:
+                    if btn.sensitive:
+                        btn.click()
+                        utils.check(_closed, timeout=1)
+                        return
+                except Exception:
+                    continue
+
+        for item in _find_local_all("Close", "menu item"):
+            owner = _owning_window(item)
+            if owner is not None and owner is not self:
+                continue
+            try:
+                item.click()
+                utils.check(_closed, timeout=1)
+                return
+            except Exception:
+                continue
 
         try:
             self.doActionNamed("close")
@@ -727,32 +785,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return
         except Exception:
             pass
-
-        for name in ("Cancel", "Close"):
-            btn = _find_local(name, "push button")
-            if btn is None:
-                continue
-            owner = _owning_window(btn)
-            if owner is not None and owner is not self:
-                continue
-            try:
-                if btn.sensitive:
-                    btn.click()
-                    utils.check(_closed, timeout=1)
-                    return
-            except Exception:
-                continue
-
-        item = _find_local("Close", "menu item")
-        if item is not None:
-            owner = _owning_window(item)
-            if owner is None or owner is self:
-                try:
-                    item.click()
-                    utils.check(_closed, timeout=1)
-                    return
-                except Exception:
-                    pass
 
         try:
             self.grab_focus()
