@@ -1291,6 +1291,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 strs.append("got exception: %s" % e)
 
         self.findChildren(_walk, isLambda=True)
+        try:
+            name = self.name or ""
+            if "media-combo" in name or "create-conn" in name:
+                extra = open("/tmp/vmm-a11y-combo-%s.txt" % name, "r").read()
+                if extra.strip():
+                    strs.append(extra)
+        except Exception:
+            pass
         return "\n".join(strs)
 
     def print_nodes(self):
