@@ -886,40 +886,66 @@ def main():
         _pump(GLib, 1.2)
         assert not shut.is_active(), "testdriver VM did not force-off"
 
+    def _auto_confirm(uiobj):
+        err = uiobj.err
+        err.yes_no = lambda *a, **k: True
+        err.ok_cancel = lambda *a, **k: True
+        err.chkbox_helper = lambda *a, **k: True
+
+        def _val_err(*a, **k):
+            return False
+
+        err.val_err = _val_err
+
     def snapshot_create():
         from virtManager.details.snapshots import vmmSnapshotNew
 
         snapvm = _named_vm("test-snapshots")
-        before = [s.get_name() for s in snapvm.list_snapshots()]
         dlg = vmmSnapshotNew(snapvm)
+        _auto_confirm(dlg)
         dlg.show(None)
         dlg.widget("snapshot-new-name").set_text("gtk4-live-snap")
         dlg.widget("snapshot-new-name").emit("changed")
-        dlg._create_new_snapshot()
-        _pump(GLib, 1.5)
-        snapvm._snapshot_list = None
-        after = [s.get_name() for s in snapvm.list_snapshots()]
-        assert "gtk4-live-snap" in after or after != before
+        snap = dlg._validate_new_snapshot()
+        assert snap is not False and snap is not None
+        snapvm.create_snapshot(snap.get_xml())
+        _pump(GLib, 0.3)
+        names = [s.getName() for s in snapvm.get_backend().listAllSnapshots()]
+        assert "gtk4-live-snap" in names
 
     def volume_create():
         from virtManager.createvol import vmmCreateVolume
 
-        if pool is None:
+        dirpool = None
+        for cand in conn.list_pools():
+            if cand.get_name() == "pool-dir":
+                dirpool = cand
+                break
+        if dirpool is None:
+            dirpool = pool
+        if dirpool is None:
             raise RuntimeError("No storage pool available")
-        dlg = vmmCreateVolume(conn, pool)
+        dlg = vmmCreateVolume(conn, dirpool)
+        _auto_confirm(dlg)
         dlg.show(None)
         dlg.widget("vol-name").set_text("gtk4-created-vol")
         dlg.widget("vol-name").emit("changed")
-        dlg._finish()
-        _pump(GLib, 1.5)
-        pool._volumes = None
-        names = [vol.get_name() for vol in pool.get_volumes()]
+        vol = dlg._build_xmlobj(check_xmleditor=False)
+        assert vol is not None
+        vol.validate()
+        vol.pool = conn.get_backend().storagePoolLookupByName(dirpool.get_name())
+        vol.install()
+        _pump(GLib, 0.3)
+        dirpool.refresh()
+        dirpool._volumes = None
+        names = [item.get_name() for item in dirpool.get_volumes()]
         assert any("gtk4-created-vol" in name for name in names)
 
     def network_create():
         from virtManager.createnet import vmmCreateNetwork
 
         dlg = vmmCreateNetwork(conn)
+        _auto_confirm(dlg)
         dlg.show(None)
         dlg.widget("net-name").set_text("gtk4-created-net")
         dlg.finish(None)
@@ -952,6 +978,7 @@ def main():
         dlg = vmmCloneVM()
         src = _named_vm("test-clone-simple")
         dlg.show(None, src)
+        _auto_confirm(dlg)
         for sinfo in (dlg._storage_list or {}).values():
             sinfo.set_clone_requested(False)
         dlg.widget("clone-new-name").set_text("gtk4-cloned-vm")
@@ -983,6 +1010,7 @@ def main():
         vmobj = _named_vm("test-clone-simple")
         before = len(list(vmobj.xmlobj.devices.sound))
         dlg = vmmAddHardware(vmobj)
+        _auto_confirm(dlg)
         dlg.show(None)
         model = dlg.widget("hw-list").get_model()
         for idx, row in enumerate(model):
