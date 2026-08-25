@@ -69,10 +69,7 @@ def _walk_find(node, pred, recursive=True, _seen=None):
     """
     if _seen is None:
         _seen = set()
-    try:
-        key = node.id
-    except Exception:
-        key = id(node)
+    key = id(node)
     if key in _seen:
         return None
     _seen.add(key)
