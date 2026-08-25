@@ -661,6 +661,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "Start virtual machine",
                     "Copy host",
                     "Removable",
+                    "Customize",
                 )
             ):
                 return True

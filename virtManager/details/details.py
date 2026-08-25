@@ -1967,6 +1967,12 @@ class vmmDetails(vmmGObjectUI):
         if is_host:
             text += " (%s)" % cpu.mode
         self.widget("cpu-copy-host").set_label(text)
+        try:
+            sidecar = gtkcompat._A11Y_SIDECAR["items"].get("cpu-copy-host")
+            if sidecar is not None:
+                gtkcompat.set_accessible_name(sidecar, text.replace("_", ""))
+        except Exception:
+            pass
         self._cpu_copy_host_clicked_cb(self.widget("cpu-copy-host"))
 
         if not self._cpu_secure_is_available():

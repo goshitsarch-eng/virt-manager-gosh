@@ -1317,6 +1317,27 @@ def publish_media_combo_rows(createvm, box=None):
             break
 
 
+def _append_createvm_customize_check(box, createvm):
+    if box is None or createvm is None or getattr(box, "_vmm_customize_check", False):
+        return
+    try:
+        src = createvm.widget("summary-customize")
+    except Exception:
+        src = None
+    if src is None:
+        return
+    box._vmm_customize_check = True
+    try:
+        expose_a11y_check(
+            "summary-customize",
+            "Customize configuration before install",
+            src,
+            parent=box,
+        )
+    except Exception:
+        pass
+
+
 def _append_createvm_resource_spins(box, createvm):
     """Findable cpus/mem spins on the New VM methods window."""
     if box is None or createvm is None or getattr(box, "_vmm_resource_spins", False):
@@ -1494,6 +1515,7 @@ def expose_createvm_methods_window(createvm):
                 _append_createvm_status_labels(child, createvm)
                 _append_createvm_media_controls(child, createvm)
                 _append_createvm_resource_spins(child, createvm)
+                _append_createvm_customize_check(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:
                 pass
@@ -1574,6 +1596,7 @@ def expose_createvm_methods_window(createvm):
     _append_createvm_status_labels(box, createvm)
     _append_createvm_media_controls(box, createvm)
     _append_createvm_resource_spins(box, createvm)
+    _append_createvm_customize_check(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
     win.set_visible(True)

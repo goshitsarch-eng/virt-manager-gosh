@@ -604,6 +604,12 @@ class vmmCreateVM(vmmGObjectUI):
             gtkcompat.expose_a11y_spin(
                 "mem", "Memory:", self.widget("mem"), window=self.topwin
             )
+            gtkcompat.expose_a11y_check(
+                "summary-customize",
+                "Customize configuration before install",
+                self.widget("summary-customize"),
+                window=self.topwin,
+            )
         except Exception:
             pass
 
@@ -1917,6 +1923,10 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("mem").set_value(ram_size)
 
         self.widget("cpus").set_value(n_cpus or 1)
+        try:
+            open("/tmp/vmm-a11y-spin-cpus.txt", "w").write(str(int(n_cpus or 1)))
+        except Exception:
+            pass
 
         if storage:
             storage_size = storage // (1024**3)
