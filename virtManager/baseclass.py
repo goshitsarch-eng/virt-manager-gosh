@@ -391,6 +391,7 @@ class vmmGObjectUI(vmmGObject):
             except Exception:
                 pass
             _sync_title()
+            self.bind_escape_key_close()
 
         self._err = None
 
@@ -430,15 +431,27 @@ class vmmGObjectUI(vmmGObject):
         raise NotImplementedError("_cleanup must be implemented in subclass")
 
     def close(self, ignore1=None, ignore2=None):
-        pass
+        if self.topwin is not None:
+            self.topwin.hide()
 
     def is_visible(self):
         return bool(self.topwin and self.topwin.get_visible())
 
     def bind_escape_key_close(self):
-        def close_on_escape(_controller, keyval, _keycode, _state):
-            if Gdk.keyval_name(keyval) == "Escape":
+        if getattr(self, "_vmm_escape_bound", False) or self.topwin is None:
+            return
+        self._vmm_escape_bound = True
+
+        def close_on_escape(_controller, keyval, _keycode, state):
+            name = Gdk.keyval_name(keyval) or ""
+            if name == "Escape":
                 self.close()
+                return True
+            # Xvfb has no window manager, so Alt+F4 must be handled here.
+            alt = bool(state & Gdk.ModifierType.ALT_MASK)
+            if name == "F4" and alt:
+                self.close()
+                return True
             return False
 
         controller = Gtk.EventControllerKey()

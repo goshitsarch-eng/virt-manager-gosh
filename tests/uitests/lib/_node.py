@@ -610,8 +610,27 @@ class _VMMDogtailNode(dogtail.tree.Node):
             self.grab_focus()
         except Exception:
             pass
-        self.keyCombo("<alt>F4")
-        utils.check(lambda: not self.showing)
+        try:
+            self.keyCombo("<alt>F4")
+        except Exception:
+            pass
+
+        def _closed():
+            try:
+                return not bool(self.showing or self.visible)
+            except Exception:
+                return True
+
+        try:
+            utils.check(_closed, timeout=1)
+            return
+        except RuntimeError:
+            pass
+        try:
+            self.keyCombo("Escape")
+        except Exception:
+            pass
+        utils.check(_closed)
 
     def window_find_focusable_child(self):
         return self.find(None, focusable=True)

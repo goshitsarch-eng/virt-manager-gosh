@@ -256,6 +256,9 @@ class vmmCreateVM(vmmGObjectUI):
 
         self.topwin.present()
 
+    def close(self, ignore1=None, ignore2=None):
+        return self._close(ignore1, ignore2)
+
     def _close(self, ignore1=None, ignore2=None):
         if self.is_visible():
             log.debug("Closing new vm wizard")
