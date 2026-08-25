@@ -2151,6 +2151,10 @@ class vmmCreateVM(vmmGObjectUI):
             self._os_list.reset_state()
             self._os_list.search_entry.set_text(_("None detected"))
             try:
+                os.remove("/tmp/vmm-a11y-oslist-popover-hidden")
+            except Exception:
+                pass
+            try:
                 open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("None detected"))
             except Exception:
                 pass

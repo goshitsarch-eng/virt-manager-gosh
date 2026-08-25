@@ -169,7 +169,20 @@ class vmmOSList(vmmGObjectUI):
         except Exception:
             hidden = False
         if hidden and not confirmed:
-            label = ""
+            typed = ""
+            try:
+                typed = self.search_entry.get_text() or ""
+            except Exception:
+                typed = ""
+            special = (
+                _("None detected"),
+                _("Detecting..."),
+                _("Waiting for install media / source"),
+            )
+            if typed in special:
+                label = typed
+            else:
+                label = ""
         elif not label:
             try:
                 label = self.search_entry.get_text() or ""
