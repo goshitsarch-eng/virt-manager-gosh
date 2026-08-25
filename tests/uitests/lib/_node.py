@@ -541,6 +541,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = self.name or ""
             if name.startswith(".") or name.endswith(" (hidden)"):
                 return False
+            # Sidecar entries live on opacity-0 / 0x0 surfaces.
+            if any(
+                key in name
+                for key in (
+                    "media-entry",
+                    "media-combo",
+                    "uri-entry",
+                    "storage-entry",
+                    "oslist-entry",
+                    "create-conn",
+                )
+            ):
+                return True
         except Exception:
             pass
         try:
