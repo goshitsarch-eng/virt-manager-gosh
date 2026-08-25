@@ -480,6 +480,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     return stored.strip()
             except Exception:
                 pass
+        if "pagenum-label" in name:
+            try:
+                stored = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                if stored.strip():
+                    return stored.strip()
+            except Exception:
+                pass
         # oslist-entry children include the popover sidecar; that is not
         # the OS label. Prefer an empty string over a sibling widget name.
         if "oslist-entry" in name or name.startswith(

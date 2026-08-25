@@ -419,6 +419,10 @@ class vmmCreateVM(vmmGObjectUI):
         gtkcompat.attach_notebook_a11y(self.widget("install-method-pages"))
         gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
         ptxt = self.widget("header-pagenum").get_text() or "pagenum-label"
+        try:
+            open("/tmp/vmm-a11y-pagenum.txt", "w").write(ptxt)
+        except Exception:
+            pass
         gtkcompat.expose_a11y_label(
             "create-pagenum",
             "pagenum-label: %s" % ptxt,
@@ -1524,12 +1528,22 @@ class vmmCreateVM(vmmGObjectUI):
 
         self.widget("header-pagenum").set_markup(page_lbl)
         gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        try:
+            open("/tmp/vmm-a11y-pagenum.txt", "w").write(page_lbl)
+        except Exception:
+            pass
         gtkcompat.expose_a11y_label(
             "create-pagenum",
             "pagenum-label: %s" % page_lbl,
             page_lbl,
             window=self.topwin,
         )
+        try:
+            win = getattr(self, "_vmm_methods_win", None)
+            if win is not None:
+                gtkcompat._append_createvm_status_labels(win.get_child(), self)
+        except Exception:
+            pass
 
     def _change_os_detect(self, sensitive):
         self._os_list.set_sensitive(sensitive)
@@ -1972,6 +1986,14 @@ class vmmCreateVM(vmmGObjectUI):
         if not self._is_os_detect_active():
             return
         if self._os_already_detected_for_media:
+            return
+        # User already picked an OS (oslist-popover). Don't block Forward
+        # on media detection.
+        if (
+            self._os_list.get_selected_os()
+            or getattr(self._os_list, "_kept_os", None)
+            or self._last_osobj
+        ):
             return
 
         self._do_start_detect_os(cdrom, location, forward_after_finish)
