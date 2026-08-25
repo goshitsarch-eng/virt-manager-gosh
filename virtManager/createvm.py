@@ -597,6 +597,15 @@ class vmmCreateVM(vmmGObjectUI):
                 self._addstorage.widget("storage-size"),
                 window=self.topwin,
             )
+        try:
+            gtkcompat.expose_a11y_spin(
+                "cpus", "cpus", self.widget("cpus"), window=self.topwin
+            )
+            gtkcompat.expose_a11y_spin(
+                "mem", "Memory:", self.widget("mem"), window=self.topwin
+            )
+        except Exception:
+            pass
 
     def _os_selected(self, _src, osobj):
         self._last_osobj = osobj

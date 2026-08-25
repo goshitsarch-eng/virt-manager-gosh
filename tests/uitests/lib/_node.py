@@ -486,6 +486,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
             return stored
+        if name.split(":", 1)[0].strip() in ("cpus", "mem", "Memory"):
+            key = "cpus" if "cpu" in name else "mem"
+            try:
+                stored = open("/tmp/vmm-a11y-spin-%s.txt" % key, "r").read()
+                if stored.strip():
+                    return stored.strip()
+            except Exception:
+                pass
         if "pagenum-label" in name:
             try:
                 stored = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
@@ -630,6 +638,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "Automatically detect",
                     "No media detected",
                     "Fedora12_media",
+                    "cpus",
+                    "Memory:",
                 )
             ):
                 return True

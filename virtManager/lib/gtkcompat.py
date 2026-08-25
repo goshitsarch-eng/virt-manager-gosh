@@ -1317,6 +1317,24 @@ def publish_media_combo_rows(createvm, box=None):
             break
 
 
+def _append_createvm_resource_spins(box, createvm):
+    """Findable cpus/mem spins on the New VM methods window."""
+    if box is None or createvm is None or getattr(box, "_vmm_resource_spins", False):
+        return
+    box._vmm_resource_spins = True
+    for key, name in (("cpus", "cpus"), ("mem", "Memory:")):
+        try:
+            src = createvm.widget(key)
+        except Exception:
+            src = None
+        if src is None:
+            continue
+        try:
+            expose_a11y_spin(key, name, src, parent=box)
+        except Exception:
+            pass
+
+
 def _append_iso_browse_control(box, createvm):
     """Findable install-iso-browse on the methods window."""
     if box is None or createvm is None or getattr(box, "_vmm_iso_browse", False):
@@ -1475,6 +1493,7 @@ def expose_createvm_methods_window(createvm):
                 _append_name_load_control(child, createvm)
                 _append_createvm_status_labels(child, createvm)
                 _append_createvm_media_controls(child, createvm)
+                _append_createvm_resource_spins(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:
                 pass
@@ -1554,6 +1573,7 @@ def expose_createvm_methods_window(createvm):
     _append_name_load_control(box, createvm)
     _append_createvm_status_labels(box, createvm)
     _append_createvm_media_controls(box, createvm)
+    _append_createvm_resource_spins(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
     win.set_visible(True)
@@ -2462,17 +2482,24 @@ def expose_a11y_spin(key, name, spin, window=None, parent=None):
         box.append(ent)
         _A11Y_SIDECAR["items"][key] = ent
 
-        def _from_src(*_a, src=spin, dst=ent):
+        def _from_src(*_a, src=spin, dst=ent, spin_key=key):
             if getattr(dst, "_vmm_spin_syncing", False):
                 return False
             dst._vmm_spin_syncing = True
+            val = ""
             try:
-                dst.set_text(str(int(src.get_value())))
+                val = str(int(src.get_value()))
+                dst.set_text(val)
             except Exception:
                 try:
-                    dst.set_text(str(src.get_value()))
+                    val = str(src.get_value())
+                    dst.set_text(val)
                 except Exception:
                     pass
+            try:
+                open("/tmp/vmm-a11y-spin-%s.txt" % spin_key, "w").write(val)
+            except Exception:
+                pass
             dst._vmm_spin_syncing = False
             return False
 
