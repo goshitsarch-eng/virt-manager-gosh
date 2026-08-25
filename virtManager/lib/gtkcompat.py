@@ -207,6 +207,68 @@ def set_accessible_name(widget, name):
     widget._vmm_a11y_name = str(name)
 
 
+def _mark_toplevel_hidden(window, hidden):
+    """AT-SPI often keeps STATE_VISIBLE after Gtk.Window.hide()."""
+    if window is None:
+        return
+    try:
+        title = window.get_title() or ""
+    except Exception:
+        title = ""
+    try:
+        name = window.get_accessible_name() or title
+    except Exception:
+        name = title
+    base = name.replace(" (hidden)", "").replace("(hidden)", "").strip() or title
+    if not base:
+        return
+    set_accessible_name(window, (base + " (hidden)") if hidden else base)
+
+
+def _ensure_toplevel_hidden_sync(window):
+    if window is None or getattr(window, "_vmm_hidden_sync", False):
+        return
+    window._vmm_hidden_sync = True
+
+    def _sync(*_a):
+        try:
+            _mark_toplevel_hidden(window, not window.get_visible())
+        except Exception:
+            pass
+        return False
+
+    try:
+        window.connect("notify::visible", _sync)
+    except Exception:
+        pass
+    _sync()
+
+
+def _ensure_toplevel_close_action(window):
+    """Expose AT-SPI/GTK 'close' so dogtail can hide GTK 4 windows."""
+    if window is None or getattr(window, "_vmm_close_action", False):
+        return
+    window._vmm_close_action = True
+
+    def _close(*_a):
+        try:
+            window.close()
+        except Exception:
+            pass
+        try:
+            if window.get_visible():
+                window.hide()
+        except Exception:
+            pass
+        _mark_toplevel_hidden(window, True)
+        return True
+
+    try:
+        window.install_action("close", None, lambda *_a: _close())
+    except Exception:
+        pass
+
+
 def set_toplevel_a11y_role(widget):
     """
     Gtk.AccessibleRole.WINDOW is abstract in GTK 4 and AT-SPI then
@@ -221,9 +283,11 @@ def set_toplevel_a11y_role(widget):
     ):
         try:
             widget.set_accessible_role(role)
-            return
+            break
         except Exception:
             continue
+    _ensure_toplevel_hidden_sync(widget)
+    _ensure_toplevel_close_action(widget)
 
 
 def _checked_tristate(active):

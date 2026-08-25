@@ -296,14 +296,26 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return bool(self.showing or self.visible or self.sensitive)
         return False
 
-    @property
-    def showing(self):
+    def _a11y_hidden_name(self):
         try:
             name = self.name or ""
-            if name.startswith(".") or name.endswith(" (hidden)"):
-                return False
         except Exception:
-            pass
+            return False
+        return name.startswith(".") or "(hidden)" in name
+
+    @property
+    def visible(self):
+        if self._a11y_hidden_name():
+            return False
+        try:
+            return self.getState().contains(pyatspi.STATE_VISIBLE)
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        if self._a11y_hidden_name():
+            return False
         try:
             st = self.getState()
             if hasattr(pyatspi, "STATE_HIDDEN") and st.contains(pyatspi.STATE_HIDDEN):
@@ -675,29 +687,53 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
         def _closed():
             try:
-                return not bool(self.visible)
-            except Exception:
-                return False
-
-        def _belongs_here(node):
-            cur = node
-            for _ in range(16):
-                if cur is None:
-                    return False
-                if cur is self:
+                if self._a11y_hidden_name():
                     return True
+                if not bool(self.visible):
+                    return True
+                if not bool(self.showing):
+                    return True
+            except Exception:
+                return True
+            return False
+
+        def _owning_window(node):
+            try:
+                cur = node.accessible_parent
+            except Exception:
+                return None
+            for _ in range(24):
+                if cur is None:
+                    return None
+                try:
+                    role = cur.roleName
+                except Exception:
+                    role = ""
+                if role in _WINDOW_ROLES:
+                    return cur
                 try:
                     cur = cur.accessible_parent
                 except Exception:
-                    return False
-            return False
+                    return None
+            return None
+
+        def _find_local(name, roleName):
+            pred = _FuzzyPredicate(name, _alias_role(roleName))
+            return _walk_find(self, pred, True)
+
+        try:
+            self.doActionNamed("close")
+            utils.check(_closed, timeout=2)
+            return
+        except Exception:
+            pass
 
         for name in ("Cancel", "Close"):
-            try:
-                btn = self.find(name, "push button", timeout=0.4)
-            except Exception:
+            btn = _find_local(name, "push button")
+            if btn is None:
                 continue
-            if not _belongs_here(btn):
+            owner = _owning_window(btn)
+            if owner is not None and owner is not self:
                 continue
             try:
                 if btn.sensitive:
@@ -706,6 +742,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     return
             except Exception:
                 continue
+
+        item = _find_local("Close", "menu item")
+        if item is not None:
+            owner = _owning_window(item)
+            if owner is None or owner is self:
+                try:
+                    item.click()
+                    utils.check(_closed, timeout=1)
+                    return
+                except Exception:
+                    pass
+
         try:
             self.grab_focus()
         except Exception:

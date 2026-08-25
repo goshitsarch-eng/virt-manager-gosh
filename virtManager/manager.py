@@ -177,6 +177,10 @@ class vmmManager(vmmGObjectUI):
 
     def show(self):
         vis = self.is_visible()
+        try:
+            gtkcompat._mark_toplevel_hidden(self.topwin, False)
+        except Exception:
+            pass
         self.topwin.present()
         if vis:
             return
@@ -193,8 +197,15 @@ class vmmManager(vmmGObjectUI):
             return
 
         log.debug("Closing manager")
-        self.prev_position = self.topwin.get_position()
+        try:
+            self.prev_position = self.topwin.get_position()
+        except Exception:
+            self.prev_position = None
         self.topwin.hide()
+        try:
+            gtkcompat._mark_toplevel_hidden(self.topwin, True)
+        except Exception:
+            pass
         vmmEngine.get_instance().decrement_window_counter()
 
         return 1

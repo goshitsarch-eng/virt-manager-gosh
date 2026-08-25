@@ -385,7 +385,15 @@ class vmmGObjectUI(vmmGObject):
                 if title:
                     from .lib import gtkcompat
 
-                    gtkcompat.set_accessible_name(self.topwin, title)
+                    hidden = False
+                    try:
+                        hidden = not self.topwin.get_visible()
+                    except Exception:
+                        hidden = False
+                    gtkcompat.set_accessible_name(
+                        self.topwin,
+                        title + (" (hidden)" if hidden else ""),
+                    )
                 return False
 
             try:
@@ -399,6 +407,12 @@ class vmmGObjectUI(vmmGObject):
                 from .lib import gtkcompat
 
                 gtkcompat.ensure_window_a11y_box(self.topwin)
+                gtkcompat.expose_a11y_button(
+                    "win-close-%s" % id(self.topwin),
+                    "Close",
+                    self.close,
+                    window=self.topwin,
+                )
             except Exception:
                 pass
 
@@ -442,6 +456,12 @@ class vmmGObjectUI(vmmGObject):
     def close(self, ignore1=None, ignore2=None):
         if self.topwin is not None:
             self.topwin.hide()
+            try:
+                from .lib import gtkcompat
+
+                gtkcompat._mark_toplevel_hidden(self.topwin, True)
+            except Exception:
+                pass
 
     def is_visible(self):
         return bool(self.topwin and self.topwin.get_visible())
