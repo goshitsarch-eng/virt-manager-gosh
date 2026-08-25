@@ -115,10 +115,12 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
     for idx, child in enumerate(kids):
         if recursive:
             try:
-                closed_menu = child.roleName == "menu" and (child.name or "").startswith(".")
+                cname = child.name or ""
+                closed_menu = cname.startswith(".")
             except Exception:
                 closed_menu = False
-            if closed_menu:
+                cname = ""
+            if closed_menu and not str(getattr(pred, "_name", "") or "").startswith("."):
                 try:
                     if pred.satisfiedByNode(child):
                         return child

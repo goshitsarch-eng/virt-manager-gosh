@@ -1333,7 +1333,7 @@ def attach_notebook_a11y(notebook):
                     ensure_activate_clicked(real_tab)
                 # Keep the real tab out of dogtail find("Polling", "page tab")
                 # so the overlay button (which actually switches pages) wins.
-                hidden = "." + (tlabel or _mnemonic_label(pname) or "tab")
+                hidden = ".nb-tab-%s" % i
                 walk = real_tab
                 for _ in range(4):
                     if walk is None or walk is notebook:
