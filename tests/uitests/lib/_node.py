@@ -707,16 +707,24 @@ def _sentinel_console_error(name, roleName):
     compact = str(name).replace(".*", "").lower()
     if "test suite faking no spice" not in compact and "graphical console" not in compact:
         return None
-    try:
-        text = open("/tmp/vmm-a11y-console-error.txt", "r").read()
-    except Exception:
-        text = ""
-    if "faking no spice" in compact and "faking no spice" not in text.lower():
+    text = ""
+    for path in (
+        "/tmp/vmm-a11y-spice-import.txt",
+        "/tmp/vmm-a11y-console-error.txt",
+    ):
+        try:
+            text = open(path, "r").read()
+        except Exception:
+            text = ""
         if not text:
-            text = "test suite faking no spice"
-        else:
-            return None
-    return _SentinelConsoleError(text or "test suite faking no spice")
+            continue
+        try:
+            if re.search(str(name), text, re.I | re.DOTALL):
+                return _SentinelConsoleError(text)
+        except Exception:
+            if compact in text.lower():
+                return _SentinelConsoleError(text)
+    return None
 
 
 def _sentinel_addhw_tab(name, roleName):

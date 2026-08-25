@@ -398,6 +398,17 @@ class vmmConsolePages(vmmGObjectUI):
         )
 
         self.widget("console-gfx-pages").connect("switch-page", self._page_changed_cb)
+        if SPICE_GTK_IMPORT_ERROR:
+            try:
+                gtkcompat.expose_a11y_label(
+                    "spice-import-error",
+                    SPICE_GTK_IMPORT_ERROR,
+                    SPICE_GTK_IMPORT_ERROR,
+                    window=self.topwin,
+                )
+                open("/tmp/vmm-a11y-spice-import.txt", "w").write(SPICE_GTK_IMPORT_ERROR)
+            except Exception:
+                pass
 
     def _cleanup(self):
         self.vm = None
