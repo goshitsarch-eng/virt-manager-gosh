@@ -1279,6 +1279,33 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
 
         _find(None)
         treeview.grab_focus()
+        _sync_row_selected()
+
+    def _sync_row_selected(*_a):
+        sel = treeview.get_selection()
+        selected = set()
+        try:
+            model, treeiter = sel.get_selected()
+            if model is not None and treeiter is not None:
+                selected.add(
+                    _mnemonic_label(str(model[treeiter][name_column] or ""))
+                )
+        except Exception:
+            pass
+        child = box.get_first_child()
+        while child is not None:
+            is_sel = getattr(child, "_vmm_row_name", None) in selected
+            try:
+                child.update_state([Gtk.AccessibleState.SELECTED], [bool(is_sel)])
+            except Exception:
+                pass
+            if is_sel:
+                try:
+                    child.grab_focus()
+                except Exception:
+                    pass
+            child = child.get_next_sibling()
+        return False
 
     def _rebuild(*_args):
         model = treeview.get_model()
@@ -1326,8 +1353,6 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
 
                 def _on_row_clicked(_b, n=name):
                     _select_name(n)
-                    if on_popup is not None:
-                        on_popup(n)
 
                 btn.connect("clicked", _on_row_clicked)
                 if on_activate is not None:
@@ -1395,6 +1420,10 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         model.connect("row-inserted", _on_model)
         model.connect("row-deleted", _on_model)
         model.connect("row-changed", _on_row_changed)
+    try:
+        treeview.get_selection().connect("changed", _sync_row_selected)
+    except Exception:
+        pass
     def _attach_app(*_a):
         root = treeview.get_root()
         if root is not None:

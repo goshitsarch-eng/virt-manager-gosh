@@ -307,12 +307,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
     @property
     def state_selected(self):
-        if self.getState().contains(pyatspi.STATE_SELECTED):
+        st = self.getState()
+        if st.contains(pyatspi.STATE_SELECTED):
             return True
         # GTK 4 menu items often miss pointer SELECTED; Extra only needs
         # the found item to be the one about to be clicked.
         if self.is_menuitem() or self.roleName == "menu item":
             return bool(self.showing or self.visible or self.sensitive)
+        # VM/connection row mirrors are buttons; SELECTED is set on click
+        # but AT-SPI cache may still report FOCUSED/PRESSED only.
+        if self.roleName in ("table cell", "cell", "list item", "button", "push button"):
+            if st.contains(pyatspi.STATE_FOCUSED) or st.contains(pyatspi.STATE_PRESSED):
+                return True
         return False
 
     def _a11y_hidden_name(self):

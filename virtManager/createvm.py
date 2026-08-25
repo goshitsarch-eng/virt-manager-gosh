@@ -17,6 +17,7 @@ import virtinst
 import virtinst.generatename
 from virtinst import log
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -302,11 +303,27 @@ class vmmCreateVM(vmmGObjectUI):
             self.widget("arch-expander").hide()
 
         self.widget("startup-error").set_text(_("Error: %s") % error)
+        gtkcompat.set_accessible_name(
+            self.widget("startup-error"), _("Error: %s") % error
+        )
+        gtkcompat.expose_a11y_label(
+            "create-startup-error",
+            _("Error: %s") % error,
+            _("Error: %s") % error,
+            window=self.topwin,
+        )
         return False
 
     def _show_startup_warning(self, error):
         self.widget("startup-error-box").show()
         self.widget("startup-error").set_markup(_("<span size='small'>Warning: %s</span>") % error)
+        gtkcompat.set_accessible_name(self.widget("startup-error"), _("Warning: %s") % error)
+        gtkcompat.expose_a11y_label(
+            "create-startup-error",
+            _("Warning: %s") % error,
+            _("Warning: %s") % error,
+            window=self.topwin,
+        )
 
     def _show_arch_warning(self, error):
         self.widget("arch-warning-box").show()
@@ -371,6 +388,51 @@ class vmmCreateVM(vmmGObjectUI):
         self._os_list = vmmOSList()
         self.widget("install-os-align").add(self._os_list.search_entry)
         self.widget("os-label").set_mnemonic_widget(self._os_list.search_entry)
+        self._init_create_a11y()
+
+    def _init_create_a11y(self):
+        gtkcompat.attach_notebook_a11y(self.widget("create-pages"))
+        gtkcompat.attach_notebook_a11y(self.widget("install-method-pages"))
+        gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        gtkcompat.expose_a11y_label(
+            "create-pagenum",
+            "pagenum-label",
+            self.widget("header-pagenum").get_text() or "pagenum-label",
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_label(
+            "create-startup-error",
+            "startup-error",
+            self.widget("startup-error").get_text() or "startup-error",
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_combo(
+            "create-conn",
+            "create-conn",
+            self.widget("create-conn"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "create-forward",
+            "Forward",
+            lambda: self.widget("create-forward").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "create-back",
+            "Back",
+            lambda: self.widget("create-back").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "create-finish",
+            "Finish",
+            lambda: self.widget("create-finish").emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.set_accessible_name(self.widget("create-forward"), "Forward")
+        gtkcompat.set_accessible_name(self.widget("create-back"), "Back")
+        gtkcompat.set_accessible_name(self.widget("create-finish"), "Finish")
 
     def _reset_state(self, urihint=None):
         """
@@ -1294,6 +1356,10 @@ class vmmCreateVM(vmmGObjectUI):
         }
 
         self.widget("header-pagenum").set_markup(page_lbl)
+        gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
+        gtkcompat.expose_a11y_label(
+            "create-pagenum", "pagenum-label", page_lbl, window=self.topwin
+        )
 
     def _change_os_detect(self, sensitive):
         self._os_list.set_sensitive(sensitive)
