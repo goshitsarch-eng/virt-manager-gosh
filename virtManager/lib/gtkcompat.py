@@ -791,6 +791,20 @@ def _run_modal(window, response_signal="response"):
         window.disconnect(hid)
     if close_hid is not None:
         window.disconnect(close_hid)
+    try:
+        window.hide()
+    except Exception:
+        pass
+    parent = None
+    try:
+        parent = window.get_transient_for()
+    except Exception:
+        parent = None
+    if parent is not None:
+        try:
+            parent.present()
+        except Exception:
+            pass
     return result[0]
 
 
