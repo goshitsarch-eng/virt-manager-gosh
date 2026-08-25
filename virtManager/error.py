@@ -17,7 +17,9 @@ from .baseclass import vmmGObject
 from .lib import gtkcompat
 
 
-def _launch_dialog(dialog, primary_text, secondary_text, title, widget=None, modal=True):
+def _launch_dialog(
+    dialog, primary_text, secondary_text, title, widget=None, modal=True, destroy=True
+):
     def fix_text(t):
         if not t:
             return t
@@ -49,7 +51,8 @@ def _launch_dialog(dialog, primary_text, secondary_text, title, widget=None, mod
     if modal:
         res = dialog.run()
         res = bool(res in [Gtk.ResponseType.YES, Gtk.ResponseType.OK])
-        dialog.destroy()
+        if destroy:
+            dialog.destroy()
     else:
 
         def response_destroy(src, ignore):
@@ -402,9 +405,12 @@ class _errorDialog(Gtk.Window):
             self.chk_vbox.add(chkbox)
             chkbox.show()
 
-        res = _launch_dialog(self, primary_text, secondary_text or "", title, modal=modal)
+        res = _launch_dialog(
+            self, primary_text, secondary_text or "", title, modal=modal, destroy=False
+        )
 
         if chktext:
-            res = [res, chkbox.get_active()]
+            res = [res, bool(chkbox.get_active())]
+        self.destroy()
 
         return res
