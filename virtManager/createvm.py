@@ -439,6 +439,13 @@ class vmmCreateVM(vmmGObjectUI):
         gtkcompat.set_accessible_name(self.widget("create-forward"), ".create-forward-real")
         gtkcompat.set_accessible_name(self.widget("create-back"), ".create-back-real")
         gtkcompat.set_accessible_name(self.widget("create-finish"), ".create-finish-real")
+        for wid in ("create-forward", "create-back", "create-finish"):
+            src = self.widget(wid)
+            try:
+                src.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+                src.update_state([Gtk.AccessibleState.HIDDEN], [True])
+            except Exception:
+                pass
         for wid, name in (
             ("method-local", "Local install media (ISO image or CDROM)"),
             ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
@@ -1521,9 +1528,10 @@ class vmmCreateVM(vmmGObjectUI):
         return next_page
 
     def _forward_clicked(self, src_ignore=None):
-        # Sidecar Forward idle-dispatches emit("clicked") so AT-SPI is
-        # already off the stack. Construct/tests call this directly.
-        return self._forward_clicked_impl()
+        # Real Forward is still named "Forward" in AT-SPI. dialog.run()
+        # inside that click times out the bus; construct calls _impl.
+        GLib.idle_add(self._forward_clicked_impl)
+        return True
 
     def _forward_clicked_impl(self, *_a):
         notebook = self.widget("create-pages")
@@ -2010,7 +2018,8 @@ class vmmCreateVM(vmmGObjectUI):
     ##########################
 
     def _finish_clicked(self, src_ignore):
-        return self._finish_clicked_impl()
+        GLib.idle_add(self._finish_clicked_impl)
+        return True
 
     def _finish_clicked_impl(self, *_a):
         # Validate the final page

@@ -1066,15 +1066,15 @@ def main():
         dlg.widget("create-pages").set_current_page(PAGE_NAME)
         dlg._page_changed(None, None, PAGE_NAME)
         assert dlg._validate(PAGE_NAME) is True, errs
-        dlg._forward_clicked()
+        dlg._forward_clicked_impl()
         osobj = virtinst.OSDB.lookup_os("generic")
         assert osobj is not None
         dlg._os_list.select_os(osobj)
         assert dlg._os_list.get_selected_os() is not None
-        dlg._forward_clicked()
-        dlg._forward_clicked()
+        dlg._forward_clicked_impl()
+        dlg._forward_clicked_impl()
         dlg.widget("enable-storage").set_active(False)
-        dlg._forward_clicked()
+        dlg._forward_clicked_impl()
         assert dlg.widget("create-pages").get_current_page() == PAGE_FINISH, errs
         dlg.widget("create-vm-name").set_text("gtk4-created-vm")
         dlg._gdata.name = "gtk4-created-vm"

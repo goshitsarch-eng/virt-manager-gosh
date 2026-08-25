@@ -935,7 +935,7 @@ def expose_createvm_methods_window(createvm):
     win = Gtk.Window()
     win.set_decorated(False)
     win.set_modal(False)
-    win.set_default_size(280, 200)
+    win.set_default_size(280, 320)
     try:
         win.set_accessible_role(Gtk.AccessibleRole.GENERIC)
     except Exception:
@@ -968,6 +968,30 @@ def expose_createvm_methods_window(createvm):
 
         btn.connect("clicked", _pick)
         box.append(btn)
+    for emit_wid, label in (
+        ("create-forward", "Forward"),
+        ("create-back", "Back"),
+        ("create-finish", "Finish"),
+    ):
+        nav = Gtk.Button(label=label)
+        nav.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        ensure_activate_clicked(nav)
+        set_accessible_name(nav, label)
+
+        def _nav(_b, wid=emit_wid, cvm=createvm):
+            def _idle():
+                try:
+                    w = cvm.widget(wid)
+                    if w is not None:
+                        w.emit("clicked")
+                except Exception:
+                    pass
+                return False
+
+            GLib.idle_add(_idle)
+
+        nav.connect("clicked", _nav)
+        box.append(nav)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _ensure_app_window(win)
     win.set_visible(True)
