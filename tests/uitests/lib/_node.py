@@ -606,6 +606,25 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
     def window_close(self):
         assert self.roleName in list(_WINDOW_ROLES)
+
+        def _closed():
+            try:
+                return not bool(self.visible)
+            except Exception:
+                return True
+
+        for name in ("Cancel", "Close"):
+            try:
+                btn = self.find(name, "push button")
+            except Exception:
+                continue
+            try:
+                if btn.sensitive:
+                    btn.click()
+                    utils.check(_closed)
+                    return
+            except Exception:
+                continue
         try:
             self.grab_focus()
         except Exception:
@@ -614,13 +633,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
             self.keyCombo("<alt>F4")
         except Exception:
             pass
-
-        def _closed():
-            try:
-                return not bool(self.showing or self.visible)
-            except Exception:
-                return True
-
         try:
             utils.check(_closed, timeout=1)
             return
