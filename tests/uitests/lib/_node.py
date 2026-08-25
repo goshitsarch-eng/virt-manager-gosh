@@ -101,7 +101,11 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
             role = child.roleName or ""
             name = child.name or ""
         except Exception:
-            return 3
+            return 4
+        # Prefer sidecar Buttons over GTK 4 CheckButtons. CheckButton
+        # AT-SPI names stay as the visible label and activate is a no-op.
+        if role in ("push button", "button"):
+            return 0
         if name.startswith(".a11y-tree") or role in (
             "panel",
             "frame",
@@ -111,12 +115,14 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
             "tree table",
             "list",
         ):
-            return 0
+            return 1
         if role == "menu" and name.startswith("."):
-            return 4
+            return 5
         if role == "menu":
-            return 2
-        return 1
+            return 3
+        if role in ("check box", "check button"):
+            return 4
+        return 2
 
     try:
         kids.sort(key=_walk_prio)
