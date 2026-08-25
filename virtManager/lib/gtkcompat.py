@@ -1156,8 +1156,18 @@ class Menu(Gtk.Box):
 
     def popdown(self, *_args, **_kwargs):
         self._opened = False
+        parent = self._parent_widget
         self._sync_menu_a11y_name()
         self._destroy_popover()
+        # Toolbar Menu toggle stays active after an item click; reset it
+        # so the next AT-SPI click opens the menu again.
+        for cand in (parent, getattr(parent, "_menu_button", None)):
+            if cand is not None and hasattr(cand, "get_active") and hasattr(cand, "set_active"):
+                try:
+                    if cand.get_active():
+                        cand.set_active(False)
+                except Exception:
+                    pass
 
     def popup_at_pointer(self, event=None):
         ignore = event
