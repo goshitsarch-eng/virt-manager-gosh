@@ -1581,10 +1581,18 @@ class CheckMenuItem(Gtk.CheckButton):
         sync_accessible_checked(self)
 
     def _sync_accessible_label(self, *_args):
-        text = _mnemonic_label(self.get_label() or self.label or "")
+        text = ""
+        try:
+            text = self.get_label() or ""
+        except Exception:
+            text = ""
+        text = _mnemonic_label(text)
         if text:
             set_accessible_name(self, text)
-        self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
+        try:
+            self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
+        except Exception:
+            pass
 
     def _on_toggled(self, *_args):
         sync_accessible_checked(self)
