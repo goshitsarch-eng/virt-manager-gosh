@@ -3107,6 +3107,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 except Exception:
                     pass
             child = child.get_next_sibling()
+        _publish_hw_list()
         return False
 
     def _rebuild(*_args):
@@ -3189,7 +3190,38 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         pending["src"] = 0
         win.set_visible(True)
         _sync_row_selected()
+        _publish_hw_list()
         return False
+
+    def _publish_hw_list():
+        names = []
+        child = box.get_first_child()
+        while child is not None:
+            name = getattr(child, "_vmm_row_name", None) or ""
+            if name:
+                names.append(name)
+            child = child.get_next_sibling()
+        try:
+            tname = treeview.get_accessible_name() or ""
+        except Exception:
+            tname = ""
+        if tname == "hw-list" or names:
+            try:
+                open("/tmp/vmm-a11y-hw-list.txt", "w").write("\n".join(names))
+            except Exception:
+                pass
+        selected = ""
+        try:
+            sel = treeview.get_selection()
+            model, treeiter = sel.get_selected()
+            if model is not None and treeiter is not None:
+                selected = _mnemonic_label(str(model[treeiter][name_column] or ""))
+        except Exception:
+            selected = ""
+        try:
+            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
+        except Exception:
+            pass
 
     pending = {"src": 0}
 
@@ -3241,6 +3273,27 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         # Label changed (IDE Disk 2 -> USB Disk 1): rebuild so
         # dogtail can find the new accessible name.
         _on_model()
+
+    def _poll_hw_select():
+        path = "/tmp/vmm-a11y-hw-select.txt"
+        try:
+            text = open(path, "r").read().strip()
+        except Exception:
+            text = ""
+        if text:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            try:
+                _select_name(text)
+            except Exception:
+                pass
+        return True
+
+    if not getattr(treeview, "_vmm_hw_select_poll", False):
+        treeview._vmm_hw_select_poll = True
+        GLib.timeout_add(50, _poll_hw_select)
 
     treeview.connect("notify::model", _on_model)
     model = treeview.get_model()

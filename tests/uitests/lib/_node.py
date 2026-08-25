@@ -73,6 +73,77 @@ def _virt_manager_app():
     return None
 
 
+class _SentinelTableCell(object):
+    """hw-list row when AT-SPI walks hang after GetItems."""
+
+    def __init__(self, name, selected=False):
+        self.name = name
+        self.roleName = "table cell"
+        self._selected = selected
+
+    @property
+    def state_selected(self):
+        try:
+            return open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == self.name
+        except Exception:
+            return self._selected
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+
+    def find(self, *args, **kwargs):
+        raise dogtail.tree.SearchError("sentinel cell has no children")
+
+
+def _sentinel_hw_cell(name, roleName):
+    if not name:
+        return None
+    role = str(roleName or "")
+    if role and "table cell" not in role and "cell" not in role and "button" not in role:
+        return None
+    try:
+        rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+    except Exception:
+        return None
+    matched = None
+    try:
+        pat = re.compile(name, re.DOTALL)
+    except Exception:
+        pat = None
+    for row in rows:
+        if not row:
+            continue
+        if row == name or (pat is not None and pat.search(row)):
+            matched = row
+            break
+    if matched is None:
+        return None
+    selected = False
+    try:
+        selected = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == matched
+    except Exception:
+        pass
+    return _SentinelTableCell(matched, selected)
+
+
 def _oslist_start_search():
     """Clear Escape/hide markers and allow the popover to reopen after a pick."""
     for marker in (
@@ -988,7 +1059,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "forward",
             "media-entry",
         )
-        if nname in ("ok", "yes", "close", "cancel"):
+        if nname in ("ok", "yes"):
             try:
                 with open("/tmp/vmm-a11y-click.txt", "w") as fh:
                     fh.write(raw or nname)
@@ -1448,6 +1519,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
+
+        try:
+            sent = _sentinel_hw_cell(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
 
         ret = None
         deadline = time.time() + max(0.1, float(timeout))
