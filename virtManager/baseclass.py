@@ -391,7 +391,8 @@ class vmmGObjectUI(vmmGObject):
             except Exception:
                 pass
             _sync_title()
-            self.bind_escape_key_close()
+            if not self._external_topwin:
+                self.bind_escape_key_close()
             try:
                 from .lib import gtkcompat
 
