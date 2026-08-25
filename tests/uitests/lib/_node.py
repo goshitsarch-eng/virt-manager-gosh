@@ -328,7 +328,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
         self.check_onscreen()
         self.check_sensitive()
         if self.is_menuitem():
-            self.point()
+            # Opacity-0 GTK 4 menu windows report menubar coordinates.
+            # A mouse click there misses the item; AT-SPI activate works.
+            try:
+                self.doActionNamed("click")
+                return
+            except Exception:
+                self.point()
         super().click(*args, **kwargs)
 
     def point(self, *args, **kwargs):
