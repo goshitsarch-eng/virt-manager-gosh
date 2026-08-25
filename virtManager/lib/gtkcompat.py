@@ -90,6 +90,8 @@ def ensure_button_accessible_name(widget, name):
     except Exception:
         pass
     apply_accessible_label(widget)
+    set_accessible_name(widget, name)
+    GLib.idle_add(lambda: set_accessible_name(widget, name) or False)
 
 
 def apply_accessible_label(widget):

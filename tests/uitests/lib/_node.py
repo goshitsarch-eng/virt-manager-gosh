@@ -2,6 +2,7 @@
 # See the COPYING file in the top-level directory.
 
 import re
+import time
 
 from gi.repository import Gdk
 
@@ -46,6 +47,38 @@ def _alias_role(roleName):
     if not roleName:
         return roleName
     return _GTK4_ROLE_ALIASES.get(roleName, roleName)
+
+
+def _walk_find(node, pred, recursive=True, _seen=None):
+    """
+    Live AT-SPI walk. dogtail findChild uses a cache that often misses
+    GTK 4 windows and freshly mapped labels.
+    """
+    if _seen is None:
+        _seen = set()
+    try:
+        key = node.id
+    except Exception:
+        key = id(node)
+    if key in _seen:
+        return None
+    _seen.add(key)
+    try:
+        if pred.satisfiedByNode(node):
+            return node
+    except Exception:
+        pass
+    if not recursive:
+        return None
+    try:
+        kids = list(node.children)
+    except Exception:
+        return None
+    for child in kids:
+        ret = _walk_find(child, pred, True, _seen)
+        if ret is not None:
+            return ret
+    return None
 
 
 class _FuzzyPredicate(dogtail.predicate.Predicate):
@@ -102,11 +135,17 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
             labeller = ""
             if node.labeller:
                 labeller = node.labeller.text
+            text = ""
+            try:
+                text = node.text or ""
+            except Exception:
+                text = ""
 
             if (
                 self._name
-                and not self._name_pattern.match(node.name)
+                and not self._name_pattern.match(node.name or "")
                 and not self._name_pattern.match(labeller)
+                and not self._name_pattern.match(text)
             ):
                 return
             if self._labeller_text and not self._labeller_pattern.match(labeller):
@@ -377,36 +416,35 @@ class _VMMDogtailNode(dogtail.tree.Node):
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
-        try:
-            ret = self.findChild(pred, recursive=recursive)
-        except dogtail.tree.SearchError:
-            # GTK 4 dialogs often appear as new application-level frames.
-            # Search the desktop when looking for a window-like role.
-            role_str = str(roleName or "")
-            if any(
-                r in role_str
-                for r in (
-                    "dialog",
-                    "frame",
-                    "alert",
-                    "window",
-                    "menu item",
-                    "menu",
-                    "label",
-                    "static",
-                )
-            ):
-                try:
-                    ret = dogtail.tree.root.findChild(pred, recursive=True)
-                except dogtail.tree.SearchError:
-                    ret = None
-            else:
-                ret = None
+        role_str = str(roleName or "")
+        desktop_roles = (
+            "dialog",
+            "frame",
+            "alert",
+            "window",
+            "menu item",
+            "menu",
+            "label",
+            "static",
+        )
+        ret = None
+        deadline = time.time() + 4
+        while ret is None and time.time() < deadline:
+            ret = _walk_find(self, pred, recursive=recursive)
+            if ret is None and any(r in role_str for r in desktop_roles):
+                ret = _walk_find(dogtail.tree.root, pred, True)
             if ret is None:
-                raise dogtail.tree.SearchError(
-                    "Didn't find widget with name='%s' "
-                    "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
-                ) from None
+                time.sleep(0.1)
+        if ret is None:
+            try:
+                ret = self.findChild(pred, recursive=recursive)
+            except dogtail.tree.SearchError:
+                ret = None
+        if ret is None:
+            raise dogtail.tree.SearchError(
+                "Didn't find widget with name='%s' "
+                "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+            )
 
         # Wait for independent windows to become active in the window manager
         # before we return them. This ensures the window is actually onscreen

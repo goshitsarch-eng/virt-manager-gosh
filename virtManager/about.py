@@ -4,6 +4,7 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+from gi.repository import Gdk
 from gi.repository import Gtk
 
 from virtinst import log
@@ -74,6 +75,17 @@ class vmmAbout(vmmGObject):
             "Daniel P. Berrange, Cole Robinson, Hugh O. Brock"
         )
         dialog.set_child(box)
+
+        def _on_key(_c, keyval, _keycode, _state):
+            if keyval == Gdk.KEY_Escape:
+                dialog.hide()
+                return True
+            return False
+
+        keyctl = Gtk.EventControllerKey()
+        keyctl.connect("key-pressed", _on_key)
+        dialog.add_controller(keyctl)
+        dialog.connect("close-request", lambda *_a: dialog.hide() or True)
         self._dialog = dialog
         dialog.present()
 
