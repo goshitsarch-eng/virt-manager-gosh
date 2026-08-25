@@ -932,6 +932,43 @@ def _append_name_load_control(box, createvm):
     box.append(btn)
 
 
+def _append_createvm_status_labels(box, createvm):
+    """Mirror wizard status text onto the findable New VM window."""
+    if box is None or createvm is None:
+        return
+    err = ""
+    page = ""
+    try:
+        err = createvm.widget("startup-error").get_text() or ""
+    except Exception:
+        err = ""
+    try:
+        page = createvm.widget("header-pagenum").get_text() or ""
+    except Exception:
+        page = ""
+    lab = getattr(box, "_vmm_startup_lab", None)
+    if lab is None:
+        lab = Gtk.Label(label=err or "startup-error", xalign=0)
+        lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        lab.set_wrap(True)
+        box.append(lab)
+        box._vmm_startup_lab = lab
+    if err:
+        lab.set_text(err)
+        set_accessible_name(lab, err)
+        lab.set_visible(True)
+    page_lab = getattr(box, "_vmm_pagenum_lab", None)
+    if page_lab is None:
+        page_lab = Gtk.Label(label=page or "pagenum-label", xalign=0)
+        page_lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        set_accessible_name(page_lab, "pagenum-label")
+        box.append(page_lab)
+        box._vmm_pagenum_lab = page_lab
+    if page:
+        page_lab.set_text(page)
+        set_accessible_name(page_lab, "pagenum-label: %s" % page)
+
+
 def _ensure_app_window(win):
     app = Gtk.Application.get_default()
     if app is None or win is None:
@@ -958,6 +995,12 @@ def expose_createvm_methods_window(createvm):
                     child, getattr(createvm, "_os_list", None)
                 )
                 _append_name_load_control(child, createvm)
+                _append_createvm_status_labels(child, createvm)
+            except Exception:
+                pass
+            set_accessible_name(win, "New VM")
+            try:
+                win.set_title("New VM")
             except Exception:
                 pass
             win.set_visible(True)
@@ -969,12 +1012,12 @@ def expose_createvm_methods_window(createvm):
     win.set_modal(False)
     win.set_default_size(280, 320)
     try:
-        win.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+        win.set_accessible_role(Gtk.AccessibleRole.DIALOG)
     except Exception:
         pass
-    set_accessible_name(win, ".create-methods")
+    set_accessible_name(win, "New VM")
     try:
-        win.set_title(".create-methods")
+        win.set_title("New VM")
     except Exception:
         pass
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -1026,6 +1069,7 @@ def expose_createvm_methods_window(createvm):
         box.append(nav)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _append_name_load_control(box, createvm)
+    _append_createvm_status_labels(box, createvm)
     _ensure_app_window(win)
     win.set_visible(True)
     createvm._vmm_methods_win = win
@@ -1151,6 +1195,19 @@ def expose_conn_menu_window(manager):
 
         btn.connect("clicked", _act)
         host.append(btn)
+    newbtn = Gtk.Button(label="New")
+    newbtn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(newbtn)
+    set_accessible_name(newbtn, "New")
+
+    def _new(*_a, mgr=manager):
+        try:
+            mgr.new_vm(None)
+        except Exception:
+            pass
+
+    newbtn.connect("clicked", _new)
+    outer.append(newbtn)
     outer.append(host)
     manager._vmm_conn_menu_box = host
     return host
