@@ -195,6 +195,7 @@ _BUILDER_A11Y_NAMES = {
     "vsock-auto": "vsock-auto",
     "vsock-cid": "vsock-cid",
     "xmleditor-xml": "XML editor",
+    "prefs-close": "Close",
 }
 
 
