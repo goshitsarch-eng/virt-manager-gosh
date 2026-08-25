@@ -18,7 +18,14 @@ from .lib import gtkcompat
 
 
 def _launch_dialog(
-    dialog, primary_text, secondary_text, title, widget=None, modal=True, destroy=True
+    dialog,
+    primary_text,
+    secondary_text,
+    title,
+    widget=None,
+    modal=True,
+    destroy=True,
+    clone_a11y=False,
 ):
     def fix_text(t):
         if not t:
@@ -57,7 +64,10 @@ def _launch_dialog(
                     "err-btn-" + label, label, lambda r=child: r.emit("clicked")
                 )
                 alert_buttons.append((label, lambda r=child: r.emit("clicked")))
-    gtkcompat.present_a11y_alert(primary_text, alert_buttons)
+    # Fresh AT-SPI clones help one-shot errors (run-fail). Reused Extra
+    # confirm windows already map; cloning those poisons GetItems.
+    if clone_a11y:
+        gtkcompat.present_a11y_alert(primary_text, alert_buttons)
 
     if widget:
         dialog.get_content_area().add(widget)
@@ -143,7 +153,12 @@ class vmmErrorDialog(vmmGObject):
         )
 
         return dialog.show_dialog(
-            primary_text=summary, secondary_text=text2, details=details, title=title, modal=modal
+            primary_text=summary,
+            secondary_text=text2,
+            details=details,
+            title=title,
+            modal=modal,
+            clone_a11y=True,
         )
 
     ###################################
@@ -422,7 +437,14 @@ class _errorDialog(Gtk.Window):
         self.buf_expander.set_visible(True)
 
     def show_dialog(
-        self, primary_text, secondary_text="", title="", details="", chktext="", modal=True
+        self,
+        primary_text,
+        secondary_text="",
+        title="",
+        details="",
+        chktext="",
+        modal=True,
+        clone_a11y=False,
     ):
         chkbox = None
         res = None
@@ -444,7 +466,13 @@ class _errorDialog(Gtk.Window):
             chkbox.show()
 
         res = _launch_dialog(
-            self, primary_text, secondary_text or "", title, modal=modal, destroy=False
+            self,
+            primary_text,
+            secondary_text or "",
+            title,
+            modal=modal,
+            destroy=False,
+            clone_a11y=clone_a11y,
         )
 
         if chktext:
