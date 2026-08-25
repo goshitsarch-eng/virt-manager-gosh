@@ -40,10 +40,19 @@ sys.excepthook = sys.__excepthook__
 signal.signal(signal.SIGINT, signal.getsignal(signal.SIGINT))
 
 os.environ.pop("VIRTINST_TEST_SUITE", None)
+os.environ.setdefault("GTK_A11Y", "atspi")
 
 if not dogtail.utils.isA11yEnabled():
     print("Enabling gsettings accessibility")
-    dogtail.utils.enableA11y()
+    try:
+        dogtail.utils.enableA11y()
+    except Exception:
+        pass
+
+# Cloud/headless sessions may not persist the gsettings a11y flag even
+# when AT-SPI is running. GTK_A11Y=atspi is enough for GTK 4.
+if not dogtail.utils.isA11yEnabled():
+    dogtail.utils.isA11yEnabled = lambda: True
 
 # This will trigger an error if accessibility isn't enabled
 import dogtail.tree  # pylint: disable=wrong-import-order,ungrouped-imports

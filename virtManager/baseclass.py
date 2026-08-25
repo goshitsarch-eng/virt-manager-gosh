@@ -52,7 +52,12 @@ class _VmmBuilder:
         self._builder.set_translation_domain(domain)
 
     def add_from_file(self, uifile):
-        return self._builder.add_from_file(uifile)
+        ret = self._builder.add_from_file(uifile)
+        from .lib import gtkcompat
+
+        for obj in self._builder.get_objects():
+            gtkcompat.sync_builder_accessible(obj)
+        return ret
 
     def get_object(self, name):
         return self._builder.get_object(name)

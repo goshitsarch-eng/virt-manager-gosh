@@ -63,6 +63,10 @@ def _import_gtk(leftovers):
         from gi.repository import Gtk
 
         leftovers = sys.argv[1:]
+        from gi.repository import GLib
+
+        GLib.set_prgname("virt-manager")
+        GLib.set_application_name("virt-manager")
 
         if Gtk.check_version(4, 10, 0):  # pragma: no cover
             print("gtk4 4.10.0 or later is required.")

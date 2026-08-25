@@ -377,5 +377,9 @@ class VMMDogtailApp:
         with utils.dogtail_timeout(10):
             # On Fedora 39 sometimes app launch from the test suite
             # takes a while for reasons I can't quite figure
-            self._root = dogtail.tree.root.application("virt-manager")
+            try:
+                self._root = dogtail.tree.root.application("virt-manager")
+            except dogtail.tree.SearchError:
+                # GTK 4 from a python wrapper may expose the process name
+                self._root = dogtail.tree.root.application("python3")
             self._topwin = self.find_window(window_name)

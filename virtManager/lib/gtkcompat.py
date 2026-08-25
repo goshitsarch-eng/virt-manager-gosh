@@ -32,6 +32,30 @@ def set_accessible_name(widget, name):
     widget.set_name(str(name))
 
 
+def _mnemonic_label(text):
+    if not text:
+        return ""
+    return str(text).replace("_", "", 1)
+
+
+def sync_builder_accessible(widget):
+    """
+    GTK 4 often exposes tooltip text as the AT-SPI name for icon buttons.
+    Prefer the widget label so dogtail lookups match the GTK 3 names.
+    """
+    if widget is None or not isinstance(widget, Gtk.Widget):
+        return
+    label = None
+    if hasattr(widget, "get_label"):
+        try:
+            label = widget.get_label()
+        except TypeError:
+            label = None
+    name = _mnemonic_label(label)
+    if name:
+        set_accessible_name(widget, name)
+
+
 def get_accessible_name(widget):
     return widget.get_name()
 
@@ -378,9 +402,19 @@ class MenuItem(Gtk.Button):
         self.connect("notify::label", self._on_label_prop)
         self.vmm_widget_name = None
 
+    def _sync_accessible_label(self):
+        text = ""
+        if self._label_widget is not None:
+            text = self._label_widget.get_text() or ""
+        if not text:
+            text = (self.label or "").replace("_", "", 1)
+        if text:
+            set_accessible_name(self, text)
+
     def _on_label_prop(self, *_args):
         if self.label:
             self._label_widget.set_text_with_mnemonic(self.label)
+            self._sync_accessible_label()
 
     def _on_clicked(self, *_args):
         if self._submenu:
@@ -401,6 +435,14 @@ class MenuItem(Gtk.Button):
     def set_label(self, text):
         self.label = text or ""
         self._label_widget.set_text_with_mnemonic(text or "")
+        self._sync_accessible_label()
+
+    def do_add_child(self, builder, child, type_name):
+        ignore = builder
+        if type_name == "submenu" or isinstance(child, Menu):
+            self.set_submenu(child)
+            return
+        Gtk.Button.set_child(self, child)
 
     def get_label(self):
         return self._label_widget.get_text()
@@ -415,9 +457,12 @@ class MenuItem(Gtk.Button):
     def set_submenu(self, menu):
         self._submenu = menu
         if menu is not None:
-            if menu.get_parent() is not None and menu.get_parent() is not self:
+            self.set_accessible_role(Gtk.AccessibleRole.MENU)
+            # Do not parent the menu onto the item: GTK 4 would concatenate
+            # every submenu label into this item's accessible name.
+            if menu.get_parent() is self:
                 menu.unparent()
-            menu.set_parent(self)
+        self._sync_accessible_label()
 
     def get_submenu(self):
         return self._submenu
