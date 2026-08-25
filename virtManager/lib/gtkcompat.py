@@ -1313,12 +1313,45 @@ def expose_createconn_window(createconn):
         pass
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     win.set_child(box)
+    hv = createconn.widget("hypervisor")
     expose_a11y_combo(
         "createconn-hypervisor",
         "Hypervisor",
-        createconn.widget("hypervisor"),
+        hv,
         parent=box,
     )
+    try:
+        model = hv.get_model() if hv is not None else None
+        it = model.get_iter_first() if model is not None else None
+        while it is not None:
+            try:
+                hvid = model[it][0]
+                label = str(model[it][1] or "")
+            except Exception:
+                hvid = None
+                label = ""
+            if label:
+                btn = Gtk.Button(label=label, has_frame=False)
+                btn.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
+                ensure_activate_clicked(btn)
+                set_accessible_name(btn, label)
+
+                def _pick(_b, combo=hv, val=hvid):
+                    try:
+                        from virtManager.lib import uiutil
+
+                        uiutil.set_list_selection(combo, val)
+                    except Exception:
+                        pass
+
+                btn.connect("clicked", _pick)
+                box.append(btn)
+            try:
+                it = model.iter_next(it)
+            except Exception:
+                break
+    except Exception:
+        pass
     expose_a11y_entry(
         "createconn-uri",
         "uri-entry",

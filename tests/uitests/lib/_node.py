@@ -1222,9 +1222,24 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         Lookup the combo, click it, select the menu item
         """
-        combo = self.find(combolabel, "combo box")
-        combo.click_combo_entry()
-        combo.find(itemlabel, _alias_role("menu item")).click()
+        combo = None
+        try:
+            combo = self.find(combolabel, "combo box")
+        except Exception:
+            combo = None
+        if combo is not None:
+            try:
+                combo.click_combo_entry()
+                combo.find(itemlabel, _alias_role("menu item")).click()
+                return
+            except Exception:
+                pass
+        # GTK 4 ComboBox rows are often missing from AT-SPI. Click a
+        # mirrored item button published on the same window.
+        try:
+            self.find(itemlabel, "push button").click()
+        except Exception:
+            self.find(itemlabel, "menu item").click()
 
     def combo_check_default(self, combolabel, itemlabel):
         """
