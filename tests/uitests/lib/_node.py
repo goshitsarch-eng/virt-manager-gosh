@@ -596,8 +596,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
     @property
     def text(self):
         name = getattr(self, "name", None) or ""
-        if "oslist-entry" in name or name.startswith(
-            "Choose the operating system"
+        if (
+            getattr(self, "_vmm_is_oslist", False)
+            or "oslist-entry" in name
+            or name.startswith("Choose the operating system")
         ):
             try:
                 stored = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
@@ -693,7 +695,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
         # GTK 4 buttons/cells often have no Text iface. Use the name plus
         # one child name (status) without extra AT-SPI queries.
-        if self.roleName in (
+        try:
+            role = self.roleName or ""
+        except Exception:
+            role = ""
+        if role in (
             "push button",
             "button",
             "table cell",
@@ -715,7 +721,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         parts.append(child.name)
             except Exception:
                 pass
-            if self.roleName in ("text", "entry", "text box", "spin button"):
+            if role in ("text", "entry", "text box", "spin button"):
                 if len(parts) > 1:
                     extra = parts[-1]
                     if extra != name:
@@ -1256,7 +1262,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 self.text = text
             except Exception:
                 pass
-        if (self.text or "") == text:
+        try:
+            current = self.text or ""
+        except Exception:
+            current = ""
+        if current == text:
             # Sidecar AccessibleText / name_with_value can report the
             # typed suffix even when the real Gtk buffer is unchanged.
             # Always load the backing widget so Apply sees the new value.
@@ -1591,6 +1601,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
             try:
                 utils.check(lambda: ret.active or ret.showing or ret.onscreen)
             except RuntimeError:
+                pass
+        if name and "oslist-entry" in str(name).lower():
+            try:
+                ret._vmm_is_oslist = True
+            except Exception:
                 pass
         if name and "copy host" in str(name).lower():
             try:
