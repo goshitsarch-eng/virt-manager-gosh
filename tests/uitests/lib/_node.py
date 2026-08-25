@@ -568,7 +568,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
         ret = None
-        deadline = time.time() + 4
+        deadline = time.time() + 8
         while ret is None and time.time() < deadline:
             if recursive:
                 ret = _walk_find(self, pred, False)

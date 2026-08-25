@@ -41,8 +41,10 @@ class VMMDogtailApp:
     def find_window(self, name, roleName=None, check_active=True):
         if roleName is None:
             roleName = "(frame|dialog|alert|window|panel)"
+        if name is None:
+            name = "Virtual Machine Manager"
         return self.root.find(
-            name=name, roleName=roleName, recursive=False, check_active=check_active
+            name=name, roleName=roleName, recursive=True, check_active=check_active
         )
 
     rawinput = dogtail.rawinput
