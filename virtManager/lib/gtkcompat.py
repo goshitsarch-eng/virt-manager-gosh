@@ -617,28 +617,35 @@ class Menu(Gtk.Box):
             show_all(item)
 
     def _ensure_popover(self, parent):
+        # Use a transient undecorated window so AT-SPI can see menu items.
+        # Gtk.Popover often exposes only empty panels to dogtail.
         if self._popover is None:
-            self._popover = Gtk.Popover()
-            self._popover.set_has_arrow(False)
-            self._popover.set_autohide(True)
+            self._popover = Gtk.Window()
+            self._popover.set_decorated(False)
+            self._popover.set_resizable(False)
+            self._popover.set_transient_for(parent.get_root() if parent else None)
+            self._popover.set_accessible_role(Gtk.AccessibleRole.MENU)
+            self._popover.add_css_class("menu")
         if self.get_parent() is not None and self.get_parent() != self._popover:
             self.unparent()
-        if self._popover.get_parent() is None and parent is not None:
-            self._popover.set_parent(parent)
         if self._popover.get_child() is not self:
             self._popover.set_child(self)
         self._parent_widget = parent
+        show_all(self)
+        for item in self._items:
+            show_all(item)
+            if hasattr(item, "_sync_accessible_label"):
+                item._sync_accessible_label()
 
     def popup(self, *_args, **_kwargs):
         parent = self._parent_widget
-        if parent is None or parent.get_root() is None:
+        if parent is None:
             return
         self._ensure_popover(parent)
-        if self._popover.get_parent() is not None:
-            try:
-                self._popover.popup()
-            except Exception:
-                pass
+        try:
+            self._popover.present()
+        except Exception:
+            pass
 
     def popup_at_pointer(self, event=None):
         ignore = event
