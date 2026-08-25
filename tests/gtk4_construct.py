@@ -904,10 +904,12 @@ def main():
         dlg = vmmSnapshotNew(snapvm)
         _auto_confirm(dlg)
         dlg.show(None)
+        dlg.widget("snapshot-new-mode-internal").set_active(True)
         dlg.widget("snapshot-new-name").set_text("gtk4-live-snap")
         dlg.widget("snapshot-new-name").emit("changed")
         snap = dlg._validate_new_snapshot()
         assert snap is not False and snap is not None
+        snap.memory_type = "internal"
         snapvm.create_snapshot(snap.get_xml())
         _pump(GLib, 0.3)
         names = [s.getName() for s in snapvm.get_backend().listAllSnapshots()]
