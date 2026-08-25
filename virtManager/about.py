@@ -57,6 +57,9 @@ class vmmAbout(vmmGObject):
             dialog.set_website_label("https://virt-manager.org/")
         dialog.set_license_type(Gtk.License.GPL_2_0)
         dialog.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+        from .lib import gtkcompat
+
+        gtkcompat.set_accessible_name(dialog, "About Virtual Machine Manager")
         self._dialog = dialog
         dialog.present(parent)
 

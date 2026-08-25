@@ -431,6 +431,8 @@ class MenuItem(Gtk.Button):
             text = (self.label or "").replace("_", "", 1)
         if text:
             set_accessible_name(self, text)
+        if not self._submenu:
+            self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
 
     def _on_label_prop(self, *_args):
         if self.label:
@@ -480,6 +482,8 @@ class MenuItem(Gtk.Button):
         self._submenu = menu
         if menu is not None:
             self.set_accessible_role(Gtk.AccessibleRole.MENU)
+        else:
+            self.set_accessible_role(Gtk.AccessibleRole.MENU_ITEM)
             # Do not parent the menu onto the item: GTK 4 would concatenate
             # every submenu label into this item's accessible name.
             if menu.get_parent() is self:
