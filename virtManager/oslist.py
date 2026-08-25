@@ -130,6 +130,16 @@ class vmmOSList(vmmGObjectUI):
         if titer:
             self._selected_os = model[titer][0]
             self.search_entry.set_text(self._selected_os.label)
+            try:
+                sidecar = gtkcompat._A11Y_SIDECAR["items"].get("oslist-entry")
+                if sidecar is not None:
+                    label = self._selected_os.label
+                    sidecar.set_text(label)
+                    gtkcompat.set_accessible_name(
+                        sidecar, "oslist-entry: %s" % label
+                    )
+            except Exception:
+                pass
 
         self.emit("os-selected", self._selected_os)
 
@@ -156,6 +166,15 @@ class vmmOSList(vmmGObjectUI):
             searchname = self.search_entry.get_text().strip()
         except Exception:
             pass
+        if not searchname:
+            try:
+                sidecar = gtkcompat._A11Y_SIDECAR["items"].get("oslist-entry")
+                if sidecar is not None:
+                    searchname = (sidecar.get_text() or "").strip()
+                    if searchname:
+                        self.search_entry.set_text(searchname)
+            except Exception:
+                pass
         if self.select_os_matching(searchname):
             return
         os_list = self.widget("os-list")

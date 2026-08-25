@@ -852,6 +852,66 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None, name_with_valu
     return ent
 
 
+def _oslist_apply_search_text(oslist, text):
+    if oslist is None:
+        return
+    try:
+        oslist.search_entry.set_text(text or "")
+    except Exception:
+        pass
+
+
+def _oslist_load_search_from_file(oslist):
+    path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+    try:
+        text = open(path, "r").read()
+    except Exception:
+        return
+    _oslist_apply_search_text(oslist, text)
+
+
+def _oslist_confirm_search(oslist):
+    if oslist is None:
+        return
+    try:
+        oslist._entry_activate_cb(oslist.search_entry)
+    except Exception:
+        pass
+
+
+def _append_oslist_a11y_controls(box, oslist):
+    """Load/activate buttons on a findable add_window() surface."""
+    if box is None or oslist is None:
+        return
+    if getattr(box, "_vmm_oslist_controls", False):
+        return
+    box._vmm_oslist_controls = True
+
+    load = Gtk.Button(label=".entry-load-oslist-entry")
+    load.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(load)
+    set_accessible_name(load, ".entry-load-oslist-entry")
+    load.connect("clicked", lambda *_a, lst=oslist: _oslist_load_search_from_file(lst))
+    box.append(load)
+
+    act = Gtk.Button(label=".oslist-activate")
+    act.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+    ensure_activate_clicked(act)
+    set_accessible_name(act, ".oslist-activate")
+    act.connect("clicked", lambda *_a, lst=oslist: _oslist_confirm_search(lst))
+    box.append(act)
+
+
+def _ensure_app_window(win):
+    app = Gtk.Application.get_default()
+    if app is None or win is None:
+        return
+    try:
+        app.add_window(win)
+    except Exception:
+        pass
+
+
 def expose_createvm_methods_window(createvm):
     """
     Fresh AT-SPI window with install-method Buttons. Overlay sidecars are
@@ -861,6 +921,13 @@ def expose_createvm_methods_window(createvm):
     win = getattr(createvm, "_vmm_methods_win", None)
     if win is not None:
         try:
+            _ensure_app_window(win)
+            try:
+                _append_oslist_a11y_controls(
+                    win.get_child(), getattr(createvm, "_os_list", None)
+                )
+            except Exception:
+                pass
             win.set_visible(True)
             return win
         except Exception:
@@ -868,7 +935,7 @@ def expose_createvm_methods_window(createvm):
     win = Gtk.Window()
     win.set_decorated(False)
     win.set_modal(False)
-    win.set_default_size(280, 140)
+    win.set_default_size(280, 200)
     try:
         win.set_accessible_role(Gtk.AccessibleRole.GENERIC)
     except Exception:
@@ -901,12 +968,8 @@ def expose_createvm_methods_window(createvm):
 
         btn.connect("clicked", _pick)
         box.append(btn)
-    app = Gtk.Application.get_default()
-    if app is not None:
-        try:
-            app.add_window(win)
-        except Exception:
-            pass
+    _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
+    _ensure_app_window(win)
     win.set_visible(True)
     createvm._vmm_methods_win = win
     return win
@@ -1106,14 +1169,19 @@ def expose_oslist_activate_window(oslist):
     win = getattr(oslist, "_vmm_activate_win", None)
     if win is not None:
         try:
+            _ensure_app_window(win)
+            try:
+                _append_oslist_a11y_controls(win.get_child(), oslist)
+            except Exception:
+                pass
             win.set_visible(True)
             return win
         except Exception:
-            pass
+            oslist._vmm_activate_win = None
     win = Gtk.Window()
     win.set_decorated(False)
     win.set_modal(False)
-    win.set_default_size(80, 32)
+    win.set_default_size(160, 64)
     try:
         win.set_accessible_role(Gtk.AccessibleRole.GENERIC)
     except Exception:
@@ -1123,25 +1191,10 @@ def expose_oslist_activate_window(oslist):
         win.set_title(".oslist-activate-win")
     except Exception:
         pass
-    btn = Gtk.Button(label=".oslist-activate")
-    btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
-    ensure_activate_clicked(btn)
-    set_accessible_name(btn, ".oslist-activate")
-
-    def _activate(_b, lst=oslist):
-        try:
-            lst._entry_activate_cb(lst.search_entry)
-        except Exception:
-            pass
-
-    btn.connect("clicked", _activate)
-    win.set_child(btn)
-    app = Gtk.Application.get_default()
-    if app is not None:
-        try:
-            app.add_window(win)
-        except Exception:
-            pass
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    win.set_child(box)
+    _append_oslist_a11y_controls(box, oslist)
+    _ensure_app_window(win)
     win.set_visible(True)
     oslist._vmm_activate_win = win
     return win

@@ -673,6 +673,17 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     self.grabFocus()
                 except Exception:
                     pass
+            # Overlay click often does not fire install_action. Confirm
+            # via the dedicated .oslist-activate button when there is text.
+            try:
+                typed = (self.text or "").strip()
+            except Exception:
+                typed = ""
+            if typed:
+                try:
+                    self._click_named_button(".oslist-activate")
+                except Exception:
+                    pass
             return
         if self.is_menuitem() or self.roleName in (
             "table cell",
@@ -736,6 +747,40 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 except Exception:
                     pass
 
+    def _click_named_button(self, name):
+        app = _virt_manager_app()
+        pred = _FuzzyPredicate(re.escape(name), _alias_role("push button"))
+        roots = []
+        if app is not None:
+            roots.append(app)
+        try:
+            roots.append(dogtail.tree.root)
+        except Exception:
+            pass
+        for root in roots:
+            btn = _walk_find(root, pred, True)
+            if btn is not None:
+                try:
+                    btn.doActionNamed("click")
+                except Exception:
+                    btn.click()
+                return True
+        return False
+
+    def typeText(self, string):
+        # GTK 4 AccessibleText typing often misses the Gtk buffer. For
+        # oslist-entry, load the string into the real SearchEntry so the
+        # popover opens and Enter can confirm Generic.
+        if "oslist-entry" in (self.name or ""):
+            try:
+                with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
+                    fh.write(string)
+                if self._click_named_button(".entry-load-oslist-entry"):
+                    return
+            except Exception:
+                pass
+        return super().typeText(string)
+
     def set_text(self, text):
         self.check_onscreen()
         self.check_sensitive()
@@ -784,15 +829,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                 fh.write(text)
             base = (self.name or "").split(":", 1)[0].strip().rstrip(":")
-            pred = _FuzzyPredicate(
-                re.escape(".entry-load-" + base), _alias_role("push button")
-            )
-            btn = _walk_find(app, pred, True) if app is not None else None
-            if btn is not None:
-                try:
-                    btn.doActionNamed("click")
-                except Exception:
-                    btn.click()
+            self._click_named_button(".entry-load-" + base)
         except Exception:
             pass
 

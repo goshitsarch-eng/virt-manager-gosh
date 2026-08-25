@@ -143,17 +143,25 @@ class VMMDogtailApp:
                 try:
                     from . import _node
 
-                    app = _node._virt_manager_app()
                     pred = _node._FuzzyPredicate(
                         ".oslist-activate", _node._alias_role("push button")
                     )
-                    btn = _node._walk_find(app, pred, True) if app is not None else None
-                    if btn is not None:
-                        try:
-                            btn.doActionNamed("click")
-                        except Exception:
-                            btn.click()
-                        return
+                    roots = []
+                    app = _node._virt_manager_app()
+                    if app is not None:
+                        roots.append(app)
+                    try:
+                        roots.append(dogtail.tree.root)
+                    except Exception:
+                        pass
+                    for root in roots:
+                        btn = _node._walk_find(root, pred, True)
+                        if btn is not None:
+                            try:
+                                btn.doActionNamed("click")
+                            except Exception:
+                                btn.click()
+                            return
                 except Exception:
                     pass
             return dogtail.rawinput.pressKey(key, *a, **kw)
