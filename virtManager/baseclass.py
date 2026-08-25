@@ -392,6 +392,12 @@ class vmmGObjectUI(vmmGObject):
                 pass
             _sync_title()
             self.bind_escape_key_close()
+            try:
+                from .lib import gtkcompat
+
+                gtkcompat.ensure_window_a11y_box(self.topwin)
+            except Exception:
+                pass
 
         self._err = None
 

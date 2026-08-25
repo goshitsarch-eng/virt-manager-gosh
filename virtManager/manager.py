@@ -141,7 +141,12 @@ class vmmManager(vmmGObjectUI):
         gtkcompat.set_accessible_name(errlab, "error-label")
         # GTK 4 does not expose hidden notebook pages. Mirror the startup
         # error so DefaultStartup / CLI first-run can find error-label.
-        gtkcompat.expose_a11y_label("error-label", "error-label", errlab.get_text() or "error")
+        gtkcompat.expose_a11y_label(
+            "error-label",
+            "error-label",
+            errlab.get_text() or "error",
+            window=self.topwin,
+        )
 
         self.init_stats()
         self.init_toolbar()
@@ -216,7 +221,9 @@ class vmmManager(vmmGObjectUI):
         self.widget("vm-notebook").set_current_page(1)
         self.widget("startup-error-label").set_text(msg)
         gtkcompat.set_accessible_name(self.widget("startup-error-label"), "error-label")
-        gtkcompat.expose_a11y_label("error-label", "error-label", msg or "error")
+        gtkcompat.expose_a11y_label(
+            "error-label", "error-label", msg or "error", window=self.topwin
+        )
 
     ################
     # Init methods #

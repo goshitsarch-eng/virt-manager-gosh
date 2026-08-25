@@ -75,7 +75,7 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
     if _seen is None:
         _seen = set()
     if _budget is None:
-        _budget = [800]
+        _budget = [2500]
     if _budget[0] <= 0:
         return None
     _budget[0] -= 1
@@ -317,12 +317,38 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
     @property
     def text(self):
+        name = getattr(self, "name", None) or ""
+
+        def _is_labeller(val):
+            if val is None:
+                return True
+            s = str(val).strip()
+            if not s:
+                return True
+            if s.endswith(":"):
+                return True
+            if name and s == name.split(":", 1)[0].strip() + ":":
+                return True
+            return False
+
         try:
-            t = self.queryText().getText(0, -1)
-            if t:
+            t = self.queryEditableText().getText(0, -1)
+            if t and not _is_labeller(t):
                 return t
         except Exception:
             pass
+        try:
+            t = self.queryText().getText(0, -1)
+            # GTK 4 Gtk.Entry often exposes the mnemonic labeller ("Name:")
+            # or the full accessible name as AccessibleText.
+            if t and not _is_labeller(t) and t.strip() != name.strip():
+                return t
+        except Exception:
+            pass
+        if ":" in name:
+            rest = name.split(":", 1)[1].strip()
+            if rest:
+                return rest
         # GTK 4 buttons/cells often have no Text iface. Use the name plus
         # one child name (status) without extra AT-SPI queries.
         if self.roleName in (
@@ -339,24 +365,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "static",
         ):
             parts = []
-            if self.name:
-                parts.append(self.name)
+            if name:
+                parts.append(name)
             try:
                 for child in list(self.children or [])[:3]:
-                    if child is not None and child.name and child.name != self.name:
+                    if child is not None and child.name and child.name != name:
                         parts.append(child.name)
             except Exception:
                 pass
             if self.roleName in ("text", "entry", "text box", "spin button"):
                 if len(parts) > 1:
                     return parts[-1]
-                raw = parts[0] if parts else ""
-                # "Name: test default" sidecar/entry name → value only
-                if ":" in raw:
-                    rest = raw.split(":", 1)[1].strip()
-                    if rest:
-                        return rest
-                return raw
+                return parts[0] if parts else ""
             return "\n".join(parts)
         return None
 

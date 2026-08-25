@@ -92,11 +92,24 @@ class vmmVMWindow(vmmGObjectUI):
         self.init_menus()
         addhw = self._details.widget("add-hardware-button")
         gtkcompat.expose_a11y_button(
-            "add-hardware", "add-hardware", lambda: addhw.emit("clicked")
+            "add-hardware",
+            "add-hardware",
+            lambda: addhw.emit("clicked"),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_label(
+            "guest-status",
+            "Guest is not running.",
+            "Guest is not running.",
+            window=self.topwin,
         )
         gtkcompat.sync_sidecar_visible(
             "add-hardware",
             self.widget("details-pages").get_current_page() == DETAILS_PAGE_DETAILS,
+        )
+        gtkcompat.sync_sidecar_visible(
+            "guest-status",
+            self.widget("details-pages").get_current_page() == DETAILS_PAGE_CONSOLE,
         )
 
         self.builder.connect_signals(
@@ -382,7 +395,10 @@ class vmmVMWindow(vmmGObjectUI):
         try:
             addhw = self._details.widget("add-hardware-button")
             gtkcompat.expose_a11y_button(
-                "add-hardware", "add-hardware", lambda: addhw.emit("clicked")
+                "add-hardware",
+                "add-hardware",
+                lambda: addhw.emit("clicked"),
+                window=self.topwin,
             )
             gtkcompat.sync_sidecar_visible("add-hardware", newpage == DETAILS_PAGE_DETAILS)
             gtkcompat.sync_sidecar_visible(

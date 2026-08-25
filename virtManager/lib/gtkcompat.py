@@ -335,13 +335,53 @@ def _strip_pango_markup(text):
     return re.sub(r"<[^>]+>", "", str(text or "")).replace("&amp;", "&")
 
 
-_A11Y_SIDECAR = {"win": None, "box": None, "items": {}}
+_A11Y_SIDECAR = {"win": None, "box": None, "items": {}, "last_window": None}
 
 
-def _a11y_sidecar_box():
+def ensure_window_a11y_box(window):
     """
-    Always-mapped window for widgets GTK 4 keeps off the AT-SPI tree
-    (hidden notebook pages, some modal dialogs).
+    Overlay a mapped box on a real toplevel so hidden-page sidecars stay
+    in that window's AT-SPI tree. A separate opacity-0 GROUP window is
+    invisible to AT-SPI.
+    """
+    if window is None:
+        return _a11y_global_sidecar_box()
+    box = getattr(window, "_vmm_a11y_box", None)
+    if box is not None:
+        return box
+    overlay = Gtk.Overlay()
+    try:
+        child = window.get_child()
+    except Exception:
+        child = None
+    if child is not None:
+        try:
+            window.set_child(None)
+        except Exception:
+            child = None
+        if child is not None:
+            overlay.set_child(child)
+    try:
+        window.set_child(overlay)
+    except Exception:
+        return _a11y_global_sidecar_box()
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    box.set_halign(Gtk.Align.START)
+    box.set_valign(Gtk.Align.END)
+    try:
+        box.set_can_target(False)
+    except Exception:
+        pass
+    overlay.add_overlay(box)
+    window._vmm_a11y_overlay = overlay
+    window._vmm_a11y_box = box
+    return box
+
+
+def _a11y_global_sidecar_box():
+    """
+    Fallback always-mapped window. Keep it named with a leading '.' so
+    uitests do not treat it as the app toplevel.
     """
     if _A11Y_SIDECAR["win"] is None:
         win = Gtk.Window()
@@ -349,9 +389,14 @@ def _a11y_sidecar_box():
         win.set_resizable(False)
         win.set_modal(False)
         win.set_focusable(False)
-        win.set_opacity(0)
+        win.set_default_size(8, 8)
         try:
-            win.set_accessible_role(Gtk.AccessibleRole.GROUP)
+            win.set_accessible_role(Gtk.AccessibleRole.WINDOW)
+        except Exception:
+            pass
+        set_accessible_name(win, ".a11y-sidecar")
+        try:
+            win.set_title(".a11y-sidecar")
         except Exception:
             pass
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -368,8 +413,62 @@ def _a11y_sidecar_box():
     return _A11Y_SIDECAR["box"]
 
 
-def expose_a11y_label(key, name, text):
-    box = _a11y_sidecar_box()
+def _a11y_sidecar_box(window=None):
+    if window is None:
+        window = _A11Y_SIDECAR.get("last_window")
+    if window is not None:
+        _A11Y_SIDECAR["last_window"] = window
+        return ensure_window_a11y_box(window)
+    return _a11y_global_sidecar_box()
+
+
+def attach_entry_a11y_value(entry, label=None):
+    """
+    GTK 4 labelled-by (mnemonic-widget) makes Gtk.Entry AccessibleText
+    the labeller ("Name:") instead of the buffer. Clear that relation
+    and publish "Name: <value>" so dogtail .text can recover the value.
+    """
+    if entry is None or not hasattr(entry, "get_text"):
+        return
+    if label:
+        entry._vmm_entry_label = label
+
+    def _sync(*_a):
+        try:
+            value = entry.get_text() or ""
+        except Exception:
+            value = ""
+        lab = getattr(entry, "_vmm_entry_label", None)
+        if not lab:
+            cached = getattr(entry, "_vmm_a11y_name", None) or ""
+            if cached.endswith(":"):
+                lab = cached
+            elif ":" in cached:
+                lab = cached.split(":", 1)[0].strip() + ":"
+        if lab and lab.endswith(":"):
+            name = ("%s %s" % (lab, value)).strip() if value else lab
+            try:
+                entry.update_relation([Gtk.AccessibleRelation.LABELLED_BY], [])
+            except Exception:
+                pass
+            set_accessible_name(entry, name)
+        return False
+
+    entry._vmm_sync_entry_a11y = _sync
+    if not getattr(entry, "_vmm_entry_value_a11y", False):
+        entry._vmm_entry_value_a11y = True
+        try:
+            entry.connect("changed", lambda *_a: _sync())
+            entry.connect("notify::text", lambda *_a: _sync())
+        except Exception:
+            pass
+        GLib.idle_add(_sync)
+    else:
+        _sync()
+
+
+def expose_a11y_label(key, name, text, window=None):
+    box = _a11y_sidecar_box(window)
     lab = _A11Y_SIDECAR["items"].get(key)
     if lab is None:
         lab = Gtk.Label(label=text or name or "")
@@ -382,12 +481,12 @@ def expose_a11y_label(key, name, text):
     return lab
 
 
-def expose_a11y_text(key, name, text):
+def expose_a11y_text(key, name, text, window=None):
     """
     Mirror an entry as a real Gtk.Entry so AccessibleText returns the
     value, while the AT-SPI name stays the labeller ("Name:").
     """
-    box = _a11y_sidecar_box()
+    box = _a11y_sidecar_box(window)
     ent = _A11Y_SIDECAR["items"].get(key)
     if ent is None:
         ent = Gtk.Entry()
@@ -410,9 +509,9 @@ def expose_a11y_text(key, name, text):
     return ent
 
 
-def expose_a11y_check(key, name, widget):
+def expose_a11y_check(key, name, widget, window=None):
     """Mirror a CheckButton so it stays findable when its notebook page hides."""
-    box = _a11y_sidecar_box()
+    box = _a11y_sidecar_box(window)
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
         btn = Gtk.CheckButton(label=name)
@@ -450,8 +549,8 @@ def expose_a11y_check(key, name, widget):
     return btn
 
 
-def expose_a11y_button(key, name, callback):
-    box = _a11y_sidecar_box()
+def expose_a11y_button(key, name, callback, window=None):
+    box = _a11y_sidecar_box(window)
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
         btn = Gtk.Button(label=name)
@@ -1156,6 +1255,8 @@ def sync_builder_accessible(widget):
     GLib.idle_add(_reapply)
     if isinstance(widget, Gtk.Label):
         GLib.idle_add(lambda: apply_mnemonic_accessible_name(widget) or False)
+    if isinstance(widget, Gtk.Entry):
+        GLib.idle_add(lambda: attach_entry_a11y_value(widget) or False)
 
 
 def apply_mnemonic_accessible_name(label):
@@ -1175,6 +1276,11 @@ def apply_mnemonic_accessible_name(label):
         return
     text = _mnemonic_label(label.get_text() or label.get_label() or "")
     if not text:
+        return
+    if hasattr(target, "get_text") and hasattr(target, "set_text") and not isinstance(
+        target, Gtk.Label
+    ):
+        attach_entry_a11y_value(target, text)
         return
     if not getattr(target, "_vmm_a11y_name", None):
         set_accessible_name(target, text)
