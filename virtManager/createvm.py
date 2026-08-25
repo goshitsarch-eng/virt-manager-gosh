@@ -1651,7 +1651,18 @@ class vmmCreateVM(vmmGObjectUI):
         if instpage == INSTALL_PAGE_ISO:
             cdrom = self._get_config_local_media()
         elif instpage == INSTALL_PAGE_URL:
+            self._sync_url_from_sentinels()
             location = self.widget("install-url-entry").get_text()
+            if not (location or "").strip():
+                try:
+                    location = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                except Exception:
+                    location = ""
+                if location:
+                    try:
+                        self.widget("install-url-entry").set_text(location)
+                    except Exception:
+                        pass
 
         return cdrom, location
 
@@ -1819,6 +1830,11 @@ class vmmCreateVM(vmmGObjectUI):
         self._change_os_detect(not dodetect)
         if dodetect:
             self._os_already_detected_for_media = False
+            try:
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("Detecting..."))
+                self._os_list.search_entry.set_text(_("Detecting..."))
+            except Exception:
+                pass
             self._start_detect_os_if_needed()
 
     def _browse_oscontainer(self, ignore):
