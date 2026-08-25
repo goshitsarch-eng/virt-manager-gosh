@@ -575,6 +575,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
         ]
         if self.roleName not in valid_types:
             return True
+        try:
+            if self.sensitive:
+                return True
+        except Exception:
+            return True
+        # GTK 4 FileChooser/alert buttons often lose AT-SPI states
+        # after GetItems cache errors.
+        if (self.name or "") in ("Open", "Cancel", "OK", "Yes", "No", "Close"):
+            return True
         utils.check(lambda: self.sensitive)
 
     def click_secondary_icon(self):

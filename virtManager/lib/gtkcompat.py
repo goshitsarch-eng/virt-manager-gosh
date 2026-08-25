@@ -2916,6 +2916,10 @@ def _browse_local_window(
     open_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
     ensure_activate_clicked(open_btn)
     set_accessible_name(open_btn, open_lbl)
+    try:
+        open_btn.update_state([Gtk.AccessibleState.DISABLED], [False])
+    except Exception:
+        pass
     cancel_btn = Gtk.Button(label="Cancel")
     cancel_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
     set_accessible_name(cancel_btn, "Cancel")
