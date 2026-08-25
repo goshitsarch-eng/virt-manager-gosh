@@ -185,9 +185,24 @@ class VMMDogtailApp:
         needs_confirm = needs_shutdown or pause
 
         def _do_click():
-            vmcell.click()
-            vmcell.click(button=3)
-            menu = self.root.find("vm-action-menu")
+            # Re-find the cell: VM state changes rebuild the GTK 4 a11y
+            # mirror, so a node from the first lookup can go stale.
+            cell = manager.find(vmname + "\n", "table cell")
+            cell.click()
+            cell.click(button=3)
+            menu = None
+            for _try in range(3):
+                try:
+                    menu = self.root.find("vm-action-menu")
+                    if menu.onscreen:
+                        break
+                except Exception:
+                    menu = None
+                cell = manager.find(vmname + "\n", "table cell")
+                cell.click()
+                cell.click(button=3)
+            if menu is None:
+                menu = self.root.find("vm-action-menu")
             utils.check(lambda: menu.onscreen)
             if needs_shutdown:
                 smenu = menu.find("Shut Down", "menu")

@@ -200,9 +200,14 @@ class vmmErrorDialog(vmmGObject):
     def warn_chkbox(self, text1, text2=None, chktext=None, buttons=None):
         dtype = Gtk.MessageType.WARNING
         buttons = buttons or Gtk.ButtonsType.OK_CANCEL
-        chkbox = _errorDialog(
-            parent=self.get_parent(), flags=0, message_type=dtype, buttons=buttons
-        )
+        # Reuse one confirm window so Extra's many Yes/No prompts do not
+        # poison the AT-SPI GetItems cache.
+        chkbox = getattr(self, "_warn_dialog", None)
+        if chkbox is None:
+            chkbox = _errorDialog(
+                parent=self.get_parent(), flags=0, message_type=dtype, buttons=buttons
+            )
+            self._warn_dialog = chkbox
         return chkbox.show_dialog(primary_text=text1, secondary_text=text2, chktext=chktext)
 
     def err_chkbox(self, text1, text2=None, chktext=None, buttons=None):
@@ -424,6 +429,6 @@ class _errorDialog(Gtk.Window):
 
         if chktext:
             res = [res, bool(chkbox.get_active())]
-        self.destroy()
+        self.hide()
 
         return res

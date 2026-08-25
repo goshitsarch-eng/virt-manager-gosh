@@ -307,6 +307,17 @@ class vmmManager(vmmGObjectUI):
         self.vmmenu._vmm_menu_name = "vm-action-menu"
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
+        # Keep one mapped window per context menu so AT-SPI does not
+        # churn GetItems when Extra opens the menu many times.
+        self.vmmenu._parent_widget = self.topwin
+        self.connmenu._parent_widget = self.topwin
+        try:
+            self.vmmenu._ensure_popover(self.topwin)
+            self.vmmenu._ensure_mapped()
+            self.connmenu._ensure_popover(self.topwin)
+            self.connmenu._ensure_mapped()
+        except Exception:
+            pass
 
         def _on_menu_key(_c, keyval, *_a):
             if Gdk.keyval_name(keyval) == "Menu":
