@@ -370,7 +370,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
         try:
             t = self.queryEditableText().getText(0, -1)
-            if t and not _is_labeller(t):
+            if t and not _is_labeller(t) and t.strip() != name.strip():
                 return t
         except Exception:
             pass

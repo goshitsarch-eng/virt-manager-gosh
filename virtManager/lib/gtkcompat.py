@@ -827,6 +827,8 @@ def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None
                 text = src.get_property("text") or ""
                 if dst.get_text() != text:
                     dst.set_text(text)
+                shown = name if not text else "%s: %s" % (name, text)
+                set_accessible_name(dst, shown)
                 try:
                     dst.set_editable(bool(real.get_editable()))
                     dst.set_sensitive(True)
