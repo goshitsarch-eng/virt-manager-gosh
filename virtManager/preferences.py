@@ -189,7 +189,6 @@ class vmmPreferences(vmmGObjectUI):
         uiutil.init_combo_text_column(combo, 1)
 
         if not vmmInspection.libguestfs_installed():  # pragma: no cover
-            self.widget("prefs-libguestfs").set_sensitive(False)
             self.widget("prefs-libguestfs").set_tooltip_text(
                 _("python libguestfs support is not installed")
             )
