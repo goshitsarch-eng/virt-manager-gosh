@@ -988,13 +988,13 @@ def _oslist_hide_popovers(oslist):
         pass
     for wrap in _oslist_popover_wraps(oslist):
         try:
-            set_accessible_name(wrap, ".oslist-popover")
+            # Keep a stable AT-SPI name; hide is tracked by the sentinel files.
+            set_accessible_name(wrap, "oslist-popover")
         except Exception:
             pass
     try:
         top = getattr(oslist, "topwin", None)
         if top is not None:
-            set_accessible_name(top, ".oslist-popover")
             try:
                 top.popdown()
             except Exception:

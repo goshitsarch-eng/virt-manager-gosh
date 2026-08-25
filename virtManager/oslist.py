@@ -365,10 +365,6 @@ class vmmOSList(vmmGObjectUI):
             except Exception:
                 pass
         try:
-            gtkcompat.set_accessible_name(self.topwin, ".oslist-popover")
-        except Exception:
-            pass
-        try:
             open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
         except Exception:
             pass

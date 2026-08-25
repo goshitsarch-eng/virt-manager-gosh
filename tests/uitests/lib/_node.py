@@ -575,10 +575,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = self.name or ""
         except Exception:
             name = ""
-        if "oslist-popover" in (name or ""):
-            if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") or os.path.exists(
-                "/tmp/vmm-a11y-oslist-escape"
-            ):
+        try:
+            _oslist_hidden = os.path.exists(
+                "/tmp/vmm-a11y-oslist-popover-hidden"
+            ) or os.path.exists("/tmp/vmm-a11y-oslist-escape")
+        except Exception:
+            _oslist_hidden = False
+        if _oslist_hidden:
+            if "oslist-popover" in (name or ""):
+                return False
+            # GTK 4 drops dotted accessible names; a popped-down popover
+            # then looks like an unnamed dialog and would stay "onscreen".
+            if role in ["frame", "window", "dialog", "alert"] and not name:
                 return False
         try:
             if name.startswith(".") or name.endswith(" (hidden)"):
