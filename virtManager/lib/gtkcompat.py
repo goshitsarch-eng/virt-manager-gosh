@@ -3205,11 +3205,12 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             tname = treeview.get_accessible_name() or ""
         except Exception:
             tname = ""
-        if tname == "hw-list" or names:
-            try:
-                open("/tmp/vmm-a11y-hw-list.txt", "w").write("\n".join(names))
-            except Exception:
-                pass
+        if tname != "hw-list":
+            return
+        try:
+            open("/tmp/vmm-a11y-hw-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
         selected = ""
         try:
             sel = treeview.get_selection()
