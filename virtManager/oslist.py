@@ -326,6 +326,10 @@ class vmmOSList(vmmGObjectUI):
 
     def _os_selected_cb(self, src, path, column):
         self._os_confirmed = True
+        try:
+            open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+        except Exception:
+            pass
         self._sync_os_selection()
 
     def _filter_os_cb(self, model, titer, ignore1):
@@ -356,6 +360,10 @@ class vmmOSList(vmmGObjectUI):
         self.search_entry.set_text("")
         try:
             os.remove("/tmp/vmm-a11y-os-select.txt")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-oslist-confirmed")
         except Exception:
             pass
         self._clear_filter()
@@ -406,6 +414,10 @@ class vmmOSList(vmmGObjectUI):
             self._kept_os = vmosobj
             self._selected_os = vmosobj
             self._os_confirmed = True
+            try:
+                open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+            except Exception:
+                pass
         self._clear_filter()
 
         os_list = self.widget("os-list")

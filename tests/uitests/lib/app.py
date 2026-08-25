@@ -145,6 +145,12 @@ class VMMDogtailApp:
                         fh.write("1")
                 except Exception:
                     pass
+                try:
+                    if not os.path.exists("/tmp/vmm-a11y-oslist-confirmed"):
+                        with open("/tmp/vmm-a11y-oslist-entry.txt", "w") as fh:
+                            fh.write("")
+                except Exception:
+                    pass
             if key_l in ("enter", "return"):
                 try:
                     from . import _node
