@@ -78,14 +78,18 @@ def _walk_find(node, pred, recursive=True, _seen=None):
             return node
     except Exception:
         pass
-    if not recursive:
-        return None
     try:
         kids = list(node.children)
     except Exception:
         return None
     for child in kids:
-        ret = _walk_find(child, pred, True, _seen)
+        if recursive:
+            ret = _walk_find(child, pred, True, _seen)
+        else:
+            try:
+                ret = child if pred.satisfiedByNode(child) else None
+            except Exception:
+                ret = None
         if ret is not None:
             return ret
     return None

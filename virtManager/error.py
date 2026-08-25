@@ -278,6 +278,10 @@ class _errorDialog(Gtk.Window):
         Gtk.Window.__init__(self)
         self.set_transient_for(parent)
         self.set_modal(True)
+        if parent is not None and hasattr(parent, "get_application"):
+            app = parent.get_application()
+            if app is not None:
+                app.add_window(self)
         self.set_title("")
         self.set_default_size(440, 180)
         self.set_accessible_role(Gtk.AccessibleRole.ALERT)

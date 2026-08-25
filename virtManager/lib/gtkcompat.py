@@ -113,10 +113,27 @@ def attach_treeview_a11y(treeview, name_column=1):
     treeview._vmm_a11y_mirror = win
     treeview._vmm_a11y_box = box
 
-    def _select_path(path):
+    def _select_handle(handle):
+        model = treeview.get_model()
         sel = treeview.get_selection()
-        if sel is not None:
-            sel.select_path(path)
+        if model is None or sel is None or handle is None:
+            return
+
+        def _find(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    if model[_iter][0] is handle:
+                        sel.select_iter(_iter)
+                        return True
+                except Exception:
+                    pass
+                if _find(_iter):
+                    return True
+                _iter = model.iter_next(_iter)
+            return False
+
+        _find(None)
         treeview.grab_focus()
 
     def _rebuild(*_args):
@@ -137,11 +154,14 @@ def attach_treeview_a11y(treeview, name_column=1):
                 except Exception:
                     name = ""
                 name = _mnemonic_label(str(name or ""))
-                path = model.get_path(_iter)
+                try:
+                    handle = model[_iter][0]
+                except Exception:
+                    handle = None
                 btn = Gtk.Button(label=name)
                 btn.set_accessible_role(Gtk.AccessibleRole.CELL)
                 set_accessible_name(btn, name)
-                btn.connect("clicked", lambda _b, p=path.copy(): _select_path(p))
+                btn.connect("clicked", lambda _b, h=handle: _select_handle(h))
                 box.append(btn)
                 _walk(_iter)
                 _iter = model.iter_next(_iter)
