@@ -1058,55 +1058,54 @@ def _sync_conn_menu_sensitivity(manager):
 
 
 def expose_conn_menu_window(manager):
-    """Always-mapped connection context menu. Overlay Gtk.Menu popovers
-    are often missing after GetItems; a new add_window() surface stays
-    findable as conn-menu even before the first right-click."""
+    """Publish conn-menu on the existing VM-list a11y window.
+
+    A dedicated add_window() dialog is findable but poisons AT-SPI
+    GetItems so later toplevels (New VM) disappear. The tree mirror
+    is already mapped and walked by dogtail.
+    """
     if manager is None:
         return None
     items = _sync_conn_menu_sensitivity(manager)
-    win = getattr(manager, "_vmm_conn_menu_win", None)
-    if win is not None:
-        try:
-            _ensure_app_window(win)
-            set_accessible_name(win, "conn-menu")
-            win.set_visible(True)
-            box = win.get_child()
-            child = box.get_first_child() if box is not None else None
-            while child is not None:
-                name = ""
+    host = getattr(manager, "_vmm_conn_menu_box", None)
+    if host is not None:
+        child = host.get_first_child()
+        while child is not None:
+            name = ""
+            try:
+                name = child.get_accessible_name() or ""
+            except Exception:
+                pass
+            src = None
+            if name.startswith("conn-"):
+                src = items.get(name[5:])
+            if src is not None:
                 try:
-                    name = child.get_accessible_name() or ""
+                    child.set_sensitive(src.get_sensitive())
                 except Exception:
                     pass
-                src = None
-                if name.startswith("conn-"):
-                    src = items.get(name[5:])
-                if src is not None:
-                    try:
-                        child.set_sensitive(src.get_sensitive())
-                    except Exception:
-                        pass
-                child = child.get_next_sibling()
-            return win
-        except Exception:
-            manager._vmm_conn_menu_win = None
-    win = Gtk.Window()
-    win.set_decorated(False)
-    win.set_modal(False)
-    win.set_focusable(False)
-    win.set_focus_on_click(False)
-    win.set_default_size(220, 200)
+            child = child.get_next_sibling()
+        return host
+
+    vmlist = None
     try:
-        win.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+        vmlist = manager.widget("vm-list")
+    except Exception:
+        vmlist = None
+    outer = getattr(vmlist, "_vmm_a11y_outer", None) if vmlist is not None else None
+    if outer is None:
+        return None
+
+    host = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    try:
+        host.set_accessible_role(Gtk.AccessibleRole.MENU)
     except Exception:
         pass
-    set_accessible_name(win, "conn-menu")
+    set_accessible_name(host, "conn-menu")
     try:
-        win.set_title("conn-menu")
+        host.set_can_target(True)
     except Exception:
         pass
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-    win.set_child(box)
     for idx in ("create", "connect", "disconnect", "delete", "details"):
         src = items.get(idx)
         name = "conn-%s" % idx
@@ -1134,10 +1133,6 @@ def expose_conn_menu_window(manager):
                 except Exception:
                     pass
             try:
-                hide_conn_menu_window(mgr)
-            except Exception:
-                pass
-            try:
                 menu = getattr(mgr, "connmenu", None)
                 if menu is not None:
                     menu.popdown()
@@ -1145,11 +1140,10 @@ def expose_conn_menu_window(manager):
                 pass
 
         btn.connect("clicked", _act)
-        box.append(btn)
-    _ensure_app_window(win)
-    win.set_visible(True)
-    manager._vmm_conn_menu_win = win
-    return win
+        host.append(btn)
+    outer.append(host)
+    manager._vmm_conn_menu_box = host
+    return host
 
 
 def hide_conn_menu_window(manager):
@@ -1893,11 +1887,14 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         except Exception:
             continue
     win.set_default_size(240, 80)
+    outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-    win.set_child(box)
+    outer.append(box)
+    win.set_child(outer)
     win.set_opacity(0)
     treeview._vmm_a11y_mirror = win
     treeview._vmm_a11y_box = box
+    treeview._vmm_a11y_outer = outer
 
     def _select_name(want):
         model = treeview.get_model()
@@ -3608,10 +3605,6 @@ class Menu(Gtk.Box):
             self.unparent()
         if self._popover.get_child() is not self:
             self._popover.set_child(self)
-        try:
-            _ensure_app_window(self._popover)
-        except Exception:
-            pass
         self._sync_menu_a11y_name()
         self.remove_css_class("vmm-submenu")
         show_all(self)
