@@ -1331,11 +1331,15 @@ def attach_notebook_a11y(notebook):
                     gest.connect("pressed", lambda *_a, idx=i: _select(idx=idx))
                     real_tab.add_controller(gest)
                     ensure_activate_clicked(real_tab)
-                set_accessible_name(real_tab, tlabel or _mnemonic_label(pname))
-                try:
-                    real_tab.set_accessible_role(Gtk.AccessibleRole.TAB)
-                except Exception:
-                    pass
+                # Keep the real tab out of dogtail find("Polling", "page tab")
+                # so the overlay button (which actually switches pages) wins.
+                hidden = "." + (tlabel or _mnemonic_label(pname) or "tab")
+                walk = real_tab
+                for _ in range(4):
+                    if walk is None or walk is notebook:
+                        break
+                    set_accessible_name(walk, hidden)
+                    walk = walk.get_parent() if hasattr(walk, "get_parent") else None
             sidecar = page_map.get(pname)
             if sidecar is None:
                 sidecar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
