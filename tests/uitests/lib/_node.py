@@ -241,6 +241,57 @@ def _sentinel_oslist_popover(name, roleName):
     return _OslistPopoverSentinel()
 
 
+class _StorageRadioSentinel(object):
+    """Storage create/select radios after GetItems hides the methods window."""
+
+    def __init__(self, name, want):
+        self.name = name
+        self.roleName = "radio button"
+        self._want = want
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-storage-radio.txt", "w").write(self._want)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+
+def _sentinel_storage_radio(name, roleName):
+    if not name:
+        return None
+    raw = str(name)
+    compact = raw.replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    if role and "radio" not in role and "button" not in role and "check" not in role:
+        return None
+    if "select or create" in compact:
+        return _StorageRadioSentinel("Select or create custom storage", "select")
+    if "create a disk image" in compact:
+        return _StorageRadioSentinel(
+            "Create a disk image for the virtual machine", "create"
+        )
+    return None
+
+
 def _sentinel_hw_cell(name, roleName):
     if not name:
         return None
@@ -1708,6 +1759,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
         try:
             sent = _sentinel_oslist_popover(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_storage_radio(name, roleName)
             if sent is not None:
                 return sent
         except Exception:

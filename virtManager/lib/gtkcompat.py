@@ -1685,6 +1685,7 @@ def expose_createvm_methods_window(createvm):
                 _append_createvm_status_labels(child, createvm)
                 _append_createvm_media_controls(child, createvm)
                 _append_createvm_resource_spins(child, createvm)
+                _append_createvm_storage_radios(child, createvm)
                 _append_createvm_customize_check(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:

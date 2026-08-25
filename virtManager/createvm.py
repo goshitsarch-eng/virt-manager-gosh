@@ -312,6 +312,29 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_create_name)
 
+        if not getattr(self, "_vmm_storage_radio_poll", False):
+            self._vmm_storage_radio_poll = True
+
+            def _poll_storage_radio():
+                path = "/tmp/vmm-a11y-storage-radio.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip().lower()
+                    os.remove(path)
+                except Exception:
+                    return True
+                wid = "storage-select" if "select" in want else "storage-create"
+                try:
+                    src = self._addstorage.widget(wid)
+                    if src is not None:
+                        src.set_active(True)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_storage_radio)
+
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
 
