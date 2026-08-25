@@ -602,12 +602,15 @@ def expose_a11y_check(key, name, widget, window=None):
     return btn
 
 
-def expose_a11y_button(key, name, callback, window=None):
+def expose_a11y_button(key, name, callback, window=None, role=None):
     box = _a11y_sidecar_box(window)
     btn = _A11Y_SIDECAR["items"].get(key)
     if btn is None:
         btn = Gtk.Button(label=name)
-        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        try:
+            btn.set_accessible_role(role or Gtk.AccessibleRole.BUTTON)
+        except Exception:
+            btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
         ensure_activate_clicked(btn)
         btn.connect("clicked", lambda b: b._vmm_cb() if getattr(b, "_vmm_cb", None) else None)
         box.append(btn)

@@ -445,6 +445,25 @@ class vmmManager(vmmGObjectUI):
         self.diskcol = make_stats_column(_("Disk I/O"), COL_DISK)
         self.netcol = make_stats_column(_("Network I/O"), COL_NETWORK)
         gtkcompat.attach_treeview_column_a11y(vmlist)
+        try:
+            col_role = Gtk.AccessibleRole.COLUMN_HEADER
+        except Exception:
+            col_role = Gtk.AccessibleRole.BUTTON
+        for title, col in (
+            ("Name", nameCol),
+            ("CPU usage", self.guestcpucol),
+            ("Host CPU", self.hostcpucol),
+            ("Memory", self.memcol),
+            ("Disk I/O", self.diskcol),
+            ("Network I/O", self.netcol),
+        ):
+            gtkcompat.expose_a11y_button(
+                "col-" + title,
+                title,
+                lambda c=col: c.clicked(),
+                window=self.topwin,
+                role=col_role,
+            )
 
         model.set_sort_func(COL_NAME, self.vmlist_name_sorter)
         model.set_sort_func(COL_GUEST_CPU, self.vmlist_guest_cpu_usage_sorter)
