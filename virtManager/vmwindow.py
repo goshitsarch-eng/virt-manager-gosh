@@ -103,14 +103,7 @@ class vmmVMWindow(vmmGObjectUI):
             "Guest is not running.",
             window=self.topwin,
         )
-        gtkcompat.sync_sidecar_visible(
-            "add-hardware",
-            self.widget("details-pages").get_current_page() == DETAILS_PAGE_DETAILS,
-        )
-        gtkcompat.sync_sidecar_visible(
-            "guest-status",
-            self.widget("details-pages").get_current_page() == DETAILS_PAGE_CONSOLE,
-        )
+        self._sync_page_sidecars()
 
         self.builder.connect_signals(
             {
@@ -392,20 +385,7 @@ class vmmVMWindow(vmmGObjectUI):
         self._refresh_current_page(newpage)
         self._sync_toolbar_page_buttons(newpage)
         self._sync_console_page_menu_state()
-        try:
-            addhw = self._details.widget("add-hardware-button")
-            gtkcompat.expose_a11y_button(
-                "add-hardware",
-                "add-hardware",
-                lambda: addhw.emit("clicked"),
-                window=self.topwin,
-            )
-            gtkcompat.sync_sidecar_visible("add-hardware", newpage == DETAILS_PAGE_DETAILS)
-            gtkcompat.sync_sidecar_visible(
-                "guest-status", newpage == DETAILS_PAGE_CONSOLE
-            )
-        except Exception:
-            pass
+        self._sync_page_sidecars(newpage)
 
     def change_run_text(self, can_restore):
         if can_restore:
@@ -483,6 +463,30 @@ class vmmVMWindow(vmmGObjectUI):
     def activate_default_console_page(self):
         self._console.vmwindow_activate_default_console_page()
 
+    def _sync_page_sidecars(self, newpage=None):
+        if newpage is None:
+            newpage = self.widget("details-pages").get_current_page()
+        try:
+            addhw = self._details.widget("add-hardware-button")
+            gtkcompat.set_accessible_name(
+                addhw,
+                "add-hardware" if newpage == DETAILS_PAGE_DETAILS else "add-hardware (hidden)",
+            )
+            gtkcompat.expose_a11y_button(
+                "add-hardware",
+                "add-hardware",
+                lambda: addhw.emit("clicked"),
+                window=self.topwin,
+            )
+            gtkcompat.sync_sidecar_visible(
+                "add-hardware", newpage == DETAILS_PAGE_DETAILS
+            )
+            gtkcompat.sync_sidecar_visible(
+                "guest-status", newpage == DETAILS_PAGE_CONSOLE
+            )
+        except Exception:
+            pass
+
     # activate_* are called from engine.py via CLI options
     def activate_default_page(self):
         if self.is_customize_dialog:
@@ -490,17 +494,21 @@ class vmmVMWindow(vmmGObjectUI):
         pages = self.widget("details-pages")
         pages.set_current_page(DETAILS_PAGE_CONSOLE)
         self.activate_default_console_page()
+        self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_console_page(self):
         pages = self.widget("details-pages")
         pages.set_current_page(DETAILS_PAGE_CONSOLE)
+        self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_performance_page(self):
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
         self._details.vmwindow_activate_performance_page()
+        self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 
     def activate_config_page(self):
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
+        self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 
     def set_pause_state(self, state):
         src = self.widget("control-pause")

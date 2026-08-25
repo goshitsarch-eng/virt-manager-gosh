@@ -403,12 +403,8 @@ def _a11y_global_sidecar_box():
         win.set_child(box)
         _A11Y_SIDECAR["win"] = win
         _A11Y_SIDECAR["box"] = box
-        app = Gtk.Application.get_default()
-        if app is not None:
-            try:
-                app.add_window(win)
-            except Exception:
-                pass
+        # Do not add this to Gtk.Application: extra windows keep the
+        # process alive after the last real toplevel closes.
         win.set_visible(True)
     return _A11Y_SIDECAR["box"]
 
@@ -882,11 +878,11 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     def _attach_app(*_a):
         root = treeview.get_root()
         if root is not None:
-            win.set_transient_for(root)
-            if hasattr(root, "get_application"):
-                app = root.get_application()
-                if app is not None:
-                    app.add_window(win)
+            try:
+                win.set_transient_for(root)
+            except Exception:
+                pass
+            set_accessible_name(win, ".a11y-tree")
         win.set_visible(True)
         return False
 
@@ -972,11 +968,11 @@ def attach_treeview_column_a11y(treeview):
     def _attach_app(*_a):
         root = treeview.get_root()
         if root is not None:
-            win.set_transient_for(root)
-            if hasattr(root, "get_application"):
-                app = root.get_application()
-                if app is not None:
-                    app.add_window(win)
+            try:
+                win.set_transient_for(root)
+            except Exception:
+                pass
+            set_accessible_name(win, ".a11y-columns")
         win.set_visible(True)
         return False
 
@@ -1115,11 +1111,16 @@ def attach_notebook_a11y(notebook):
     def _attach_app(*_a):
         root = notebook.get_root()
         if root is not None:
-            win.set_transient_for(root)
-            if hasattr(root, "get_application"):
-                app = root.get_application()
-                if app is not None:
-                    app.add_window(win)
+            try:
+                win.set_transient_for(root)
+            except Exception:
+                pass
+            set_accessible_name(win, ".a11y-notebook")
+            try:
+                win.set_title(".a11y-notebook")
+            except Exception:
+                pass
+        # Do not add_window: that keeps virt-manager running after Close.
         win.set_visible(True)
         return False
 
