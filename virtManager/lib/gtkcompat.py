@@ -864,6 +864,25 @@ def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None
             pass
         view._vmm_xml_from_src = _from_src
         _from_src()
+
+        def _load_file(*_a, dst=view):
+            path = os.environ.get("VMM_A11Y_XML_PATH", "/tmp/vmm-a11y-xml.txt")
+            try:
+                text = open(path, "r").read()
+            except Exception:
+                return
+            try:
+                dst.set_text(text)
+            except Exception:
+                pass
+
+        load = expose_a11y_button(
+            key + "-load",
+            ".xml-load",
+            _load_file,
+            parent=box,
+        )
+        view._vmm_xml_load = load
     set_accessible_name(view, name)
     view.set_visible(True)
     return view

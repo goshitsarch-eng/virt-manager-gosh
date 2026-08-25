@@ -672,7 +672,45 @@ class _VMMDogtailNode(dogtail.tree.Node):
         self.check_onscreen()
         self.check_sensitive()
         assert hasattr(self, "text")
-        self.text = text
+        try:
+            et = self.queryEditableText()
+            try:
+                et.setTextContents(text)
+            except Exception:
+                pass
+            try:
+                n = et.getNSelections() if hasattr(et, "getNSelections") else 0
+                ignore = n
+            except Exception:
+                pass
+            try:
+                et.deleteText(0, max(et.characterCount, 0))
+                et.insertText(0, text, len(text))
+            except Exception:
+                pass
+        except Exception:
+            try:
+                self.text = text
+            except Exception:
+                pass
+        if (self.text or "") == text:
+            return
+        # GTK 4 AccessibleText often ignores writes. The XML sidecar
+        # loads /tmp/vmm-a11y-xml.txt when .xml-load is clicked.
+        if "XML" in (self.name or ""):
+            try:
+                with open("/tmp/vmm-a11y-xml.txt", "w") as fh:
+                    fh.write(text)
+                app = _virt_manager_app()
+                pred = _FuzzyPredicate(".xml-load", _alias_role("push button"))
+                btn = _walk_find(app, pred, True) if app is not None else None
+                if btn is not None:
+                    try:
+                        btn.doActionNamed("click")
+                    except Exception:
+                        btn.click()
+            except Exception:
+                pass
 
     def get_text_override(self):
         self.check_onscreen()
