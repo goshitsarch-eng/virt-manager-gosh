@@ -83,6 +83,11 @@ class vmmCreateConn(vmmGObjectUI):
         self.topwin.hide()
         from .lib import gtkcompat
 
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "Add Connection (hidden)")
+            self.topwin.set_title("Add Connection (hidden)")
+        except Exception:
+            pass
         gtkcompat.hide_createconn_window(self)
 
     def show(self, parent):
