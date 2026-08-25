@@ -236,6 +236,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         return self.getState().contains(pyatspi.STATE_SELECTED)
 
     @property
+    def checked(self):
+        # GTK 4 ToggleButton exposes AccessibleState.CHECKED as STATE_PRESSED
+        st = self.getState()
+        return st.contains(pyatspi.STATE_CHECKED) or st.contains(pyatspi.STATE_PRESSED)
+
+    @property
     def onscreen(self):
         # We need to check that full widget is on screen because we use this
         # function to check whether we can click a widget. We may click
