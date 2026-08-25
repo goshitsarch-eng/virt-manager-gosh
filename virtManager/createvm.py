@@ -1991,6 +1991,14 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
         try:
+            # Do not toggle include-eol here: the handler refilters the
+            # full OS model and blocks the main loop after GetItems.
+            if getattr(osobj, "eol", False):
+                self._os_list._filter_eol = False
+                open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write("1")
+        except Exception:
+            pass
+        try:
             label = osobj.label or ""
             self._os_list.search_entry.set_text(label)
             open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
@@ -2631,12 +2639,9 @@ class vmmCreateVM(vmmGObjectUI):
             return  # pragma: no cover
 
         if distro:
-            osobj = virtinst.OSDB.lookup_os(distro)
-            self._remember_create_os(osobj)
-            try:
-                self._os_list.select_os(osobj)
-            except Exception:
-                pass
+            # select_os refilters the OS model and can block >2s after
+            # GetItems, which misses the Forward pagenum check.
+            self._remember_create_os(virtinst.OSDB.lookup_os(distro))
         else:
             self._os_list.reset_state()
             self._os_list.search_entry.set_text(_("None detected"))
