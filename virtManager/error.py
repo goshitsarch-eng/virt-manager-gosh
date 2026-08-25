@@ -48,6 +48,7 @@ def _launch_dialog(
     if secondary_text:
         gtkcompat.expose_a11y_label("err-secondary", secondary_text, secondary_text)
     bbox = getattr(dialog, "_button_box", None)
+    alert_buttons = []
     if bbox is not None:
         for child in gtkcompat.get_children(bbox):
             label = gtkcompat._accessible_label_for_widget(child) or child.get_name()
@@ -55,6 +56,8 @@ def _launch_dialog(
                 gtkcompat.expose_a11y_button(
                     "err-btn-" + label, label, lambda r=child: r.emit("clicked")
                 )
+                alert_buttons.append((label, lambda r=child: r.emit("clicked")))
+    gtkcompat.present_a11y_alert(primary_text, alert_buttons)
 
     if widget:
         dialog.get_content_area().add(widget)

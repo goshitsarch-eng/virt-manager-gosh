@@ -233,6 +233,69 @@ def hide_a11y_keys(prefix):
                 pass
 
 
+def present_a11y_alert(primary, buttons):
+    """
+    Fresh AT-SPI alert window. Adding widgets to an existing sidecar is
+    invisible after GetItems cache errors; a new window is not.
+    buttons: [(label, callback), ...]
+    """
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_modal(False)
+    win.set_default_size(420, 160)
+    try:
+        win.set_accessible_role(Gtk.AccessibleRole.ALERT)
+    except Exception:
+        pass
+    set_accessible_name(win, "vmm dialog")
+    win.set_title("vmm dialog")
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    box.set_margin_top(12)
+    box.set_margin_bottom(12)
+    box.set_margin_start(12)
+    box.set_margin_end(12)
+    lab = Gtk.Label(label=primary or "")
+    lab.set_wrap(True)
+    lab.set_xalign(0)
+    lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+    set_accessible_name(lab, primary or "")
+    box.append(lab)
+    btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    btnbox.set_halign(Gtk.Align.END)
+    for label, cb in buttons or []:
+        btn = Gtk.Button(label=label)
+        ensure_activate_clicked(btn)
+        set_accessible_name(btn, label)
+        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+
+        def _click(_b, call=cb, w=win):
+            try:
+                if call:
+                    call()
+            finally:
+                try:
+                    w.close()
+                except Exception:
+                    pass
+
+        btn.connect("clicked", _click)
+        btnbox.append(btn)
+    box.append(btnbox)
+    win.set_child(box)
+    app = Gtk.Application.get_default()
+    if app is not None:
+        try:
+            app.add_window(win)
+        except Exception:
+            pass
+    win.set_visible(True)
+    try:
+        win.present()
+    except Exception:
+        pass
+    return win
+
+
 def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=None):
     """
     GTK 4 TreeView does not expose rows to AT-SPI. Mirror each row as a

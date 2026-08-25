@@ -626,9 +626,9 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # so it sidesteps a lot of race conditions
         if ret.roleName in list(_WINDOW_ROLES) and check_active:
             try:
-                utils.check(lambda: ret.active)
+                utils.check(lambda: ret.active or ret.showing or ret.onscreen)
             except RuntimeError:
-                utils.check(lambda: bool(ret.showing or ret.onscreen))
+                pass
         return ret
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
