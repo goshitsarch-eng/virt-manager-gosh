@@ -982,6 +982,29 @@ def expose_oslist_a11y(oslist, window=None):
         except Exception:
             pass
 
+    root = window
+    try:
+        if root is None:
+            root = search.get_root()
+    except Exception:
+        root = window
+    if isinstance(root, Gtk.Window) and not getattr(root, "_vmm_oslist_enter", False):
+        root._vmm_oslist_enter = True
+        wkey = Gtk.EventControllerKey()
+
+        def _win_key(_c, keyval, *_a, lst=oslist):
+            if Gdk.keyval_name(keyval) in ("Return", "KP_Enter"):
+                try:
+                    if (lst.search_entry.get_text() or "").strip():
+                        lst._entry_activate_cb(lst.search_entry)
+                        return True
+                except Exception:
+                    pass
+            return False
+
+        wkey.connect("key-pressed", _win_key)
+        root.add_controller(wkey)
+
     box = _a11y_sidecar_box(window)
     wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     try:
