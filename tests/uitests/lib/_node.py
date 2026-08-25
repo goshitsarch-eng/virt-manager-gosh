@@ -491,6 +491,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         return extra
                 # GTK 4 empty entries expose the accessible name as text.
                 return ""
+            try:
+                blob = open("/tmp/vmm-a11y-conn-status.txt", "r").read()
+            except Exception:
+                blob = ""
+            joined = "\n".join(parts)
+            for line in blob.splitlines():
+                if "\t" not in line:
+                    continue
+                key, val = line.split("\t", 1)
+                if key and (
+                    key in name or name.startswith(key) or key in joined
+                ):
+                    return val
             return "\n".join(parts)
         return None
 

@@ -1122,16 +1122,26 @@ def expose_conn_menu_window(manager):
             except Exception:
                 pass
 
-        def _act(_b, it=src, mgr=manager):
-            if it is None:
-                return
+        def _act(_b, it=src, mgr=manager, key=idx):
             try:
-                it.emit("activate")
+                if key == "disconnect":
+                    mgr.close_conn(None)
+                elif key == "connect":
+                    mgr.open_conn()
+                elif key == "delete":
+                    mgr.do_delete()
+                elif key == "create":
+                    mgr.new_vm(None)
+                elif key == "details":
+                    mgr.show_host(None)
+                elif it is not None:
+                    it.emit("activate")
             except Exception:
-                try:
-                    it.activate()
-                except Exception:
-                    pass
+                if it is not None:
+                    try:
+                        it.emit("activate")
+                    except Exception:
+                        pass
             try:
                 menu = getattr(mgr, "connmenu", None)
                 if menu is not None:

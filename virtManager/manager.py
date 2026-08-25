@@ -97,6 +97,7 @@ class vmmManager(vmmGObjectUI):
         self.connmenu = Gtk.Menu()
         self.connmenu.get_accessible().set_name("conn-menu")
         self.connmenu_items = {}
+        self._last_conn = None
 
         self.builder.connect_signals(
             {
@@ -568,7 +569,7 @@ class vmmManager(vmmGObjectUI):
     def show_host(self, _src):
         from .host import vmmHost
 
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
         vmmHost.show_instance(self, conn)
 
     def show_vm(self, _src):
@@ -617,7 +618,7 @@ class vmmManager(vmmGObjectUI):
             self.show_host(_src)
 
     def do_delete(self, ignore=None):
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
         vm = self.current_vm()
         if vm is None:
             self._do_delete_conn(conn)
@@ -669,12 +670,16 @@ class vmmManager(vmmGObjectUI):
         vmmenu.VMActionUI.shutdown(self, self.current_vm())
 
     def close_conn(self, ignore):
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
+        if conn is None:
+            return
         if not conn.is_disconnected():
             conn.close()
 
     def open_conn(self, ignore=None):
-        conn = self.current_conn()
+        conn = self.current_conn() or self._last_conn
+        if conn is None:
+            return
         if conn.is_disconnected():
             conn.connect_once("open-completed", self._conn_open_completed_cb)
             conn.open()
@@ -881,6 +886,17 @@ class vmmManager(vmmGObjectUI):
 
         self.conn_row_updated(conn)
         self.update_current_selection()
+        try:
+            lines = []
+            for crow in self.model:
+                if not crow[ROW_IS_CONN]:
+                    continue
+                key = str(crow[ROW_SORT_KEY] or "")
+                text = gtkcompat._strip_pango_markup(crow[ROW_MARKUP] or "")
+                lines.append("%s\t%s" % (key, text))
+            open("/tmp/vmm-a11y-conn-status.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
 
     def conn_row_updated(self, conn):
         row = self.get_row(conn)
@@ -903,6 +919,8 @@ class vmmManager(vmmGObjectUI):
     def update_current_selection(self, ignore=None):
         vm = self.current_vm()
         conn = self.current_conn()
+        if conn is not None:
+            self._last_conn = conn
 
         show_open = bool(vm)
         show_details = bool(vm)
