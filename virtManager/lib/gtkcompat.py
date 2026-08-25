@@ -1110,6 +1110,30 @@ def sync_builder_accessible(widget):
         except TypeError:
             pass
     GLib.idle_add(_reapply)
+    if isinstance(widget, Gtk.Label):
+        GLib.idle_add(lambda: apply_mnemonic_accessible_name(widget) or False)
+
+
+def apply_mnemonic_accessible_name(label):
+    """
+    GTK 3 exposed mnemonic-widget as the checkbox/entry labeller. Copy
+    the label text onto the target so find_fuzzy("Poll Disk", "check") works.
+    """
+    if label is None or not isinstance(label, Gtk.Label):
+        return
+    if not hasattr(label, "get_mnemonic_widget"):
+        return
+    try:
+        target = label.get_mnemonic_widget()
+    except Exception:
+        return
+    if target is None:
+        return
+    text = _mnemonic_label(label.get_text() or label.get_label() or "")
+    if not text:
+        return
+    if not getattr(target, "_vmm_a11y_name", None):
+        set_accessible_name(target, text)
 
 
 def get_accessible_name(widget):
