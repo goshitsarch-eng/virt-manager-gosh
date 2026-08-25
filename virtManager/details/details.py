@@ -530,6 +530,25 @@ class vmmDetails(vmmGObjectUI):
                 window=self.topwin,
                 name_with_value=True,
             )
+
+            def _bus_from_text(*_a, combo=self.widget("disk-bus"), entry=bus_text):
+                if getattr(entry, "_vmm_bus_syncing", False):
+                    return
+                text = ""
+                try:
+                    text = (entry.get_text() or "").strip()
+                except Exception:
+                    return
+                if not text:
+                    return
+                entry._vmm_bus_syncing = True
+                try:
+                    uiutil.set_list_selection(combo, text.lower())
+                except Exception:
+                    pass
+                entry._vmm_bus_syncing = False
+
+            bus_text.connect("changed", _bus_from_text)
         except Exception:
             pass
 
