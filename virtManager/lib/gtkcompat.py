@@ -1301,7 +1301,16 @@ def attach_notebook_a11y(notebook):
             tab.set_accessible_role(Gtk.AccessibleRole.BUTTON)
             set_accessible_name(tab, tlabel or _mnemonic_label(pname))
             ensure_activate_clicked(tab)
-            tab.connect("clicked", lambda _b, idx=i: notebook.set_current_page(idx))
+
+            def _select(_b=None, idx=i):
+                try:
+                    notebook.set_current_page(idx)
+                except Exception:
+                    pass
+                _sync_from_notebook()
+                return False
+
+            tab.connect("clicked", _select)
             box.append(tab)
             widgets.append(tab)
             sidecar = page_map.get(pname)
@@ -1326,12 +1335,37 @@ def attach_notebook_a11y(notebook):
         notebook._vmm_nb_widgets = widgets
         return False
 
-    def _on_switch(_nb, _page, idx):
+    def _sync_from_notebook(*_a):
+        try:
+            current = notebook.get_current_page()
+        except Exception:
+            current = 0
+        page_map = getattr(notebook, "_vmm_nb_page_map", {}) or {}
+        try:
+            n = notebook.get_n_pages()
+        except Exception:
+            n = 0
+        for i in range(n):
+            page = notebook.get_nth_page(i)
+            if page is None:
+                continue
+            pname = _page_name(i, page)
+            sidecar = page_map.get(pname)
+            if sidecar is not None:
+                _sync_page_visible(sidecar, pname, i == current)
         for i, (_tab, sidecar, pname) in enumerate(pages):
-            _sync_page_visible(sidecar, pname, i == idx)
+            _sync_page_visible(sidecar, pname, i == current)
+        return False
+
+    def _on_switch(_nb, _page, idx):
+        _sync_from_notebook()
         return False
 
     notebook.connect("switch-page", _on_switch)
+    try:
+        notebook.connect("notify::page", _sync_from_notebook)
+    except Exception:
+        pass
     _rebuild()
     notebook.connect("map", lambda *_a: GLib.idle_add(_rebuild))
 
