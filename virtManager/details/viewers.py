@@ -48,6 +48,12 @@ except (ValueError, ImportError) as _SPICE_GTK_IMPORT_ERROR:
         # GTK 4 uses SpiceClientGLib + gtk4display.SpiceDisplay
         SPICE_GTK_IMPORT_ERROR = None
 
+if SPICE_GTK_IMPORT_ERROR:
+    try:
+        open("/tmp/vmm-a11y-spice-import.txt", "w").write(SPICE_GTK_IMPORT_ERROR)
+    except Exception:
+        pass
+
 from . import gtk4display
 
 from virtinst import log

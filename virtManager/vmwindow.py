@@ -208,6 +208,8 @@ class vmmVMWindow(vmmGObjectUI):
 
         vmmEngine.get_instance().increment_window_counter()
         self._refresh_vm_state()
+        if not self.is_customize_dialog:
+            self.activate_default_page()
 
     def customize_finish(self, src):
         ignore = src

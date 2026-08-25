@@ -645,7 +645,16 @@ class vmmConsolePages(vmmGObjectUI):
     #########################
 
     def _init_viewer(self, ginfo, errmsg):
-        if self._viewer or not self.is_visible():
+        if self._viewer:
+            return
+        if not self.is_visible():
+            if errmsg:
+                self._activate_gfx_unavailable_page(errmsg)
+            elif getattr(ginfo, "gtype", None) == "spice" and SPICE_GTK_IMPORT_ERROR:
+                self._activate_gfx_unavailable_page(
+                    _("Error connecting to graphical console:\n%s")
+                    % ("Error opening SPICE console: %s" % SPICE_GTK_IMPORT_ERROR)
+                )
             return
 
         if errmsg:
