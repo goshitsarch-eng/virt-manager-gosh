@@ -748,7 +748,7 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None):
         box.append(ent)
         _A11Y_SIDECAR["items"][key] = ent
 
-        def _from_src(*_a, src=entry, dst=ent):
+        def _from_src(*_a, src=entry, dst=ent, lab=name):
             if getattr(dst, "_vmm_entry_syncing", False):
                 return False
             dst._vmm_entry_syncing = True
@@ -756,6 +756,11 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None):
                 text = src.get_text() or ""
                 if dst.get_text() != text:
                     dst.set_text(text)
+                shown = lab or ""
+                if text and str(lab).endswith(":"):
+                    shown = "%s %s" % (lab, text)
+                set_accessible_name(dst, shown)
+                attach_entry_a11y_value(dst, lab)
             except Exception:
                 pass
             dst._vmm_entry_syncing = False

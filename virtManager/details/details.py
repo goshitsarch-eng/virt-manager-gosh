@@ -1349,6 +1349,10 @@ class vmmDetails(vmmGObjectUI):
         if success is not False:
             self._disable_apply()
             success = True
+            try:
+                self._refresh_page()
+            except Exception:
+                pass
         return success
 
     def _edited(self, pagetype):
