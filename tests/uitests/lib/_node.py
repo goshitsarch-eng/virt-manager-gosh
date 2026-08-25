@@ -975,6 +975,25 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     fh.write("1")
             except Exception:
                 pass
+            try:
+                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                    fh.write(raw or "config-apply")
+            except Exception:
+                pass
+            return
+        _SENTINEL_CLICK = (
+            "install-iso-browse",
+            "begin installation",
+            "add-hardware",
+            "forward",
+            "finish",
+        )
+        if any(s in nname for s in _SENTINEL_CLICK):
+            try:
+                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                    fh.write(raw or nname)
+            except Exception:
+                pass
             return
         if (
             "oslist-entry" in nname

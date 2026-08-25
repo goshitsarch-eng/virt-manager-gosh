@@ -514,6 +514,8 @@ def _strip_pango_markup(text):
 
 
 _A11Y_SIDECAR = {"win": None, "box": None, "items": {}, "last_window": None}
+_A11Y_CLICK_CBS = {}
+_A11Y_CLICK_POLL = {"on": False}
 
 
 def ensure_window_a11y_box(window):
@@ -584,6 +586,49 @@ def _a11y_global_sidecar_box():
         # process alive after the last real toplevel closes.
         win.set_visible(True)
     return _A11Y_SIDECAR["box"]
+
+
+def register_a11y_click(name, callback):
+    """Map an AT-SPI button name to a callback for /tmp/vmm-a11y-click.txt."""
+    if not name or callback is None:
+        return
+    _A11Y_CLICK_CBS[name] = callback
+    _A11Y_CLICK_CBS[name.lower()] = callback
+    _start_a11y_click_poll()
+
+
+def _start_a11y_click_poll():
+    if _A11Y_CLICK_POLL["on"]:
+        return
+    _A11Y_CLICK_POLL["on"] = True
+    path = "/tmp/vmm-a11y-click.txt"
+
+    def _tick():
+        try:
+            text = open(path, "r").read().strip()
+        except Exception:
+            return True
+        if not text:
+            return True
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        cb = _A11Y_CLICK_CBS.get(text) or _A11Y_CLICK_CBS.get(text.lower())
+        if cb is None:
+            want = text.lower()
+            for key, fn in list(_A11Y_CLICK_CBS.items()):
+                if want in key.lower() or key.lower() in want:
+                    cb = fn
+                    break
+        if cb is not None:
+            try:
+                cb()
+            except Exception:
+                pass
+        return True
+
+    GLib.timeout_add(50, _tick)
 
 
 def _a11y_sidecar_box(window=None):
@@ -1452,6 +1497,10 @@ def _append_iso_browse_control(box, createvm):
     btn.connect("clicked", _browse)
     try:
         btn.install_action("click", None, lambda *_a: _browse())
+    except Exception:
+        pass
+    try:
+        register_a11y_click("install-iso-browse", _browse)
     except Exception:
         pass
     box.append(btn)
@@ -2553,6 +2602,10 @@ def expose_a11y_button(key, name, callback, window=None, role=None, parent=None)
     btn._vmm_cb = callback
     set_accessible_name(btn, name)
     btn.set_visible(True)
+    try:
+        register_a11y_click(name, callback)
+    except Exception:
+        pass
     return btn
 
 
