@@ -120,7 +120,14 @@ def _walk_find(node, pred, recursive=True, _seen=None, _budget=None, _path=()):
                 except Exception:
                     pass
                 continue
-            child_path = _path + (idx, getattr(child, "roleName", ""), getattr(child, "name", "") or "")
+            try:
+                child_path = _path + (
+                    idx,
+                    getattr(child, "roleName", "") or "",
+                    getattr(child, "name", "") or "",
+                )
+            except Exception:
+                continue
             ret = _walk_find(child, pred, True, _seen, _budget, child_path)
         else:
             try:
@@ -324,7 +331,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if role in ["frame", "window"]:
             return True
         # Menubar File/Help items are role "menu" but must stay clickable.
-        if self.is_menuitem() or role == "menu item":
+        try:
+            is_item = self.is_menuitem() or role == "menu item"
+        except Exception:
+            is_item = role == "menu item"
+        if is_item:
             try:
                 if (self.name or "").startswith("."):
                     return False

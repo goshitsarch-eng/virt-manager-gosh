@@ -137,6 +137,7 @@ class vmmManager(vmmGObjectUI):
         self.hostcpucol = None
         self.spacer_txt = None
         self.init_vmlist()
+        gtkcompat.set_accessible_name(self.widget("startup-error-label"), "error-label")
 
         self.init_stats()
         self.init_toolbar()

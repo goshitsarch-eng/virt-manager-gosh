@@ -398,6 +398,17 @@ def sync_builder_accessible(widget):
     apply_accessible_label(widget)
     ensure_activate_clicked(widget)
     sync_accessible_checked(widget)
+    # GTK 3 ATK used the builder id as the accessible name for unlabeled
+    # widgets. Keep that so find("error-label") / similar still works.
+    if isinstance(widget, Gtk.Label) and hasattr(widget, "get_buildable_id"):
+        try:
+            bid = widget.get_buildable_id()
+        except Exception:
+            bid = None
+        if bid == "startup-error-label":
+            set_accessible_name(widget, "error-label")
+        elif bid and bid.endswith("-label"):
+            set_accessible_name(widget, bid)
     inner = getattr(widget, "_button", None)
     if inner is not None:
         apply_accessible_label(inner)
