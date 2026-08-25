@@ -257,6 +257,7 @@ class vmmCreateVM(vmmGObjectUI):
             vmmEngine.get_instance().increment_window_counter()
 
         self.topwin.present()
+        gtkcompat.expose_createvm_methods_window(self)
 
     def close(self, ignore1=None, ignore2=None):
         return self._close(ignore1, ignore2)
@@ -267,6 +268,7 @@ class vmmCreateVM(vmmGObjectUI):
             vmmEngine.get_instance().decrement_window_counter()
 
         self.topwin.hide()
+        gtkcompat.hide_createvm_methods_window(self)
 
         self._cleanup_customize_window()
         if self._storage_browser:

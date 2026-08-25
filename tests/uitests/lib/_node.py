@@ -219,6 +219,24 @@ class _FuzzyPredicate(dogtail.predicate.Predicate):
                 pass
             if self._roleName and not self._role_pattern.match(node.roleName):
                 return
+            try:
+                nname_l = (node.name or "").lower()
+                nrole = node.roleName or ""
+            except Exception:
+                nname_l = ""
+                nrole = ""
+            # Native GTK 4 CheckButtons keep the visible label but ignore
+            # activate. Skip them so find() reaches sidecar Buttons.
+            if nrole in ("check box", "check button") and any(
+                p in nname_l
+                for p in (
+                    "manual install",
+                    "local install media",
+                    "network install",
+                    "import existing disk",
+                )
+            ):
+                return
 
             labeller = ""
             try:

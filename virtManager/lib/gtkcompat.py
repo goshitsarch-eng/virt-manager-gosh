@@ -852,6 +852,83 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None, name_with_valu
     return ent
 
 
+def expose_createvm_methods_window(createvm):
+    """
+    Fresh AT-SPI window with install-method Buttons. Overlay sidecars are
+    often missing after GetItems cache errors; a new add_window()'d
+    window stays findable. Clicking a button selects the real radio.
+    """
+    win = getattr(createvm, "_vmm_methods_win", None)
+    if win is not None:
+        try:
+            win.set_visible(True)
+            return win
+        except Exception:
+            pass
+    win = Gtk.Window()
+    win.set_decorated(False)
+    win.set_modal(False)
+    win.set_default_size(280, 140)
+    try:
+        win.set_accessible_role(Gtk.AccessibleRole.GENERIC)
+    except Exception:
+        pass
+    set_accessible_name(win, ".create-methods")
+    try:
+        win.set_title(".create-methods")
+    except Exception:
+        pass
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    win.set_child(box)
+    for wid, name in (
+        ("method-local", "Local install media (ISO image or CDROM)"),
+        ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
+        ("method-import", "Import existing disk image"),
+        ("method-manual", "Manual install"),
+    ):
+        src = createvm.widget(wid)
+        btn = Gtk.Button(label=name, has_frame=False)
+        btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        ensure_activate_clicked(btn)
+        set_accessible_name(btn, name)
+
+        def _pick(_b, s=src):
+            if s is not None:
+                try:
+                    s.set_active(True)
+                except Exception:
+                    pass
+
+        btn.connect("clicked", _pick)
+        box.append(btn)
+    app = Gtk.Application.get_default()
+    if app is not None:
+        try:
+            app.add_window(win)
+        except Exception:
+            pass
+    win.set_visible(True)
+    createvm._vmm_methods_win = win
+    return win
+
+
+def hide_createvm_methods_window(createvm):
+    win = getattr(createvm, "_vmm_methods_win", None)
+    if win is None:
+        return
+    try:
+        app = Gtk.Application.get_default()
+        if app is not None:
+            app.remove_window(win)
+    except Exception:
+        pass
+    try:
+        win.close()
+    except Exception:
+        pass
+    createvm._vmm_methods_win = None
+
+
 def expose_oslist_a11y(oslist, window=None):
     """
     Mirror the OS search entry and popover. GTK 4 SearchEntry/Popover are
