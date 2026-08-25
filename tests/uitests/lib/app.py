@@ -192,6 +192,12 @@ class VMMDogtailApp:
             if needs_shutdown:
                 smenu = menu.find("Shut Down", "menu")
                 smenu.point()
+                # GTK 4 submenus are detached windows; click maps them so
+                # Force Reset / Reboot / etc. are in the AT-SPI tree.
+                try:
+                    smenu.click()
+                except Exception:
+                    pass
                 utils.check(lambda: smenu.onscreen)
                 item = smenu.find(action, "menu item")
             else:

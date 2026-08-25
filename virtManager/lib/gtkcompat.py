@@ -242,9 +242,13 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 # Keep BUTTON so AT-SPI still has a click action. Uitests
                 # accept "button" as a table-cell alias.
                 btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
-                set_accessible_name(btn, name)
+                # Include the newline so find("test\n") hits the button, not
+                # a child label that has no activate handler.
+                set_accessible_name(btn, text or (name + "\n" if name else name))
                 btn._vmm_row_name = name
                 btn._vmm_row_label = lab
+                ensure_activate_clicked(btn)
+
                 def _on_row_clicked(_b, n=name):
                     _select_name(n)
                     if on_popup is not None:
@@ -300,6 +304,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 if lab is not None:
                     lab.set_text(text)
                     set_accessible_name(lab, text)
+                set_accessible_name(child, text or (name + "\n" if name else name))
                 break
             child = child.get_next_sibling()
 
@@ -777,6 +782,8 @@ class MenuItem(Gtk.Button):
 
     def _on_pointer_enter(self, *_args):
         self._set_selected(True)
+        if self._submenu is not None:
+            self._submenu.popup_at_widget(self)
 
     def _on_pointer_leave(self, *_args):
         self._set_selected(False)
@@ -1043,13 +1050,31 @@ class Menu(Gtk.Box):
                 pass
         root = None
         if self._parent_widget is not None and hasattr(self._parent_widget, "get_root"):
-            root = self._parent_widget.get_root()
+            try:
+                root = self._parent_widget.get_root()
+            except Exception:
+                root = None
         if root is not None:
-            self._popover.set_transient_for(root)
-            if hasattr(root, "get_application"):
+            try:
+                self._popover.set_transient_for(root)
+            except Exception:
+                pass
+        app = None
+        if root is not None and hasattr(root, "get_application"):
+            try:
                 app = root.get_application()
-                if app is not None:
-                    app.add_window(self._popover)
+            except Exception:
+                app = None
+        if app is None:
+            try:
+                app = Gtk.Application.get_default()
+            except Exception:
+                app = None
+        if app is not None:
+            try:
+                app.add_window(self._popover)
+            except Exception:
+                pass
         if self.get_parent() is not None and self.get_parent() != self._popover:
             self.unparent()
         if self._popover.get_child() is not self:
@@ -1096,10 +1121,12 @@ class Menu(Gtk.Box):
             set_accessible_name(self._popover, shown)
 
     def popup(self, *_args, **_kwargs):
-        parent = self._parent_widget
-        if parent is None and self._popover is None:
+        # Context menus (vm-action-menu, conn-menu) are not attached to a
+        # toolbar button, so they have no _parent_widget until first popup.
+        # Still create a standalone AT-SPI window so dogtail can find them.
+        self._ensure_popover(self._parent_widget)
+        if self._popover is None:
             return
-        self._ensure_popover(parent)
         self._opened = True
         self._popover.set_opacity(1)
         self._ensure_mapped()

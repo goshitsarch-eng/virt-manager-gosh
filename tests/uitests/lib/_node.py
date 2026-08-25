@@ -480,12 +480,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
         # pylint: disable=signature-differs
         super().point(*args, **kwargs)
 
-        if self.is_menuitem():
+        if self.is_menuitem() or self.roleName == "menu":
             # GTK 4 custom menus may not expose SELECTED on pointer warp
             try:
                 utils.check(lambda: self.state_selected)
             except RuntimeError:
                 pass
+            # Detached submenu windows stay closed until activate/enter.
+            if self.roleName == "menu" and not (self.name or "").startswith("."):
+                try:
+                    self.doActionNamed("click")
+                except Exception:
+                    pass
 
     def set_text(self, text):
         self.check_onscreen()

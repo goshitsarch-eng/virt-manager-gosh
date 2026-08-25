@@ -305,6 +305,8 @@ class vmmManager(vmmGObjectUI):
         self.connmenu.show_all()
         gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
         self.vmmenu._vmm_menu_name = "vm-action-menu"
+        gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
+        self.connmenu._vmm_menu_name = "conn-menu"
 
         def _on_menu_key(_c, keyval, *_a):
             if Gdk.keyval_name(keyval) == "Menu":
@@ -898,6 +900,7 @@ class vmmManager(vmmGObjectUI):
             # Popup the vm menu
             vm = model[_iter][ROW_HANDLE]
             self.vmmenu.update_widget_states(vm)
+            self.vmmenu._parent_widget = self.topwin
             self.vmmenu.popup_at_pointer(event)
         else:
             # Pop up connection menu
@@ -910,6 +913,7 @@ class vmmManager(vmmGObjectUI):
             self.connmenu_items["connect"].set_sensitive(disconn)
             self.connmenu_items["delete"].set_sensitive(disconn)
 
+            self.connmenu._parent_widget = self.topwin
             self.connmenu.popup_at_pointer(event)
 
     #################
