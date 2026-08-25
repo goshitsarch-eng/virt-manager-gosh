@@ -1015,7 +1015,7 @@ def _oslist_apply_search_text(oslist, text):
         return
     try:
         disable = getattr(oslist, "_vmm_disable_detect", None)
-        if disable:
+        if disable and text and not str(text).startswith("/"):
             disable()
     except Exception:
         pass

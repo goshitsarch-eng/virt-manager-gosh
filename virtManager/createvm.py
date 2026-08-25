@@ -2080,6 +2080,14 @@ class vmmCreateVM(vmmGObjectUI):
         detectThread.start()
 
         self._os_list.search_entry.set_text(_("Detecting..."))
+        try:
+            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("Detecting..."))
+        except Exception:
+            pass
+        try:
+            self._os_list.refresh_a11y()
+        except Exception:
+            pass
         spin = self.widget("install-detect-os-spinner")
         spin.start()
 
@@ -2142,6 +2150,10 @@ class vmmCreateVM(vmmGObjectUI):
         else:
             self._os_list.reset_state()
             self._os_list.search_entry.set_text(_("None detected"))
+            try:
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("None detected"))
+            except Exception:
+                pass
             self._os_list.refresh_a11y()
 
         if forward_after_finish:

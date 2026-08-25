@@ -32,6 +32,12 @@ class vmmOSList(vmmGObjectUI):
         self._os_confirmed = False
         self.search_entry = self.widget("os-name")
         self.search_entry.set_placeholder_text(_("Type to start searching..."))
+        try:
+            self.search_entry.connect(
+                "changed", lambda *_a: self.refresh_a11y()
+            )
+        except Exception:
+            pass
         self.eol_text = self.widget("eol-warn").get_text()
 
         self.builder.connect_signals(
@@ -346,10 +352,6 @@ class vmmOSList(vmmGObjectUI):
         self.search_entry.set_text("")
         try:
             os.remove("/tmp/vmm-a11y-os-select.txt")
-        except Exception:
-            pass
-        try:
-            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("")
         except Exception:
             pass
         self._clear_filter()
