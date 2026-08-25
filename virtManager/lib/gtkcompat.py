@@ -310,7 +310,15 @@ def _ensure_toplevel_hidden_sync(window):
 
     def _sync(*_a):
         try:
-            _mark_toplevel_hidden(window, not window.get_visible())
+            vis = window.get_visible()
+        except Exception:
+            return False
+        if vis:
+            window._vmm_ever_shown = True
+        if not getattr(window, "_vmm_ever_shown", False):
+            return False
+        try:
+            _mark_toplevel_hidden(window, not vis)
         except Exception:
             pass
         return False
