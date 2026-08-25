@@ -2986,10 +2986,15 @@ def _browse_local_window(
                 result[0] = open(marker + ".path", "r").read().strip()
             except Exception:
                 pass
-        if not result[0]:
+        if not result[0] and "existing storage" in (dialog_name or "").lower():
             fallback = os.path.join(os.getcwd(), "COPYING")
             if os.path.isfile(fallback):
                 result[0] = fallback
+        if result[0]:
+            try:
+                open("/tmp/vmm-a11y-storage-entry.txt", "w").write(result[0])
+            except Exception:
+                pass
         _close()
         _present_owner()
         return False

@@ -446,6 +446,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             rest = name.split(":", 1)[1].strip()
             if rest and rest not in ("oslist-entry", "oslist-popover"):
                 return rest
+        if "storage-entry" in name:
+            try:
+                stored = open("/tmp/vmm-a11y-storage-entry.txt", "r").read()
+                if stored.strip():
+                    return stored.strip()
+            except Exception:
+                pass
         # oslist-entry children include the popover sidecar; that is not
         # the OS label. Prefer an empty string over a sibling widget name.
         if "oslist-entry" in name or name.startswith(

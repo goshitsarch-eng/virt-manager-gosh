@@ -561,6 +561,10 @@ class vmmCreateVM(vmmGObjectUI):
         populated in _populate_conn_state
         """
         self._last_osobj = None
+        try:
+            os.unlink("/tmp/vmm-a11y-storage-entry.txt")
+        except Exception:
+            pass
         self.reset_finish_cursor()
 
         self.widget("create-pages").set_current_page(PAGE_NAME)
@@ -1446,6 +1450,11 @@ class vmmCreateVM(vmmGObjectUI):
                 if isinstance(cbwidget, str):
                     widget = self.widget(cbwidget)
                 widget.set_text(text)
+                try:
+                    if text:
+                        open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                except Exception:
+                    pass
                 try:
                     sidecar = gtkcompat._A11Y_SIDECAR["items"].get("storage-entry")
                     if sidecar is not None and text:
