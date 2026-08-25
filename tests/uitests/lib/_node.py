@@ -679,10 +679,25 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 return False
 
+        def _belongs_here(node):
+            cur = node
+            for _ in range(16):
+                if cur is None:
+                    return False
+                if cur is self:
+                    return True
+                try:
+                    cur = cur.accessible_parent
+                except Exception:
+                    return False
+            return False
+
         for name in ("Cancel", "Close"):
             try:
                 btn = self.find(name, "push button", timeout=0.4)
             except Exception:
+                continue
+            if not _belongs_here(btn):
                 continue
             try:
                 if btn.sensitive:
