@@ -565,6 +565,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "install-iso-browse",
                     "storage-browse",
                     "install-import-browse",
+                    "Automatically detect",
                 )
             ):
                 return True
