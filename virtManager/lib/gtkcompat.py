@@ -1295,6 +1295,7 @@ def expose_createconn_window(createconn):
             except Exception:
                 pass
             win.set_visible(True)
+            _start_combo_select_poll(createconn)
             return win
         except Exception:
             createconn._vmm_createconn_win = None

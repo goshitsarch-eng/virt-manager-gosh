@@ -92,6 +92,7 @@ class vmmCreateConn(vmmGObjectUI):
         if self.is_visible():
             self.topwin.present()
             gtkcompat.expose_createconn_window(self)
+            gtkcompat._start_combo_select_poll(self)
             return
 
         self.reset_state()
@@ -109,6 +110,7 @@ class vmmCreateConn(vmmGObjectUI):
         except Exception:
             pass
         gtkcompat.expose_createconn_window(self)
+        gtkcompat._start_combo_select_poll(self)
 
     def _cleanup(self):
         pass
