@@ -2030,7 +2030,12 @@ class Menu(Gtk.Box):
                 root = self._parent_widget.get_root()
             except Exception:
                 root = None
-        if root is not None and isinstance(root, Gtk.Window):
+        if (
+            root is not None
+            and isinstance(root, Gtk.Window)
+            and isinstance(self._parent_widget, MenuItem)
+            and getattr(self._parent_widget, "get_submenu", lambda: None)() is self
+        ):
             box = ensure_window_a11y_box(root)
             if self.get_parent() is not None and self.get_parent() is not box:
                 self.unparent()
