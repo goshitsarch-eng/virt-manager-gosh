@@ -3055,6 +3055,41 @@ class _SentinelMediaCombo(object):
         return self.find(name, roleName, labeller_text)
 
 
+# Guest window Virtual Machine menu actions. find("Delete", "menu item")
+# is recursive in dogtail; the details catch-all must not treat these as
+# CPU-model combo rows.
+_VM_WINDOW_ACTION_LABELS = {
+    "delete": "Delete",
+    "clone": "Clone...",
+    "clone...": "Clone...",
+    "migrate": "Migrate...",
+    "migrate...": "Migrate...",
+    "run": "Run",
+    "restore": "Restore",
+    "pause": "Pause",
+    "resume": "Resume",
+    "open": "Open",
+    "shut down": "Shut Down",
+    "shutdown": "Shut Down",
+    "reboot": "Reboot",
+    "force reset": "Force Reset",
+    "force off": "Force Off",
+    "save": "Save",
+}
+_VM_WINDOW_ACTION_NAMES = set(_VM_WINDOW_ACTION_LABELS)
+
+
+def _sentinel_vmwindow_action_item(name, roleName):
+    role = str(roleName or "").lower()
+    if role and "item" not in role:
+        return None
+    compact = str(name or "").replace(".*", "").lower().strip()
+    pretty = _VM_WINDOW_ACTION_LABELS.get(compact)
+    if pretty is None:
+        return None
+    return _SentinelVMActionItem(pretty)
+
+
 def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     try:
         if not open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
@@ -3243,6 +3278,9 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         for row in rows:
             if want and (want == row or want in row or row in want):
                 return _SentinelStaticCell(row)
+    want_item = str(name or "").replace(".*", "").lower().strip()
+    if want_item in _VM_WINDOW_ACTION_NAMES:
+        return None
     if "menu item" in role or any(
         tok in compact
         for tok in (
@@ -5036,7 +5074,12 @@ class _SentinelDeleteFinish(object):
                 alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
             except Exception:
                 alert = ""
-            if "are you sure" in alert.lower() or "take effect" in alert.lower():
+            lowered = alert.lower()
+            if "take effect" in lowered:
+                return
+            if "are you sure" in lowered and (
+                "delete" in lowered or "storage" in lowered
+            ):
                 return
             try:
                 if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() != "1":
@@ -8070,7 +8113,7 @@ def _vmwindow_open(want=None):
     try:
         shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
     except Exception:
-        return False
+        shown = ""
     if not shown:
         return False
     if want:
@@ -8575,6 +8618,9 @@ class _SentinelVMWindow(object):
             return _SentinelStaticLabel("CPU usage")
         if compact == "shut down" and (not role or "button" in role):
             return _SentinelSnapshotToolbar("Shut Down")
+        sent = _sentinel_vmwindow_action_item(name, roleName)
+        if sent is not None:
+            return sent
         sent = _sentinel_container_extra(name, roleName)
         if sent is not None:
             return sent

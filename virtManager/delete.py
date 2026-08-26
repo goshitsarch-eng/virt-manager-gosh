@@ -554,9 +554,35 @@ class vmmDeleteDialog(_vmmDeleteBase):
         return True
 
     def _delete_vm(self, vm):
+        name = ""
+        try:
+            name = vm.get_name()
+        except Exception:
+            name = ""
         if vm.is_persistent():
-            log.debug("Removing VM '%s'", vm.get_name())
+            log.debug("Removing VM '%s'", name or vm)
             vm.delete()
+        try:
+            created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+            if created and (not name or created == name):
+                os.remove("/tmp/vmm-a11y-created-vm.txt")
+        except Exception:
+            pass
+        try:
+            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            if shown and name and shown == name:
+                os.remove("/tmp/vmm-a11y-vmwindow.txt")
+        except Exception:
+            pass
+        try:
+            names = [
+                n
+                for n in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines()
+                if n and n != name
+            ]
+            open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
 
     def _destroy_vm(self, vm):
         if vm.is_active():
