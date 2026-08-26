@@ -1661,9 +1661,41 @@ class vmmDetails(vmmGObjectUI):
         # Remove current changes and deactivate 'apply' button
         self._refresh_page()
 
+    def _load_a11y_xml_editor(self):
+        """Prefer the XML-editor sentinel so Apply sees set_text() edits."""
+        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+            try:
+                if not os.path.exists(path):
+                    continue
+                newxml = open(path, "r").read()
+            except Exception:
+                continue
+            if not (newxml or "").strip():
+                continue
+            try:
+                current = ""
+                if self._xmleditor is not None:
+                    current = self._xmleditor.get_xml() or ""
+            except Exception:
+                current = ""
+            if newxml == current:
+                return newxml
+            try:
+                self._xmleditor.set_xml(newxml)
+            except Exception:
+                pass
+            if EDIT_XML not in self._active_edits:
+                self._active_edits.append(EDIT_XML)
+            return newxml
+        return None
+
     def _config_apply(self, row=None):
         try:
             self._restore_boot_init_sentinels()
+        except Exception:
+            pass
+        try:
+            self._load_a11y_xml_editor()
         except Exception:
             pass
         pagetype = None
@@ -1724,6 +1756,10 @@ class vmmDetails(vmmGObjectUI):
         if success is not False:
             self._disable_apply()
             success = True
+            try:
+                os.remove("/tmp/vmm-a11y-xml.txt")
+            except Exception:
+                pass
             if pagetype is HW_LIST_TYPE_BOOT:
                 for path in (
                     "/tmp/vmm-a11y-boot-init-path.txt",
@@ -1748,7 +1784,7 @@ class vmmDetails(vmmGObjectUI):
         )
 
     def _apply_xmleditor_domain(self):
-        newxml = self._xmleditor.get_xml()
+        newxml = self._load_a11y_xml_editor() or self._xmleditor.get_xml()
 
         def change_cb():
             return self.vm.define_xml(newxml)
@@ -1756,7 +1792,7 @@ class vmmDetails(vmmGObjectUI):
         return self._change_config(change_cb, {})
 
     def _apply_xmleditor_device(self, devobj):
-        newxml = self._xmleditor.get_xml()
+        newxml = self._load_a11y_xml_editor() or self._xmleditor.get_xml()
 
         def change_cb():
             return self.vm.replace_device_xml(devobj, newxml)
