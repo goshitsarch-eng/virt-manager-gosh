@@ -109,17 +109,12 @@ class VMMDogtailApp:
                 time.sleep(0.1)
         if name and " on" in name:
             want = str(name or "").replace(".*", "").split(" on")[0].strip()
+            from . import _node
+
             while time.time() < deadline:
                 try:
                     shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
-                    if shown and (
-                        not want
-                        or shown == want
-                        or shown.startswith(want + " ")
-                        or want.startswith(shown + " ")
-                    ):
-                        from . import _node
-
+                    if shown and _node._vmwindow_matches(shown, want):
                         return _node._SentinelVMWindow(shown)
                 except Exception as exc:
                     last_err = exc
@@ -581,43 +576,28 @@ class VMMDogtailApp:
         return self._manager
 
     def find_details_window(self, vmname, click_details=False, shutdown=False):
-        def _norm(value):
-            return (
-                str(value or "")
-                .lower()
-                .replace("-", " ")
-                .replace("_", " ")
-            )
-
         deadline = time.time() + 45
         last_nudge = 0
         win = None
         want = str(vmname or "")
+        from . import _node
+
+        real_want = _node._manager_vm_real_name(want) or want
         while time.time() < deadline:
             try:
                 shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
             except Exception:
                 shown = ""
-            nshown = _norm(shown)
-            nwant = _norm(want)
-            if shown and (
-                not want
-                or shown == want
-                or (want and shown.startswith(want + " "))
-                or (shown and want.startswith(shown + " "))
-                or nshown == nwant
-            ):
-                from . import _node
-
+            if shown and _node._vmwindow_matches(shown, want):
                 win = _node._SentinelVMWindow(shown)
                 break
             now = time.time()
             if want and now - last_nudge >= 2.0:
                 last_nudge = now
                 try:
-                    open("/tmp/vmm-a11y-vm-select.txt", "w").write(want)
-                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(want)
-                    open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
+                    open("/tmp/vmm-a11y-vm-select.txt", "w").write(real_want)
+                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real_want)
+                    open("/tmp/vmm-a11y-vm-open.txt", "w").write(real_want)
                     open("/tmp/vmm-a11y-vm-action.txt", "w").write("Open")
                 except Exception:
                     pass

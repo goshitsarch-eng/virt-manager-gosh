@@ -7841,8 +7841,8 @@ def _vmwindow_open(want=None):
         return False
     if not shown:
         return False
-    if want and want not in shown and shown not in want:
-        return False
+    if want:
+        return _vmwindow_matches(shown, want)
     return True
 
 
@@ -9614,6 +9614,29 @@ def _looks_like_conn_label(want):
     return False
 
 
+def _vmwindow_matches(shown, want):
+    """True when a published details window belongs to the requested guest."""
+    shown = str(shown or "").strip()
+    want = str(want or "").strip()
+    if not shown:
+        return False
+    if not want:
+        return True
+    if shown == want:
+        return True
+    if shown.startswith(want + " ") or want.startswith(shown + " "):
+        # Title form "name on testdriver" vs published guest name.
+        if " on " in shown or " on " in want:
+            return True
+    real_shown = _manager_vm_real_name(shown)
+    real_want = _manager_vm_real_name(want)
+    if real_shown and real_want and real_shown == real_want:
+        return True
+    nshown = shown.lower().replace("-", " ").replace("_", " ")
+    nwant = want.lower().replace("-", " ").replace("_", " ")
+    return bool(nshown) and nshown == nwant
+
+
 def _manager_vm_real_name(want):
     aliases = _manager_vm_aliases()
     if want in aliases:
@@ -9700,9 +9723,10 @@ class _SentinelManagerVMCell(object):
 
     def click(self, *args, **kwargs):
         button = kwargs.get("button", 1)
+        real = _manager_vm_real_name(self._vm) or self._vm
         try:
-            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vm)
-            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vm)
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(real)
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real)
         except Exception:
             pass
         if button == 3:
@@ -9713,7 +9737,8 @@ class _SentinelManagerVMCell(object):
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-vm-selected.txt", "r").read().strip() == self._vm:
+                cur = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().strip()
+                if cur in (self._vm, real):
                     break
             except Exception:
                 pass

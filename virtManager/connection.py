@@ -496,7 +496,22 @@ class vmmConnection(vmmGObject):
     #################################
 
     def get_vm_by_name(self, name):
-        return self._objects.lookup_object(vmmDomain, name)
+        obj = self._objects.lookup_object(vmmDomain, name)
+        if obj is not None or not name:
+            return obj
+        for vm in self.list_vms():
+            try:
+                if vm.get_name() == name:
+                    return vm
+                title = vm.get_title()
+                if title and title == name:
+                    return vm
+                pretty = vm.get_name_or_title()
+                if pretty and pretty == name:
+                    return vm
+            except Exception:
+                continue
+        return None
 
     def list_vms(self):
         return self._objects.get_objects_for_class(vmmDomain)
