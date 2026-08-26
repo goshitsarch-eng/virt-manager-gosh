@@ -9343,15 +9343,29 @@ class _SentinelSnapshotToolbar(object):
             open("/tmp/vmm-a11y-vm-toolbar-action.txt", "w").write(self.name)
         except Exception:
             pass
-        deadline = time.time() + 6.0
+        deadline = time.time() + 8.0
         while time.time() < deadline:
             if os.path.exists("/tmp/vmm-a11y-alert.txt"):
                 return
+            if self.name == "Shut Down":
+                try:
+                    if open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
             if not os.path.exists("/tmp/vmm-a11y-vm-toolbar-action.txt"):
                 extra = time.time() + 1.0
                 while time.time() < extra:
                     if os.path.exists("/tmp/vmm-a11y-alert.txt"):
                         return
+                    if self.name == "Shut Down":
+                        try:
+                            if open(
+                                "/tmp/vmm-a11y-vm-run-sensitive.txt", "r"
+                            ).read().strip() == "1":
+                                return
+                        except Exception:
+                            pass
                     time.sleep(0.05)
                 return
             time.sleep(0.05)
