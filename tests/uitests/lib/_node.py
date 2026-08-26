@@ -8894,6 +8894,18 @@ class _SentinelManagerVMCell(object):
 
     def doubleClick(self, *args, **kwargs):
         self.click(*args, **kwargs)
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            live = []
+            try:
+                for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+                    if line.strip():
+                        live.append(line.split("\t", 1)[0].strip())
+            except Exception:
+                live = []
+            if self._vm in live:
+                break
+            time.sleep(0.05)
         try:
             open("/tmp/vmm-a11y-vm-open.txt", "w").write(self._vm)
         except Exception:

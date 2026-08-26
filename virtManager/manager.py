@@ -286,7 +286,15 @@ class vmmManager(vmmGObjectUI):
                     name = open(path, "r").read().strip().split("\n")[0].strip()
                     os.remove(path)
                     if name:
-                        self.activate_row_for_name(name)
+                        try:
+                            self.select_row_for_name(name)
+                        except Exception:
+                            pass
+                        if self.current_vm() is None:
+                            # Connection/VM list may still be coming up.
+                            open(path, "w").write(name)
+                        else:
+                            self.activate_row_for_name(name)
             except Exception:
                 pass
             return True
