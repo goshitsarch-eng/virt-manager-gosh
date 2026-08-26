@@ -240,6 +240,28 @@ class _SentinelTableCell(object):
                 tab = "memory-tab"
             elif "Boot" in label:
                 tab = "boot-tab"
+            elif any(key in label for key in ("Serial", "Parallel", "Console", "Channel")):
+                tab = "char-tab"
+            elif "Sound" in label:
+                tab = "sound-tab"
+            elif "Video" in label:
+                tab = "video-tab"
+            elif "Watchdog" in label:
+                tab = "watchdog-tab"
+            elif "Smartcard" in label:
+                tab = "smartcard-tab"
+            elif "TPM" in label:
+                tab = "tpm-tab"
+            elif "VSOCK" in label or "vsock" in label.lower():
+                tab = "vsock-tab"
+            elif "Filesystem" in label:
+                tab = "filesystem-tab"
+            elif "Controller" in label:
+                tab = "controller-tab"
+            elif "Display" in label or "Graphics" in label:
+                tab = "graphics-tab"
+            elif any(key in label for key in ("PCI", "USB ", "Host")):
+                tab = "host-tab"
             if tab:
                 open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
         except Exception:
@@ -1811,6 +1833,30 @@ class _SentinelAddhwTab(object):
             return True
         if self.name == "network-tab" and ("NIC" in hw or "Network" in hw):
             return True
+        if self.name == "char-tab" and any(
+            key in hw for key in ("Serial", "Parallel", "Console", "Channel")
+        ):
+            return True
+        if self.name == "sound-tab" and "Sound" in hw:
+            return True
+        if self.name == "video-tab" and "Video" in hw:
+            return True
+        if self.name == "watchdog-tab" and "Watchdog" in hw:
+            return True
+        if self.name == "smartcard-tab" and "Smartcard" in hw:
+            return True
+        if self.name == "tpm-tab" and "TPM" in hw:
+            return True
+        if self.name == "vsock-tab" and ("VSOCK" in hw or "vsock" in hw.lower()):
+            return True
+        if self.name in ("filesystem-tab", "fs-tab") and "Filesystem" in hw:
+            return True
+        if self.name == "controller-tab" and "Controller" in hw:
+            return True
+        if self.name == "graphics-tab" and ("Display" in hw or "Graphics" in hw):
+            return True
+        if self.name == "host-tab" and any(key in hw for key in ("PCI", "USB ", "Host")):
+            return True
         return False
 
     @property
@@ -1960,6 +2006,77 @@ def _sentinel_addhw_finish(name, roleName, root=None):
     return None
 
 
+class _SentinelDetailsComboItem(object):
+    def __init__(self, combo, name):
+        self.name = name
+        self.roleName = "menu item"
+        self._combo = combo
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def bring_on_screen(self, *args, **kwargs):
+        return self
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (self._combo, self.name.replace(".*", ""))
+            )
+        except Exception:
+            pass
+
+
+class _SentinelDetailsCombo(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "combo box"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        self.click_combo_entry()
+
+    def click_combo_entry(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        if name is None:
+            return _SentinelEntry(self.name, "/tmp/vmm-a11y-combo-%s.txt" % self.name)
+        return _SentinelDetailsComboItem(self.name, name)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(".*%s.*" % name if name else None, roleName, labeller_text)
+
+
 class _SentinelDetailsSpin(object):
     def __init__(self, name, path):
         self.name = name
@@ -2087,6 +2204,18 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         )
     if "vcpu allocation" in compact:
         return _SentinelDetailsSpin("vCPU allocation:", "/tmp/vmm-a11y-cpu-vcpus.txt")
+    if compact in ("cpu-model",) or "cpu-model" in compact:
+        return _SentinelDetailsCombo("cpu-model")
+    sent = _sentinel_oslist_entry(name, roleName)
+    if sent is not None:
+        return sent
+    sent = _sentinel_oslist_popover(name, roleName)
+    if sent is not None:
+        return sent
+    if "no bootable" in compact:
+        return _SentinelStaticLabel("No bootable devices")
+    if compact == "config-remove":
+        return _SentinelClickButton("config-remove")
     return None
 
 
@@ -6439,6 +6568,8 @@ class _SentinelVMWindow(object):
             return _SentinelVMFileItem("View Manager")
         if compact == "config-cancel":
             return _SentinelClickButton("config-cancel")
+        if compact == "config-remove":
+            return _SentinelClickButton("config-remove")
         if "add-hardware" in compact or compact == "add hardware":
             return _SentinelAddHardwareButton()
         if compact == "shut down" and (not role or "button" in role):

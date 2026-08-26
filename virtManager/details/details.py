@@ -892,6 +892,7 @@ class vmmDetails(vmmGObjectUI):
                         "Chipset:": "overview-chipset",
                         "Firmware:": "overview-firmware",
                         "machine-combo": "machine-type",
+                        "cpu-model": "cpu-model",
                     }.get(key)
                     if not wid:
                         return True
@@ -948,12 +949,35 @@ class vmmDetails(vmmGObjectUI):
                             self._enable_apply(EDIT_FIRMWARE)
                         elif wid == "overview-chipset":
                             self._enable_apply(EDIT_MACHTYPE)
+                        elif wid == "cpu-model":
+                            self._enable_apply(EDIT_CPU)
                     self._publish_overview_combos()
                 except Exception:
                     pass
                 return True
 
             GLib.timeout_add(50, _poll_overview_combo)
+
+            def _poll_cpu_model_text():
+                path = "/tmp/vmm-a11y-combo-cpu-model.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                except Exception:
+                    return True
+                try:
+                    combo = self.widget("cpu-model")
+                    child = combo.get_child() if combo is not None else None
+                    if child is not None and hasattr(child, "set_text"):
+                        if child.get_text() != text:
+                            child.set_text(text)
+                            self._enable_apply(EDIT_CPU)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_cpu_model_text)
 
     def _publish_overview_combos(self):
         mapping = (
