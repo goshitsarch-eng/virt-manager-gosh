@@ -251,6 +251,11 @@ class vmmHostNets(vmmGObjectUI):
                     if have == name:
                         sel.select_iter(it)
                         net_list.grab_focus()
+                        self._last_net_name = name
+                        try:
+                            open("/tmp/vmm-a11y-host-net-selected.txt", "w").write(name)
+                        except Exception:
+                            pass
                         self._publish_a11y_state()
                         return True
                 except Exception:
@@ -397,6 +402,8 @@ class vmmHostNets(vmmGObjectUI):
                 else self._ensure_current_network()
             )
             if not net:
+                if getattr(self, "_selecting_net", False):
+                    return
                 self._set_error_page(_("No virtual network selected."))
                 return
 

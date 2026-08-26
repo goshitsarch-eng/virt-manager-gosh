@@ -426,6 +426,11 @@ class vmmHostStorage(vmmGObjectUI):
                     if have == name:
                         sel.select_iter(it)
                         pool_list.grab_focus()
+                        self._last_pool_name = name
+                        try:
+                            open("/tmp/vmm-a11y-host-pool-selected.txt", "w").write(name)
+                        except Exception:
+                            pass
                         self._publish_a11y_state()
                         return True
                 except Exception:
@@ -698,6 +703,8 @@ class vmmHostStorage(vmmGObjectUI):
                 else self._ensure_current_pool()
             )
             if not pool:
+                if getattr(self, "_selecting_pool", False):
+                    return
                 self._set_error_page(_("No storage pool selected."))
                 return
 

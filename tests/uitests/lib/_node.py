@@ -3488,6 +3488,7 @@ class _SentinelHostListCell(object):
         ignore = (args, kwargs)
         try:
             open(self._select_path, "w").write(self.name or "")
+            open(self._selected_path, "w").write(self.name or "")
         except Exception:
             pass
         try:
