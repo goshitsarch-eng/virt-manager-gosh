@@ -8776,6 +8776,7 @@ def _sentinel_net_source(name, roleName):
 
 
 _TESTDRIVER_VMS = (
+    "test",
     "test-clone-simple",
     "test-clone",
     "test-clone-full",
@@ -9081,6 +9082,17 @@ def _sentinel_manager_conn_cell(name, roleName):
         return None
     want = str(name or "").replace(".*", "").split("\n")[0].strip()
     if not want:
+        return None
+    # "test" is a testdriver guest. Do not treat it as a substring of
+    # the connection pretty name "test testdriver.xml".
+    live_vms = []
+    try:
+        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+            if line.strip():
+                live_vms.append(line.split("\t", 1)[0].strip())
+    except Exception:
+        pass
+    if want in _TESTDRIVER_VMS or want in live_vms:
         return None
     for cname, _connected in _conn_list_rows():
         if want == cname or want in cname or cname in want:
