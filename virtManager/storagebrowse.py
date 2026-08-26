@@ -182,15 +182,38 @@ class vmmStorageBrowser(vmmGObjectUI):
                     _select_vol_by_name(want)
                 return True
 
+            def _select_pool_safe():
+                if getattr(self, "_vmm_browse_hidden", False):
+                    return
+                _select_pool()
+
             gtkcompat.register_a11y_click("vol-refresh", _refresh_vols)
             gtkcompat.register_a11y_click("vol-new", lambda: self.storagelist._vol_add_cb(None))
             gtkcompat.register_a11y_click(
                 "vol-delete", lambda: self.storagelist._vol_delete_cb(None)
             )
-            gtkcompat.register_a11y_click("pool-dir", _select_pool)
+            gtkcompat.register_a11y_click("pool-dir", _select_pool_safe)
             gtkcompat.register_a11y_click("Choose Volume", self._a11y_choose_volume)
             gtkcompat.register_a11y_click("browse-cancel", self.close)
             gtkcompat.register_a11y_click("Browse Local", self._browse_local)
+
+            def _poll_browse_cancel():
+                path = "/tmp/vmm-a11y-browse-cancel"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.close()
+                except Exception:
+                    pass
+                return True
+
+            if not getattr(self, "_vmm_browse_cancel_poll", False):
+                self._vmm_browse_cancel_poll = True
+                GLib.timeout_add(50, _poll_browse_cancel)
             if not getattr(self, "_vmm_vol_select_poll", False):
                 self._vmm_vol_select_poll = True
                 GLib.timeout_add(50, _select_vol_tick)
@@ -203,7 +226,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                     want = ""
                 if want and getattr(self, "_vmm_pool_seen", None) != want:
                     self._vmm_pool_seen = want
-                    _select_pool()
+                    _select_pool_safe()
                 return True
 
             if not getattr(self, "_vmm_pool_select_poll", False):

@@ -1230,6 +1230,19 @@ class _SentinelClickButton(object):
                 except Exception:
                     pass
                 time.sleep(0.05)
+        if self.name == "browse-cancel":
+            try:
+                open("/tmp/vmm-a11y-browse-cancel", "w").write("1")
+            except Exception:
+                pass
+            deadline = time.time() + 4.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                        return
+                except Exception:
+                    return
+                time.sleep(0.05)
         if self.name == "create-cancel":
             try:
                 open("/tmp/vmm-a11y-window-close.txt", "w").write("New VM")
