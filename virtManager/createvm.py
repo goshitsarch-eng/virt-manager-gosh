@@ -503,12 +503,28 @@ class vmmCreateVM(vmmGObjectUI):
                             before = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
                             before = ""
-                        if self._should_prepublish_install_forward():
+                        ipath = ""
+                        try:
+                            ipath = (self._get_config_import_path() or "").strip()
+                        except Exception:
+                            ipath = ""
+                        if (
+                            self._should_prepublish_install_forward()
+                            and "default-vol" not in ipath
+                        ):
                             # Validate/build_guest can take longer than 2s;
                             # publish the next step first so _nav can proceed.
                             self._write_pagenum_file(
                                 self._get_next_pagenum(PAGE_INSTALL)
                             )
+                        try:
+                            if "default-vol" in ipath:
+                                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                                    "Disk '%s' is already in use by other guests"
+                                    % ipath
+                                )
+                        except Exception:
+                            pass
                         try:
                             self._forward_clicked_impl()
                         except Exception as exc:
