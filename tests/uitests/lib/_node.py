@@ -1238,8 +1238,13 @@ class _SentinelClickButton(object):
                 old = open("/tmp/vmm-a11y-network-ip-stamp", "r").read()
             except Exception:
                 old = ""
+            nic = ""
             try:
-                open("/tmp/vmm-a11y-network-ip-refresh", "w").write("1")
+                nic = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+            except Exception:
+                nic = ""
+            try:
+                open("/tmp/vmm-a11y-network-ip-refresh", "w").write(nic or "1")
             except Exception:
                 pass
             deadline = time.time() + 5.0

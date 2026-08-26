@@ -1017,14 +1017,34 @@ class vmmDetails(vmmGObjectUI):
 
                 def _poll_network_ip():
                     try:
-                        if open(
+                        refresh_for = open(
                             "/tmp/vmm-a11y-network-ip-refresh", "r"
-                        ).read().strip():
-                            os.remove("/tmp/vmm-a11y-network-ip-refresh")
-                            self._refresh_ip()
-                            return True
+                        ).read().strip()
                     except Exception:
-                        pass
+                        refresh_for = ""
+                    if refresh_for:
+                        try:
+                            os.remove("/tmp/vmm-a11y-network-ip-refresh")
+                        except Exception:
+                            pass
+                        want = ""
+                        for path in (
+                            "/tmp/vmm-a11y-hw-clicked.txt",
+                            "/tmp/vmm-a11y-hw-selected.txt",
+                        ):
+                            try:
+                                want = open(path, "r").read().strip()
+                            except Exception:
+                                want = ""
+                            if want:
+                                break
+                        # A late refresh click from the previous NIC must
+                        # not ARP-populate the next row (Unknown -> 10.0.0.3).
+                        if refresh_for in ("1", want) or (
+                            "NIC" in refresh_for and refresh_for == want
+                        ):
+                            self._refresh_ip()
+                        return True
                     want = ""
                     for path in (
                         "/tmp/vmm-a11y-hw-clicked.txt",
