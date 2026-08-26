@@ -28,11 +28,23 @@ from ..device.gfxdetails import (
     _EDIT_GFX_PORT,
     _EDIT_GFX_TYPE,
 )
-from ..device.fsdetails import vmmFSDetails
+from ..device.fsdetails import (
+    _EDIT_FS_DRIVER,
+    _EDIT_FS_READONLY,
+    _EDIT_FS_SOURCE,
+    _EDIT_FS_TARGET,
+    _EDIT_FS_TYPE,
+    vmmFSDetails,
+)
 from ..device.gfxdetails import vmmGraphicsDetails
 from ..device.mediacombo import vmmMediaCombo
 from ..device.netlist import vmmNetworkList
-from ..device.tpmdetails import vmmTPMDetails
+from ..device.tpmdetails import (
+    _EDIT_TPM_MODEL,
+    _EDIT_TPM_TYPE,
+    _EDIT_TPM_VERSION,
+    vmmTPMDetails,
+)
 from ..device.vsockdetails import vmmVsockDetails
 from ..lib.graphwidgets import Sparkline
 from ..oslist import vmmOSList
@@ -1332,8 +1344,6 @@ class vmmDetails(vmmGObjectUI):
                             self._enable_apply(EDIT_NET_MODEL)
                         return True
                     gfx_keys = {
-                        "Type:": ("graphics-type", _EDIT_GFX_TYPE),
-                        "Type": ("graphics-type", _EDIT_GFX_TYPE),
                         "Listen type:": ("graphics-listen-type", _EDIT_GFX_LISTEN),
                         "graphics-rendernode": ("graphics-rendernode", _EDIT_GFX_OPENGL),
                     }
@@ -1347,6 +1357,54 @@ class vmmDetails(vmmGObjectUI):
                             except Exception:
                                 pass
                             self._enable_apply(EDIT_GFX)
+                            self._publish_details_device_fields()
+                        return True
+                    if key in ("Type:", "Type"):
+                        os.remove(sel)
+                        combo, edit, change_cb = self._a11y_type_combo()
+                        if combo is not None and self._a11y_select_combo(combo, item):
+                            if change_cb is not None:
+                                try:
+                                    change_cb()
+                                except Exception:
+                                    pass
+                            self._enable_apply(edit)
+                            self._publish_details_device_fields()
+                        return True
+                    if key == "controller-model":
+                        os.remove(sel)
+                        combo = self.widget("controller-model")
+                        if self._a11y_select_combo(combo, item):
+                            self._enable_apply(EDIT_CONTROLLER_MODEL)
+                            self._publish_details_device_fields()
+                        return True
+                    if key == "smartcard-mode":
+                        os.remove(sel)
+                        combo = self.widget("smartcard-mode")
+                        if self._a11y_select_combo(combo, item):
+                            self._enable_apply(EDIT_SMARTCARD_MODE)
+                            self._publish_details_device_fields()
+                        return True
+                    if key in ("Driver:", "Driver"):
+                        os.remove(sel)
+                        combo = self.fsDetails.widget("fs-driver-combo")
+                        if self._a11y_select_combo(combo, item):
+                            try:
+                                self.fsDetails._change_cb(_EDIT_FS_DRIVER)
+                            except Exception:
+                                pass
+                            self._enable_apply(EDIT_FS)
+                            self._publish_details_device_fields()
+                        return True
+                    if key in ("Version:", "Version"):
+                        os.remove(sel)
+                        combo = self.tpmdetails.widget("tpm-version")
+                        if self._a11y_select_combo(combo, item):
+                            try:
+                                self.tpmdetails._change_cb(_EDIT_TPM_VERSION)
+                            except Exception:
+                                pass
+                            self._enable_apply(EDIT_TPM)
                             self._publish_details_device_fields()
                         return True
                     if key in ("Startup Policy:", "Startup Policy"):
@@ -1365,11 +1423,16 @@ class vmmDetails(vmmGObjectUI):
                         return True
                     if key in ("Model:", "Model"):
                         os.remove(sel)
-                        combo, edit = self._a11y_model_combo()
+                        combo, edit, change_cb = self._a11y_model_combo()
                         if combo is not None and self._a11y_select_combo(combo, item):
                             if edit == EDIT_VIDEO_MODEL:
                                 try:
                                     self._video_model_changed_cb(combo)
+                                except Exception:
+                                    self._enable_apply(edit)
+                            elif change_cb is not None:
+                                try:
+                                    change_cb()
                                 except Exception:
                                     self._enable_apply(edit)
                             else:
@@ -1617,7 +1680,7 @@ class vmmDetails(vmmGObjectUI):
                 try:
                     if os.path.exists(mset):
                         text = open(mset, "r").read().strip()
-                        combo, edit = self._a11y_model_combo()
+                        combo, edit, change_cb = self._a11y_model_combo()
                         if combo is not None and text:
                             if self._a11y_select_combo(combo, text):
                                 try:
@@ -1625,12 +1688,125 @@ class vmmDetails(vmmGObjectUI):
                                 except Exception:
                                     pass
                                 if edit == EDIT_VIDEO_MODEL:
-                                    self._video_model_changed_cb(combo)
+                                    try:
+                                        self._video_model_changed_cb(combo)
+                                    except Exception:
+                                        self._enable_apply(edit)
+                                elif change_cb is not None:
+                                    try:
+                                        change_cb()
+                                    except Exception:
+                                        self._enable_apply(edit)
                                 else:
                                     self._enable_apply(edit)
                                 self._publish_details_device_fields()
                 except Exception:
                     pass
+                cset = "/tmp/vmm-a11y-combo-controller-model.txt.set"
+                try:
+                    if os.path.exists(cset):
+                        text = open(cset, "r").read().strip()
+                        combo = self.widget("controller-model")
+                        child = combo.get_child() if combo is not None else None
+                        if child is not None and hasattr(child, "set_text"):
+                            child.set_text(text)
+                            try:
+                                combo.set_active(-1)
+                            except Exception:
+                                pass
+                            try:
+                                os.remove(cset)
+                            except Exception:
+                                pass
+                            self._enable_apply(EDIT_CONTROLLER_MODEL)
+                            self._publish_details_device_fields()
+                except Exception:
+                    pass
+                for path, getter, edit, change in (
+                    (
+                        "/tmp/vmm-a11y-fs-source.txt",
+                        lambda: self.fsDetails.widget("fs-source"),
+                        EDIT_FS,
+                        lambda: self.fsDetails._change_cb(_EDIT_FS_SOURCE),
+                    ),
+                    (
+                        "/tmp/vmm-a11y-fs-target.txt",
+                        lambda: self.fsDetails.widget("fs-target"),
+                        EDIT_FS,
+                        lambda: self.fsDetails._change_cb(_EDIT_FS_TARGET),
+                    ),
+                    (
+                        "/tmp/vmm-a11y-vsock-cid.txt",
+                        lambda: self.vsockdetails.widget("vsock-cid"),
+                        EDIT_VSOCK_CID,
+                        None,
+                    ),
+                ):
+                    pset = path + ".set"
+                    try:
+                        if not os.path.exists(pset):
+                            continue
+                        stamp = os.path.getmtime(pset)
+                        seen = "_vmm_seen_" + path.replace("/", "_")
+                        if getattr(self, seen, None) == stamp:
+                            continue
+                        setattr(self, seen, stamp)
+                        text = open(pset, "r").read().strip()
+                        w = getter()
+                        if hasattr(w, "set_value"):
+                            w.set_value(float(text or 0))
+                        elif hasattr(w, "set_text"):
+                            w.set_text(text)
+                        try:
+                            os.remove(pset)
+                        except Exception:
+                            pass
+                        if change is not None:
+                            try:
+                                change()
+                            except Exception:
+                                pass
+                        self._enable_apply(edit)
+                        self._publish_details_device_fields()
+                    except Exception:
+                        pass
+                for cpath, getter, edit, change in (
+                    (
+                        "/tmp/vmm-a11y-fs-export.txt.click",
+                        lambda: self.fsDetails.widget("fs-readonly"),
+                        EDIT_FS,
+                        lambda: self.fsDetails._change_cb(_EDIT_FS_READONLY),
+                    ),
+                    (
+                        "/tmp/vmm-a11y-vsock-auto.txt.click",
+                        lambda: self.vsockdetails.widget("vsock-auto"),
+                        EDIT_VSOCK_AUTO,
+                        None,
+                    ),
+                ):
+                    if not os.path.exists(cpath):
+                        continue
+                    try:
+                        os.remove(cpath)
+                        w = getter()
+                        w.set_active(not w.get_active())
+                        if change is not None:
+                            try:
+                                change()
+                            except Exception:
+                                pass
+                        self._enable_apply(edit)
+                        self._publish_details_device_fields()
+                    except Exception:
+                        pass
+                if os.path.exists("/tmp/vmm-a11y-tpm-advanced-expand"):
+                    try:
+                        os.remove("/tmp/vmm-a11y-tpm-advanced-expand")
+                        exp = self.tpmdetails.widget("tpm-advanced-expander")
+                        if exp is not None:
+                            exp.set_expanded(True)
+                    except Exception:
+                        pass
                 if os.path.exists("/tmp/vmm-a11y-watchdog-action-down"):
                     try:
                         os.remove("/tmp/vmm-a11y-watchdog-action-down")
@@ -1679,10 +1855,52 @@ class vmmDetails(vmmGObjectUI):
         combo.set_active_iter(match)
         return True
 
+    def _details_hw_context(self):
+        tab = ""
+        hw = ""
+        try:
+            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+        except Exception:
+            tab = ""
+        for path in (
+            "/tmp/vmm-a11y-last-hw.txt",
+            "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-hw-selected.txt",
+        ):
+            try:
+                hw = open(path, "r").read().strip()
+            except Exception:
+                hw = ""
+            if hw:
+                break
+        return tab, hw
+
+    def _a11y_type_combo(self):
+        tab, hw = self._details_hw_context()
+        blob = ("%s %s" % (tab, hw)).lower()
+        if "tpm" in blob:
+            return (
+                self.tpmdetails.widget("tpm-type"),
+                EDIT_TPM,
+                lambda: self.tpmdetails._change_cb(_EDIT_TPM_TYPE),
+            )
+        if "filesystem" in blob or tab in ("filesystem-tab", "fs-tab"):
+            return (
+                self.fsDetails.widget("fs-type-combo"),
+                EDIT_FS,
+                lambda: self.fsDetails._change_cb(_EDIT_FS_TYPE),
+            )
+        return (
+            self.gfxdetails.widget("graphics-type"),
+            EDIT_GFX,
+            lambda: self.gfxdetails._change_cb(_EDIT_GFX_TYPE),
+        )
+
     def _a11y_model_combo(self):
         want = ""
         for path in (
             "/tmp/vmm-a11y-details-tab.txt",
+            "/tmp/vmm-a11y-last-hw.txt",
             "/tmp/vmm-a11y-hw-clicked.txt",
             "/tmp/vmm-a11y-hw-selected.txt",
         ):
@@ -1692,24 +1910,35 @@ class vmmDetails(vmmGObjectUI):
                 want = ""
             if want:
                 if "sound" in want.lower():
-                    return self.widget("sound-model"), EDIT_SOUND_MODEL
+                    return self.widget("sound-model"), EDIT_SOUND_MODEL, None
                 if "video" in want.lower():
-                    return self.widget("video-model"), EDIT_VIDEO_MODEL
+                    return self.widget("video-model"), EDIT_VIDEO_MODEL, None
                 if "watchdog" in want.lower():
-                    return self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL
+                    return self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL, None
+                if "tpm" in want.lower():
+                    return (
+                        self.tpmdetails.widget("tpm-model"),
+                        EDIT_TPM,
+                        lambda: self.tpmdetails._change_cb(_EDIT_TPM_MODEL),
+                    )
         try:
             text = open("/tmp/vmm-a11y-details-model.txt.set", "r").read().strip()
         except Exception:
             text = ""
         if text:
-            for combo, edit in (
-                (self.widget("sound-model"), EDIT_SOUND_MODEL),
-                (self.widget("video-model"), EDIT_VIDEO_MODEL),
-                (self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL),
+            for combo, edit, change_cb in (
+                (self.widget("sound-model"), EDIT_SOUND_MODEL, None),
+                (self.widget("video-model"), EDIT_VIDEO_MODEL, None),
+                (self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL, None),
+                (
+                    self.tpmdetails.widget("tpm-model"),
+                    EDIT_TPM,
+                    lambda: self.tpmdetails._change_cb(_EDIT_TPM_MODEL),
+                ),
             ):
                 if self._a11y_select_combo(combo, text):
-                    return combo, edit
-        return None, None
+                    return combo, edit, change_cb
+        return None, None, None
 
     def _publish_details_device_fields(self):
         def _combo_label(combo):
@@ -1729,20 +1958,32 @@ class vmmDetails(vmmGObjectUI):
                 return ""
 
         try:
+            type_combo, _tedit, _tcb = self._a11y_type_combo()
             mapping = (
-                ("Type:", self.gfxdetails.widget("graphics-type")),
+                ("Type:", type_combo),
                 ("Listen type:", self.gfxdetails.widget("graphics-listen-type")),
                 ("graphics-rendernode", self.gfxdetails.widget("graphics-rendernode")),
                 ("Startup Policy:", self.widget("hostdev-usb-startup-policy")),
                 ("Action:", self.widget("watchdog-action")),
+                ("controller-model", self.widget("controller-model")),
+                ("smartcard-mode", self.widget("smartcard-mode")),
+                ("Driver:", self.fsDetails.widget("fs-driver-combo")),
+                ("Version:", self.tpmdetails.widget("tpm-version")),
             )
             current = []
             for key, combo in mapping:
                 label = _combo_label(combo)
-                open("/tmp/vmm-a11y-combo-%s.txt" % key, "w").write(label)
-                if label:
-                    current.append(label)
-            combo, _edit = self._a11y_model_combo()
+                extra = ""
+                try:
+                    if combo is not None and combo.get_has_entry():
+                        extra = combo.get_child().get_text().strip()
+                except Exception:
+                    extra = ""
+                shown = extra or label
+                open("/tmp/vmm-a11y-combo-%s.txt" % key, "w").write(shown)
+                if shown:
+                    current.append(shown)
+            combo, _edit, _cb = self._a11y_model_combo()
             if combo is not None:
                 label = _combo_label(combo)
                 open("/tmp/vmm-a11y-combo-Model:.txt", "w").write(label)
@@ -1780,6 +2021,47 @@ class vmmDetails(vmmGObjectUI):
             open("/tmp/vmm-a11y-video-3d.txt", "w").write(
                 "1" if self.widget("video-3d").get_active() else "0"
             )
+            open("/tmp/vmm-a11y-fs-source.txt", "w").write(
+                self.fsDetails.widget("fs-source").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-fs-target.txt", "w").write(
+                self.fsDetails.widget("fs-target").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-fs-export.txt", "w").write(
+                "1" if self.fsDetails.widget("fs-readonly").get_active() else "0"
+            )
+            warn = self.fsDetails.widget("fs-driver-warn-box")
+            open("/tmp/vmm-a11y-fs-shared-mem-warn.txt", "w").write(
+                "1" if warn is not None and warn.get_visible() else "0"
+            )
+            auto = self.vsockdetails.widget("vsock-auto")
+            cid = self.vsockdetails.widget("vsock-cid")
+            open("/tmp/vmm-a11y-vsock-auto.txt", "w").write(
+                "1" if auto.get_active() else "0"
+            )
+            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
+                str(int(uiutil.spin_get_helper(cid) or 0))
+            )
+            open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write(
+                "1" if cid.get_visible() else "0"
+            )
+            self._publish_controller_devices()
+        except Exception:
+            pass
+
+    def _publish_controller_devices(self):
+        names = []
+        try:
+            model = self.widget("controller-device-list").get_model()
+            if model is not None:
+                for row in model:
+                    label = str(row[0] or "").strip()
+                    if label:
+                        names.append(label)
+        except Exception:
+            names = []
+        try:
+            open("/tmp/vmm-a11y-controller-devices.txt", "w").write("\n".join(names))
         except Exception:
             pass
 
@@ -2883,6 +3165,16 @@ class vmmDetails(vmmGObjectUI):
             want = "Video"
         elif tab == "watchdog-tab" and "Watchdog" not in (want or ""):
             want = "Watchdog"
+        elif tab == "controller-tab" and "Controller" not in (want or ""):
+            want = "Controller"
+        elif tab in ("filesystem-tab", "fs-tab") and "Filesystem" not in (want or ""):
+            want = "Filesystem"
+        elif tab == "smartcard-tab" and "Smartcard" not in (want or ""):
+            want = "Smartcard"
+        elif tab == "tpm-tab" and "TPM" not in (want or ""):
+            want = "TPM"
+        elif tab == "vsock-tab" and "VSOCK" not in (want or ""):
+            want = "VirtIO VSOCK"
         elif tab == "host-tab" and not any(
             tok in (want or "") for tok in ("PCI", "USB", "Host")
         ):
@@ -3004,6 +3296,7 @@ class vmmDetails(vmmGObjectUI):
                     if newlab:
                         open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
                         open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
+                        open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
                         want = newlab
             except Exception:
                 labeled = None
@@ -3466,7 +3759,24 @@ class vmmDetails(vmmGObjectUI):
         kwargs = {}
 
         if self._edited(EDIT_CONTROLLER_MODEL):
-            model = uiutil.get_list_selection(self.widget("controller-model"))
+            combo = self.widget("controller-model")
+            model = uiutil.get_list_selection(combo)
+            try:
+                typed = combo.get_child().get_text().strip()
+            except Exception:
+                typed = ""
+            if typed and (
+                combo.get_active() < 0
+                or typed
+                not in (
+                    str(model or ""),
+                    "USB 2",
+                    "USB 3",
+                    "Hypervisor default",
+                    "VirtIO SCSI",
+                )
+            ):
+                model = typed
             kwargs["model"] = model
 
         return self._change_config(self.vm.define_controller, kwargs, devobj=devobj)
@@ -4131,6 +4441,10 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_smartcard_page(self, sc):
         uiutil.set_list_selection(self.widget("smartcard-mode"), sc.mode)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_redir_page(self, rd):
         address = None
@@ -4146,6 +4460,10 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_tpm_page(self, tpmdev):
         self.tpmdetails.set_dev(tpmdev)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_panic_page(self, dev):
         self.widget("panic-model").set_text(dev.model or "")
@@ -4159,6 +4477,10 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_vsock_page(self, dev):
         self.vsockdetails.set_dev(dev)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_char_page(self, chardev):
         char_type = chardev.DEVICE_TYPE
@@ -4341,9 +4663,18 @@ class vmmDetails(vmmGObjectUI):
         if controller.type == "usb" and "xhci" in str(model):
             model = "usb3"
         uiutil.set_list_selection(self.widget("controller-model"), model)
+        try:
+            self._publish_controller_devices()
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_filesystem_page(self, dev):
         self.fsDetails.set_dev(dev)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_boot_page(self):
         # Refresh autostart

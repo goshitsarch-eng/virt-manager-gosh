@@ -292,11 +292,7 @@ class _SentinelTableCell(object):
             # Publisher overwrites hw-selected with the GTK row (often
             # Overview). Remove/apply must use this click-only label.
             open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(self.name or "")
-            if any(
-                key in (self.name or "")
-                for key in ("USB", "PCI", "Sound", "Video", "Watchdog", "Display")
-            ):
-                open("/tmp/vmm-a11y-last-hw.txt", "w").write(self.name or "")
+            open("/tmp/vmm-a11y-last-hw.txt", "w").write(self.name or "")
         except Exception:
             pass
         if self._index is not None:
@@ -760,10 +756,16 @@ class _SentinelEntry(object):
             open(self._path, "w").write(text if text is not None else "")
         except Exception:
             pass
-        if self._path in (
+        needs_set = self._path in (
             "/tmp/vmm-a11y-details-model.txt",
             "/tmp/vmm-a11y-gfx-password.txt",
-        ):
+            "/tmp/vmm-a11y-fs-source.txt",
+            "/tmp/vmm-a11y-fs-target.txt",
+        ) or (
+            self._path.startswith("/tmp/vmm-a11y-combo-")
+            and not self._path.endswith("-current.txt")
+        )
+        if needs_set:
             try:
                 open(self._path + ".set", "w").write(text if text is not None else "")
             except Exception:
@@ -781,7 +783,16 @@ class _SentinelEntry(object):
                     )
                 except Exception:
                     sens = False
-                if gone and (sens or self._path != "/tmp/vmm-a11y-details-model.txt"):
+                if gone and (
+                    sens
+                    or self._path
+                    not in (
+                        "/tmp/vmm-a11y-details-model.txt",
+                        "/tmp/vmm-a11y-fs-source.txt",
+                        "/tmp/vmm-a11y-fs-target.txt",
+                    )
+                    and not self._path.startswith("/tmp/vmm-a11y-combo-")
+                ):
                     return
                 time.sleep(0.05)
         try:
@@ -2179,6 +2190,17 @@ class _SentinelAddhwTab(object):
         sent = _sentinel_details_page_widgets(name, roleName, labeller_text)
         if sent is not None:
             return sent
+        if "cell" in str(roleName or "").lower() or (not roleName and " on " in raw):
+            try:
+                rows = open(
+                    "/tmp/vmm-a11y-controller-devices.txt", "r"
+                ).read().splitlines()
+            except Exception:
+                rows = []
+            want = raw.replace(".*", "")
+            for row in rows:
+                if want and (want == row or want in row or row in want):
+                    return _SentinelStaticCell(row)
         sent = _sentinel_boot_widgets(name, roleName, labeller_text)
         if sent is not None:
             return sent
@@ -2470,6 +2492,13 @@ class _SentinelDetailsSpin(object):
         return True
 
     @property
+    def visible(self):
+        try:
+            return open(self._path + ".visible", "r").read().strip() != "0"
+        except Exception:
+            return True
+
+    @property
     def sensitive(self):
         try:
             return open(self._path + ".sensitive", "r").read().strip() != "0"
@@ -2600,6 +2629,10 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
             "Maximum allocation:", "/tmp/vmm-a11y-mem-max.txt"
         )
     if "enable shared" in compact:
+        if "label" in role and "check" not in role:
+            return _SentinelVisibleLabel(
+                "Enable shared memory", "/tmp/vmm-a11y-fs-shared-mem-warn.txt"
+            )
         return _SentinelDetailsCheck(
             "Enable shared memory", "/tmp/vmm-a11y-mem-shared.txt"
         )
@@ -2633,6 +2666,15 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     if "no bootable" in compact:
         return _SentinelStaticLabel("No bootable devices")
     if "advanced options" in compact:
+        tab = ""
+        try:
+            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+        except Exception:
+            tab = ""
+        if tab == "tpm-tab" or "tpm" in tab:
+            return _SentinelDetailsExpander(
+                "Advanced options", "/tmp/vmm-a11y-tpm-advanced-expand"
+            )
         return _SentinelDetailsExpander(
             "Advanced options", "/tmp/vmm-a11y-disk-advanced-expand"
         )
@@ -2695,6 +2737,35 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsCombo("Model:")
     if compact.replace(".*", "").replace(":", "").strip() == "type":
         return _SentinelDetailsCombo("Type:")
+    if compact == "controller-model" or "controller-model" in compact:
+        return _SentinelDetailsCombo("controller-model")
+    if compact == "smartcard-mode" or "smartcard-mode" in compact:
+        return _SentinelDetailsCombo("smartcard-mode")
+    if compact.replace(".*", "").replace(":", "").strip() == "driver":
+        return _SentinelDetailsCombo("Driver:")
+    if compact.replace(".*", "").replace(":", "").strip() == "version":
+        return _SentinelDetailsCombo("Version:")
+    if compact == "vsock-cid":
+        return _SentinelDetailsSpin("vsock-cid", "/tmp/vmm-a11y-vsock-cid.txt")
+    if compact == "vsock-auto":
+        return _SentinelDetailsCheck("vsock-auto", "/tmp/vmm-a11y-vsock-auto.txt")
+    if "source path" in compact:
+        return _SentinelEntry("Source path:", "/tmp/vmm-a11y-fs-source.txt")
+    if "target path" in compact:
+        return _SentinelEntry("Target path:", "/tmp/vmm-a11y-fs-target.txt")
+    if "export filesystem" in compact:
+        return _SentinelDetailsCheck(
+            "Export filesystem", "/tmp/vmm-a11y-fs-export.txt"
+        )
+    if role and "cell" in role:
+        try:
+            rows = open("/tmp/vmm-a11y-controller-devices.txt", "r").read().splitlines()
+        except Exception:
+            rows = []
+        want = str(name or "").replace(".*", "")
+        for row in rows:
+            if want and (want == row or want in row or row in want):
+                return _SentinelStaticCell(row)
     if "menu item" in role or any(
         tok in compact
         for tok in (
@@ -6851,6 +6922,60 @@ class _SentinelStaticLabel(object):
 
     @property
     def onscreen(self):
+        return True
+
+    @property
+    def visible(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelVisibleLabel(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "label"
+        self._path = path
+
+    @property
+    def text(self):
+        return self.name
+
+    @property
+    def visible(self):
+        try:
+            return open(self._path, "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        return self.visible
+
+    @property
+    def onscreen(self):
+        return self.visible
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelStaticCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def visible(self):
         return True
 
     def check_onscreen(self):
