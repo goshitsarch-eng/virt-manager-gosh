@@ -614,6 +614,10 @@ class vmmOSList(vmmGObjectUI):
             except Exception:
                 pass
         self.refresh_a11y()
+        try:
+            self.emit("os-selected", self._selected_os)
+        except Exception:
+            pass
         return
 
     def get_selected_os(self):

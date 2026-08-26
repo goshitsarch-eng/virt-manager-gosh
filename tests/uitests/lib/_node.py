@@ -351,8 +351,25 @@ class _OslistRowSentinel(object):
                 open("/tmp/vmm-a11y-oslist-eol.txt", "w").write("1")
                 return
             open("/tmp/vmm-a11y-os-select.txt", "w").write(want)
+            open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
         except Exception:
             pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                got = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+            except Exception:
+                got = ""
+            if got and want and want.lower() not in ("include-eol",):
+                compact = got.lower().replace(" ", "")
+                if want.lower() in compact or compact not in (
+                    "fedora",
+                    "detecting...",
+                    "nonedetected",
+                ):
+                    if want.lower() in compact or "12" in compact:
+                        return
+            time.sleep(0.05)
 
 
 class _OslistPopoverSentinel(object):

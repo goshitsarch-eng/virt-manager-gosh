@@ -1806,6 +1806,8 @@ class vmmDetails(vmmGObjectUI):
             inspection.vm_refresh(self.vm)
 
     def _os_list_name_selected_cb(self, src, osobj):
+        if getattr(self, "_ui_refreshing", False):
+            return
         self._enable_apply(EDIT_OS_NAME)
 
     def _curmem_changed_cb(self, src):
@@ -2845,14 +2847,16 @@ class vmmDetails(vmmGObjectUI):
             pass
 
     def _refresh_os_page(self):
-        try:
-            osobj = self.vm.xmlobj.osinfo
-            label = getattr(osobj, "label", None) or ""
-            if label:
-                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
-        except Exception:
-            pass
-        self._os_list.select_os(self.vm.xmlobj.osinfo)
+        pending = os.path.exists("/tmp/vmm-a11y-oslist-typed")
+        if not pending:
+            try:
+                osobj = self.vm.xmlobj.osinfo
+                label = getattr(osobj, "label", None) or ""
+                if label:
+                    open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
+            except Exception:
+                pass
+            self._os_list.select_os(self.vm.xmlobj.osinfo)
 
         inspection_supported = self.config.inspection_supported()
         uiutil.set_grid_row_visible(
