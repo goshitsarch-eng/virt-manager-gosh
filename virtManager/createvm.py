@@ -1440,6 +1440,7 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-disk-inuse-allow",
             "/tmp/vmm-a11y-import-entry.txt",
             "/tmp/vmm-a11y-media-entry.txt",
+            "/tmp/vmm-a11y-createvm-media-combo.txt",
             "/tmp/vmm-a11y-alert.txt",
             "/tmp/vmm-a11y-alert-response.txt",
             "/tmp/vmm-a11y-boot-menu.txt",
