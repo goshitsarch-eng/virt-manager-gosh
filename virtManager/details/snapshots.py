@@ -597,7 +597,6 @@ class vmmSnapshotPage(vmmGObjectUI):
         selection.emit("changed")
         selection.set_mode(Gtk.SelectionMode.MULTIPLE)
         selection.set_select_function(self._confirm_changes, None)
-        self._start_a11y_poll()
 
     ##############
     # Init stuff #

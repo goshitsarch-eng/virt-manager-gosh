@@ -107,6 +107,18 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and " on " in name:
+            want = str(name or "").replace(".*", "").split(" on ")[0].strip()
+            while time.time() < deadline:
+                try:
+                    shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    if shown and (not want or want in shown or shown in want):
+                        from . import _node
+
+                        return _node._SentinelVMWindow(shown)
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Create snapshot" in name:
             while time.time() < deadline:
                 try:
@@ -901,4 +913,9 @@ class VMMDogtailApp:
             except dogtail.tree.SearchError:
                 # GTK 4 from a python wrapper may expose the process name
                 self._root = dogtail.tree.root.application("python3")
-            self._topwin = self.find_window(self._infer_open_window_name(extra_opts, window_name))
+            if show_console:
+                self._topwin = self.find_window("%s on" % show_console)
+            else:
+                self._topwin = self.find_window(
+                    self._infer_open_window_name(extra_opts, window_name)
+                )

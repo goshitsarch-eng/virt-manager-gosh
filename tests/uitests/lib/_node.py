@@ -5176,6 +5176,78 @@ def _sentinel_createnet_widgets(name, roleName, labeller_text=None):
     return None
 
 
+def _vmwindow_open(want=None):
+    try:
+        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+    except Exception:
+        return False
+    if not shown:
+        return False
+    if want and want not in shown and shown not in want:
+        return False
+    return True
+
+
+class _SentinelVMWindow(object):
+    roleName = "frame"
+
+    def __init__(self, vmname=None):
+        try:
+            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        self._vmname = vmname or shown or "test-snapshots"
+        self.name = "%s on testdriver.xml" % self._vmname
+
+    @property
+    def showing(self):
+        return _vmwindow_open(self._vmname)
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def grab_focus(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable)
+        sent = _sentinel_snapshot_widgets(
+            name, roleName, labeller_text, root_name=self.name
+        )
+        if sent is not None:
+            return sent
+        sent = _sentinel_alert(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
 def _snapshot_page_open():
     try:
         return open("/tmp/vmm-a11y-snapshot-page.txt", "r").read().strip() == "1"
