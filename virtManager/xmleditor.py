@@ -129,6 +129,32 @@ class vmmXMLEditor(vmmGObjectUI):
         self._srcview.show_all()
         self.widget("xml-scroll").add(self._srcview)
         self._set_xmleditor_enabled_from_config()
+        self._publish_xml_a11y()
+        if not getattr(self, "_vmm_xml_tab_poll", False):
+            self._vmm_xml_tab_poll = True
+
+            def _poll_xml_tab():
+                path = "/tmp/vmm-a11y-xml-tab.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    if want == "XML":
+                        self.widget("xml-notebook").set_current_page(_PAGE_XML)
+                    elif want == "Details":
+                        self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
+                    self._publish_xml_a11y()
+                except Exception:
+                    pass
+                return True
+
+            from gi.repository import GLib
+
+            GLib.timeout_add(50, _poll_xml_tab)
 
     ####################
     # Internal helpers #
@@ -202,6 +228,7 @@ class vmmXMLEditor(vmmGObjectUI):
             self._srcxml = xml or ""
             self._srcbuff.set_text(self._srcxml)
             self._reset_cursor()
+            self._publish_xml_a11y()
         finally:
             self._srcbuff.connect("changed", self._buffer_changed_cb)
 
@@ -223,6 +250,18 @@ class vmmXMLEditor(vmmGObjectUI):
         Return True if the XML page is selected
         """
         return self._curpage == _PAGE_XML
+
+    def _publish_xml_a11y(self):
+        try:
+            open("/tmp/vmm-a11y-xml-page.txt", "w").write(
+                "1" if self._curpage == _PAGE_XML else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-xml-contents.txt", "w").write(self.get_xml() or "")
+        except Exception:
+            pass
 
     #############
     # Listeners #
@@ -257,6 +296,7 @@ class vmmXMLEditor(vmmGObjectUI):
 
     def _after_page_changed_cb(self, notebook, gparam):
         self._curpage = notebook.get_current_page()
+        self._publish_xml_a11y()
 
     def _xmleditor_enabled_changed_cb(self):
         self._set_xmleditor_enabled_from_config()

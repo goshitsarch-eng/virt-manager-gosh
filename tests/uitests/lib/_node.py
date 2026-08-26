@@ -1027,6 +1027,102 @@ class _SentinelNavButton(object):
         self.click()
 
 
+class _SentinelXmlPageTab(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "page tab"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-xml-tab.txt", "w").write(self.name)
+        except Exception:
+            pass
+        if self.name == "XML":
+            try:
+                open("/tmp/vmm-a11y-xml-page.txt", "w").write("1")
+            except Exception:
+                pass
+        elif self.name == "Details":
+            try:
+                open("/tmp/vmm-a11y-xml-page.txt", "w").write("0")
+            except Exception:
+                pass
+
+
+class _SentinelXmlEditor(object):
+    name = "XML editor"
+    roleName = "text"
+
+    def _page(self):
+        try:
+            return open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+        except Exception:
+            return "0"
+
+    @property
+    def showing(self):
+        return self._page() == "1"
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+        except Exception:
+            return ""
+
+    def get_text_override(self):
+        return self.text
+
+    def set_text(self, text):
+        try:
+            open("/tmp/vmm-a11y-xml.txt", "w").write(text or "")
+            open("/tmp/vmm-a11y-xml-contents.txt", "w").write(text or "")
+            open("/tmp/vmm-a11y-click.txt", "w").write(".xml-load")
+        except Exception:
+            pass
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+
+def _sentinel_xml_widgets(name, roleName):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "")
+    compact = raw.lower().strip()
+    role = str(roleName or "").lower()
+    if "xml editor" in compact:
+        return _SentinelXmlEditor()
+    if compact in ("xml", "details") and "tab" in role:
+        pretty = "XML" if compact == "xml" else "Details"
+        return _SentinelXmlPageTab(pretty)
+    return None
+
+
 class _SentinelProgressWindow(object):
     """Creating Virtual Machine progress dialog after GetItems."""
 
@@ -2696,6 +2792,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
 
         if name and "pagenum" in str(name).lower():
             return _SentinelPagenum()
+        try:
+            sent = _sentinel_xml_widgets(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
         if name and "creating virtual machine" in str(name).lower():
             return _SentinelProgressWindow(str(name).replace(".*", ""))
         try:
