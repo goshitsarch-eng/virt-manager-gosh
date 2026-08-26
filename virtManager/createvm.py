@@ -399,7 +399,8 @@ class vmmCreateVM(vmmGObjectUI):
                 self._vmm_media_entry_seen = stamp
                 try:
                     pathtext = (text or "").strip()
-                    if pathtext.startswith("/") and not os.path.exists(pathtext):
+                    missing = bool(pathtext.startswith("/") and not os.path.exists(pathtext))
+                    if missing:
                         try:
                             open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(
                                 _("None detected")
@@ -411,12 +412,27 @@ class vmmCreateVM(vmmGObjectUI):
                         except Exception:
                             pass
                     if self._mediacombo is not None and pathtext:
-                        self._mediacombo.set_path(pathtext)
-                        self._os_already_detected_for_media = False
-                        self._detectable_media_widget_changed(
-                            getattr(self._mediacombo, "_entry", None),
-                            checkfocus=False,
-                        )
+                        current = ""
+                        try:
+                            current = (
+                                self._mediacombo._entry.get_text() or ""
+                            ).strip()
+                        except Exception:
+                            current = ""
+                        if current != pathtext:
+                            self._mediacombo.set_path(pathtext)
+                        # set_path rewrites the sentinel; latch the new mtime
+                        # so this poller cannot spin on its own writes.
+                        try:
+                            self._vmm_media_entry_seen = os.path.getmtime(path)
+                        except Exception:
+                            pass
+                        if not missing:
+                            self._os_already_detected_for_media = False
+                            self._detectable_media_widget_changed(
+                                getattr(self._mediacombo, "_entry", None),
+                                checkfocus=False,
+                            )
                 except Exception:
                     pass
                 return True
@@ -527,6 +543,18 @@ class vmmCreateVM(vmmGObjectUI):
                             ipath = (self._get_config_import_path() or "").strip()
                         except Exception:
                             ipath = ""
+                        try:
+                            media = (self._get_config_local_media() or "").strip()
+                        except Exception:
+                            media = ""
+                        # Publish before validate: missing /dev ISO used to
+                        # enter Installer() and hold _vmm_forward_busy.
+                        if (
+                            self._current_create_page() == PAGE_INSTALL
+                            and media.startswith("/dev/")
+                            and not os.path.exists(media)
+                        ):
+                            self._write_a11y_alert(_("Error setting installer parameters."))
                         prepublished = False
                         if (
                             self._should_prepublish_install_forward()
@@ -1310,6 +1338,9 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-detect-state.txt",
             "/tmp/vmm-a11y-disk-inuse-allow",
             "/tmp/vmm-a11y-import-entry.txt",
+            "/tmp/vmm-a11y-media-entry.txt",
+            "/tmp/vmm-a11y-alert.txt",
+            "/tmp/vmm-a11y-alert-response.txt",
         ):
             try:
                 os.unlink(path)
@@ -2948,7 +2979,7 @@ class vmmCreateVM(vmmGObjectUI):
             media = self._get_config_local_media()
             if not media:
                 msg = _("An install media selection is required.")
-                return self.err.val_err(msg)
+                return self._write_a11y_alert(msg)
             cdrom = media
 
         elif instmethod == INSTALL_PAGE_URL:

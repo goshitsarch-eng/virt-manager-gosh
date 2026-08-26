@@ -221,9 +221,14 @@ class vmmMediaCombo(vmmGObjectUI):
         uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
         self._entry.set_position(-1)
         try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+            prev = open("/tmp/vmm-a11y-media-entry.txt", "r").read()
         except Exception:
-            pass
+            prev = None
+        if prev != (path or ""):
+            try:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+            except Exception:
+                pass
 
     def set_mnemonic_label(self, label):
         label.set_mnemonic_widget(self._entry)

@@ -244,6 +244,32 @@ class VMMDogtailApp:
                 except Exception:
                     pass
             return
+        # New VM wizard alerts are file sentinels. Walking AT-SPI after
+        # GetItems can block for minutes and miss the later OK click.
+        if os.path.exists("/tmp/vmm-a11y-pagenum.txt"):
+            try:
+                utils.check(_alert_matches, timeout=20)
+            except Exception:
+                pass
+            if _alert_matches():
+                stored = _alert_text()
+                try:
+                    open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
+                except Exception:
+                    pass
+                try:
+                    open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+                except Exception:
+                    pass
+                try:
+                    utils.check(lambda: _alert_text() != stored, timeout=3)
+                except Exception:
+                    try:
+                        os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    except Exception:
+                        pass
+                return
+            raise RuntimeError("Did not find alert text '%s'" % label_text)
         alert = None
         for name, role in (
             (".*", "alert"),
