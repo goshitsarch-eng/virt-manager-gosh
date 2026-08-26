@@ -58,6 +58,7 @@ class vmmXMLEditor(vmmGObjectUI):
         self._srcview = None
         self._srcbuff = None
         self._vmm_a11y_owner = None
+        self._vmm_xml_leave_pending = False
         self._init_ui()
 
         self.details_changed = False
@@ -136,6 +137,24 @@ class vmmXMLEditor(vmmGObjectUI):
             self._vmm_xml_tab_poll = True
 
             def _poll_xml_tab():
+                try:
+                    resp = "/tmp/vmm-a11y-alert-response.txt"
+                    if getattr(self, "_vmm_xml_leave_pending", False) and os.path.exists(resp):
+                        answer = open(resp, "r").read().strip().lower()
+                        os.remove(resp)
+                        self._vmm_xml_leave_pending = False
+                        try:
+                            os.remove("/tmp/vmm-a11y-alert.txt")
+                        except Exception:
+                            pass
+                        if answer == "yes":
+                            self._srcxml = self.get_xml() or self._srcxml
+                            self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
+                        else:
+                            self.widget("xml-notebook").set_current_page(_PAGE_XML)
+                        self._publish_xml_a11y()
+                except Exception:
+                    pass
                 path = "/tmp/vmm-a11y-xml-tab.txt"
                 try:
                     if not os.path.exists(path):
@@ -161,6 +180,17 @@ class vmmXMLEditor(vmmGObjectUI):
                                 pass
                             if (self.get_xml() or "") != pending:
                                 self._srcbuff.set_text(pending)
+                        if (self._srcxml or "") != (self.get_xml() or ""):
+                            self._vmm_xml_leave_pending = True
+                            try:
+                                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                                    "There are unapplied changes. "
+                                    "Your XML changes will be lost if you leave this tab."
+                                )
+                            except Exception:
+                                pass
+                            self._publish_xml_a11y()
+                            return True
                     if want == "XML":
                         self.widget("xml-notebook").set_current_page(_PAGE_XML)
                         if not (self.get_xml() or "").strip():
