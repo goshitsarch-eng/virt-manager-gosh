@@ -218,6 +218,18 @@ class vmmCreateConn(vmmGObjectUI):
             try:
                 if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
                     os.remove("/tmp/vmm-a11y-createconn-connect")
+                    try:
+                        host = open("/tmp/vmm-a11y-createconn-host.txt", "r").read()
+                        if host and self.widget("hostname").get_text() != host:
+                            self.widget("hostname").set_text(host)
+                    except Exception:
+                        pass
+                    try:
+                        user = open("/tmp/vmm-a11y-createconn-user.txt", "r").read()
+                        if user and self.widget("username-entry").get_text() != user:
+                            self.widget("username-entry").set_text(user)
+                    except Exception:
+                        pass
                     self.open_conn(None)
                     self._publish_a11y_state()
             except Exception:
@@ -376,6 +388,10 @@ class vmmCreateConn(vmmGObjectUI):
 
         if is_remote and not host:
             msg = _("A hostname is required for remote connections.")
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+            except Exception:
+                pass
             return self.err.val_err(msg)
 
         return True
