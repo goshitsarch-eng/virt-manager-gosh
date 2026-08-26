@@ -181,6 +181,22 @@ class _SentinelTableCell(object):
                 pass
             time.sleep(0.05)
 
+    def doubleClick(self, *args, **kwargs):
+        self.click(*args, **kwargs)
+        try:
+            open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+            open("/tmp/vmm-a11y-click.txt", "w").write("Choose Volume")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                    return
+            except Exception:
+                return
+            time.sleep(0.05)
+
     def find(self, *args, **kwargs):
         raise dogtail.tree.SearchError("sentinel cell has no children")
 
