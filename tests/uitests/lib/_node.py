@@ -2350,6 +2350,9 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
             deadline = time.time() + 2.0
+            while time.time() < deadline and os.path.exists("/tmp/vmm-a11y-config-apply"):
+                time.sleep(0.05)
+            deadline = time.time() + 2.0
             while time.time() < deadline:
                 try:
                     if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "0":
@@ -3073,7 +3076,27 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     fh.write("%s\t%s" % (combolabel or "", itemlabel or ""))
             except Exception:
                 pass
-            time.sleep(0.4)
+            published = {
+                "Chipset:": "/tmp/vmm-a11y-chipset.txt",
+                "Firmware:": "/tmp/vmm-a11y-firmware.txt",
+                "machine-combo": "/tmp/vmm-a11y-machine-combo.txt",
+                "Architecture": "/tmp/vmm-a11y-arch.txt",
+                "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
+                "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
+                "net-source": "/tmp/vmm-a11y-net-source.txt",
+            }.get(combolabel)
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                try:
+                    got = open(published, "r").read().strip() if published else ""
+                except Exception:
+                    got = ""
+                want = (itemlabel or "").replace(".*", "")
+                if got and (want.lower() in got.lower() or got.lower() in want.lower()):
+                    break
+                if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+                    break
+                time.sleep(0.05)
             return
         combo = None
         try:
