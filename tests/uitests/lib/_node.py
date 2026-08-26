@@ -11984,6 +11984,17 @@ def _sentinel_hw_cell(name, roleName):
     ):
         matched = want
     if matched is None:
+        aliases = {
+            "Boot": "Boot Options",
+            "CPUs": "CPUs",
+            "Memory": "Memory",
+            "Overview": "Overview",
+        }
+        for key, pretty in aliases.items():
+            if key in want:
+                matched = pretty
+                break
+    if matched is None:
         return None
     selected = False
     try:
