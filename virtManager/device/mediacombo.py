@@ -213,6 +213,14 @@ class vmmMediaCombo(vmmGObjectUI):
 
     def get_path(self, store_media=True):
         try:
+            browse = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+            if browse:
+                if store_media and not browse.startswith("/dev"):
+                    self.config.add_iso_path(browse)
+                return browse
+        except Exception:
+            pass
+        try:
             set_path = "/tmp/vmm-a11y-media-entry.txt.set"
             if os.path.exists(set_path):
                 sent = open(set_path, "r").read().strip()

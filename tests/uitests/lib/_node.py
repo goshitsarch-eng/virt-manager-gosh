@@ -835,6 +835,11 @@ class _SentinelEntry(object):
                 os.remove("/tmp/vmm-a11y-media-select.txt")
             except Exception:
                 pass
+            if not (text or "").strip():
+                try:
+                    os.remove("/tmp/vmm-a11y-media-browse.txt")
+                except Exception:
+                    pass
         needs_set = self._path in (
             "/tmp/vmm-a11y-details-model.txt",
             "/tmp/vmm-a11y-gfx-password.txt",

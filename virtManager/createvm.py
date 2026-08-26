@@ -1581,6 +1581,9 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-import-entry.txt",
             "/tmp/vmm-a11y-method-active.txt",
             "/tmp/vmm-a11y-media-entry.txt",
+            "/tmp/vmm-a11y-media-entry.txt.set",
+            "/tmp/vmm-a11y-media-select.txt",
+            "/tmp/vmm-a11y-media-browse.txt",
             "/tmp/vmm-a11y-createvm-media-combo.txt",
             "/tmp/vmm-a11y-alert.txt",
             "/tmp/vmm-a11y-alert-response.txt",
@@ -2701,6 +2704,7 @@ class vmmCreateVM(vmmGObjectUI):
             try:
                 open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
                 open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+                open("/tmp/vmm-a11y-media-browse.txt", "w").write(path or "")
             except Exception:
                 pass
 
