@@ -387,6 +387,8 @@ class VMMDogtailApp:
         Opening the File dialog first used to delete the hidden marker
         the poll writes and then stall on win.showing.
         """
+        # Launch virt-manager first. The poller lives in that process.
+        self.get_manager()
         try:
             os.remove("/tmp/vmm-a11y-createconn-hidden")
         except Exception:
