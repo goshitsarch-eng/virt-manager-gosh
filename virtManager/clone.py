@@ -227,6 +227,19 @@ class vmmCloneVM(vmmGObjectUI):
 
     def show(self, parent, vm):
         log.debug("Showing clone wizard")
+        for path in (
+            "/tmp/vmm-a11y-clone-cancel",
+            "/tmp/vmm-a11y-clone-finish",
+            "/tmp/vmm-a11y-clone-details",
+            "/tmp/vmm-a11y-window-close.txt",
+            "/tmp/vmm-a11y-clone-stg-cancel",
+            "/tmp/vmm-a11y-clone-stg-ok",
+            "/tmp/vmm-a11y-clone-stg-browse",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self._set_vm(vm)
         self._reset_state()
         self.topwin.set_transient_for(parent)
