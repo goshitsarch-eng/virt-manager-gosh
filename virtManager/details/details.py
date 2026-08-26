@@ -614,6 +614,64 @@ class vmmDetails(vmmGObjectUI):
                         self._publish_mem_spins()
                     except Exception:
                         pass
+                cpath = "/tmp/vmm-a11y-cpu-copy-host.txt.click"
+                if os.path.exists(cpath):
+                    try:
+                        os.remove(cpath)
+                        w = self.widget("cpu-copy-host")
+                        w.set_active(not w.get_active())
+                        self._cpu_copy_host_clicked_cb(w)
+                        changed = True
+                    except Exception:
+                        pass
+                cpath = "/tmp/vmm-a11y-cpu-secure.txt.click"
+                if os.path.exists(cpath):
+                    try:
+                        os.remove(cpath)
+                        w = self.widget("cpu-secure")
+                        w.set_active(not w.get_active())
+                        self._enable_apply(EDIT_CPU)
+                        changed = True
+                    except Exception:
+                        pass
+                cpath = "/tmp/vmm-a11y-cpu-topology-enable.txt.click"
+                if os.path.exists(cpath):
+                    try:
+                        os.remove(cpath)
+                        w = self.widget("cpu-topology-enable")
+                        w.set_active(not w.get_active())
+                        self._cpu_topology_enable_cb(w)
+                        changed = True
+                    except Exception:
+                        pass
+                epath = "/tmp/vmm-a11y-cpu-topology-expand"
+                if os.path.exists(epath):
+                    try:
+                        os.remove(epath)
+                        self.widget("cpu-topology-expander").set_expanded(True)
+                    except Exception:
+                        pass
+                for fpath, wid, edit in (
+                    ("/tmp/vmm-a11y-cpu-sockets.txt.set", "cpu-sockets", EDIT_TOPOLOGY),
+                    ("/tmp/vmm-a11y-cpu-cores.txt.set", "cpu-cores", EDIT_TOPOLOGY),
+                    ("/tmp/vmm-a11y-cpu-threads.txt.set", "cpu-threads", EDIT_TOPOLOGY),
+                ):
+                    if not os.path.exists(fpath):
+                        continue
+                    try:
+                        text = open(fpath, "r").read().strip()
+                        os.remove(fpath)
+                        self.widget(wid).set_value(float(text or 0))
+                        self._sync_cpu_topology_ui()
+                        self._enable_apply(edit)
+                        changed = True
+                    except Exception:
+                        pass
+                if changed:
+                    try:
+                        self._publish_cpu_fields()
+                    except Exception:
+                        pass
                 return True
 
             GLib.timeout_add(50, _poll_mem_fields)
@@ -687,7 +745,7 @@ class vmmDetails(vmmGObjectUI):
             def _copy_host_click():
                 w = self.widget("cpu-copy-host")
                 try:
-                    w.set_active(True)
+                    w.set_active(not w.get_active())
                 except Exception:
                     pass
                 try:
@@ -695,9 +753,7 @@ class vmmDetails(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    open("/tmp/vmm-a11y-copy-host.txt", "w").write(
-                        "Copy host CPU configuration (host-passthrough)"
-                    )
+                    self._publish_cpu_fields()
                 except Exception:
                     pass
 
@@ -868,11 +924,37 @@ class vmmDetails(vmmGObjectUI):
                     return True
                 try:
                     self._config_remove()
+                except Exception as exc:
+                    try:
+                        open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
+                            "%s\n" % exc
+                        )
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_config_remove)
+        if not getattr(self, "_vmm_os_publish_poll", False):
+            self._vmm_os_publish_poll = True
+
+            def _poll_os_publish():
+                try:
+                    sel = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+                except Exception:
+                    return True
+                if "OS information" not in sel:
+                    return True
+                if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
+                    return True
+                try:
+                    label = self.vm.xmlobj.osinfo.label
+                    if label:
+                        open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_config_remove)
+            GLib.timeout_add(50, _poll_os_publish)
         if not getattr(self, "_vmm_overview_combo_poll", False):
             self._vmm_overview_combo_poll = True
 
@@ -963,9 +1045,13 @@ class vmmDetails(vmmGObjectUI):
                 try:
                     if not os.path.exists(path):
                         return True
+                    stamp = os.path.getmtime(path)
                     text = open(path, "r").read()
                 except Exception:
                     return True
+                if getattr(self, "_vmm_cpu_model_text_seen", None) == stamp:
+                    return True
+                self._vmm_cpu_model_text_seen = stamp
                 try:
                     combo = self.widget("cpu-model")
                     child = combo.get_child() if combo is not None else None
@@ -1533,6 +1619,26 @@ class vmmDetails(vmmGObjectUI):
         except Exception as e:  # pragma: no cover
             self.err.show_err(_("Error launching hardware dialog: %s") % str(e))
 
+    def _hw_row_for_label(self, want):
+        """Find a hw-list model row by published label, without selecting it."""
+        if not want:
+            return None
+        model = self.widget("hw-list").get_model()
+        if not model:
+            return None
+        want_l = want.strip().lower()
+        exact = None
+        fuzzy = None
+        for row in model:
+            label = str(row[HW_LIST_COL_LABEL] or "").strip()
+            if label == want or label.lower() == want_l:
+                exact = row
+                break
+            if want_l and (want_l in label.lower() or label.lower() in want_l):
+                if fuzzy is None:
+                    fuzzy = row
+        return exact if exact is not None else fuzzy
+
     def _remove_non_disk(self, devobj):
         try:
             open("/tmp/vmm-a11y-alert.txt", "w").write(
@@ -1561,28 +1667,45 @@ class vmmDetails(vmmGObjectUI):
         dialog.show(self.topwin, self.vm)
 
     def _config_remove(self):
-        want = ""
+        if getattr(self, "_config_remove_busy", False):
+            return
+        self._config_remove_busy = True
         try:
-            want = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
-        except Exception:
+            row = self._get_hw_row()
+            # Prefer the last AT-SPI hw-list label so Remove targets Serial 1
+            # even if GTK selection drifted. Do not re-select the row here:
+            # _set_hw_selection can fire _hw_changed_cb and steal the confirm.
             want = ""
-        if want:
-            model = self.widget("hw-list").get_model()
-            for idx, row in enumerate(model):
-                label = str(row[HW_LIST_COL_LABEL] or "")
-                if label == want or want in label or label in want:
-                    self._set_hw_selection(idx, _disable_apply=False)
-                    break
-        row = self._get_hw_row()
-        if not row:
-            return
-        devobj = row[HW_LIST_COL_DEVICE]
-        if not devobj:
-            return
-        if devobj.DEVICE_TYPE == "disk":
-            self._remove_disk(devobj)
-        else:
-            self._remove_non_disk(devobj)
+            try:
+                want = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+            except Exception:
+                want = ""
+            labeled = self._hw_row_for_label(want)
+            if labeled is not None:
+                row = labeled
+            if not row:
+                try:
+                    open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
+                        "no hw-list row for %r\n" % want
+                    )
+                except Exception:
+                    pass
+                return
+            devobj = row[HW_LIST_COL_DEVICE]
+            if not devobj:
+                try:
+                    open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
+                        "no device on row %r\n" % want
+                    )
+                except Exception:
+                    pass
+                return
+            if devobj.DEVICE_TYPE == "disk":
+                self._remove_disk(devobj)
+            else:
+                self._remove_non_disk(devobj)
+        finally:
+            self._config_remove_busy = False
 
     ############################
     # Details/Hardware getters #
@@ -1732,6 +1855,10 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("cpu-threads").set_value(1)
 
             self._enable_apply(EDIT_TOPOLOGY)
+            try:
+                self._publish_cpu_fields()
+            except Exception:
+                pass
         finally:
             self._cpu_topology_syncing = False
 
@@ -2446,6 +2573,35 @@ class vmmDetails(vmmGObjectUI):
             open("/tmp/vmm-a11y-cpu-vcpus.txt", "w").write(vcpus)
         except Exception:
             pass
+        try:
+            self._publish_cpu_fields()
+        except Exception:
+            pass
+
+    def _publish_cpu_fields(self):
+        try:
+            open("/tmp/vmm-a11y-cpu-copy-host.txt", "w").write(
+                "1" if self.widget("cpu-copy-host").get_active() else "0"
+            )
+            open("/tmp/vmm-a11y-cpu-secure.txt", "w").write(
+                "1" if self.widget("cpu-secure").get_active() else "0"
+            )
+            enable = self.widget("cpu-topology-enable").get_active()
+            open("/tmp/vmm-a11y-cpu-topology-enable.txt", "w").write(
+                "1" if enable else "0"
+            )
+            for wid, path in (
+                ("cpu-sockets", "/tmp/vmm-a11y-cpu-sockets.txt"),
+                ("cpu-cores", "/tmp/vmm-a11y-cpu-cores.txt"),
+                ("cpu-threads", "/tmp/vmm-a11y-cpu-threads.txt"),
+            ):
+                val = str(int(uiutil.spin_get_helper(self.widget(wid)) or 0))
+                open(path, "w").write(val)
+                open(path + ".sensitive", "w").write("1" if enable else "0")
+            vcpus = str(int(uiutil.spin_get_helper(self.widget("cpu-vcpus")) or 0))
+            open("/tmp/vmm-a11y-cpu-vcpus.txt", "w").write(vcpus)
+        except Exception:
+            pass
 
     def _refresh_page(self):
         row = self._get_hw_row()
@@ -2644,6 +2800,13 @@ class vmmDetails(vmmGObjectUI):
             pass
 
     def _refresh_os_page(self):
+        try:
+            osobj = self.vm.xmlobj.osinfo
+            label = getattr(osobj, "label", None) or ""
+            if label:
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
+        except Exception:
+            pass
         self._os_list.select_os(self.vm.xmlobj.osinfo)
 
         inspection_supported = self.config.inspection_supported()
@@ -2824,6 +2987,10 @@ class vmmDetails(vmmGObjectUI):
 
         cpu.check_security_features(self.vm.get_xmlobj())
         self.widget("cpu-secure").set_active(cpu.secure)
+        try:
+            self._publish_cpu_fields()
+        except Exception:
+            pass
 
     def _refresh_config_memory(self):
         host_mem_widget = self.widget("state-host-memory")

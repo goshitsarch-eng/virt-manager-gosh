@@ -425,7 +425,7 @@ class _SentinelOslistEntry(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
+            return open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
         except Exception:
             return ""
 
@@ -880,10 +880,14 @@ class _SentinelClickButton(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
-        try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
-        except Exception:
-            pass
+        # config-remove has a dedicated file poller. Writing click.txt as
+        # well double-fires _config_remove; the nested confirm then hits
+        # _in_prompt and the Are-you-sure alert disappears.
+        if self.name != "config-remove":
+            try:
+                open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+            except Exception:
+                pass
         if self.name == "vol-refresh":
             try:
                 open("/tmp/vmm-a11y-vol-refresh", "w").write("1")
@@ -2109,7 +2113,10 @@ class _SentinelDetailsSpin(object):
 
     @property
     def sensitive(self):
-        return True
+        try:
+            return open(self._path + ".sensitive", "r").read().strip() != "0"
+        except Exception:
+            return True
 
     def check_onscreen(self):
         return True
@@ -2179,6 +2186,34 @@ class _SentinelDetailsCheck(object):
             time.sleep(0.05)
 
 
+class _SentinelDetailsExpander(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "toggle button"
+        self._path = path
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        self.click_expander()
+
+    def click_expander(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path, "w").write("1")
+        except Exception:
+            pass
+
+
 def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     try:
         if not open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
@@ -2211,6 +2246,20 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsSpin("vCPU allocation:", "/tmp/vmm-a11y-cpu-vcpus.txt")
     if compact in ("cpu-model",) or "cpu-model" in compact:
         return _SentinelDetailsCombo("cpu-model")
+    if "copy host" in compact:
+        return _SentinelDetailsCheck("Copy host", "/tmp/vmm-a11y-cpu-copy-host.txt")
+    if "cpu security" in compact:
+        return _SentinelDetailsCheck("CPU security", "/tmp/vmm-a11y-cpu-secure.txt")
+    if "topology" in compact and "toggle" in role:
+        return _SentinelDetailsExpander("Topology", "/tmp/vmm-a11y-cpu-topology-expand")
+    if "manually set" in compact:
+        return _SentinelDetailsCheck("Manually set", "/tmp/vmm-a11y-cpu-topology-enable.txt")
+    if "sockets" in compact:
+        return _SentinelDetailsSpin("Sockets:", "/tmp/vmm-a11y-cpu-sockets.txt")
+    if compact.startswith("cores") or "cores:" in compact:
+        return _SentinelDetailsSpin("Cores:", "/tmp/vmm-a11y-cpu-cores.txt")
+    if "threads" in compact:
+        return _SentinelDetailsSpin("Threads:", "/tmp/vmm-a11y-cpu-threads.txt")
     sent = _sentinel_oslist_entry(name, roleName)
     if sent is not None:
         return sent
