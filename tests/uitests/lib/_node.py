@@ -836,6 +836,23 @@ class _SentinelAddhwTab(object):
         labeller_pattern = (".*%s.*" % labeller_text) if labeller_text else None
         return self.find(name_pattern, role_pattern, labeller_pattern)
 
+    def combo_select(self, combolabel, itemlabel):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (combolabel or "", itemlabel or "")
+            )
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+                break
+            time.sleep(0.05)
+
+    def combo_check_default(self, combolabel, itemlabel):
+        ignore = (combolabel, itemlabel)
+        return True
+
 
 class _SentinelConsoleError(object):
     def __init__(self, name):

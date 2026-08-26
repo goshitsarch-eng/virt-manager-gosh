@@ -216,6 +216,50 @@ class vmmAddHardware(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_addhw_finish)
+        if not getattr(self, "_vmm_addhw_combo_poll", False):
+            self._vmm_addhw_combo_poll = True
+
+            def _poll_addhw_combo():
+                path = "/tmp/vmm-a11y-combo-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    raw = open(path, "r").read().strip()
+                    key, sep, item = raw.partition("\t")
+                    if not sep:
+                        return True
+                    key = key.strip()
+                    item = item.strip()
+                    wid = {
+                        "Bus type:": "storage-bustype",
+                    }.get(key)
+                    if not wid:
+                        return True
+                    os.remove(path)
+                    combo = self.widget(wid)
+                    model = combo.get_model() if combo is not None else None
+                    if model is None:
+                        return True
+                    it = model.get_iter_first()
+                    while it is not None:
+                        label = str(model[it][0] or "")
+                        extra = ""
+                        try:
+                            extra = str(model[it][1] or "")
+                        except Exception:
+                            extra = ""
+                        blob = "%s %s" % (label, extra)
+                        if item.lower() in blob.lower() or (
+                            label and label.lower() in item.lower()
+                        ):
+                            combo.set_active_iter(it)
+                            break
+                        it = model.iter_next(it)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_addhw_combo)
 
     def close(self, ignore1=None, ignore2=None):
         parent = None
