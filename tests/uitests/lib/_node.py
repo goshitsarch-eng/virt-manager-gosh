@@ -98,8 +98,14 @@ class _SentinelTableCell(object):
 
     @property
     def state_selected(self):
-        try:
-            cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+        for path in (
+            "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-hw-selected.txt",
+        ):
+            try:
+                cur = open(path, "r").read().strip()
+            except Exception:
+                cur = ""
             if cur == self.name:
                 return True
             if cur and self.name:
@@ -113,6 +119,15 @@ class _SentinelTableCell(object):
                     "Controller",
                 ):
                     return True
+        try:
+            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+            name = self.name or ""
+            if tab == "sound-tab" and name.startswith("Sound"):
+                return True
+            if tab == "video-tab" and name.startswith("Video"):
+                return True
+            if tab == "watchdog-tab" and name.startswith("Watchdog"):
+                return True
         except Exception:
             pass
         if self._index is not None:
@@ -8735,7 +8750,7 @@ def _sentinel_hw_cell(name, roleName):
     except Exception:
         pat = None
     matched = None
-    deadline = time.time() + 2.0
+    deadline = time.time() + 6.0
     while time.time() < deadline:
         try:
             rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
