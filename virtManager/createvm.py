@@ -3680,6 +3680,16 @@ class vmmCreateVM(vmmGObjectUI):
                 names.append(foundvm.get_name())
                 open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
             open("/tmp/vmm-a11y-created-vm.txt", "w").write(foundvm.get_name())
+            # Wizard Name must not look like an unapplied Overview edit.
+            for leftover in (
+                "/tmp/vmm-a11y-overview-name-want.txt",
+                "/tmp/vmm-a11y-overview-name.txt",
+                "/tmp/vmm-a11y-config-apply-sensitive",
+            ):
+                try:
+                    os.remove(leftover)
+                except Exception:
+                    pass
             # Publish before show() so uitests do not miss the window if
             # present() hits a leftover unapplied-changes dialog.
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(foundvm.get_name())

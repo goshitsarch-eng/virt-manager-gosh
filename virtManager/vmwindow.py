@@ -432,14 +432,28 @@ class vmmVMWindow(vmmGObjectUI):
         if fs.get_active():
             fs.set_active(False)  # pragma: no cover
 
+        name = ""
+        try:
+            name = self.vm.get_name() if self.vm is not None else ""
+        except Exception:
+            name = ""
+        try:
+            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            if shown and (not name or shown == name):
+                os.remove("/tmp/vmm-a11y-vmwindow.txt")
+        except Exception:
+            pass
+        try:
+            created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+            if created and (not name or created == name):
+                os.remove("/tmp/vmm-a11y-created-vm.txt")
+        except Exception:
+            pass
+
         if not self.is_visible():
             return
 
         self.topwin.hide()
-        try:
-            os.remove("/tmp/vmm-a11y-vmwindow.txt")
-        except Exception:
-            pass
         self._console.vmwindow_close()
         self._details.vmwindow_close()
 

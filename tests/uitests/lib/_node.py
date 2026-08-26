@@ -906,20 +906,23 @@ class _SentinelEntry(object):
                 )
             except Exception:
                 pass
-            try:
-                open("/tmp/vmm-a11y-overview-name.txt", "w").write(
-                    text if text is not None else ""
-                )
-                open("/tmp/vmm-a11y-overview-name-want.txt", "w").write(
-                    text if text is not None else ""
-                )
-            except Exception:
-                pass
-            deadline = time.time() + 2.0
-            while time.time() < deadline:
-                if not os.path.exists("/tmp/vmm-a11y-overview-name.txt"):
-                    break
-                time.sleep(0.05)
+            # Only the details Overview name is an unapplied edit.
+            # The New VM Name field must not leave overview-name-want.
+            if "overview-name" in (self._path or ""):
+                try:
+                    open("/tmp/vmm-a11y-overview-name.txt", "w").write(
+                        text if text is not None else ""
+                    )
+                    open("/tmp/vmm-a11y-overview-name-want.txt", "w").write(
+                        text if text is not None else ""
+                    )
+                except Exception:
+                    pass
+                deadline = time.time() + 2.0
+                while time.time() < deadline:
+                    if not os.path.exists("/tmp/vmm-a11y-overview-name.txt"):
+                        break
+                    time.sleep(0.05)
         if str(self.name).startswith("Title"):
             try:
                 open("/tmp/vmm-a11y-overview-title.txt", "w").write(
@@ -11802,14 +11805,21 @@ def _sentinel_hw_cell(name, roleName):
 
 def _write_overview_name(text):
     try:
+        open("/tmp/vmm-a11y-create-name.txt", "w").write(text if text is not None else "")
+    except Exception:
+        pass
+    newvm = False
+    try:
+        newvm = open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        newvm = False
+    if newvm:
+        return
+    try:
         open("/tmp/vmm-a11y-overview-name.txt", "w").write(text if text is not None else "")
         open("/tmp/vmm-a11y-overview-name-want.txt", "w").write(
             text if text is not None else ""
         )
-    except Exception:
-        pass
-    try:
-        open("/tmp/vmm-a11y-create-name.txt", "w").write(text if text is not None else "")
     except Exception:
         pass
 
