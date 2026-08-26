@@ -9166,6 +9166,22 @@ class _SentinelManagerVMCell(object):
         return _vm_renamed_to(self._vm) + "\n"
 
     @property
+    def text(self):
+        name = _vm_renamed_to(self._vm)
+        status = ""
+        try:
+            for line in open("/tmp/vmm-a11y-vm-status.txt", "r").read().splitlines():
+                parts = line.split("\t", 1)
+                if parts[0].strip() in (name, self._vm):
+                    status = parts[1].strip() if len(parts) > 1 else ""
+                    break
+        except Exception:
+            status = ""
+        if status:
+            return "%s\n%s" % (name, status)
+        return name + "\n"
+
+    @property
     def showing(self):
         return True
 

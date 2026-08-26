@@ -933,6 +933,7 @@ class vmmManager(vmmGObjectUI):
 
     def _publish_vm_list(self):
         names = []
+        statuses = []
         try:
             model = self.widget("vm-list").get_model()
         except Exception:
@@ -948,10 +949,15 @@ class vmmManager(vmmGObjectUI):
                         key = str(model[_iter][ROW_SORT_KEY] or "")
                         handle = model[_iter][ROW_HANDLE]
                         real = ""
+                        status = ""
                         try:
                             real = handle.get_name() if handle is not None else ""
                         except Exception:
                             real = ""
+                        try:
+                            status = handle.run_status() if handle is not None else ""
+                        except Exception:
+                            status = ""
                         line = key
                         if real and key and real != key:
                             line = "%s\t%s" % (real, key)
@@ -959,6 +965,8 @@ class vmmManager(vmmGObjectUI):
                             line = real
                         if line and line not in names:
                             names.append(line)
+                        if real or key:
+                            statuses.append("%s\t%s" % (real or key, status or ""))
                 except Exception:
                     pass
                 _walk(_iter)
@@ -976,6 +984,10 @@ class vmmManager(vmmGObjectUI):
                 pass
         try:
             open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-vm-status.txt", "w").write("\n".join(statuses))
         except Exception:
             pass
         conns = []
