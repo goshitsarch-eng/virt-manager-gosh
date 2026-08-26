@@ -943,6 +943,73 @@ def main():
         assert saved and saved[:4] == b"\x89PNG"
         display.close()
 
+    def inspection_os_page():
+        from virtManager.config import vmmConfig
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_OS
+        from virtManager.lib import inspection as inspmod
+        from virtManager.lib.inspection import vmmInspection
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmmInspection._libguestfs_installed = True
+        vmmConfig.get_instance().set_libguestfs_inspect_vms(True)
+
+        clone = _named_vm("test-clone")
+        first = inspmod._make_fake_data(clone)
+        assert first.applications
+        clone.set_inspection_data(first)
+
+        win = vmmVMWindow.get_instance(None, clone)
+        win.show()
+        win.activate_config_page()
+        details = win._details
+        hwlist = details.widget("hw-list")
+        os_idx = None
+        for idx, row in enumerate(hwlist.get_model()):
+            if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_OS:
+                os_idx = idx
+                break
+        assert os_idx is not None, "OS information hardware row missing"
+        uiutil.set_list_selection_by_number(hwlist, os_idx)
+        details._hw_changed_cb(hwlist)
+        details._refresh_os_page()
+        _pump(GLib, 0.05)
+
+        assert details.widget("details-inspection-apps").get_visible()
+        assert details.widget("details-inspection-refresh").get_visible()
+        apps_model = details.widget("inspection-apps").get_model()
+        labels = [row[0] + " " + row[2] for row in apps_model]
+        assert any("test_app1_summary" in text for text in labels), labels
+        before = list(labels)
+        time.sleep(0.02)
+        second = inspmod._make_fake_data(clone)
+        clone.set_inspection_data(second)
+        details._refresh_os_page()
+        _pump(GLib, 0.05)
+        after = [row[0] + " " + row[2] for row in details.widget("inspection-apps").get_model()]
+        assert after != before, "inspection refresh did not update application summaries"
+
+        empty = _named_vm("test")
+        err = inspmod._make_fake_data(empty)
+        assert err.errorstr and "no disks" in err.errorstr
+        empty.set_inspection_data(err)
+        ewin = vmmVMWindow.get_instance(None, empty)
+        ewin.show()
+        ewin.activate_config_page()
+        edetails = ewin._details
+        ehw = edetails.widget("hw-list")
+        eidx = None
+        for idx, row in enumerate(ehw.get_model()):
+            if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_OS:
+                eidx = idx
+                break
+        uiutil.set_list_selection_by_number(ehw, eidx)
+        edetails._hw_changed_cb(ehw)
+        edetails._refresh_os_page()
+        _pump(GLib, 0.05)
+        assert "no disks" in (edetails.widget("details-overview-error").get_text() or "")
+
     def createvm_wizard_nav():
         from virtManager.createvm import PAGE_FINISH
         from virtManager.createvm import PAGE_INSTALL
@@ -1479,6 +1546,7 @@ def main():
         ("createvm_oslist", createvm_oslist),
         ("vnc_protocol_helpers", vnc_protocol_helpers),
         ("vnc_live_handshake", vnc_live_handshake),
+        ("inspection_os_page", inspection_os_page),
         ("createvm_wizard_nav", createvm_wizard_nav),
         ("addhardware_build", addhardware_build),
         ("vm_start_stop", vm_start_stop),

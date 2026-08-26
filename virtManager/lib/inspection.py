@@ -41,7 +41,15 @@ def _make_fake_data(vm):
 
     icontheme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
     icon = icontheme.lookup_icon("vm_new", None, 32, 1, Gtk.TextDirection.NONE, 0)
-    data.icon = open(icon.get_filename(), "rb").read()
+    icon_path = None
+    if icon is not None:
+        if hasattr(icon, "get_file"):
+            gfile = icon.get_file()
+            icon_path = gfile.get_path() if gfile is not None else None
+        elif hasattr(icon, "get_filename"):
+            icon_path = icon.get_filename()
+    if icon_path:
+        data.icon = open(icon_path, "rb").read()
 
     data.applications = []
     for prefix in ["test_app1_", "test_app2_"]:

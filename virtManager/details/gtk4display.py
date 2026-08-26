@@ -204,13 +204,15 @@ class _DisplayBase(Gtk.DrawingArea):
         cr.paint()
 
     def _set_framebuffer(self, surface, width, height):
+        changed = self._fb_size != (width, height)
         self._fb = surface
         self._fb_size = (width, height)
         if self._force_size and not self._scaling:
             self.set_content_width(width)
             self.set_content_height(height)
         self.queue_draw()
-        self.emit("vnc-desktop-resize", width, height)
+        if changed:
+            self.emit("vnc-desktop-resize", width, height)
 
     def _on_motion(self, _c, x, y):
         self._last_x, self._last_y = x, y
