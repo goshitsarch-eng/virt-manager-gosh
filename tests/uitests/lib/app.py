@@ -501,8 +501,11 @@ class VMMDogtailApp:
                     os.remove("/tmp/vmm-a11y-alert-response.txt")
                 except Exception:
                     pass
+            # Do not clobber a replacement alert (search-perms error after Yes).
             try:
-                os.remove("/tmp/vmm-a11y-alert.txt")
+                now = _alert_text()
+                if not now.strip() or now == stored:
+                    os.remove("/tmp/vmm-a11y-alert.txt")
             except Exception:
                 pass
             return
@@ -544,7 +547,9 @@ class VMMDogtailApp:
                     except Exception:
                         pass
                 try:
-                    os.remove("/tmp/vmm-a11y-alert.txt")
+                    now = _alert_text()
+                    if not now.strip() or now == stored:
+                        os.remove("/tmp/vmm-a11y-alert.txt")
                 except Exception:
                     pass
                 return

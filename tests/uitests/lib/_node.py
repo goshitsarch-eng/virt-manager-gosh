@@ -6744,7 +6744,7 @@ class _SentinelMigrateExpander(object):
         self.click()
 
 
-def _sentinel_alert(name, roleName):
+def _sentinel_alert(name, roleName, wait=0):
     role = str(roleName or "").lower()
     # find_window() role aliases include alert|dialog. Only intercept
     # explicit alert searches so Delete/Remove Disk stay real windows.
@@ -6753,15 +6753,19 @@ def _sentinel_alert(name, roleName):
     )
     if not explicit and name not in (None, ".*"):
         return None
-    try:
-        text = open("/tmp/vmm-a11y-alert.txt", "r").read()
-    except Exception:
-        text = ""
-    if not text.strip():
-        return None
-    want = str(name or "").replace(".*", "")
-    if name is None or name == ".*" or not want or want.lower() in text.lower():
-        return _SentinelAlert(text)
+    deadline = time.time() + max(0.0, float(wait or 0))
+    while True:
+        try:
+            text = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        except Exception:
+            text = ""
+        if text.strip():
+            want = str(name or "").replace(".*", "")
+            if name is None or name == ".*" or not want or want.lower() in text.lower():
+                return _SentinelAlert(text)
+        if time.time() >= deadline:
+            break
+        time.sleep(0.05)
     return None
 
 
@@ -9183,6 +9187,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         Search root for any widget that contains the passed name/role regex
         strings.
         """
+        raw_role = str(roleName or "").lower()
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
@@ -9295,9 +9300,23 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
             return _SentinelVMActionMenu()
         try:
-            sent = _sentinel_alert(name, roleName)
+            want_alert = raw_role in ("alert", "(alert|dialog)") or (
+                "alert" in raw_role and "window" not in raw_role and "frame" not in raw_role
+            )
+            wait = max(0.1, float(timeout)) if want_alert else 0
+            sent = _sentinel_alert(name, roleName, wait=wait)
             if sent is not None:
                 return sent
+            if want_alert and (
+                os.path.exists("/tmp/vmm-a11y-addhw-shown.txt")
+                or os.path.exists("/tmp/vmm-a11y-addhw-open")
+            ):
+                raise dogtail.tree.SearchError(
+                    "Didn't find widget with name='%s' "
+                    "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+                )
+        except dogtail.tree.SearchError:
+            raise
         except Exception:
             pass
         try:
@@ -9425,6 +9444,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         ret = None
         deadline = time.time() + max(0.1, float(timeout))
         while ret is None and time.time() < deadline:
+            try:
+                sent = _sentinel_alert(name, roleName)
+                if sent is not None:
+                    return sent
+            except Exception:
+                pass
             if recursive:
                 ret = _walk_find(self, pred, False)
             if ret is None:

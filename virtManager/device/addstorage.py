@@ -23,6 +23,16 @@ from ..baseclass import vmmGObjectUI
 ) = range(1, 7)
 
 
+def _a11y_alert_checked():
+    try:
+        if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
+            os.remove("/tmp/vmm-a11y-alert-checked.txt")
+            return True
+    except Exception:
+        pass
+    return False
+
+
 class vmmAddStorage(vmmGObjectUI):
     __gsignals__ = {
         "browse-clicked": (vmmGObjectUI.RUN_FIRST, None, [object]),
@@ -119,7 +129,7 @@ class vmmAddStorage(vmmGObjectUI):
 
     @staticmethod
     def check_path_search(src, conn, path):
-        skip_paths = src.config.get_perms_fix_ignore()
+        skip_paths = src.config.get_perms_fix_ignore() or []
         searchdata = virtinst.DeviceDisk.check_path_search(conn.get_backend(), path)
 
         broken_paths = searchdata.fixlist[:]
@@ -137,6 +147,7 @@ class vmmAddStorage(vmmGObjectUI):
             _("Don't ask about these directories again."),
             buttons=Gtk.ButtonsType.YES_NO,
         )
+        chkres = bool(chkres) or _a11y_alert_checked()
 
         if chkres:
             src.config.add_perms_fix_ignore(broken_paths)
@@ -160,6 +171,7 @@ class vmmAddStorage(vmmGObjectUI):
         ignore, chkres = src.err.err_chkbox(
             errmsg, details, _("Don't ask about these directories again.")
         )
+        chkres = bool(chkres) or _a11y_alert_checked()
 
         if chkres:
             src.config.add_perms_fix_ignore(list(errors.keys()))
