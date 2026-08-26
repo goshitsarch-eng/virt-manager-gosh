@@ -1860,6 +1860,11 @@ class vmmDetails(vmmGObjectUI):
 
     def _apply_xmleditor_device(self, devobj):
         newxml = self._load_a11y_xml_editor() or self._xmleditor.get_xml()
+        # Sentinel/AT-SPI sometimes publishes the full domain XML even
+        # when a disk row is selected. Apply that as a domain edit.
+        head = (newxml or "").lstrip()[:200]
+        if head.startswith("<domain") or "<domain" in head.split("\n", 1)[0]:
+            return self._apply_xmleditor_domain()
 
         def change_cb():
             return self.vm.replace_device_xml(devobj, newxml)
