@@ -994,11 +994,12 @@ class vmmConsolePages(vmmGObjectUI):
         cpage = self.widget("console-pages").get_current_page()
         if cpage == _CONSOLE_PAGE_SERIAL:
             return
-        if cpage == _CONSOLE_PAGE_CONNECT:
-            return
 
-        # UNAVAILABLE, or GRAPHICS showing a previous error (SDL, stale
-        # listen config): connect to the current default console.
+        # UNAVAILABLE, GRAPHICS error, or the manual Connect page: connect
+        # to the current default console. Console radio reinit sets
+        # _viewer_connect_clicked so a missing gsettings default still
+        # opens the viewer.
+        self._viewer_connect_clicked = True
         self._toggle_first_console_menu_item()
 
     def _on_console_menu_toggled_cb(self, src):

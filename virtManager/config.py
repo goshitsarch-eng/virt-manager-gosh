@@ -495,7 +495,10 @@ class vmmConfig:
         self.conf.set("/console/auto-redirect", state)
 
     def get_console_autoconnect(self):
-        return bool(self.conf.get("/console/autoconnect"))
+        val = self.conf.get("/console/autoconnect")
+        if val is None:
+            return True
+        return bool(val)
 
     def set_console_autoconnect(self, val):
         return self.conf.set("/console/autoconnect", val)
