@@ -615,6 +615,8 @@ def _sentinel_method_radio(name, roleName):
     compact = str(name).replace(".*", "").lower()
     if "entry" in compact or "oslist" in compact or "combo" in compact:
         return None
+    if "tab" in compact:
+        return None
     if any(
         token in compact
         for token in (
