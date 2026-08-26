@@ -1978,6 +1978,23 @@ class vmmCreateVM(vmmGObjectUI):
         ]
 
     def _get_config_oscontainer_bootstrap(self):
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oscontainer-bootstrap.txt"):
+                want = open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "r").read().strip().lower()
+                if want in ("1", "true", "on"):
+                    try:
+                        self.widget("install-oscontainer-bootstrap").set_active(True)
+                    except Exception:
+                        pass
+                    return True
+                if want in ("0", "false", "off"):
+                    try:
+                        self.widget("install-oscontainer-bootstrap").set_active(False)
+                    except Exception:
+                        pass
+                    return False
+        except Exception:
+            pass
         return self.widget("install-oscontainer-bootstrap").get_active()
 
     def _get_config_oscontainer_source_url(self, store_media=False):
