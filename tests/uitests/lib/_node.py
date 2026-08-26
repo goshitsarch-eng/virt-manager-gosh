@@ -707,6 +707,11 @@ class _SentinelClickButton(object):
                 open("/tmp/vmm-a11y-vol-refresh", "w").write("1")
             except Exception:
                 pass
+        if self.name == "config-remove":
+            try:
+                open("/tmp/vmm-a11y-config-remove", "w").write("1")
+            except Exception:
+                pass
         if self.name == "Browse":
             try:
                 xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
@@ -4288,6 +4293,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelProgressWindow(str(name).replace(".*", ""))
         if name and "vmm-storage-browser" in str(name).lower():
             return _SentinelStorageBrowser()
+        if name and "config-remove" in str(name).replace(".*", "").lower():
+            return _SentinelClickButton("config-remove")
         if name and "vm-action-menu" in str(name).lower():
             try:
                 os.remove("/tmp/vmm-a11y-vm-menu-hidden")

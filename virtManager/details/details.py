@@ -694,6 +694,13 @@ class vmmDetails(vmmGObjectUI):
             gtkcompat.register_a11y_click(
                 "Browse", self._disk_source_browse_clicked_cb
             )
+            gtkcompat.expose_a11y_button(
+                "config-remove",
+                "config-remove",
+                self._config_remove,
+                window=self.topwin,
+            )
+            gtkcompat.register_a11y_click("config-remove", self._config_remove)
             try:
                 open("/tmp/vmm-a11y-boot-menu.txt", "w").write("0")
             except Exception:
@@ -731,6 +738,24 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_boot_init)
+        if not getattr(self, "_vmm_config_remove_poll", False):
+            self._vmm_config_remove_poll = True
+
+            def _poll_config_remove():
+                path = "/tmp/vmm-a11y-config-remove"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._config_remove()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_config_remove)
         if not getattr(self, "_vmm_overview_combo_poll", False):
             self._vmm_overview_combo_poll = True
 
