@@ -42,9 +42,19 @@ class vmmVMWindow(vmmGObjectUI):
                 cls._instances[key] = vmmVMWindow(vm)
             return cls._instances[key]
         except Exception as e:  # pragma: no cover
+            try:
+                import traceback
+
+                open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                    "get_instance %s\n%s\n%s"
+                    % (vm.get_name() if vm is not None else "?", e, traceback.format_exc())
+                )
+            except Exception:
+                pass
             if not parentobj:
                 raise
             parentobj.err.show_err(_("Error launching details: %s") % str(e))
+            return None
 
     def __init__(self, vm, parent=None):
         vmmGObjectUI.__init__(self, "vmwindow.ui", "vmm-vmwindow")
@@ -177,6 +187,10 @@ class vmmVMWindow(vmmGObjectUI):
 
         self._refresh_vm_state()
         self.activate_default_page()
+        try:
+            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
+        except Exception:
+            pass
 
     @property
     def conn(self):
@@ -203,9 +217,12 @@ class vmmVMWindow(vmmGObjectUI):
     def show(self):
         log.debug("Showing VM details: %s", self.vm)
         vis = self.is_visible()
-        self.topwin.present()
         try:
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
+        except Exception:
+            pass
+        try:
+            self.topwin.present()
         except Exception:
             pass
         if not vis:

@@ -112,7 +112,12 @@ class VMMDogtailApp:
             while time.time() < deadline:
                 try:
                     shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
-                    if shown and (not want or want in shown or shown in want):
+                    if shown and (
+                        not want
+                        or shown == want
+                        or shown.startswith(want + " ")
+                        or want.startswith(shown + " ")
+                    ):
                         from . import _node
 
                         return _node._SentinelVMWindow(shown)
@@ -583,27 +588,38 @@ class VMMDogtailApp:
                 .replace("_", " ")
             )
 
-        deadline = time.time() + 12
+        deadline = time.time() + 45
+        last_nudge = 0
         win = None
+        want = str(vmname or "")
         while time.time() < deadline:
             try:
                 shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
             except Exception:
                 shown = ""
-            want = str(vmname or "")
             nshown = _norm(shown)
             nwant = _norm(want)
             if shown and (
                 not want
-                or want in shown
-                or shown in want
-                or nwant in nshown
-                or nshown in nwant
+                or shown == want
+                or (want and shown.startswith(want + " "))
+                or (shown and want.startswith(shown + " "))
+                or nshown == nwant
             ):
                 from . import _node
 
                 win = _node._SentinelVMWindow(shown)
                 break
+            now = time.time()
+            if want and now - last_nudge >= 2.0:
+                last_nudge = now
+                try:
+                    open("/tmp/vmm-a11y-vm-select.txt", "w").write(want)
+                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(want)
+                    open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
+                    open("/tmp/vmm-a11y-vm-action.txt", "w").write("Open")
+                except Exception:
+                    pass
             time.sleep(0.1)
         if win is None:
             win = self.find_window("%s on" % vmname, "(frame|window|dialog|panel)")

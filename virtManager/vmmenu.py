@@ -321,4 +321,13 @@ class VMActionUI:
     def show(src, vm):
         from .vmwindow import vmmVMWindow
 
-        vmmVMWindow.get_instance(src, vm).show()
+        if vm is None:
+            raise ValueError("Cannot open details: no VM selected")
+        try:
+            open("/tmp/vmm-a11y-vm-opening.txt", "w").write(vm.get_name())
+        except Exception:
+            pass
+        inst = vmmVMWindow.get_instance(src, vm)
+        if inst is None:
+            raise RuntimeError("Failed to create details window for %s" % vm.get_name())
+        inst.show()

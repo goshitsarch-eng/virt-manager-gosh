@@ -369,7 +369,18 @@ class vmmManager(vmmGObjectUI):
                                 self.select_row_for_name(name)
                             except Exception:
                                 pass
-                            vmmenu.VMActionUI.show(self, vm)
+                            try:
+                                vmmenu.VMActionUI.show(self, vm)
+                            except Exception:
+                                try:
+                                    import traceback
+
+                                    open(path, "w").write(name)
+                                    open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                                        "show %s\n%s" % (name, traceback.format_exc())
+                                    )
+                                except Exception:
+                                    pass
             except Exception:
                 pass
             return True
@@ -735,8 +746,13 @@ class vmmManager(vmmGObjectUI):
                         fn(self, vm)
                     except Exception:
                         try:
+                            import traceback
+
+                            open(path, "w").write(action)
+                            if (action or "") == "Open" and want:
+                                open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
                             open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
-                                "%s\n%s" % (action, want)
+                                "%s\n%s\n%s" % (action, want, traceback.format_exc())
                             )
                         except Exception:
                             pass
