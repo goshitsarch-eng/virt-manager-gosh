@@ -281,9 +281,10 @@ class vmmMediaCombo(vmmGObjectUI):
                 set_path = "/tmp/vmm-a11y-details-media-entry.txt.set"
                 if os.path.exists(set_path):
                     sent = self._path_from_display(open(set_path, "r").read())
-                    if sent and store_media and not sent.startswith("/dev"):
-                        self.config.add_iso_path(sent)
-                    return sent
+                    if sent:
+                        if store_media and not sent.startswith("/dev"):
+                            self.config.add_iso_path(sent)
+                        return sent
             except Exception:
                 pass
             try:
@@ -302,6 +303,16 @@ class vmmMediaCombo(vmmGObjectUI):
             try:
                 sent = self._path_from_display(
                     open("/tmp/vmm-a11y-details-media-path.txt", "r").read()
+                )
+                if sent:
+                    if store_media and not sent.startswith("/dev"):
+                        self.config.add_iso_path(sent)
+                    return sent
+            except Exception:
+                pass
+            try:
+                sent = self._path_from_display(
+                    open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
                 )
                 if sent:
                     if store_media and not sent.startswith("/dev"):
