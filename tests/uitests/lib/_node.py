@@ -9650,6 +9650,12 @@ class _SentinelManagerWindow(object):
         except Exception:
             pass
         try:
+            # Freeze the last sampled coordinates so restore compares
+            # against the same pair the uitest just stored in checkxy.
+            open("/tmp/vmm-a11y-manager-restore-lock", "w").write("1")
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-window-close.txt", "w").write("Virtual Machine Manager")
         except Exception:
             pass
