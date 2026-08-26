@@ -4032,6 +4032,153 @@ class _SentinelVMActionMenu(object):
         return self.find(name, roleName, labeller_text)
 
 
+def _connectauth_open():
+    try:
+        return open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+class _SentinelAuthEntry(object):
+    def __init__(self, name, path, focus_key):
+        self.name = name
+        self.roleName = "text"
+        self._path = path
+        self._focus_key = focus_key
+
+    @property
+    def text(self):
+        try:
+            return open(self._path, "r").read()
+        except Exception:
+            return ""
+
+    @text.setter
+    def text(self, value):
+        self.set_text(value)
+
+    @property
+    def showing(self):
+        return _connectauth_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def focused(self):
+        try:
+            return open("/tmp/vmm-a11y-connectauth-focus.txt", "r").read().strip() == self._focus_key
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write(self._focus_key)
+        except Exception:
+            pass
+
+    def set_text(self, text):
+        try:
+            open(self._path, "w").write(text if text is not None else "")
+            open(self._path + ".set", "w").write(text if text is not None else "")
+        except Exception:
+            pass
+
+    def typeText(self, string):
+        self.set_text((self.text or "") + (string or ""))
+
+
+class _SentinelAuthButton(object):
+    def __init__(self, action):
+        self.name = action
+        self.roleName = "push button"
+        self._action = action
+
+    @property
+    def showing(self):
+        return _connectauth_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-connectauth-action.txt", "w").write(self._action)
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if not _connectauth_open():
+                return
+            time.sleep(0.05)
+
+
+class _SentinelConnectAuthWindow(object):
+    name = "Authentication required"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _connectauth_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        if "username" in compact:
+            return _SentinelAuthEntry(
+                "Username: entry", "/tmp/vmm-a11y-connectauth-user.txt", "user"
+            )
+        if "password" in compact:
+            return _SentinelAuthEntry(
+                "Password: entry", "/tmp/vmm-a11y-connectauth-pass.txt", "pass"
+            )
+        if compact.strip() in ("ok", "_ok") or (
+            "ok" in compact and "button" in role
+        ):
+            return _SentinelAuthButton("ok")
+        if "cancel" in compact:
+            return _SentinelAuthButton("cancel")
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
 def _delete_dialog_open():
     try:
         return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
@@ -8920,6 +9067,12 @@ _TESTDRIVER_VMS = (
     "test-clone-simple-clone",
     "test-clone-simple-clone1",
     "test-clone1",
+    "test-arm-kernel",
+    "test-state-paused",
+    "test-state-crashed",
+    "test-state-pmsuspended",
+    "test-state-transient",
+    "test-state-managedsave",
 )
 
 
@@ -9248,23 +9401,38 @@ def _sentinel_manager_vm_cell(name, roleName):
     want = raw.split("\n")[0].strip()
     if not want:
         return None
+    # Window titles like "Authentication required" must not become VM cells.
+    names = _manager_vm_names()
+    aliases = _manager_vm_aliases()
+    live = []
+    try:
+        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+            if line.strip():
+                live.append(line.split("\t", 1)[0].strip())
+    except Exception:
+        pass
+    if want in aliases:
+        return _SentinelManagerVMCell(aliases[want])
+    if want in names or want in live or want in _TESTDRIVER_VMS:
+        return _SentinelManagerVMCell(want)
     real = _manager_vm_real_name(want)
-    if real:
-        for vm in _manager_vm_names():
-            if want == vm or real == vm or real == _manager_vm_aliases().get(vm, vm):
-                return _SentinelManagerVMCell(real)
+    if (
+        real
+        and real != want
+        and (real in names or real in live or real in _TESTDRIVER_VMS)
+        and ("\n" in raw or "cell" in role)
+    ):
         return _SentinelManagerVMCell(real)
-    # Newly migrated/renamed guests appear after dest poll.
+    if "\n" in raw:
+        for vm in names:
+            if vm.startswith(want) or want.startswith(vm):
+                return _SentinelManagerVMCell(vm)
     if want and "cell" in role:
         deadline = time.time() + 3.0
         while time.time() < deadline:
             time.sleep(0.05)
             if want in _manager_vm_names():
                 return _SentinelManagerVMCell(want)
-    if "\n" in raw:
-        for vm in _manager_vm_names():
-            if vm.startswith(want) or want.startswith(vm):
-                return _SentinelManagerVMCell(vm)
     return None
 
 
@@ -9738,6 +9906,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
             or " on " in name
             or "Virtual Machine Manager" in name
         ):
+            if "Virtual Machine Manager" in name:
+                try:
+                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                        return False
+                except Exception:
+                    pass
+                try:
+                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                        return False
+                except Exception:
+                    pass
+                return True
             if " on " in name:
                 try:
                     vis = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
@@ -10975,6 +11155,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         return _SentinelAddHardwareMenuItem()
                 except Exception:
                     pass
+        if name and "authentication required" in str(name).replace(".*", "").lower():
+            try:
+                if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                    return _SentinelConnectAuthWindow()
+            except Exception:
+                pass
         if name and str(name).replace(".*", "").lower() in ("remove disk", "delete"):
             role = str(raw_role or "").lower()
             if _delete_dialog_open() and (

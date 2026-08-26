@@ -119,6 +119,16 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Authentication required" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelConnectAuthWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name in ("Remove Disk", "Delete"):
             while time.time() < deadline:
                 try:
@@ -289,6 +299,13 @@ class VMMDogtailApp:
 
         def pressKey(self, key, *a, **kw):
             key_l = str(key or "").lower()
+            if key_l == "enter":
+                try:
+                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                        open("/tmp/vmm-a11y-connectauth-activate", "w").write("1")
+                        return
+                except Exception:
+                    pass
             if key_l == "escape":
                 try:
                     with open("/tmp/vmm-a11y-oslist-escape", "w") as fh:
