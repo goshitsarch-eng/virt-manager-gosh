@@ -631,12 +631,11 @@ class _SentinelOslistEntry(object):
             pass
 
     def set_text(self, text):
-        # Keep the load-button / os-select path so set_text("generic") works.
+        # Typing only filters the popover. Confirming a row writes os-select.
         try:
             open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(text or "")
             open("/tmp/vmm-a11y-entry.txt", "w").write(text or "")
             open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
-            open("/tmp/vmm-a11y-os-select.txt", "w").write(text or "")
         except Exception:
             pass
         _oslist_start_search()
