@@ -45,6 +45,26 @@ _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
 _VNC_SEC_VENCRYPT = 19
 _VNC_VENCRYPT_PLAIN = 256
+_VNC_VENCRYPT_TLSNONE = 257
+_VNC_VENCRYPT_TLSVNC = 258
+_VNC_VENCRYPT_TLSPLAIN = 259
+_VNC_VENCRYPT_X509NONE = 260
+_VNC_VENCRYPT_X509VNC = 261
+_VNC_VENCRYPT_X509PLAIN = 262
+_VNC_VENCRYPT_TLS = (
+    _VNC_VENCRYPT_TLSNONE,
+    _VNC_VENCRYPT_TLSVNC,
+    _VNC_VENCRYPT_TLSPLAIN,
+    _VNC_VENCRYPT_X509NONE,
+    _VNC_VENCRYPT_X509VNC,
+    _VNC_VENCRYPT_X509PLAIN,
+)
+_VNC_VENCRYPT_PLAIN_AUTH = (
+    _VNC_VENCRYPT_PLAIN,
+    _VNC_VENCRYPT_TLSPLAIN,
+    _VNC_VENCRYPT_X509PLAIN,
+)
+_VNC_VENCRYPT_VNC_AUTH = (_VNC_VENCRYPT_TLSVNC, _VNC_VENCRYPT_X509VNC)
 
 try:
     gi.require_foreign("cairo")
@@ -68,7 +88,17 @@ class GrabSequence:
         return cls(keys)
 
     def as_string(self):
-        return ",".join(str(k) for k in self._keys)
+        # GtkVnc.GrabSequence.as_string() uses key names so the VM
+        # window title can show "Press Control_L+Alt_L to release pointer."
+        names = []
+        for k in self._keys:
+            name = None
+            try:
+                name = Gdk.keyval_name(int(k))
+            except Exception:
+                name = None
+            names.append(name or str(k))
+        return "+".join(names)
 
     def get_keys(self):
         return list(self._keys)
@@ -287,7 +317,13 @@ class _DisplayBase(Gtk.DrawingArea):
 
     def _on_key_pressed(self, _c, keyval, keycode, state):
         ignore = state
-        self._pressed_hwkeys.add(int(keycode or keyval))
+        # Preferences store Gdk keyvals (65507=Control_L). GTK 4 key
+        # events also report hardware keycodes (37). Track both so the
+        # default Ctrl+Alt grab release matches GtkVnc.
+        if keycode:
+            self._pressed_hwkeys.add(int(keycode))
+        if keyval:
+            self._pressed_hwkeys.add(int(keyval))
         if self._matches_grab_sequence() and (self._grabbed_pointer or self._grabbed_keyboard):
             self._ungrab_input()
             return True
@@ -300,7 +336,10 @@ class _DisplayBase(Gtk.DrawingArea):
 
     def _on_key_released(self, _c, keyval, keycode, state):
         ignore = state
-        self._pressed_hwkeys.discard(int(keycode or keyval))
+        if keycode:
+            self._pressed_hwkeys.discard(int(keycode))
+        if keyval:
+            self._pressed_hwkeys.discard(int(keyval))
         self._send_key(keyval, keycode, False)
         return True
 
@@ -405,7 +444,10 @@ class VNCDisplay(_DisplayBase):
         self._lock = threading.Lock()
         self._username = ""
         self._password = ""
+        self._clientname = "libvirt-vnc"
         self._name = ""
+        self._clip_from_guest = False
+        self._bind_host_clipboard()
         self._stop = False
         self._auth_event = threading.Event()
         self._pixels = bytearray()
@@ -418,6 +460,8 @@ class VNCDisplay(_DisplayBase):
         name = str(cred).upper()
         if cred == 1 or name.endswith("PASSWORD"):
             self._password = value or ""
+        elif cred == 2 or "CLIENT" in name:
+            self._clientname = value or "libvirt-vnc"
         else:
             self._username = value or ""
         self._auth_event.set()
@@ -524,7 +568,8 @@ class VNCDisplay(_DisplayBase):
             self._vnc_auth2(sock)
         elif _VNC_SEC_VENCRYPT in types:
             sock.sendall(bytes([_VNC_SEC_VENCRYPT]))
-            self._vencrypt_plain(sock)
+            sock = self._vencrypt(sock)
+            self._sock = sock
         else:
             raise RuntimeError("Unsupported VNC security types: %s" % list(types))
         result = struct.unpack("!I", self._recv_n(sock, 4))[0]
@@ -591,7 +636,8 @@ class VNCDisplay(_DisplayBase):
                 self._recv_n(sock, 5)
             elif msg[0] == 3:
                 slen = struct.unpack("!xxxI", self._recv_n(sock, 7))[0]
-                self._recv_n(sock, slen)
+                text = self._recv_n(sock, slen)
+                self._apply_server_cut_text(text)
         GLib.idle_add(self.emit, "vnc-disconnected")
         self._open = False
 
@@ -616,8 +662,43 @@ class VNCDisplay(_DisplayBase):
         self._need_vnc_creds(False)
         sock.sendall(_vnc_auth_response(challenge, self._password))
 
-    def _vencrypt_plain(self, sock):
-        # VeNCrypt 0.2 + Plain (256): username + password, no TLS.
+    def _choose_vencrypt_subtype(self, subtypes):
+        prefer = (
+            _VNC_VENCRYPT_PLAIN,
+            _VNC_VENCRYPT_TLSPLAIN,
+            _VNC_VENCRYPT_TLSVNC,
+            _VNC_VENCRYPT_TLSNONE,
+            _VNC_VENCRYPT_X509PLAIN,
+            _VNC_VENCRYPT_X509VNC,
+            _VNC_VENCRYPT_X509NONE,
+        )
+        for cand in prefer:
+            if cand in subtypes:
+                return cand
+        return None
+
+    def _wrap_tls(self, sock, verify=False):
+        import ssl
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_REQUIRED if verify else ssl.CERT_NONE
+        if not verify:
+            try:
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+            except Exception:
+                pass
+        return ctx.wrap_socket(sock, server_hostname=None)
+
+    def _send_plain_creds(self, sock):
+        self._need_vnc_creds(True)
+        user = (self._username or "").encode("utf-8")
+        pw = (self._password or "").encode("utf-8")
+        sock.sendall(struct.pack("!II", len(user), len(pw)) + user + pw)
+
+    def _vencrypt(self, sock):
+        # VeNCrypt 0.2: Plain, or TLS/X509 + None/VNC/Plain.
         _maj, _min = self._recv_n(sock, 2)
         sock.sendall(b"\x00\x02")
         ack = self._recv_n(sock, 1)[0]
@@ -627,13 +708,72 @@ class VNCDisplay(_DisplayBase):
         subtypes = []
         for _ in range(nsub):
             subtypes.append(struct.unpack("!I", self._recv_n(sock, 4))[0])
-        if _VNC_VENCRYPT_PLAIN not in subtypes:
+        chosen = self._choose_vencrypt_subtype(subtypes)
+        if chosen is None:
             raise RuntimeError("VeNCrypt subtypes unsupported: %s" % subtypes)
-        sock.sendall(struct.pack("!I", _VNC_VENCRYPT_PLAIN))
-        self._need_vnc_creds(True)
-        user = (self._username or "").encode("utf-8")
-        pw = (self._password or "").encode("utf-8")
-        sock.sendall(struct.pack("!II", len(user), len(pw)) + user + pw)
+        sock.sendall(struct.pack("!I", chosen))
+        if chosen in _VNC_VENCRYPT_TLS:
+            sock = self._wrap_tls(sock, verify=False)
+        if chosen in _VNC_VENCRYPT_PLAIN_AUTH:
+            self._send_plain_creds(sock)
+        elif chosen in _VNC_VENCRYPT_VNC_AUTH:
+            self._vnc_auth2(sock)
+        return sock
+
+    def _vencrypt_plain(self, sock):
+        return self._vencrypt(sock)
+
+    def _apply_server_cut_text(self, raw):
+        text = raw.decode("latin1", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        self._clip_from_guest = True
+        try:
+            clip = Gdk.Display.get_default().get_clipboard()
+            clip.set(text)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-clipboard.txt", "w").write(text)
+        except Exception:
+            pass
+        GLib.timeout_add(250, self._clear_vnc_clip_from_guest)
+
+    def _clear_vnc_clip_from_guest(self):
+        self._clip_from_guest = False
+        return False
+
+    def _send_client_cut_text(self, text):
+        sock = self._sock
+        if not sock or not self._open or self._clip_from_guest:
+            return
+        payload = (text or "").encode("latin1", "replace")
+        try:
+            sock.sendall(struct.pack("!BxxxI", 6, len(payload)) + payload)
+        except Exception:
+            pass
+
+    def _bind_host_clipboard(self):
+        try:
+            clip = Gdk.Display.get_default().get_clipboard()
+            clip.connect("changed", self._on_host_clip_changed)
+        except Exception:
+            pass
+
+    def _on_host_clip_changed(self, clip):
+        if self._clip_from_guest or not self._open:
+            return
+
+        def _got(_src, result):
+            try:
+                text = clip.read_text_finish(result)
+            except Exception:
+                return
+            if text:
+                self._send_client_cut_text(text)
+
+        try:
+            clip.read_text_async(None, _got)
+        except Exception:
+            pass
 
     def _alloc_pixels(self, width, height):
         self._pixels = bytearray(max(width, 1) * max(height, 1) * 4)

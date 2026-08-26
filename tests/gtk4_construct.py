@@ -729,6 +729,26 @@ def main():
         gfile = gtkcompat.GioFile_for_path("/tmp")
         assert gfile.get_path() == "/tmp"
 
+        def _accept():
+            try:
+                open("/tmp/vmm-a11y-filechooser-open", "w").write("1")
+            except Exception:
+                pass
+            return False
+
+        GLib.timeout_add(80, _accept)
+        path = gtkcompat.browse_local(
+            None,
+            "Save Virtual Machine Screenshot",
+            start_folder="/tmp",
+            _type=("png", "PNG files"),
+            dialog_type=Gtk.FileChooserAction.SAVE,
+            choose_label="_Save",
+            default_name="Screenshot_test.png",
+            confirm_overwrite=True,
+        )
+        assert path and os.path.basename(path) == "Screenshot_test.png", path
+
     def vm_lifecycle_actions():
         from virtManager import vmmenu
         from virtManager.config import vmmConfig
@@ -803,7 +823,9 @@ def main():
         assert (dx, dy, dw, dh) == (0, 0, 8, 4)
         disp.set_keep_aspect_ratio(True)
         disp.set_pointer_grab(True)
-        disp.set_grab_keys(gtk4display.GrabSequence.new([37, 64]))
+        seq = gtk4display.GrabSequence.new([65507, 65513])
+        assert "Control_L" in seq.as_string()
+        disp.set_grab_keys(seq)
         grabbed = []
         ungrabbed = []
         disp.connect("mouse-grab", lambda _s, val: grabbed.append(val) if val else ungrabbed.append(val))
@@ -817,10 +839,16 @@ def main():
         assert disp._buttons & 4
         disp._on_scroll(None, 0, 1)
         assert grabbed
-        # Grab sequence Control_L+Alt_L (keycodes 37,64) must ungrab
-        disp._on_key_pressed(None, 0, 37, 0)
-        disp._on_key_pressed(None, 0, 64, 0)
+        # Grab sequence is stored as keyvals; GTK 4 events report both
+        disp._on_key_pressed(None, 65507, 37, 0)
+        disp._on_key_pressed(None, 65513, 64, 0)
         assert ungrabbed, "grab-sequence did not ungrab pointer"
+        disp.set_credential(2, "libvirt-vnc")
+        assert disp._clientname == "libvirt-vnc"
+        disp._apply_server_cut_text(b"guest-clip")
+        assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
+        assert disp._choose_vencrypt_subtype([258, 256]) == 256
+        assert disp._choose_vencrypt_subtype([258]) == 258
         disp.send_keys([97])
         disp.set_property("resize-guest", True)
         disp._apply_resize_guest(True)

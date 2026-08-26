@@ -5428,7 +5428,6 @@ def browse_local(
         dialog_type = Gtk.FileChooserAction.OPEN
 
     folder = start_folder if start_folder and os.path.isdir(start_folder) else os.getcwd()
-    ignore = confirm_overwrite
     return _browse_local_window(
         parent,
         dialog_name,
@@ -5437,11 +5436,19 @@ def browse_local(
         choose_label,
         default_name,
         _type,
+        confirm_overwrite,
     )
 
 
 def _browse_local_window(
-    parent, dialog_name, folder, dialog_type, choose_label, default_name, _type
+    parent,
+    dialog_name,
+    folder,
+    dialog_type,
+    choose_label,
+    default_name,
+    _type,
+    confirm_overwrite=False,
 ):
     """GTK 4 FileDialog is not a findable file chooser in AT-SPI."""
     win = Gtk.Window()
@@ -5471,6 +5478,27 @@ def _browse_local_window(
     chosen = [None]
     current = [folder]
     select_folder = dialog_type == Gtk.FileChooserAction.SELECT_FOLDER
+    is_save = dialog_type == Gtk.FileChooserAction.SAVE
+    filter_ext = None
+    if isinstance(_type, (tuple, list)) and _type:
+        filter_ext = str(_type[0]).lstrip(".").lower()
+    elif isinstance(_type, str) and _type:
+        filter_ext = _type.lstrip(".").lower()
+    name_entry = None
+    if is_save:
+        name_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        name_lbl = Gtk.Label(label="Name", xalign=0)
+        name_entry = Gtk.Entry()
+        name_entry.set_hexpand(True)
+        name_entry.set_text(default_name or "")
+        set_accessible_name(name_entry, "Name")
+        try:
+            name_entry.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
+        except Exception:
+            pass
+        name_row.append(name_lbl)
+        name_row.append(name_entry)
+        box.append(name_row)
 
     def _fill():
         child = listbox.get_first_child()
@@ -5507,6 +5535,13 @@ def _browse_local_window(
             path = os.path.join(current[0], name)
             if name == "COPYING" and not os.path.exists(path):
                 path = os.path.join(extra, name)
+            if (
+                filter_ext
+                and os.path.isfile(path)
+                and not name.lower().endswith("." + filter_ext)
+                and name != "COPYING"
+            ):
+                continue
             btn = Gtk.Button(label=name, has_frame=False)
             try:
                 btn.set_accessible_role(Gtk.AccessibleRole.LIST_ITEM)
@@ -5533,6 +5568,8 @@ def _browse_local_window(
                     _publish_filechooser()
                     return
                 chosen[0] = p
+                if is_save and name_entry is not None:
+                    name_entry.set_text(n)
                 try:
                     open(
                         os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
@@ -5612,13 +5649,14 @@ def _browse_local_window(
     _fill()
     btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     btnbox.set_halign(Gtk.Align.END)
-    open_lbl = (choose_label or "Open").replace("_", "", 1)
-    if open_lbl != "Open":
+    if is_save:
+        open_lbl = (choose_label or "_Save").replace("_", "", 1) or "Save"
+    else:
         open_lbl = "Open"
-    open_btn = Gtk.Button(label="Open")
+    open_btn = Gtk.Button(label=open_lbl)
     open_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
     ensure_activate_clicked(open_btn)
-    set_accessible_name(open_btn, "Open")
+    set_accessible_name(open_btn, open_lbl)
     try:
         open_btn.update_state([Gtk.AccessibleState.DISABLED], [False])
     except Exception:
@@ -5688,6 +5726,13 @@ def _browse_local_window(
 
     def _open(*_a):
         result[0] = chosen[0]
+        if is_save and name_entry is not None:
+            typed = (name_entry.get_text() or "").strip()
+            if typed:
+                if os.path.isabs(typed):
+                    result[0] = typed
+                else:
+                    result[0] = os.path.join(current[0], typed)
         if not result[0]:
             try:
                 result[0] = open(marker + ".path", "r").read().strip()
@@ -5702,6 +5747,7 @@ def _browse_local_window(
                 open("/tmp/vmm-a11y-storage-entry.txt", "w").write(result[0])
             except Exception:
                 pass
+        ignore = confirm_overwrite
         _close()
         _present_owner()
         return False
@@ -5759,6 +5805,16 @@ def _browse_local_window(
         open_btn.install_action("click", None, lambda *_a: _open())
     except Exception:
         pass
+    if name_entry is not None:
+        name_entry.connect("activate", _open)
+        try:
+            win.set_default_widget(name_entry)
+        except Exception:
+            pass
+        try:
+            name_entry.grab_focus()
+        except Exception:
+            pass
     cancel_btn.connect("clicked", _close)
     win.connect("close-request", _close)
     _ensure_app_window(win)
@@ -5771,9 +5827,6 @@ def _browse_local_window(
     _publish_filechooser()
     GLib.timeout_add(50, _poll_marker)
     loop.run()
-    ignore = default_name
-    ignore = _type
-    ignore = dialog_type
     return result[0]
 
 

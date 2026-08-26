@@ -644,6 +644,11 @@ class SpiceViewer(Viewer):
             autoredir = self.config.get_auto_usbredir()
             if autoredir and gtk_session is not None:
                 gtk_session.set_property("auto-usbredir", True)
+            elif autoredir and self._usbdev_manager is not None:
+                try:
+                    self._usbdev_manager.set_property("auto-connect", True)
+                except Exception:
+                    pass
         except Exception:  # pragma: no cover
             self._usbdev_manager = None
             log.debug("Error initializing spice usb device manager", exc_info=True)
