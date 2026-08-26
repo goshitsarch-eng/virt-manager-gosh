@@ -1452,6 +1452,101 @@ def publish_media_combo_rows(createvm, box=None):
             break
 
 
+def _append_createvm_container_controls(box, createvm):
+    """Container install entries, browse buttons, bootstrap, and credentials."""
+    if box is None or createvm is None or getattr(box, "_vmm_container_controls", False):
+        return
+    box._vmm_container_controls = True
+    try:
+        expose_a11y_entry(
+            "methods-install-app-entry",
+            "application path",
+            createvm.widget("install-app-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_button(
+            "methods-install-app-browse",
+            "install-app-browse",
+            lambda: createvm._browse_app(None),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-install-oscontainer-fs",
+            "root directory",
+            createvm.widget("install-oscontainer-fs"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_button(
+            "methods-install-oscontainer-browse",
+            "install-oscontainer-browse",
+            lambda: createvm._browse_oscontainer(None),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-install-container-template",
+            "container template",
+            createvm.widget("install-container-template"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_check(
+            "methods-install-oscontainer-bootstrap",
+            "Create OS directory tree from container image",
+            createvm.widget("install-oscontainer-bootstrap"),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-install-oscontainer-source-uri",
+            "install-oscontainer-source-uri",
+            createvm.widget("install-oscontainer-source-url-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_entry(
+            "methods-install-oscontainer-root-passwd",
+            "install-oscontainer-root-passwd",
+            createvm.widget("install-oscontainer-rootpw"),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-bootstrap-registry-user",
+            "bootstrap-registry-user",
+            createvm.widget("install-oscontainer-source-user"),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-bootstrap-registry-password",
+            "bootstrap-registry-password",
+            createvm.widget("install-oscontainer-source-passwd"),
+            parent=box,
+        )
+        expose_a11y_button(
+            "methods-container-credentials",
+            "Credentials",
+            lambda: createvm.widget("install-oscontainer-auth-options").set_expanded(
+                True
+            ),
+            parent=box,
+        )
+        register_a11y_click("install-app-browse", lambda: createvm._browse_app(None))
+        register_a11y_click(
+            "install-oscontainer-browse", lambda: createvm._browse_oscontainer(None)
+        )
+        register_a11y_click("Credentials", lambda: createvm.widget(
+            "install-oscontainer-auth-options"
+        ).set_expanded(True))
+        register_a11y_click(
+            "Create OS directory",
+            lambda: createvm.widget("install-oscontainer-bootstrap").set_active(
+                not bool(createvm.widget("install-oscontainer-bootstrap").get_active())
+            ),
+        )
+    except Exception:
+        pass
+
+
 def _append_createvm_customize_check(box, createvm):
     if box is None or createvm is None or getattr(box, "_vmm_customize_check", False):
         return
@@ -1965,6 +2060,7 @@ def expose_createvm_methods_window(createvm):
                 _append_createvm_url_controls(child, createvm)
                 _append_createvm_net_controls(child, createvm)
                 _append_createvm_customize_check(child, createvm)
+                _append_createvm_container_controls(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:
                 pass
@@ -1997,6 +2093,10 @@ def expose_createvm_methods_window(createvm):
         ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
         ("method-import", "Import existing disk image"),
         ("method-manual", "Manual install"),
+        ("method-container-app", "Application"),
+        ("method-container-os", "Operating system"),
+        ("vz-virt-type-exe", "Container"),
+        ("vz-virt-type-hvm", "Virtual machine"),
     ):
         src = createvm.widget(wid)
         btn = Gtk.Button(label=name, has_frame=False)
@@ -2054,6 +2154,7 @@ def expose_createvm_methods_window(createvm):
     _append_createvm_url_controls(box, createvm)
     _append_createvm_net_controls(box, createvm)
     _append_createvm_customize_check(box, createvm)
+    _append_createvm_container_controls(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
     win.set_visible(True)

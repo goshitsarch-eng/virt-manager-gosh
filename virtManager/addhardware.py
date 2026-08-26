@@ -189,6 +189,10 @@ class vmmAddHardware(vmmGObjectUI):
                         if want == label or want in label or label in want:
                             uiutil.set_list_selection_by_number(tree, idx)
                             try:
+                                open("/tmp/vmm-a11y-hw-selected.txt", "w").write(label)
+                            except Exception:
+                                pass
+                            try:
                                 os.remove(path)
                             except Exception:
                                 pass
@@ -1119,7 +1123,19 @@ class vmmAddHardware(vmmGObjectUI):
 
     def _set_error_page(self, msg=None):
         self.widget("top-pages").set_current_page(1)
-        self.widget("error-label").set_text(msg or "Hardware selection error.")
+        text = msg or "Hardware selection error."
+        self.widget("error-label").set_text(text)
+        try:
+            open("/tmp/vmm-a11y-addhw-error.txt", "w").write(text)
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_label(
+                "addhw-error", text, text, window=self.topwin
+            )
+            gtkcompat.set_accessible_name(self.widget("error-label"), text)
+        except Exception:
+            pass
         self.widget("create-finish").set_sensitive(False)
 
     ################

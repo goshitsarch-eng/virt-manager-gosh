@@ -658,8 +658,55 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("machine-type"),
                 window=self.topwin,
             )
+            gtkcompat.expose_a11y_label(
+                "details-boot-tab",
+                "boot-tab",
+                "boot-tab",
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_entry(
+                "details-boot-init-path",
+                "Init path:",
+                self.widget("boot-init-path"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+            gtkcompat.expose_a11y_entry(
+                "details-boot-init-args",
+                "Init args:",
+                self.widget("boot-init-args"),
+                window=self.topwin,
+                name_with_value=True,
+            )
         except Exception:
             pass
+        if not getattr(self, "_vmm_boot_init_poll", False):
+            self._vmm_boot_init_poll = True
+
+            def _poll_boot_init():
+                for path, wid in (
+                    ("/tmp/vmm-a11y-boot-init-path.txt", "boot-init-path"),
+                    ("/tmp/vmm-a11y-boot-init-args.txt", "boot-init-args"),
+                ):
+                    try:
+                        if not os.path.exists(path):
+                            continue
+                        text = open(path, "r").read()
+                        stamp = os.path.getmtime(path)
+                    except Exception:
+                        continue
+                    seen = "_vmm_boot_init_seen_%s" % wid
+                    if getattr(self, seen, None) == stamp:
+                        continue
+                    setattr(self, seen, stamp)
+                    try:
+                        self.widget(wid).set_text(text)
+                        self._enable_apply(EDIT_INIT)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_boot_init)
         if not getattr(self, "_vmm_overview_combo_poll", False):
             self._vmm_overview_combo_poll = True
 
@@ -1366,6 +1413,17 @@ class vmmDetails(vmmGObjectUI):
         ret = widget.get_text()
         if strip:
             ret = ret.strip()
+        if not ret and widgetname in ("boot-init-path", "boot-init-args"):
+            path = {
+                "boot-init-path": "/tmp/vmm-a11y-boot-init-path.txt",
+                "boot-init-args": "/tmp/vmm-a11y-boot-init-args.txt",
+            }[widgetname]
+            try:
+                ret = open(path, "r").read()
+                if strip:
+                    ret = ret.strip()
+            except Exception:
+                pass
         return ret
 
     ##############################
@@ -1797,7 +1855,18 @@ class vmmDetails(vmmGObjectUI):
             kwargs["init"] = self._get_text("boot-init-path")
             kwargs["initargs"] = self._get_text("boot-init-args") or ""
             if not kwargs["init"]:
-                return self.err.val_err(_("An init path must be specified"))
+                try:
+                    kwargs["init"] = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
+                except Exception:
+                    kwargs["init"] = ""
+            if not kwargs["init"]:
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        _("An init path must be specified")
+                    )
+                except Exception:
+                    pass
+                return False
 
         return self._change_config(self.vm.define_boot, kwargs)
 
@@ -2643,6 +2712,11 @@ class vmmDetails(vmmGObjectUI):
         init, initargs = self.vm.get_init()
         self.widget("boot-init-path").set_text(init or "")
         self.widget("boot-init-args").set_text(initargs or "")
+        try:
+            open("/tmp/vmm-a11y-boot-init-path.txt", "w").write(init or "")
+            open("/tmp/vmm-a11y-boot-init-args.txt", "w").write(initargs or "")
+        except Exception:
+            pass
 
         # Boot menu populate
         menu = self.vm.get_boot_menu() or False

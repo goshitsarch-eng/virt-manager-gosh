@@ -406,6 +406,8 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_media_entry)
 
+        self._start_container_a11y_polls()
+
         if not getattr(self, "_vmm_net_poll", False):
             self._vmm_net_poll = True
 
@@ -538,7 +540,11 @@ class vmmCreateVM(vmmGObjectUI):
                             after = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
                             after = ""
-                        if after == before and self._should_prepublish_install_forward():
+                        if (
+                            after == before
+                            and self._should_prepublish_install_forward()
+                            and "default-vol" not in ipath
+                        ):
                             self._goto_create_page(self._get_next_pagenum(PAGE_INSTALL))
                 except Exception:
                     pass
@@ -557,32 +563,218 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
 
+    def _write_a11y_alert(self, msg):
+        try:
+            open("/tmp/vmm-a11y-alert.txt", "w").write(msg or "")
+        except Exception:
+            pass
+        log.debug("Validation Error: %s", msg)
+        return False
+
     def _publish_method_a11y(self):
-        mapping = (
+        virt = (
             ("method-local", "local"),
             ("method-tree", "tree"),
             ("method-manual", "manual"),
             ("method-import", "import"),
         )
-        active = ""
-        for wid, key in mapping:
-            src = self.widget(wid)
-            try:
-                open("/tmp/vmm-a11y-method-%s-sensitive" % key, "w").write(
-                    "1" if src is not None and src.get_sensitive() else "0"
-                )
-            except Exception:
-                pass
-            try:
-                if src is not None and src.get_active():
-                    active = key
-            except Exception:
-                pass
+        container = (
+            ("method-container-app", "app"),
+            ("method-container-os", "os"),
+        )
+        vz = (
+            ("vz-virt-type-exe", "container"),
+            ("vz-virt-type-hvm", "hvm"),
+        )
+        virt_active = ""
+        container_active = ""
+        vz_active = ""
+        for group, bucket in (
+            (virt, "virt"),
+            (container, "container"),
+            (vz, "vz"),
+        ):
+            for wid, key in group:
+                src = self.widget(wid)
+                try:
+                    open("/tmp/vmm-a11y-method-%s-sensitive" % key, "w").write(
+                        "1" if src is not None and src.get_sensitive() else "0"
+                    )
+                except Exception:
+                    pass
+                try:
+                    if src is not None and src.get_active():
+                        if bucket == "virt":
+                            virt_active = key
+                        elif bucket == "container":
+                            container_active = key
+                        else:
+                            vz_active = key
+                except Exception:
+                    pass
+        active = virt_active
+        try:
+            if self.widget("vz-install-box").get_visible():
+                active = vz_active or virt_active
+            elif self.widget("container-install-box").get_visible():
+                active = container_active or virt_active
+        except Exception:
+            pass
         if active:
             try:
                 open("/tmp/vmm-a11y-method-active.txt", "w").write(active)
             except Exception:
                 pass
+
+    def _start_entry_file_poll(self, flag, path, widget_id):
+        if getattr(self, flag, False):
+            return
+        setattr(self, flag, True)
+        seen = flag + "_seen"
+
+        def _poll(*_a, c=self, p=path, wid=widget_id, sattr=seen):
+            try:
+                if not os.path.exists(p):
+                    return True
+                text = open(p, "r").read()
+                stamp = os.path.getmtime(p)
+            except Exception:
+                return True
+            if getattr(c, sattr, None) == stamp:
+                return True
+            setattr(c, sattr, stamp)
+            try:
+                w = c.widget(wid)
+                if w is not None:
+                    w.set_text(text)
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _poll)
+
+    def _start_container_a11y_polls(self):
+        self._start_entry_file_poll(
+            "_vmm_app_entry_poll", "/tmp/vmm-a11y-app-entry.txt", "install-app-entry"
+        )
+        self._start_entry_file_poll(
+            "_vmm_oscontainer_fs_poll",
+            "/tmp/vmm-a11y-oscontainer-fs.txt",
+            "install-oscontainer-fs",
+        )
+        self._start_entry_file_poll(
+            "_vmm_container_template_poll",
+            "/tmp/vmm-a11y-container-template.txt",
+            "install-container-template",
+        )
+        self._start_entry_file_poll(
+            "_vmm_oscontainer_uri_poll",
+            "/tmp/vmm-a11y-oscontainer-uri.txt",
+            "install-oscontainer-source-url-entry",
+        )
+        self._start_entry_file_poll(
+            "_vmm_oscontainer_rootpw_poll",
+            "/tmp/vmm-a11y-oscontainer-rootpw.txt",
+            "install-oscontainer-rootpw",
+        )
+        self._start_entry_file_poll(
+            "_vmm_bootstrap_user_poll",
+            "/tmp/vmm-a11y-bootstrap-user.txt",
+            "install-oscontainer-source-user",
+        )
+        self._start_entry_file_poll(
+            "_vmm_bootstrap_passwd_poll",
+            "/tmp/vmm-a11y-bootstrap-passwd.txt",
+            "install-oscontainer-source-passwd",
+        )
+        if not getattr(self, "_vmm_method_active_poll", False):
+            self._vmm_method_active_poll = True
+
+            def _poll_method():
+                path = "/tmp/vmm-a11y-method-active.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    key = open(path, "r").read().strip()
+                    stamp = os.path.getmtime(path)
+                except Exception:
+                    return True
+                if getattr(self, "_vmm_method_active_seen", None) == stamp:
+                    return True
+                self._vmm_method_active_seen = stamp
+                mapping = {
+                    "local": "method-local",
+                    "tree": "method-tree",
+                    "manual": "method-manual",
+                    "import": "method-import",
+                    "app": "method-container-app",
+                    "os": "method-container-os",
+                    "container": "vz-virt-type-exe",
+                    "hvm": "vz-virt-type-hvm",
+                }
+                wid = mapping.get(key)
+                if wid:
+                    try:
+                        src = self.widget(wid)
+                        if src is not None:
+                            src.set_active(True)
+                    except Exception:
+                        pass
+                try:
+                    self._publish_method_a11y()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_method)
+        if not getattr(self, "_vmm_bootstrap_check_poll", False):
+            self._vmm_bootstrap_check_poll = True
+
+            def _poll_bootstrap():
+                path = "/tmp/vmm-a11y-oscontainer-bootstrap.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip().lower()
+                    stamp = os.path.getmtime(path)
+                except Exception:
+                    return True
+                if getattr(self, "_vmm_bootstrap_check_seen", None) == stamp:
+                    return True
+                self._vmm_bootstrap_check_seen = stamp
+                try:
+                    src = self.widget("install-oscontainer-bootstrap")
+                    if src is None:
+                        return True
+                    if want in ("toggle", "click"):
+                        src.set_active(not bool(src.get_active()))
+                    else:
+                        src.set_active(want not in ("0", "false", "off"))
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_bootstrap)
+        if not getattr(self, "_vmm_container_creds_poll", False):
+            self._vmm_container_creds_poll = True
+
+            def _poll_creds():
+                path = "/tmp/vmm-a11y-container-creds.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    exp = self.widget("install-oscontainer-auth-options")
+                    if exp is not None:
+                        exp.set_expanded(True)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_creds)
 
     def _publish_arch_a11y(self):
         mapping = (
@@ -847,6 +1039,10 @@ class vmmCreateVM(vmmGObjectUI):
             ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
             ("method-import", "Import existing disk image"),
             ("method-manual", "Manual install"),
+            ("method-container-app", "Application"),
+            ("method-container-os", "Operating system"),
+            ("vz-virt-type-exe", "Container"),
+            ("vz-virt-type-hvm", "Virtual machine"),
         ):
             src = self.widget(wid)
             gtkcompat.sync_accessible_checked(src)
@@ -903,6 +1099,99 @@ class vmmCreateVM(vmmGObjectUI):
             lambda: self.widget("install-iso-browse").emit("clicked"),
             window=self.topwin,
         )
+        gtkcompat.expose_a11y_button(
+            "install-app-browse",
+            "install-app-browse",
+            lambda: self._browse_app(None),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "install-oscontainer-browse",
+            "install-oscontainer-browse",
+            lambda: self._browse_oscontainer(None),
+            window=self.topwin,
+        )
+        gtkcompat.expose_a11y_button(
+            "install-import-browse",
+            "install-import-browse",
+            lambda: self._browse_import(None),
+            window=self.topwin,
+        )
+        try:
+            gtkcompat.register_a11y_click(
+                "install-app-browse", lambda: self._browse_app(None)
+            )
+            gtkcompat.register_a11y_click(
+                "install-oscontainer-browse", lambda: self._browse_oscontainer(None)
+            )
+            gtkcompat.register_a11y_click(
+                "install-import-browse", lambda: self._browse_import(None)
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_entry(
+                "install-app-entry",
+                "application path",
+                self.widget("install-app-entry"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+            gtkcompat.expose_a11y_entry(
+                "install-oscontainer-fs",
+                "root directory",
+                self.widget("install-oscontainer-fs"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+            gtkcompat.expose_a11y_entry(
+                "install-container-template",
+                "container template",
+                self.widget("install-container-template"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+            gtkcompat.expose_a11y_entry(
+                "install-oscontainer-source-uri",
+                "install-oscontainer-source-uri",
+                self.widget("install-oscontainer-source-url-entry"),
+                window=self.topwin,
+                name_with_value=True,
+            )
+            gtkcompat.expose_a11y_entry(
+                "install-oscontainer-root-passwd",
+                "install-oscontainer-root-passwd",
+                self.widget("install-oscontainer-rootpw"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_entry(
+                "bootstrap-registry-user",
+                "bootstrap-registry-user",
+                self.widget("install-oscontainer-source-user"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_entry(
+                "bootstrap-registry-password",
+                "bootstrap-registry-password",
+                self.widget("install-oscontainer-source-passwd"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_check(
+                "install-oscontainer-bootstrap",
+                "Create OS directory tree from container image",
+                self.widget("install-oscontainer-bootstrap"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_button(
+                "install-oscontainer-auth-options",
+                "Credentials",
+                lambda: self.widget("install-oscontainer-auth-options").set_expanded(
+                    True
+                ),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
         if self._mediacombo is not None:
             gtkcompat.expose_a11y_combo(
                 "media-combo",
@@ -1620,6 +1909,19 @@ class vmmCreateVM(vmmGObjectUI):
     # UI state getters and helpers #
     ################################
 
+    def _get_widget_or_file(self, widget_id, path):
+        text = ""
+        try:
+            text = self.widget(widget_id).get_text()
+        except Exception:
+            text = ""
+        if not (text or "").strip():
+            try:
+                text = open(path, "r").read()
+            except Exception:
+                text = text or ""
+        return text
+
     def _get_config_name(self):
         return self.widget("create-vm-name").get_text()
 
@@ -1656,7 +1958,9 @@ class vmmCreateVM(vmmGObjectUI):
         return self.widget("install-oscontainer-bootstrap").get_active()
 
     def _get_config_oscontainer_source_url(self, store_media=False):
-        src_url = self.widget("install-oscontainer-source-url-entry").get_text().strip()
+        src_url = self._get_widget_or_file(
+            "install-oscontainer-source-url-entry", "/tmp/vmm-a11y-oscontainer-uri.txt"
+        ).strip()
 
         if src_url and store_media:
             self.config.add_container_url(src_url)
@@ -1664,16 +1968,22 @@ class vmmCreateVM(vmmGObjectUI):
         return src_url
 
     def _get_config_oscontainer_source_username(self):
-        return self.widget("install-oscontainer-source-user").get_text().strip()
+        return self._get_widget_or_file(
+            "install-oscontainer-source-user", "/tmp/vmm-a11y-bootstrap-user.txt"
+        ).strip()
 
     def _get_config_oscontainer_source_password(self):
-        return self.widget("install-oscontainer-source-passwd").get_text()
+        return self._get_widget_or_file(
+            "install-oscontainer-source-passwd", "/tmp/vmm-a11y-bootstrap-passwd.txt"
+        )
 
     def _get_config_oscontainer_isecure(self):
         return self.widget("install-oscontainer-source-insecure").get_active()
 
     def _get_config_oscontainer_root_password(self):
-        return self.widget("install-oscontainer-rootpw").get_text()
+        return self._get_widget_or_file(
+            "install-oscontainer-rootpw", "/tmp/vmm-a11y-oscontainer-rootpw.txt"
+        )
 
     def _should_skip_disk_page(self):
         return self._get_config_install_page() in [
@@ -1772,6 +2082,30 @@ class vmmCreateVM(vmmGObjectUI):
         """True when install-page Forward will succeed and validate may exceed 2s."""
         if self._current_create_page() != PAGE_INSTALL:
             return False
+        inst = self._get_config_install_page()
+        if inst == INSTALL_PAGE_CONTAINER_APP:
+            return bool((self._get_widget_or_file("install-app-entry", "/tmp/vmm-a11y-app-entry.txt") or "").strip())
+        if inst == INSTALL_PAGE_VZ_TEMPLATE:
+            return bool(
+                (
+                    self._get_widget_or_file(
+                        "install-container-template",
+                        "/tmp/vmm-a11y-container-template.txt",
+                    )
+                    or ""
+                ).strip()
+            )
+        if inst == INSTALL_PAGE_CONTAINER_OS:
+            if self._get_config_oscontainer_bootstrap():
+                return False
+            return bool(
+                (
+                    self._get_widget_or_file(
+                        "install-oscontainer-fs", "/tmp/vmm-a11y-oscontainer-fs.txt"
+                    )
+                    or ""
+                ).strip()
+            )
         try:
             osname = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
         except Exception:
@@ -1783,7 +2117,6 @@ class vmmCreateVM(vmmGObjectUI):
         )
         if not osname or osname in skip:
             return False
-        inst = self._get_config_install_page()
         if inst == INSTALL_PAGE_URL:
             try:
                 url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
@@ -1863,6 +2196,10 @@ class vmmCreateVM(vmmGObjectUI):
         # Reset the page number, since the total page numbers depend
         # on the chosen install method
         self._set_page_num_text(0)
+        try:
+            self._publish_method_a11y()
+        except Exception:
+            pass
 
     def _machine_changed(self, ignore):
         self._set_caps_state()
@@ -1896,6 +2233,10 @@ class vmmCreateVM(vmmGObjectUI):
             self._change_caps("hvm")
         else:
             self._change_caps("exe")
+        try:
+            self._publish_method_a11y()
+        except Exception:
+            pass
 
     # Install page listeners
     def _detectable_media_widget_changed(self, widget, checkfocus=True):
@@ -1991,7 +2332,12 @@ class vmmCreateVM(vmmGObjectUI):
             guest = self._gdata.build_guest()
             default_name = virtinst.Guest.generate_name(guest)
             fs = fs_dir + [default_name]
-            self.widget("install-oscontainer-fs").set_text(os.path.join(*fs))
+            fspath = os.path.join(*fs)
+            self.widget("install-oscontainer-fs").set_text(fspath)
+            try:
+                open("/tmp/vmm-a11y-oscontainer-fs.txt", "w").write(fspath)
+            except Exception:
+                pass
 
     ########################
     # Misc helper routines #
@@ -2017,6 +2363,17 @@ class vmmCreateVM(vmmGObjectUI):
                 try:
                     if text:
                         open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                except Exception:
+                    pass
+                try:
+                    mapping = {
+                        "install-app-entry": "/tmp/vmm-a11y-app-entry.txt",
+                        "install-oscontainer-fs": "/tmp/vmm-a11y-oscontainer-fs.txt",
+                        "install-import-entry": "/tmp/vmm-a11y-import-entry.txt",
+                        "install-container-template": "/tmp/vmm-a11y-container-template.txt",
+                    }
+                    if isinstance(cbwidget, str) and cbwidget in mapping:
+                        open(mapping[cbwidget], "w").write(text or "")
                 except Exception:
                     pass
                 try:
@@ -2265,8 +2622,76 @@ class vmmCreateVM(vmmGObjectUI):
         finally:
             self._vmm_forward_busy = False
 
+    def _apply_method_active_file(self):
+        path = "/tmp/vmm-a11y-method-active.txt"
+        try:
+            if not os.path.exists(path):
+                return
+            key = open(path, "r").read().strip()
+        except Exception:
+            return
+        mapping = {
+            "local": "method-local",
+            "tree": "method-tree",
+            "manual": "method-manual",
+            "import": "method-import",
+            "app": "method-container-app",
+            "os": "method-container-os",
+            "container": "vz-virt-type-exe",
+            "hvm": "vz-virt-type-hvm",
+        }
+        wid = mapping.get(key)
+        if not wid:
+            return
+        try:
+            src = self.widget(wid)
+            if src is not None:
+                src.set_active(True)
+        except Exception:
+            pass
+
+    def _sync_container_sentinels(self):
+        self._apply_method_active_file()
+        pairs = (
+            ("/tmp/vmm-a11y-app-entry.txt", "install-app-entry"),
+            ("/tmp/vmm-a11y-oscontainer-fs.txt", "install-oscontainer-fs"),
+            ("/tmp/vmm-a11y-container-template.txt", "install-container-template"),
+            ("/tmp/vmm-a11y-oscontainer-uri.txt", "install-oscontainer-source-url-entry"),
+            ("/tmp/vmm-a11y-oscontainer-rootpw.txt", "install-oscontainer-rootpw"),
+            ("/tmp/vmm-a11y-bootstrap-user.txt", "install-oscontainer-source-user"),
+            ("/tmp/vmm-a11y-bootstrap-passwd.txt", "install-oscontainer-source-passwd"),
+        )
+        for path, wid in pairs:
+            try:
+                if not os.path.exists(path):
+                    continue
+                text = open(path, "r").read()
+                self.widget(wid).set_text(text)
+            except Exception:
+                pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oscontainer-bootstrap.txt"):
+                want = open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "r").read().strip().lower()
+                src = self.widget("install-oscontainer-bootstrap")
+                if src is not None:
+                    if want in ("toggle", "click"):
+                        src.set_active(not bool(src.get_active()))
+                    else:
+                        src.set_active(want not in ("0", "false", "off", ""))
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-container-creds.txt"):
+                self.widget("install-oscontainer-auth-options").set_expanded(True)
+        except Exception:
+            pass
+
     def _forward_clicked_impl_body(self):
         curpage = self._current_create_page()
+        try:
+            self._sync_container_sentinels()
+        except Exception:
+            pass
         try:
             self._vmm_url_syncing = True
             self._sync_url_from_sentinels()
@@ -2275,16 +2700,20 @@ class vmmCreateVM(vmmGObjectUI):
         self._vmm_url_syncing = False
 
         if curpage == PAGE_INSTALL:
-            osobj = self._resolve_create_os()
-            if osobj is not None:
-                self._os_already_detected_for_media = True
+            if self._is_container_install():
                 if self._should_prepublish_install_forward():
                     self._write_pagenum_file(self._get_next_pagenum(curpage))
             else:
-                # Make sure we have detected the OS before validating the page
-                did_start = self._start_detect_os_if_needed(forward_after_finish=True)
-                if did_start:
-                    return False
+                osobj = self._resolve_create_os()
+                if osobj is not None:
+                    self._os_already_detected_for_media = True
+                    if self._should_prepublish_install_forward():
+                        self._write_pagenum_file(self._get_next_pagenum(curpage))
+                else:
+                    # Make sure we have detected the OS before validating the page
+                    did_start = self._start_detect_os_if_needed(forward_after_finish=True)
+                    if did_start:
+                        return False
 
         if self._validate(curpage) is not True:
             return False
@@ -2368,13 +2797,13 @@ class vmmCreateVM(vmmGObjectUI):
     def _validate_oscontainer_bootstrap(self, fs, src_url, user, passwd):
         # Check if the source path was provided
         if not src_url:
-            return self.err.val_err(_("Source URL is required"))
+            return self._write_a11y_alert(_("Source URL is required"))
 
         # Require username and password when authenticate
         # to source registry.
         if user and not passwd:
             msg = _("Please specify password for accessing source registry")
-            return self.err.val_err(msg)
+            return self._write_a11y_alert(msg)
 
         # Validate destination path
         if not os.path.exists(fs):
@@ -2382,14 +2811,20 @@ class vmmCreateVM(vmmGObjectUI):
 
         if not os.path.isdir(fs):
             msg = _("Destination path is not directory: %s") % fs
-            return self.err.val_err(msg)
+            return self._write_a11y_alert(msg)
         if not os.access(fs, os.W_OK):
             msg = _("No write permissions for directory path: %s") % fs
-            return self.err.val_err(msg)
+            return self._write_a11y_alert(msg)
         if os.listdir(fs) == []:
             return
 
         # Show Yes/No dialog if the destination is not empty
+        try:
+            open("/tmp/vmm-a11y-alert.txt", "w").write(
+                _("OS root directory is not empty")
+            )
+        except Exception:
+            pass
         return self.err.yes_no(
             _("OS root directory is not empty"),
             _(
@@ -2439,39 +2874,60 @@ class vmmCreateVM(vmmGObjectUI):
             import_path = self._get_config_import_path()
             if not import_path:
                 msg = _("A storage path to import is required.")
-                return self.err.val_err(msg)
+                return self._write_a11y_alert(msg)
 
             if not virtinst.DeviceDisk.path_definitely_exists(self.conn.get_backend(), import_path):
                 msg = _("The import path must point to an existing storage.")
-                return self.err.val_err(msg)
+                return self._write_a11y_alert(msg)
 
         elif instmethod == INSTALL_PAGE_CONTAINER_APP:
-            init = self.widget("install-app-entry").get_text()
+            init = self._get_widget_or_file(
+                "install-app-entry", "/tmp/vmm-a11y-app-entry.txt"
+            )
             if not init:
-                return self.err.val_err(_("An application path is required."))
+                return self._write_a11y_alert(_("An application path is required."))
 
         elif instmethod == INSTALL_PAGE_CONTAINER_OS:
-            fs = self.widget("install-oscontainer-fs").get_text()
+            fs = self._get_widget_or_file(
+                "install-oscontainer-fs", "/tmp/vmm-a11y-oscontainer-fs.txt"
+            )
             if not fs:
-                return self.err.val_err(_("An OS directory path is required."))
+                return self._write_a11y_alert(_("An OS directory path is required."))
 
             if self._get_config_oscontainer_bootstrap():
                 src_url = self._get_config_oscontainer_source_url()
+                if not (src_url or "").strip():
+                    try:
+                        src_url = open("/tmp/vmm-a11y-oscontainer-uri.txt", "r").read().strip()
+                    except Exception:
+                        src_url = ""
                 user = self._get_config_oscontainer_source_username()
+                if not user:
+                    try:
+                        user = open("/tmp/vmm-a11y-bootstrap-user.txt", "r").read().strip()
+                    except Exception:
+                        user = ""
                 passwd = self._get_config_oscontainer_source_password()
+                if not passwd:
+                    try:
+                        passwd = open("/tmp/vmm-a11y-bootstrap-passwd.txt", "r").read()
+                    except Exception:
+                        passwd = ""
                 ret = self._validate_oscontainer_bootstrap(fs, src_url, user, passwd)
                 if ret is False:
                     return False
 
         elif instmethod == INSTALL_PAGE_VZ_TEMPLATE:
-            template = self.widget("install-container-template").get_text()
+            template = self._get_widget_or_file(
+                "install-container-template", "/tmp/vmm-a11y-container-template.txt"
+            )
             if not template:
-                return self.err.val_err(_("A template name is required."))
+                return self._write_a11y_alert(_("A template name is required."))
 
         if not self._is_container_install() and not osobj:
             msg = _("You must select an OS.")
             msg += "\n\n" + self._os_list.eol_text
-            return self.err.val_err(msg)
+            return self._write_a11y_alert(msg)
 
         # Build the installer and Guest instance
         try:

@@ -596,6 +596,193 @@ def _sentinel_method_radio(name, roleName):
     return None
 
 
+class _SentinelClickButton(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "push button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def check_sensitive(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+
+class _SentinelBootstrapCheck(object):
+    name = "Create OS directory tree from container image"
+    roleName = "check box"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    @property
+    def checked(self):
+        try:
+            return open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "r").read().strip() in (
+                "1",
+                "true",
+                "on",
+            )
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "w").write("1")
+        except Exception:
+            pass
+
+
+class _SentinelCredentials(object):
+    name = "Credentials"
+    roleName = "toggle button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        self.click_expander()
+
+    def click_expander(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-container-creds.txt", "w").write("1")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("Credentials")
+        except Exception:
+            pass
+
+
+class _SentinelAddhwError(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "label"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-addhw-error.txt", "r").read()
+        except Exception:
+            return self.name
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelBootTab(object):
+    name = "boot-tab"
+    roleName = "panel"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_named_entry(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        labeller_pattern = (".*%s.*" % labeller_text) if labeller_text else None
+        return self.find(name_pattern, role_pattern, labeller_pattern)
+
+
+def _sentinel_container_extra(name, roleName):
+    if not name:
+        return None
+    compact = str(name).replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    if "create os directory" in compact:
+        return _SentinelBootstrapCheck()
+    if "credentials" in compact and (
+        not role or "toggle" in role or "button" in role or "expander" in role
+    ):
+        return _SentinelCredentials()
+    if "install-app-browse" in compact or "install-oscontainer-browse" in compact:
+        pretty = "install-app-browse" if "app-browse" in compact else "install-oscontainer-browse"
+        return _SentinelClickButton(pretty)
+    if "install-import-browse" in compact:
+        return _SentinelClickButton("install-import-browse")
+    if "not supported for containers" in compact:
+        return _SentinelAddhwError("Not supported for containers")
+    if "boot-tab" in compact:
+        return _SentinelBootTab()
+    return None
+
+
 class _SentinelKernelInfo(object):
     name = "Kernel/initrd settings can be configured"
     roleName = "label"
@@ -726,10 +913,11 @@ def _sentinel_arch_combo_item(name, roleName):
     return None
 
 
-def _sentinel_named_entry(name, roleName):
-    if not name:
+def _sentinel_named_entry(name, roleName, labeller_text=None):
+    blob = " ".join(str(x) for x in (name, labeller_text) if x)
+    if not blob:
         return None
-    raw = str(name).replace(".*", "")
+    raw = str(name or labeller_text or "").replace(".*", "")
     if raw.startswith("."):
         return None
     role = str(roleName or "").lower()
@@ -737,7 +925,7 @@ def _sentinel_named_entry(name, roleName):
         # find("storage-entry") passes roleName=None
         if role not in ("", "none"):
             return None
-    compact = raw.lower()
+    compact = blob.replace(".*", "").lower()
     if compact == "storage-entry" or raw == "storage-entry":
         return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
     if compact in ("name", "name:") or raw in ("Name", "Name:"):
@@ -752,6 +940,34 @@ def _sentinel_named_entry(name, roleName):
         return _SentinelEntry("install-urlopts-entry", "/tmp/vmm-a11y-urlopts-entry.txt")
     if "device name" in compact:
         return _SentinelEntry("Device name:", "/tmp/vmm-a11y-net-device.txt")
+    if "application path" in compact or "install-app-entry" in compact:
+        return _SentinelEntry("install-app-entry", "/tmp/vmm-a11y-app-entry.txt")
+    if "root directory" in compact or "install-oscontainer-fs" in compact:
+        return _SentinelEntry("install-oscontainer-fs", "/tmp/vmm-a11y-oscontainer-fs.txt")
+    if "container template" in compact or "install-container-template" in compact:
+        return _SentinelEntry(
+            "install-container-template", "/tmp/vmm-a11y-container-template.txt"
+        )
+    if "init path" in compact:
+        return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
+    if "init args" in compact:
+        return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
+    if "install-oscontainer-source-uri" in compact:
+        return _SentinelEntry(
+            "install-oscontainer-source-uri", "/tmp/vmm-a11y-oscontainer-uri.txt"
+        )
+    if "install-oscontainer-root-passwd" in compact:
+        return _SentinelEntry(
+            "install-oscontainer-root-passwd", "/tmp/vmm-a11y-oscontainer-rootpw.txt"
+        )
+    if "bootstrap-registry-user" in compact:
+        return _SentinelEntry(
+            "bootstrap-registry-user", "/tmp/vmm-a11y-bootstrap-user.txt"
+        )
+    if "bootstrap-registry-password" in compact:
+        return _SentinelEntry(
+            "bootstrap-registry-password", "/tmp/vmm-a11y-bootstrap-passwd.txt"
+        )
     return None
 
 
@@ -2270,6 +2486,17 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     "install-iso-browse",
                     "storage-browse",
                     "install-import-browse",
+                    "install-app-browse",
+                    "install-oscontainer-browse",
+                    "application path",
+                    "root directory",
+                    "container template",
+                    "Create OS directory",
+                    "Credentials",
+                    "boot-tab",
+                    "Init path",
+                    "Init args",
+                    "Not supported for containers",
                     "Automatically detect",
                     "No media detected",
                     "Fedora12_media",
@@ -2573,6 +2800,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return
         _SENTINEL_CLICK = (
             "install-iso-browse",
+            "install-app-browse",
+            "install-oscontainer-browse",
+            "install-import-browse",
+            "create os directory",
+            "credentials",
             "begin installation",
             "add-hardware",
             "forward",
@@ -3128,7 +3360,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             pass
         try:
-            sent = _sentinel_named_entry(name, roleName)
+            sent = _sentinel_named_entry(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_container_extra(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
