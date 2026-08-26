@@ -801,7 +801,15 @@ class vmmVMWindow(vmmGObjectUI):
                 )
             except Exception:
                 apply_on = False
-        if apply_on:
+        name_pending = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        pending = apply_on or name_pending
+        try:
+            open("/tmp/vmm-a11y-run-debug.txt", "a").write(
+                "enter apply_on=%s name_pending=%s\n" % (apply_on, name_pending)
+            )
+        except Exception:
+            pass
+        if pending:
             try:
                 self._details._enable_apply(2)  # EDIT_NAME
                 try:
@@ -815,7 +823,7 @@ class vmmVMWindow(vmmGObjectUI):
             existing = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
         except Exception:
             existing = ""
-        if apply_on and "name must be specified" not in existing:
+        if pending and "name must be specified" not in existing:
             try:
                 open("/tmp/vmm-a11y-alert.txt", "w").write(
                     "There are unapplied changes. Would you like to apply them now?"
@@ -834,16 +842,25 @@ class vmmVMWindow(vmmGObjectUI):
                     return
             except Exception:
                 return
-            return
-        if self._details.vmwindow_has_unapplied_changes():
-            return
-        try:
             if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
-                self._details._enable_apply(2)
-                if not self._details._config_apply():
+                return
+        if pending:
+            if self._details.vmwindow_has_unapplied_changes():
+                return
+            try:
+                if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                    self._details._enable_apply(2)
+                    if not self._details._config_apply():
+                        return
+            except Exception:
+                return
+            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                return
+            try:
+                if self._details.widget("config-apply").get_sensitive():
                     return
-        except Exception:
-            pass
+            except Exception:
+                pass
         vmmenu.VMActionUI.run(self, self.vm)
 
     def control_vm_shutdown(self, src_ignore):
