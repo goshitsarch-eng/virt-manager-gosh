@@ -3158,8 +3158,16 @@ class _SentinelAlertButton(object):
             open("/tmp/vmm-a11y-alert-response.txt", "w").write(self.name or "")
         except Exception:
             pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            try:
+                if not open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                    break
+            except Exception:
+                break
+            time.sleep(0.05)
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name or "")
+            os.remove("/tmp/vmm-a11y-alert.txt")
         except Exception:
             pass
 
