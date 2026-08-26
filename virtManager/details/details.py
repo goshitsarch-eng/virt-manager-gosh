@@ -3889,9 +3889,15 @@ class vmmDetails(vmmGObjectUI):
                 alert = open("/tmp/vmm-a11y-alert.txt", "r").read()[:200]
             except Exception:
                 alert = ""
+            media_path = ""
+            try:
+                if pagetype is HW_LIST_TYPE_DISK:
+                    media_path = self._mediacombo.get_path() or ""
+            except Exception:
+                media_path = ""
             open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
                 "done pagetype=%s success=%s want=%r last=%r tab=%r "
-                "dev=%s alert=%r\n"
+                "dev=%s media=%r alert=%r\n"
                 % (
                     pagetype,
                     success,
@@ -3899,6 +3905,7 @@ class vmmDetails(vmmGObjectUI):
                     last_hw,
                     tab,
                     getattr(dev, "type", getattr(dev, "DEVICE_TYPE", None)),
+                    media_path,
                     alert,
                 )
             )
@@ -4341,6 +4348,10 @@ class vmmDetails(vmmGObjectUI):
 
         if self._edited(EDIT_DISK_PATH):
             path = self._mediacombo.get_path()
+            try:
+                path = self._mediacombo._path_from_display(path)
+            except Exception:
+                pass
             is_removable = False
             try:
                 is_removable = bool(devobj.is_cdrom() or devobj.is_floppy())
@@ -5285,14 +5296,20 @@ class vmmDetails(vmmGObjectUI):
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
             try:
-                shown = ""
+                pretty = ""
                 try:
-                    shown = self._mediacombo._entry.get_text() or ""
+                    pretty = self._mediacombo._pretty_label_for_path(path or "")
                 except Exception:
-                    shown = ""
+                    pretty = ""
+                if not pretty:
+                    try:
+                        pretty = self._mediacombo._entry.get_text() or ""
+                    except Exception:
+                        pretty = ""
                 open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(
-                    shown or path or ""
+                    pretty or path or ""
                 )
+                open("/tmp/vmm-a11y-details-media-path.txt", "w").write(path or "")
                 if not path:
                     open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
             except Exception:

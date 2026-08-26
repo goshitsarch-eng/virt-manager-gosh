@@ -787,11 +787,32 @@ class _SentinelEntry(object):
                     ).read()
             except Exception:
                 details_val = None
+
+            def _pretty_nodedev_label(raw):
+                raw = raw if raw is not None else ""
+                text = raw.strip()
+                if not text:
+                    return raw
+                if " (" in text and text.endswith(")"):
+                    return raw
+                try:
+                    for line in open(
+                        "/tmp/vmm-a11y-details-media-combo.txt", "r"
+                    ).read().splitlines():
+                        line = line.strip()
+                        if line.endswith("(%s)" % text) or (
+                            text.startswith("/dev/") and "(%s)" % text in line
+                        ):
+                            return line
+                except Exception:
+                    pass
+                return raw
+
             # After install the details window owns media-entry. An empty
             # details file means the CDROM was ejected; do not fall through
             # to leftover wizard /pool- paths.
             if details_val is not None and shown and customize != "1":
-                return details_val
+                return _pretty_nodedev_label(details_val)
             if details_val is not None and not details_val.strip():
                 return details_val
             for alt in (
@@ -820,9 +841,15 @@ class _SentinelEntry(object):
             except Exception:
                 pass
         try:
-            return open(path, "r").read()
+            raw = open(path, "r").read()
         except Exception:
             return ""
+        if self.name == "media-entry":
+            try:
+                return _pretty_nodedev_label(raw)
+            except Exception:
+                return raw
+        return raw
 
     @text.setter
     def text(self, value):
