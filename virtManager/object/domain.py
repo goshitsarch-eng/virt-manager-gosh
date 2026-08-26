@@ -1852,7 +1852,15 @@ class vmmDomainVirtinst(vmmDomain):
         to the new DeviceDisk
         """
         if origdisk.get_source_path() != newdisk.get_source_path():
-            return
+            # GTK 3 customize: XML path edits do not take effect while
+            # the original disk still has storage-creation parameters.
+            if origdisk.get_vol_install() or origdisk.get_vol_object():
+                try:
+                    newdisk.set_source_path(origdisk.get_source_path())
+                except Exception:
+                    return
+            else:
+                return
 
         if origdisk.get_vol_object():
             log.debug(
