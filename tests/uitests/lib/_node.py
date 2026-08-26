@@ -97,6 +97,18 @@ class _SentinelTableCell(object):
                 return True
         except Exception:
             pass
+        try:
+            cur = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
+            if cur == self.name or (self.name and self.name in cur):
+                return True
+        except Exception:
+            pass
+        try:
+            cur = open("/tmp/vmm-a11y-host-vol-selected.txt", "r").read().strip()
+            if cur == self.name or (self.name and self.name in cur):
+                return True
+        except Exception:
+            pass
         return self._selected
 
     @property
@@ -6909,6 +6921,19 @@ class _SentinelStorageBrowser(object):
         role = str(roleName or "").lower()
         if "vol-refresh" in compact:
             return _SentinelClickButton("vol-refresh")
+        if compact == "vol-new":
+            return _SentinelWizardButton(
+                "vol-new",
+                "/tmp/vmm-a11y-host-vol-action.txt",
+                lambda: True,
+                wait_path="/tmp/vmm-a11y-createvol-shown.txt",
+                wait_value="1",
+                write_value="add",
+            )
+        if "vol-delete" in compact:
+            return _SentinelHostAction(
+                "vol-delete", "/tmp/vmm-a11y-host-vol-action.txt", "delete"
+            )
         if "choose volume" in compact:
             return _SentinelClickButton("Choose Volume")
         if compact == "cancel" and (not role or "button" in role):
