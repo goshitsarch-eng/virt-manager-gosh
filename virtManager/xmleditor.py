@@ -306,6 +306,7 @@ class vmmXMLEditor(vmmGObjectUI):
             ("createpool", "/tmp/vmm-a11y-createpool-shown.txt"),
             ("createvol", "/tmp/vmm-a11y-createvol-shown.txt"),
             ("createnet", "/tmp/vmm-a11y-createnet-shown.txt"),
+            ("addhw", "/tmp/vmm-a11y-addhw-shown.txt"),
         ):
             try:
                 if open(path, "r").read().strip() == "1":

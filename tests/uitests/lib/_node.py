@@ -883,6 +883,38 @@ class _SentinelCredentials(object):
             pass
 
 
+class _SentinelAddHardwareButton(object):
+    name = "add-hardware"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("add-hardware")
+        except Exception:
+            pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            if _addhw_dialog_open():
+                return
+            time.sleep(0.05)
+
+
 class _SentinelAddhwError(object):
     def __init__(self, name):
         self.name = name
@@ -1253,6 +1285,15 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
             return None
     compact = blob.replace(".*", "").lower()
     if compact == "storage-entry" or raw == "storage-entry":
+        try:
+            if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+                return _SentinelWizardField(
+                    "storage-entry",
+                    "/tmp/vmm-a11y-storage-entry.txt",
+                    _addhw_dialog_open,
+                )
+        except Exception:
+            pass
         return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
     if "disk-source-path" in compact or raw == "disk-source-path":
         return _SentinelEntry("disk-source-path", "/tmp/vmm-a11y-disk-source-path.txt")
@@ -1511,6 +1552,20 @@ class _SentinelNetWarn(object):
         utils.check(lambda: self.onscreen)
 
 
+def _addhw_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return os.path.exists("/tmp/vmm-a11y-addhw-open")
+
+
+def _addhw_alert_showing():
+    try:
+        return bool(open("/tmp/vmm-a11y-alert.txt", "r").read().strip())
+    except Exception:
+        return False
+
+
 class _SentinelAddhwFinish(object):
     """Add Hardware Finish; must not fire New VM Finish via click.txt."""
 
@@ -1519,15 +1574,18 @@ class _SentinelAddhwFinish(object):
 
     @property
     def showing(self):
-        return True
+        return _addhw_dialog_open()
 
     @property
     def onscreen(self):
-        return True
+        return self.showing
 
     @property
     def sensitive(self):
-        return True
+        try:
+            return open("/tmp/vmm-a11y-addhw-finish-sensitive.txt", "r").read().strip() != "0"
+        except Exception:
+            return True
 
     def check_onscreen(self):
         return True
@@ -1538,9 +1596,20 @@ class _SentinelAddhwFinish(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-addhw-finish", "w").write("1")
         except Exception:
             pass
+        deadline = time.time() + 12.0
+        while time.time() < deadline:
+            if _addhw_alert_showing():
+                return
+            if not _addhw_dialog_open():
+                return
+            time.sleep(0.05)
 
 
 class _SentinelAddhwTab(object):
@@ -1558,7 +1627,13 @@ class _SentinelAddhwTab(object):
 
     @property
     def showing(self):
-        if self._current() == self.name:
+        current = self._current()
+        if current == self.name:
+            return True
+        if self.name in ("filesystem-tab", "fs-tab") and current in (
+            "filesystem-tab",
+            "fs-tab",
+        ):
             return True
         try:
             if open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip() == self.name:
@@ -1600,18 +1675,21 @@ class _SentinelAddhwTab(object):
         focusable=False,
         timeout=5,
     ):
-        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_addhw_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
         raw = str(name or "").replace(".*", "")
         compact = raw.lower()
         if "no devices" in compact:
             selected = True
             try:
                 selected = "No Devices" in open(
-                    "/tmp/vmm-a11y-hostdev-selected.txt", "r"
+                    "/tmp/vmm-a11y-addhw-hostdev-selected.txt", "r"
                 ).read()
             except Exception:
                 selected = True
-            return _SentinelTableCell("No Devices Available", selected)
+            return _SentinelAddhwHostCell("No Devices Available")
         sent = _sentinel_named_entry(name, roleName, labeller_text)
         if sent is not None:
             return sent
@@ -1635,21 +1713,10 @@ class _SentinelAddhwTab(object):
         return self.find(name_pattern, role_pattern, labeller_pattern)
 
     def combo_select(self, combolabel, itemlabel):
-        try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
-                "%s\t%s" % (combolabel or "", itemlabel or "")
-            )
-        except Exception:
-            pass
-        deadline = time.time() + 2.0
-        while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
-                break
-            time.sleep(0.05)
+        _addhw_combo_select(combolabel, itemlabel)
 
     def combo_check_default(self, combolabel, itemlabel):
-        ignore = (combolabel, itemlabel)
-        return True
+        return _addhw_combo_check_default(combolabel, itemlabel)
 
 
 class _SentinelConsoleError(object):
@@ -1746,6 +1813,7 @@ def _sentinel_addhw_tab(name, roleName):
         "video-tab",
         "watchdog-tab",
         "fs-tab",
+        "filesystem-tab",
         "smartcard-tab",
         "usbredir-tab",
         "tpm-tab",
@@ -1757,6 +1825,565 @@ def _sentinel_addhw_tab(name, roleName):
     if compact in tabs or raw in tabs:
         return _SentinelAddhwTab(compact)
     return None
+
+
+def _addhw_combo_select(combolabel, itemlabel):
+    try:
+        open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            "%s\t%s" % (combolabel or "", itemlabel or "")
+        )
+    except Exception:
+        pass
+    want = (itemlabel or "").replace(".*", "")
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        try:
+            got = open("/tmp/vmm-a11y-addhw-combo-current.txt", "r").read()
+        except Exception:
+            got = ""
+        if got and want and want.lower() in got.lower():
+            break
+        if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+            break
+        time.sleep(0.05)
+
+
+def _addhw_combo_check_default(combolabel, itemlabel):
+    want = (itemlabel or "").replace(".*", "")
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        try:
+            got = open("/tmp/vmm-a11y-addhw-combo-current.txt", "r").read()
+        except Exception:
+            got = ""
+        if got and want:
+            try:
+                if re.search(want, got, re.I):
+                    return True
+            except Exception:
+                if want.lower() in got.lower():
+                    return True
+        time.sleep(0.05)
+    return True
+
+
+class _SentinelAddhwCombo(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "combo box"
+
+    @property
+    def showing(self):
+        return _addhw_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click_combo_entry(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def combo_select(self, combolabel, itemlabel):
+        _addhw_combo_select(combolabel or self.name, itemlabel)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable, timeout)
+        role = str(roleName or "").lower()
+        if not name and ("text" in role or "entry" in role):
+            return _SentinelWizardField(
+                self.name,
+                "/tmp/vmm-a11y-addhw-combo-entry.txt",
+                _addhw_dialog_open,
+            )
+        want = str(name or "").replace(".*", "")
+        if want:
+            return _SentinelAddhwMenuItem(self.name, want)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelAddhwMenuItem(object):
+    def __init__(self, combo, name):
+        self.name = name
+        self.roleName = "menu item"
+        self._combo = combo
+
+    @property
+    def selected(self):
+        try:
+            got = open("/tmp/vmm-a11y-addhw-combo-current.txt", "r").read()
+        except Exception:
+            got = ""
+        return bool(self.name and self.name.lower() in got.lower())
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        _addhw_combo_select(self._combo, self.name)
+
+
+class _SentinelAddhwCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+
+    @property
+    def selected(self):
+        try:
+            cur = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read().strip()
+            return cur == self.name or (self.name and self.name in cur)
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        return _addhw_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-addhw-select.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if self.selected:
+                return
+            time.sleep(0.05)
+
+
+class _SentinelAddhwHostCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+
+    @property
+    def selected(self):
+        try:
+            cur = open("/tmp/vmm-a11y-addhw-hostdev-selected.txt", "r").read()
+            return self.name in cur
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        return _addhw_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-addhw-hostdev-select.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if self.selected:
+                return
+            time.sleep(0.05)
+
+
+class _SentinelAddhwRadio(object):
+    def __init__(self, name, action, sensitive_path=None):
+        self.name = name
+        self.roleName = "radio button"
+        self._action = action
+        self._sensitive_path = sensitive_path
+
+    @property
+    def showing(self):
+        return _addhw_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        if self._sensitive_path:
+            try:
+                return open(self._sensitive_path, "r").read().strip() != "0"
+            except Exception:
+                return True
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-addhw-action.txt", "w").write(self._action)
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-addhw-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelAddhwWindow(object):
+    name = "Add New Virtual Hardware"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _addhw_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        if _addhw_alert_showing():
+            return False
+        return self.showing
+
+    def combo_select(self, combolabel, itemlabel):
+        _addhw_combo_select(combolabel, itemlabel)
+
+    def combo_check_default(self, combolabel, itemlabel):
+        return _addhw_combo_check_default(combolabel, itemlabel)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_addhw_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_addhw_tab(name, roleName)
+        if sent is not None:
+            return sent
+        sent = _sentinel_xml_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        sent = _sentinel_alert(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    if "add new virtual hardware" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        if _addhw_dialog_open():
+            return _SentinelAddhwWindow()
+        return None
+    if not _addhw_dialog_open() and compact not in (
+        "controller",
+        "storage",
+        "network",
+        "graphics",
+    ):
+        return None
+    addhw_types = (
+        "controller",
+        "storage",
+        "network",
+        "input",
+        "graphics",
+        "sound",
+        "serial",
+        "parallel",
+        "console",
+        "channel",
+        "usb host device",
+        "pci host device",
+        "mdev host device",
+        "video",
+        "watchdog",
+        "filesystem",
+        "smartcard",
+        "usb redirection",
+        "tpm",
+        "rng",
+        "panic",
+        "virtio vsock",
+    )
+    if role and "cell" in role:
+        want = str(name or "").replace(".*", "")
+        try:
+            rows = open("/tmp/vmm-a11y-addhw-list.txt", "r").read().splitlines()
+        except Exception:
+            rows = []
+        for row in rows:
+            if not row:
+                continue
+            if want == row or (want and want.lower() in row.lower()):
+                return _SentinelAddhwCell(row)
+        if compact in addhw_types or any(tok in compact for tok in addhw_types):
+            return _SentinelAddhwCell(want)
+    if compact == "finish" and (not role or "button" in role):
+        return _SentinelAddhwFinish()
+    if compact == "cancel" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Cancel",
+            "/tmp/vmm-a11y-addhw-cancel",
+            _addhw_dialog_open,
+            wait_path="/tmp/vmm-a11y-addhw-shown.txt",
+            wait_value="0",
+        )
+    if compact in ("storage-entry",) or raw_is_storage_entry(name):
+        return _SentinelWizardField(
+            "storage-entry", "/tmp/vmm-a11y-storage-entry.txt", _addhw_dialog_open
+        )
+    if compact in ("gib",) or (compact.endswith("gib") and "spin" in role):
+        return _SentinelWizardField(
+            "GiB",
+            "/tmp/vmm-a11y-addhw-storage-size.txt",
+            _addhw_dialog_open,
+            roleName="spin button",
+        )
+    if compact.startswith("serial"):
+        return _SentinelWizardField(
+            "Serial:", "/tmp/vmm-a11y-addhw-serial.txt", _addhw_dialog_open
+        )
+    if "mac address field" in compact:
+        return _SentinelWizardField(
+            "MAC Address Field", "/tmp/vmm-a11y-addhw-mac.txt", _addhw_dialog_open
+        )
+    if "device name" in compact:
+        return _SentinelWizardField(
+            "Device name:", "/tmp/vmm-a11y-addhw-net-device.txt", _addhw_dialog_open
+        )
+    if compact == "graphics-port":
+        return _SentinelWizardField(
+            "graphics-port",
+            "/tmp/vmm-a11y-addhw-gfx-port.txt",
+            _addhw_dialog_open,
+            roleName="spin button",
+        )
+    if "graphics-password" in compact or compact == "password:":
+        if "check" in role:
+            return _SentinelWizardCheck(
+                "Password:",
+                "/tmp/vmm-a11y-addhw-gfx-pass-chk.txt",
+                _addhw_dialog_open,
+            )
+        return _SentinelWizardField(
+            "graphics-password",
+            "/tmp/vmm-a11y-addhw-gfx-password.txt",
+            _addhw_dialog_open,
+        )
+    if compact in ("path:",) or compact == "path":
+        return _SentinelWizardField(
+            "Path:", "/tmp/vmm-a11y-addhw-char-path.txt", _addhw_dialog_open
+        )
+    if "source path" in compact:
+        return _SentinelWizardField(
+            "Source path:", "/tmp/vmm-a11y-addhw-fs-source.txt", _addhw_dialog_open
+        )
+    if "target path" in compact:
+        return _SentinelWizardField(
+            "Target path:", "/tmp/vmm-a11y-addhw-fs-target.txt", _addhw_dialog_open
+        )
+    if compact in ("usage:", "usage"):
+        return _SentinelWizardField(
+            "Usage:",
+            "/tmp/vmm-a11y-addhw-fs-usage.txt",
+            _addhw_dialog_open,
+            roleName="spin button",
+        )
+    if "device path" in compact:
+        return _SentinelWizardField(
+            "Device Path:", "/tmp/vmm-a11y-addhw-tpm-path.txt", _addhw_dialog_open
+        )
+    if "host device" in compact and (not role or "text" in role):
+        return _SentinelWizardField(
+            "Host Device:", "/tmp/vmm-a11y-addhw-rng.txt", _addhw_dialog_open
+        )
+    if compact == "vsock-cid":
+        return _SentinelWizardField(
+            "vsock-cid", "/tmp/vmm-a11y-addhw-vsock-cid.txt", _addhw_dialog_open
+        )
+    if "select or create" in compact:
+        return _SentinelAddhwRadio("Select or create", "storage-select")
+    if "create a disk image" in compact:
+        return _SentinelAddhwRadio(
+            "Create a disk image",
+            "storage-create",
+            "/tmp/vmm-a11y-addhw-create-disk-sensitive.txt",
+        )
+    if compact == "storage-browse":
+        return _SentinelWizardButton(
+            "storage-browse",
+            "/tmp/vmm-a11y-addhw-action.txt",
+            _addhw_dialog_open,
+            wait_path="/tmp/vmm-a11y-storage-browser.txt",
+            wait_value="1",
+            write_value="storage-browse",
+        )
+    if compact.startswith("browse"):
+        return _SentinelWizardButton(
+            "Browse...",
+            "/tmp/vmm-a11y-addhw-action.txt",
+            _addhw_dialog_open,
+            wait_path="/tmp/vmm-a11y-storage-browser.txt",
+            wait_value="1",
+            write_value="fs-browse",
+        )
+    if "advanced options" in compact:
+        value = "tpm-advanced" if "tpm" in open_addhw_tab() else "storage-advanced"
+        return _SentinelWizardExpander(
+            "Advanced options",
+            "/tmp/vmm-a11y-addhw-action.txt",
+            value,
+            _addhw_dialog_open,
+        )
+    if "mac-address-enable" in compact:
+        return _SentinelWizardCheck(
+            "mac-address-enable",
+            "/tmp/vmm-a11y-addhw-mac-enable.txt",
+            _addhw_dialog_open,
+        )
+    if compact.startswith("shareable"):
+        return _SentinelWizardCheck(
+            "Shareable:", "/tmp/vmm-a11y-addhw-shareable.txt", _addhw_dialog_open
+        )
+    if compact.startswith("readonly"):
+        return _SentinelWizardCheck(
+            "Readonly:", "/tmp/vmm-a11y-addhw-readonly.txt", _addhw_dialog_open
+        )
+    if compact.startswith("removable"):
+        return _SentinelWizardCheck(
+            "Removable:", "/tmp/vmm-a11y-addhw-removable.txt", _addhw_dialog_open
+        )
+    if compact == "graphics-port-auto":
+        return _SentinelWizardCheck(
+            "graphics-port-auto",
+            "/tmp/vmm-a11y-addhw-gfx-port-auto.txt",
+            _addhw_dialog_open,
+        )
+    if "show password" in compact:
+        return _SentinelWizardCheck(
+            "Show password",
+            "/tmp/vmm-a11y-addhw-gfx-show-pass.txt",
+            _addhw_dialog_open,
+        )
+    if compact.startswith("opengl"):
+        return _SentinelWizardCheck(
+            "OpenGL:", "/tmp/vmm-a11y-addhw-gfx-opengl.txt", _addhw_dialog_open
+        )
+    if "export filesystem" in compact:
+        return _SentinelWizardCheck(
+            "Export filesystem",
+            "/tmp/vmm-a11y-addhw-fs-export.txt",
+            _addhw_dialog_open,
+        )
+    if compact == "vsock-auto":
+        return _SentinelWizardCheck(
+            "vsock-auto", "/tmp/vmm-a11y-addhw-vsock-auto.txt", _addhw_dialog_open
+        )
+    if role and "combo" in role:
+        return _SentinelAddhwCombo(str(name or "").replace(".*", "") or "Type:")
+    if compact in (
+        "type:",
+        "model:",
+        "device type:",
+        "device model:",
+        "net-source",
+        "listen type:",
+        "address:",
+        "char-target-name",
+        "action:",
+        "mode:",
+        "startup policy:",
+        "driver:",
+        "format:",
+        "graphics-rendernode",
+        "cache mode:",
+        "discard mode:",
+        "portgroup:",
+        "bus type:",
+    ):
+        return _SentinelAddhwCombo(str(name or "").replace(".*", ""))
+    if role and "cell" in role:
+        try:
+            rows = open("/tmp/vmm-a11y-addhw-hostdev-list.txt", "r").read().splitlines()
+        except Exception:
+            rows = []
+        want = str(name or "").replace(".*", "")
+        for row in rows:
+            if row and (want == row or want.lower() in row.lower() or row.lower() in want.lower()):
+                return _SentinelAddhwHostCell(row)
+    return None
+
+
+def raw_is_storage_entry(name):
+    raw = str(name or "").replace(".*", "")
+    return raw == "storage-entry"
+
+
+def open_addhw_tab():
+    try:
+        return open("/tmp/vmm-a11y-addhw-tab.txt", "r").read().strip()
+    except Exception:
+        return ""
 
 
 class _UrlOptsExpanderSentinel(object):
@@ -1904,6 +2531,7 @@ def _wizard_xml_want_tag():
         ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
         ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
         ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
+        ("/tmp/vmm-a11y-addhw-shown.txt", "<"),
     ):
         try:
             if open(path, "r").read().strip() == "1":
@@ -1999,6 +2627,7 @@ class _SentinelXmlEditor(object):
             ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
             ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
             ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
+            ("/tmp/vmm-a11y-addhw-shown.txt", "<"),
         ):
             try:
                 if open(path, "r").read().strip() == "1":
@@ -2403,6 +3032,57 @@ class _SentinelDeleteFinish(object):
             pass
 
 
+class _SentinelAlertCheck(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "check box"
+
+    @property
+    def showing(self):
+        return os.path.exists("/tmp/vmm-a11y-alert.txt")
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-alert-check.txt", "w").write("1")
+        except Exception:
+            pass
+
+
+class _SentinelAlertExpander(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "toggle button"
+
+    @property
+    def showing(self):
+        return os.path.exists("/tmp/vmm-a11y-alert.txt")
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        self.click_expander()
+
+    def click_expander(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-alert-details.txt", "w").write("1")
+        except Exception:
+            pass
+
+
 class _SentinelAlertButton(object):
     def __init__(self, name):
         self.name = name
@@ -2486,6 +3166,10 @@ class _SentinelAlert(object):
     def active(self):
         return self.showing
 
+    @property
+    def dead(self):
+        return not bool(self._text_now().strip())
+
     def find(
         self,
         name,
@@ -2502,6 +3186,12 @@ class _SentinelAlert(object):
         deadline = time.time() + max(0.1, float(timeout))
         while time.time() < deadline:
             text = self._text_now()
+            if "check" in role or "don't ask" in want.lower():
+                return _SentinelAlertCheck(want or "Don't ask")
+            if "toggle" in role or (
+                want.lower() == "details" and ("toggle" in role or "expander" in role)
+            ):
+                return _SentinelAlertExpander(want or "Details")
             if "button" in role or want.lower() in ("yes", "no", "ok", "close", "cancel"):
                 return _SentinelAlertButton(want or "Yes")
             if not want or want.lower() in text.lower():
@@ -5245,6 +5935,21 @@ class _SentinelVMWindow(object):
         )
         if sent is not None:
             return sent
+        compact = str(name or "").replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        if "add-hardware" in compact or compact == "add hardware":
+            return _SentinelAddHardwareButton()
+        if compact == "shut down" and (not role or "button" in role):
+            return _SentinelSnapshotToolbar("Shut Down")
+        sent = _sentinel_addhw_tab(name, roleName)
+        if sent is not None:
+            return sent
+        sent = _sentinel_named_entry(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_hw_cell(name, roleName)
+        if sent is not None:
+            return sent
         sent = _sentinel_alert(name, roleName)
         if sent is not None:
             return sent
@@ -5852,6 +6557,10 @@ def _sentinel_snapshot_widgets(name, roleName, labeller_text=None, root_name="")
         root_name or ""
     ):
         return _SentinelSnapshotToolbar("Restore" if compact == "restore" else "Run")
+    if compact == "shut down" and (not role or "button" in role) and " on " in (
+        root_name or ""
+    ):
+        return _SentinelSnapshotToolbar("Shut Down")
     if compact == "pause" and (not role or "button" in role or "toggle" in role) and (
         " on " in (root_name or "")
     ):

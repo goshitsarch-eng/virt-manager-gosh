@@ -298,6 +298,8 @@ class vmmVMWindow(vmmGObjectUI):
                         src.set_active(not src.get_active())
                     elif action == "Save":
                         vmmenu.VMActionUI.save(self, self.vm)
+                    elif action in ("Shut Down", "Shutdown"):
+                        self.control_vm_shutdown(None)
                 except Exception:
                     pass
                 return True

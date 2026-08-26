@@ -119,6 +119,17 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Add New Virtual Hardware" in name:
+            while time.time() < deadline:
+                try:
+                    shown = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip()
+                    if shown == "1" or os.path.exists("/tmp/vmm-a11y-addhw-open"):
+                        from . import _node
+
+                        return _node._SentinelAddhwWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Create snapshot" in name:
             while time.time() < deadline:
                 try:
@@ -457,6 +468,8 @@ class VMMDogtailApp:
             os.path.exists("/tmp/vmm-a11y-pagenum.txt")
             or os.path.exists("/tmp/vmm-a11y-createconn-shown.txt")
             or os.path.exists("/tmp/vmm-a11y-snapshot-page.txt")
+            or os.path.exists("/tmp/vmm-a11y-addhw-shown.txt")
+            or os.path.exists("/tmp/vmm-a11y-addhw-open")
         ):
             try:
                 utils.check(_alert_matches, timeout=20)

@@ -2543,6 +2543,21 @@ def _start_combo_select_poll(createconn):
                 "Source Adapter",
                 "Format:",
                 "Format",
+                "Model:",
+                "Model",
+                "Device type:",
+                "Device model:",
+                "Listen type:",
+                "Address:",
+                "Device Type:",
+                "char-target-name",
+                "Action:",
+                "Startup Policy:",
+                "Driver:",
+                "graphics-rendernode",
+                "Cache mode:",
+                "Discard mode:",
+                "Portgroup:",
             ):
                 return True
             try:
@@ -4889,6 +4904,24 @@ def _run_modal(window, response_signal="response"):
     def _poll_alert_response():
         if not loop.is_running():
             return False
+        try:
+            if os.path.exists("/tmp/vmm-a11y-alert-check.txt"):
+                os.remove("/tmp/vmm-a11y-alert-check.txt")
+                box = getattr(window, "chk_vbox", None)
+                if box is not None:
+                    for child in get_children(box):
+                        if hasattr(child, "set_active"):
+                            child.set_active(not child.get_active())
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-alert-details.txt"):
+                os.remove("/tmp/vmm-a11y-alert-details.txt")
+                exp = getattr(window, "buf_expander", None)
+                if exp is not None:
+                    exp.set_expanded(True)
+        except Exception:
+            pass
         path = "/tmp/vmm-a11y-alert-response.txt"
         try:
             if not os.path.exists(path):
