@@ -515,7 +515,8 @@ class vmmManager(vmmGObjectUI):
                     vm = self.current_vm()
                 mapping = {
                     "Delete": vmmenu.VMActionUI.delete,
-                    "Clone": vmmenu.VMActionUI.clone,
+                    # Clone is opened from /tmp/vmm-a11y-clone-open.txt
+                    # so a second show() does not reset the wizard.
                     "Migrate": vmmenu.VMActionUI.migrate,
                     "Open": vmmenu.VMActionUI.show,
                 }

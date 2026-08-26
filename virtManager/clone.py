@@ -251,6 +251,12 @@ class vmmCloneVM(vmmGObjectUI):
             already = bool(self.topwin.get_visible())
         except Exception:
             already = False
+        if already and self.vm is vm:
+            try:
+                self.topwin.present()
+            except Exception:
+                pass
+            return
         try:
             gtkcompat.set_accessible_name(self.topwin, "Clone Virtual Machine")
             self.topwin.set_title("Clone Virtual Machine")
@@ -757,7 +763,24 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 name = ""
             open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
-            open("/tmp/vmm-a11y-clone-name.txt", "w").write(name)
+            name_path = "/tmp/vmm-a11y-clone-name.txt"
+            try:
+                existing = open(name_path, "r").read()
+                stamp = os.path.getmtime(name_path)
+            except Exception:
+                existing = None
+                stamp = None
+            if existing is None or existing == name or getattr(
+                self, "_vmm_clone_name_seen", None
+            ) == stamp:
+                open(name_path, "w").write(name)
+                try:
+                    self._vmm_clone_name_seen = os.path.getmtime(name_path)
+                except Exception:
+                    pass
+            else:
+                # Test typed a newer name; keep it for the poller.
+                pass
             lines = []
             for sinfo in (self._storage_list or {}).values():
                 lines.append(
