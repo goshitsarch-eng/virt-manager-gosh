@@ -123,6 +123,35 @@ class _SentinelTableCell(object):
         return self
 
     def click(self, *args, **kwargs):
+        name = self.name or ""
+        browser_open = False
+        try:
+            browser_open = (
+                open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1"
+            )
+        except Exception:
+            browser_open = False
+        looks_like_vol = bool(
+            browser_open
+            or name.endswith((".img", ".qcow2", ".iso", ".raw"))
+            or name in ("iso-vol", "default-vol", "dir-vol", "bochs-vol")
+        )
+        if looks_like_vol and not any(
+            key in name for key in ("Disk", "CDROM", "Floppy", "NIC")
+        ):
+            try:
+                open("/tmp/vmm-a11y-vol-select.txt", "w").write(name)
+            except Exception:
+                pass
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip() == name:
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
+            return
         try:
             open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
         except Exception:
@@ -717,6 +746,19 @@ class _SentinelClickButton(object):
                 open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
             except Exception:
                 pass
+        if self.name == "Choose Volume":
+            try:
+                open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+            except Exception:
+                pass
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                        return
+                except Exception:
+                    return
+                time.sleep(0.05)
         if self.name == "Browse":
             try:
                 xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()

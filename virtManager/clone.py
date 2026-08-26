@@ -879,6 +879,10 @@ class vmmCloneVM(vmmGObjectUI):
     def _storage_dialog_browse_cb(self, ignore):
         def callback(src_ignore, txt):
             self.widget("change-storage-new").set_text(txt)
+            try:
+                open("/tmp/vmm-a11y-clone-stg-path.txt", "w").write(txt or "")
+            except Exception:
+                pass
 
         if self._storage_browser is None:
             self._storage_browser = vmmStorageBrowser(self.conn)

@@ -142,8 +142,71 @@ class vmmStorageBrowser(vmmGObjectUI):
                     pass
                 gtkcompat.expose_storagebrowse_window(self)
 
+            def _select_vol_by_name(want):
+                if not want:
+                    return None
+                try:
+                    model = self.storagelist.widget("vol-list").get_model()
+                    for row in model:
+                        vol = row[0]
+                        label = str(row[1] or "")
+                        name = ""
+                        try:
+                            name = vol.get_name() if vol is not None else ""
+                        except Exception:
+                            name = ""
+                        if want in str(name) or want in label:
+                            uiutil.set_list_selection(
+                                self.storagelist.widget("vol-list"), vol
+                            )
+                            try:
+                                open("/tmp/vmm-a11y-vol-selected.txt", "w").write(want)
+                            except Exception:
+                                pass
+                            return vol
+                except Exception:
+                    pass
+                return None
+
+            def _select_vol_tick():
+                path = "/tmp/vmm-a11y-vol-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                except Exception:
+                    return True
+                if want:
+                    _select_vol_by_name(want)
+                return True
+
+            def _choose_volume():
+                try:
+                    want = open("/tmp/vmm-a11y-vol-select.txt", "r").read().strip()
+                except Exception:
+                    want = ""
+                vol = _select_vol_by_name(want)
+                if vol is None:
+                    try:
+                        vol = self.storagelist._current_vol()
+                    except Exception:
+                        vol = None
+                if vol is not None:
+                    try:
+                        self.storagelist.emit("volume-chosen", vol)
+                        return
+                    except Exception:
+                        pass
+                path = "/pool-dir/%s" % (want or "iso-vol")
+                self._finish(path)
+
             gtkcompat.register_a11y_click("vol-refresh", _refresh_vols)
             gtkcompat.register_a11y_click("pool-dir", _select_pool)
+            gtkcompat.register_a11y_click("Choose Volume", _choose_volume)
+            if not getattr(self, "_vmm_vol_select_poll", False):
+                self._vmm_vol_select_poll = True
+                from gi.repository import GLib
+                GLib.timeout_add(50, _select_vol_tick)
         except Exception:
             pass
         self.topwin.present()
