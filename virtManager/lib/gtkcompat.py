@@ -4887,6 +4887,8 @@ def _run_modal(window, response_signal="response"):
         pass
 
     def _poll_alert_response():
+        if not loop.is_running():
+            return False
         path = "/tmp/vmm-a11y-alert-response.txt"
         try:
             if not os.path.exists(path):
@@ -4895,8 +4897,6 @@ def _run_modal(window, response_signal="response"):
             os.remove(path)
         except Exception:
             return True
-        if not loop.is_running():
-            return False
         if not label:
             return True
         mapping = {
