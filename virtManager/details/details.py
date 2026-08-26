@@ -3732,11 +3732,21 @@ class vmmDetails(vmmGObjectUI):
 
         success = False
         try:
+            xml_page = False
+            try:
+                xml_page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip() == "1"
+            except Exception:
+                xml_page = False
             if (
                 self._edited(EDIT_XML)
                 and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
-                and pagetype is not HW_LIST_TYPE_BOOT
-                and tab != "boot-tab"
+                and (
+                    xml_page
+                    or (
+                        pagetype is not HW_LIST_TYPE_BOOT
+                        and tab != "boot-tab"
+                    )
+                )
             ):
                 if dev:
                     success = self._apply_xmleditor_device(dev)
