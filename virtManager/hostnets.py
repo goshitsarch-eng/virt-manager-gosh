@@ -126,6 +126,10 @@ class vmmHostNets(vmmGObjectUI):
 
     def refresh_page(self):
         self.conn.schedule_priority_tick(pollnet=True)
+        try:
+            self._populate_networks()
+        except Exception:
+            pass
         self._publish_a11y_state()
 
     def _publish_a11y_state(self):
@@ -144,11 +148,6 @@ class vmmHostNets(vmmGObjectUI):
             net = self._current_network()
             if net is not None:
                 selected = net.get_name() or ""
-            if not names:
-                for net in self.conn.list_nets():
-                    n = net.get_name()
-                    if n:
-                        names.append(n)
         except Exception:
             pass
         try:
@@ -203,25 +202,35 @@ class vmmHostNets(vmmGObjectUI):
     def _select_net_by_name(self, name):
         if not name:
             return False
-        net_list = self.widget("net-list")
-        model = net_list.get_model()
-        sel = net_list.get_selection()
-        if model is None or sel is None:
+
+        def _from_model():
+            net_list = self.widget("net-list")
+            model = net_list.get_model()
+            sel = net_list.get_selection()
+            if model is None or sel is None:
+                return False
+            it = model.get_iter_first()
+            while it is not None:
+                try:
+                    net = model[it][0]
+                    have = net.get_name() if net is not None else ""
+                    if have == name:
+                        sel.select_iter(it)
+                        net_list.grab_focus()
+                        self._publish_a11y_state()
+                        return True
+                except Exception:
+                    pass
+                it = model.iter_next(it)
             return False
-        it = model.get_iter_first()
-        while it is not None:
-            try:
-                net = model[it][0]
-                have = net.get_name() if net is not None else ""
-                if have == name or name == have:
-                    sel.select_iter(it)
-                    net_list.grab_focus()
-                    self._publish_a11y_state()
-                    return True
-            except Exception:
-                pass
-            it = model.iter_next(it)
-        return False
+
+        if _from_model():
+            return True
+        try:
+            self._populate_networks()
+        except Exception:
+            pass
+        return _from_model()
 
     def _start_a11y_poll(self):
         if getattr(self, "_vmm_hostnet_poll", False):

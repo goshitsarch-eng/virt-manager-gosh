@@ -303,10 +303,12 @@ class vmmHost(vmmGObjectUI):
                 self.widget("details-tabs").set_current_page(page)
                 if page == 1:
                     open("/tmp/vmm-a11y-host-active-list.txt", "w").write("net")
+                    self.conn.schedule_priority_tick(pollnet=True)
                     self._hostnets.refresh_page()
                     self._hostnets._publish_a11y_state()
                 elif page == 2:
                     open("/tmp/vmm-a11y-host-active-list.txt", "w").write("pool")
+                    self.conn.schedule_priority_tick(pollpool=True)
                     self._storagelist.refresh_page()
                     self._storagelist._publish_a11y_state()
             except Exception:

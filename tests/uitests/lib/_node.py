@@ -3472,6 +3472,15 @@ class _SentinelHostList(object):
         self._selected_path = selected_path
 
     def _names(self):
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                names = [n for n in open(self._list_path, "r").read().splitlines() if n]
+            except Exception:
+                names = []
+            if names:
+                return names
+            time.sleep(0.05)
         try:
             return [n for n in open(self._list_path, "r").read().splitlines() if n]
         except Exception:
