@@ -10061,10 +10061,7 @@ class _SentinelManagerWindow(object):
             return _SentinelConnMenu()
         if compact.startswith("conn-"):
             return _SentinelConnMenuItem(compact)
-        wait = max(0.5, float(timeout or 5))
-        if "\n" in str(name or ""):
-            wait = max(10.0, wait)
-        deadline = time.time() + wait
+        deadline = time.time() + max(0.5, float(timeout or 5))
         last = None
         while time.time() < deadline:
             sent = _sentinel_manager_vm_cell(name, roleName)
@@ -11288,27 +11285,9 @@ def _sentinel_manager_vm_cell(name, roleName):
     names = _manager_vm_names()
     aliases = _manager_vm_aliases()
     live = _live_vm_names()
-    mapped = aliases.get(want, want)
-    # Lifecycle/open uses vmname+"\\n". Wait until the manager has
-    # published at least one guest so Open is not clicked before connect.
-    # Exact list membership can lag for later testdriver guests.
-    if "\n" in raw:
-        if mapped in live:
-            return _SentinelManagerVMCell(mapped)
-        if want in live:
-            return _SentinelManagerVMCell(want)
-        if live and (want in _TESTDRIVER_VMS or mapped in _TESTDRIVER_VMS):
-            return _SentinelManagerVMCell(
-                mapped if mapped in _TESTDRIVER_VMS else want
-            )
-        return None
-    if want in aliases and mapped in live:
-        return _SentinelManagerVMCell(mapped)
-    if want in live:
-        return _SentinelManagerVMCell(want)
     if want in aliases:
         return _SentinelManagerVMCell(aliases[want])
-    if want in names or want in _TESTDRIVER_VMS:
+    if want in names or want in live or want in _TESTDRIVER_VMS:
         return _SentinelManagerVMCell(want)
     real = _manager_vm_real_name(want)
     if (
