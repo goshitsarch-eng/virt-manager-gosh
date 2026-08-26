@@ -2534,6 +2534,15 @@ class _SentinelCloneChkCell(object):
             open("/tmp/vmm-a11y-clone-storage.txt", "w").write("\n".join(lines))
         except Exception:
             pass
+        try:
+            flags = []
+            for row in _clone_storage_rows():
+                flags.append(
+                    "%s\t%s" % (row["target"], "1" if row["clone"] else "0")
+                )
+            open("/tmp/vmm-a11y-clone-flags.txt", "w").write("\n".join(flags))
+        except Exception:
+            pass
 
 
 class _SentinelCloneTxtCell(object):

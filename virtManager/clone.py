@@ -236,6 +236,7 @@ class vmmCloneVM(vmmGObjectUI):
             "/tmp/vmm-a11y-clone-stg-cancel",
             "/tmp/vmm-a11y-clone-stg-ok",
             "/tmp/vmm-a11y-clone-stg-browse",
+            "/tmp/vmm-a11y-clone-flags.txt",
         ):
             try:
                 os.remove(path)
@@ -839,20 +840,14 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 return True
             try:
-                path = "/tmp/vmm-a11y-clone-name.txt"
-                if os.path.exists(path):
-                    text = open(path, "r").read()
-                    stamp = os.path.getmtime(path)
-                    if getattr(self, "_vmm_clone_name_seen", None) != stamp:
-                        self._vmm_clone_name_seen = stamp
-                        if self.widget("clone-new-name").get_text() != text:
-                            self.widget("clone-new-name").set_text(text)
-                            self._set_paths_from_clone_name()
-                            self._publish_a11y_state()
-            except Exception:
-                pass
-            try:
                 changed = False
+                flag_path = "/tmp/vmm-a11y-clone-flags.txt"
+                flag_map = {}
+                if os.path.exists(flag_path):
+                    for row in open(flag_path, "r").read().splitlines():
+                        parts = row.split("\t")
+                        if len(parts) >= 2:
+                            flag_map[parts[0]] = parts[1] in ("1", "true", "yes")
                 for row in open("/tmp/vmm-a11y-clone-storage.txt", "r").read().splitlines():
                     parts = row.split("\t")
                     if len(parts) < 5:
@@ -860,7 +855,17 @@ class vmmCloneVM(vmmGObjectUI):
                     sinfo = (self._storage_list or {}).get(parts[0])
                     if sinfo is None or not sinfo.is_cloneable():
                         continue
-                    want = parts[4] in ("1", "true", "yes")
+                    if parts[0] in flag_map:
+                        want = flag_map[parts[0]]
+                    else:
+                        want = parts[4] in ("1", "true", "yes")
+                    if bool(sinfo.is_clone_requested()) != want:
+                        sinfo.set_clone_requested(want)
+                        changed = True
+                for target, want in flag_map.items():
+                    sinfo = (self._storage_list or {}).get(target)
+                    if sinfo is None or not sinfo.is_cloneable():
+                        continue
                     if bool(sinfo.is_clone_requested()) != want:
                         sinfo.set_clone_requested(want)
                         changed = True
@@ -873,6 +878,19 @@ class vmmCloneVM(vmmGObjectUI):
                     except Exception:
                         pass
                     self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-clone-name.txt"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                    if getattr(self, "_vmm_clone_name_seen", None) != stamp:
+                        self._vmm_clone_name_seen = stamp
+                        if self.widget("clone-new-name").get_text() != text:
+                            self.widget("clone-new-name").set_text(text)
+                            self._set_paths_from_clone_name()
+                            self._publish_a11y_state()
             except Exception:
                 pass
             try:
