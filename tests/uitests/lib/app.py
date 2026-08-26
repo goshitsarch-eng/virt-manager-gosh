@@ -107,8 +107,8 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
-        if name and " on " in name:
-            want = str(name or "").replace(".*", "").split(" on ")[0].strip()
+        if name and " on" in name:
+            want = str(name or "").replace(".*", "").split(" on")[0].strip()
             while time.time() < deadline:
                 try:
                     shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
@@ -404,7 +404,21 @@ class VMMDogtailApp:
         return self._manager
 
     def find_details_window(self, vmname, click_details=False, shutdown=False):
-        win = self.find_window("%s on" % vmname, "(frame|window|dialog|panel)")
+        deadline = time.time() + 12
+        win = None
+        while time.time() < deadline:
+            try:
+                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            except Exception:
+                shown = ""
+            if shown and (not vmname or vmname in shown or shown in str(vmname)):
+                from . import _node
+
+                win = _node._SentinelVMWindow(shown)
+                break
+            time.sleep(0.1)
+        if win is None:
+            win = self.find_window("%s on" % vmname, "(frame|window|dialog|panel)")
         if click_details:
             win.find("Details", "radio button").click()
         if shutdown:
