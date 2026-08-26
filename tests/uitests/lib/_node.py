@@ -3505,7 +3505,7 @@ class _SentinelHostListCell(object):
                 pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if self.state_selected:
+            if not os.path.exists(self._select_path) and self.state_selected:
                 self.focused = True
                 return
             time.sleep(0.05)
