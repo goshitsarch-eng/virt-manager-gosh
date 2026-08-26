@@ -91,7 +91,13 @@ def _launch_dialog(
             src.destroy()
 
         dialog.connect("response", response_destroy)
-        dialog.show()
+        try:
+            dialog.present()
+        except Exception:
+            try:
+                dialog.show()
+            except Exception:
+                pass
 
     return res
 

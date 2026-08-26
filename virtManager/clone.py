@@ -680,7 +680,16 @@ class vmmCloneVM(vmmGObjectUI):
                 return
         except Exception as e:
             msg = _("Error with clone settings: %s") % str(e)
-            return self.err.show_err(msg)
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+            except Exception:
+                pass
+            self._vmm_file_alert = True
+            try:
+                self.err.show_err(msg, modal=False)
+            except Exception:
+                pass
+            return
         finally:
             if "cloner" not in locals() or not cloner:
                 self._vmm_clone_finishing = False
@@ -759,6 +768,55 @@ class vmmCloneVM(vmmGObjectUI):
         self._vmm_clone_a11y_poll = True
 
         def _tick():
+            try:
+                path = "/tmp/vmm-a11y-clone-open.txt"
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip().split("\n")[0].strip()
+                    os.remove(path)
+                    vm = None
+                    if name:
+                        try:
+                            if self.conn is not None:
+                                vm = self.conn.get_vm_by_name(name)
+                        except Exception:
+                            vm = None
+                        if vm is None:
+                            from .connmanager import vmmConnectionManager
+
+                            for conn in vmmConnectionManager.get_instance().conns.values():
+                                try:
+                                    vm = conn.get_vm_by_name(name)
+                                except Exception:
+                                    vm = None
+                                if vm is not None:
+                                    break
+                    if vm is not None:
+                        parent = None
+                        try:
+                            parent = self.topwin.get_transient_for()
+                        except Exception:
+                            parent = None
+                        self.show(parent, vm)
+            except Exception:
+                pass
+            try:
+                if getattr(self, "_vmm_file_alert", False):
+                    resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip().lower()
+                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    if resp in ("close", "ok", "cancel"):
+                        try:
+                            os.remove("/tmp/vmm-a11y-alert.txt")
+                        except Exception:
+                            pass
+                        self._vmm_file_alert = False
+                        try:
+                            simple = getattr(self.err, "_simple", None)
+                            if simple is not None:
+                                simple.hide()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             try:
                 if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() != "1":
                     return True

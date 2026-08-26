@@ -1229,6 +1229,8 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
     compact = blob.replace(".*", "").lower()
     if compact == "storage-entry" or raw == "storage-entry":
         return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
+    if "disk-source-path" in compact or raw == "disk-source-path":
+        return _SentinelEntry("disk-source-path", "/tmp/vmm-a11y-disk-source-path.txt")
     if compact in ("name", "name:") or raw in ("Name", "Name:"):
         try:
             if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1":

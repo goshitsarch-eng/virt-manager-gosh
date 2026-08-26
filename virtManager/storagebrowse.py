@@ -6,6 +6,7 @@
 
 import os
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -205,7 +206,6 @@ class vmmStorageBrowser(vmmGObjectUI):
             gtkcompat.register_a11y_click("Choose Volume", _choose_volume)
             if not getattr(self, "_vmm_vol_select_poll", False):
                 self._vmm_vol_select_poll = True
-                from gi.repository import GLib
                 GLib.timeout_add(50, _select_vol_tick)
         except Exception:
             pass

@@ -2546,6 +2546,13 @@ class vmmDetails(vmmGObjectUI):
         self.widget("disk-source-label").set_visible(not is_removable)
 
         self.widget("disk-source-label").set_text(path or "-")
+        try:
+            gtkcompat.set_accessible_name(
+                self.widget("disk-source-label"), "disk-source-path"
+            )
+            open("/tmp/vmm-a11y-disk-source-path.txt", "w").write(path or "")
+        except Exception:
+            pass
         if is_removable:
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
