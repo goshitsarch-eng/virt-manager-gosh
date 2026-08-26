@@ -354,6 +354,11 @@ class vmmAddStorage(vmmGObjectUI):
         self.widget("disk-readonly").set_sensitive(not disk.is_cdrom())
         self.widget("disk-shareable").set_active(share)
         self.widget("disk-removable").set_active(removable)
+        try:
+            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1" if share else "0")
+            open("/tmp/vmm-a11y-disk-readonly.txt", "w").write("1" if ro else "0")
+        except Exception:
+            pass
 
         # This comes last
         self._active_edits = []

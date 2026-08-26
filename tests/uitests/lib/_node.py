@@ -189,8 +189,43 @@ class _SentinelTableCell(object):
     def focused(self):
         return self.state_selected
 
+    @property
+    def text(self):
+        if self._index is not None:
+            try:
+                rows = [
+                    n
+                    for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                    if n
+                ]
+                if 0 <= int(self._index) < len(rows):
+                    return rows[int(self._index)]
+            except Exception:
+                pass
+        try:
+            rows = [
+                n
+                for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                if n
+            ]
+            if self.name and self.name not in rows:
+                return rows[0] if rows else ""
+        except Exception:
+            pass
+        return self.name or ""
+
     def click(self, *args, **kwargs):
         name = self.name or ""
+        button = kwargs.get("button", 1)
+        if button == 3:
+            try:
+                open("/tmp/vmm-a11y-hw-popup.txt", "w").write(name)
+                open("/tmp/vmm-a11y-hw-popup-shown.txt", "w").write("1")
+                open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(name)
+                open("/tmp/vmm-a11y-hw-selected.txt", "w").write(name)
+            except Exception:
+                pass
+            return
         browser_open = False
         try:
             browser_open = (
@@ -688,6 +723,19 @@ class _SentinelEntry(object):
             open(self._path, "w").write(text if text is not None else "")
         except Exception:
             pass
+        if self._path in (
+            "/tmp/vmm-a11y-details-model.txt",
+            "/tmp/vmm-a11y-gfx-password.txt",
+        ):
+            try:
+                open(self._path + ".set", "w").write(text if text is not None else "")
+            except Exception:
+                pass
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                if not os.path.exists(self._path + ".set"):
+                    return
+                time.sleep(0.05)
         try:
             open("/tmp/vmm-a11y-entry.txt", "w").write(text if text is not None else "")
         except Exception:
@@ -2237,6 +2285,68 @@ class _SentinelDetailsComboItem(object):
                 pass
 
 
+class _SentinelRemoveHardware(object):
+    name = "Remove Hardware"
+    roleName = "menu item"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-hw-popup-shown.txt", "r").read().strip() == "1"
+        except Exception:
+            return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-hw-popup-shown.txt", "w").write("0")
+            open("/tmp/vmm-a11y-config-remove", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelActionText(object):
+    name = "Action:"
+    roleName = "text"
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-combo-Action:.txt", "r").read().strip()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-watchdog-action-focus", "w").write("1")
+        except Exception:
+            pass
+
+
 class _SentinelDetailsCombo(object):
     def __init__(self, name):
         self.name = name
@@ -2362,7 +2472,10 @@ class _SentinelDetailsCheck(object):
 
     @property
     def visible(self):
-        return True
+        try:
+            return open(self._path + ".visible", "r").read().strip() != "0"
+        except Exception:
+            return True
 
     def check_onscreen(self):
         return True
@@ -2497,6 +2610,38 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsCombo("Portgroup:")
     if compact == "config-remove":
         return _SentinelClickButton("config-remove")
+    if "opengl" in compact:
+        return _SentinelDetailsCheck("OpenGL:", "/tmp/vmm-a11y-gfx-opengl.txt")
+    if "graphics-port-auto" in compact:
+        return _SentinelDetailsCheck(
+            "graphics-port-auto", "/tmp/vmm-a11y-gfx-port-auto.txt"
+        )
+    if "graphics-port" in compact and "auto" not in compact:
+        return _SentinelDetailsSpin("graphics-port", "/tmp/vmm-a11y-gfx-port.txt")
+    if "graphics-password" in compact:
+        return _SentinelEntry("graphics-password", "/tmp/vmm-a11y-gfx-password.txt")
+    if compact.replace(".*", "").replace(":", "").strip() == "password" and (
+        not role or "check" in role
+    ):
+        return _SentinelDetailsCheck("Password:", "/tmp/vmm-a11y-gfx-pass-chk.txt")
+    if "listen type" in compact:
+        return _SentinelDetailsCombo("Listen type:")
+    if "graphics-rendernode" in compact:
+        return _SentinelDetailsCombo("graphics-rendernode")
+    if "rom bar" in compact:
+        return _SentinelDetailsCheck("ROM BAR:", "/tmp/vmm-a11y-hostdev-rombar.txt")
+    if "startup policy" in compact:
+        return _SentinelDetailsCombo("Startup Policy:")
+    if "3d acceleration" in compact:
+        return _SentinelDetailsCheck("3D acceleration:", "/tmp/vmm-a11y-video-3d.txt")
+    if compact.replace(".*", "").replace(":", "").strip() == "action":
+        return _SentinelActionText()
+    if compact.replace(".*", "").replace(":", "").strip() == "model":
+        if "text" in role:
+            return _SentinelEntry("Model:", "/tmp/vmm-a11y-details-model.txt")
+        return _SentinelDetailsCombo("Model:")
+    if compact.replace(".*", "").replace(":", "").strip() == "type":
+        return _SentinelDetailsCombo("Type:")
     if "menu item" in role or any(
         tok in compact
         for tok in (
@@ -2574,11 +2719,18 @@ def _addhw_combo_select(combolabel, itemlabel):
 def _addhw_combo_check_default(combolabel, itemlabel):
     want = (itemlabel or "").replace(".*", "")
     deadline = time.time() + 3.0
+    paths = [
+        "/tmp/vmm-a11y-addhw-combo-current.txt",
+        "/tmp/vmm-a11y-combo-current.txt",
+        "/tmp/vmm-a11y-combo-%s.txt" % (combolabel or ""),
+    ]
     while time.time() < deadline:
-        try:
-            got = open("/tmp/vmm-a11y-addhw-combo-current.txt", "r").read()
-        except Exception:
-            got = ""
+        got = ""
+        for path in paths:
+            try:
+                got += "\n" + open(path, "r").read()
+            except Exception:
+                pass
         if got and want:
             try:
                 if re.search(want, got, re.I):
@@ -8566,7 +8718,19 @@ def _sentinel_hw_cell(name, roleName):
             break
         time.sleep(0.05)
     if matched is None and any(
-        key in want for key in ("Disk", "CDROM", "Floppy", "NIC", "Display")
+        key in want for key in (
+            "Disk",
+            "CDROM",
+            "Floppy",
+            "NIC",
+            "Display",
+            "Sound",
+            "Video",
+            "Watchdog",
+            "PCI",
+            "USB",
+            "Controller",
+        )
     ):
         matched = want
     if matched is None:
@@ -10233,6 +10397,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
+        if name and "remove hardware" in str(name).replace(".*", "").lower():
+            role = str(raw_role or "").lower()
+            if not role or "menu" in role or "item" in role:
+                return _SentinelRemoveHardware()
         if name and "init path" in str(name).replace(".*", "").lower():
             return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
         if name and "init args" in str(name).replace(".*", "").lower():

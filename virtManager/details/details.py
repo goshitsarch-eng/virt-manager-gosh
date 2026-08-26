@@ -21,6 +21,13 @@ from ..lib import uiutil
 from ..addhardware import vmmAddHardware
 from ..baseclass import vmmGObjectUI
 from ..device.addstorage import vmmAddStorage
+from ..device.gfxdetails import (
+    _EDIT_GFX_LISTEN,
+    _EDIT_GFX_OPENGL,
+    _EDIT_GFX_PASSWD,
+    _EDIT_GFX_PORT,
+    _EDIT_GFX_TYPE,
+)
 from ..device.fsdetails import vmmFSDetails
 from ..device.gfxdetails import vmmGraphicsDetails
 from ..device.mediacombo import vmmMediaCombo
@@ -1250,6 +1257,7 @@ class vmmDetails(vmmGObjectUI):
                 try:
                     if not os.path.exists(sel):
                         self._publish_overview_combos()
+                        self._publish_details_device_fields()
                         return True
                     raw = open(sel, "r").read().strip()
                     key, sep, item = raw.partition("\t")
@@ -1322,6 +1330,51 @@ class vmmDetails(vmmGObjectUI):
                         if match is not None:
                             combo.set_active_iter(match)
                             self._enable_apply(EDIT_NET_MODEL)
+                        return True
+                    gfx_keys = {
+                        "Type:": ("graphics-type", _EDIT_GFX_TYPE),
+                        "Type": ("graphics-type", _EDIT_GFX_TYPE),
+                        "Listen type:": ("graphics-listen-type", _EDIT_GFX_LISTEN),
+                        "graphics-rendernode": ("graphics-rendernode", _EDIT_GFX_OPENGL),
+                    }
+                    if key in gfx_keys:
+                        os.remove(sel)
+                        wid, edit = gfx_keys[key]
+                        combo = self.gfxdetails.widget(wid)
+                        if self._a11y_select_combo(combo, item):
+                            try:
+                                self.gfxdetails._change_cb(edit)
+                            except Exception:
+                                pass
+                            self._enable_apply(EDIT_GFX)
+                            self._publish_details_device_fields()
+                        return True
+                    if key in ("Startup Policy:", "Startup Policy"):
+                        os.remove(sel)
+                        combo = self.widget("hostdev-usb-startup-policy")
+                        if self._a11y_select_combo(combo, item):
+                            self._enable_apply(EDIT_HOSTDEV_USB_STARTUPPOLICY)
+                            self._publish_details_device_fields()
+                        return True
+                    if key in ("Action:", "Action"):
+                        os.remove(sel)
+                        combo = self.widget("watchdog-action")
+                        if self._a11y_select_combo(combo, item):
+                            self._enable_apply(EDIT_WATCHDOG_ACTION)
+                            self._publish_details_device_fields()
+                        return True
+                    if key in ("Model:", "Model"):
+                        os.remove(sel)
+                        combo, edit = self._a11y_model_combo()
+                        if combo is not None and self._a11y_select_combo(combo, item):
+                            if edit == EDIT_VIDEO_MODEL:
+                                try:
+                                    self._video_model_changed_cb(combo)
+                                except Exception:
+                                    self._enable_apply(edit)
+                            else:
+                                self._enable_apply(edit)
+                            self._publish_details_device_fields()
                         return True
                     if key == "Portgroup:":
                         os.remove(sel)
@@ -1466,6 +1519,256 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_cpu_model_text)
+        if not getattr(self, "_vmm_device_fields_poll", False):
+            self._vmm_device_fields_poll = True
+
+            def _poll_device_fields():
+                checks = (
+                    (
+                        "/tmp/vmm-a11y-gfx-opengl.txt.click",
+                        lambda: self.gfxdetails.widget("graphics-opengl"),
+                        _EDIT_GFX_OPENGL,
+                        True,
+                    ),
+                    (
+                        "/tmp/vmm-a11y-gfx-port-auto.txt.click",
+                        lambda: self.gfxdetails.widget("graphics-port-auto"),
+                        _EDIT_GFX_PORT,
+                        True,
+                    ),
+                    (
+                        "/tmp/vmm-a11y-gfx-pass-chk.txt.click",
+                        lambda: self.gfxdetails.widget("graphics-password-chk"),
+                        _EDIT_GFX_PASSWD,
+                        True,
+                    ),
+                    (
+                        "/tmp/vmm-a11y-hostdev-rombar.txt.click",
+                        lambda: self.widget("hostdev-rombar"),
+                        EDIT_HOSTDEV_ROMBAR,
+                        False,
+                    ),
+                    (
+                        "/tmp/vmm-a11y-video-3d.txt.click",
+                        lambda: self.widget("video-3d"),
+                        EDIT_VIDEO_3D,
+                        False,
+                    ),
+                )
+                for cpath, getter, edit, is_gfx in checks:
+                    if not os.path.exists(cpath):
+                        continue
+                    try:
+                        os.remove(cpath)
+                        w = getter()
+                        w.set_active(not w.get_active())
+                        if is_gfx:
+                            self.gfxdetails._change_cb(edit)
+                            self._enable_apply(EDIT_GFX)
+                        else:
+                            self._enable_apply(edit)
+                        self._publish_details_device_fields()
+                    except Exception:
+                        pass
+                for path, getter, edit, is_gfx in (
+                    (
+                        "/tmp/vmm-a11y-gfx-port.txt",
+                        lambda: self.gfxdetails.widget("graphics-port"),
+                        _EDIT_GFX_PORT,
+                        True,
+                    ),
+                    (
+                        "/tmp/vmm-a11y-gfx-password.txt",
+                        lambda: self.gfxdetails.widget("graphics-password"),
+                        _EDIT_GFX_PASSWD,
+                        True,
+                    ),
+                ):
+                    pset = path + ".set"
+                    try:
+                        if not os.path.exists(pset):
+                            continue
+                        stamp = os.path.getmtime(pset)
+                        seen = "_vmm_seen_" + path.replace("/", "_")
+                        if getattr(self, seen, None) == stamp:
+                            continue
+                        setattr(self, seen, stamp)
+                        text = open(pset, "r").read().strip()
+                        w = getter()
+                        if hasattr(w, "set_value"):
+                            w.set_value(float(text or 0))
+                        elif hasattr(w, "set_text"):
+                            w.set_text(text)
+                        try:
+                            os.remove(pset)
+                        except Exception:
+                            pass
+                        if is_gfx:
+                            self.gfxdetails._change_cb(edit)
+                            self._enable_apply(EDIT_GFX)
+                        self._publish_details_device_fields()
+                    except Exception:
+                        pass
+                mset = "/tmp/vmm-a11y-details-model.txt.set"
+                try:
+                    if os.path.exists(mset):
+                        stamp = os.path.getmtime(mset)
+                        if getattr(self, "_vmm_details_model_seen", None) != stamp:
+                            self._vmm_details_model_seen = stamp
+                            text = open(mset, "r").read().strip()
+                            try:
+                                os.remove(mset)
+                            except Exception:
+                                pass
+                            combo, edit = self._a11y_model_combo()
+                            if combo is not None and text:
+                                if self._a11y_select_combo(combo, text):
+                                    if edit == EDIT_VIDEO_MODEL:
+                                        self._video_model_changed_cb(combo)
+                                    else:
+                                        self._enable_apply(edit)
+                                    self._publish_details_device_fields()
+                except Exception:
+                    pass
+                if os.path.exists("/tmp/vmm-a11y-watchdog-action-down"):
+                    try:
+                        os.remove("/tmp/vmm-a11y-watchdog-action-down")
+                        combo = self.widget("watchdog-action")
+                        idx = combo.get_active()
+                        model = combo.get_model()
+                        if model is not None and idx + 1 < len(model):
+                            combo.set_active(idx + 1)
+                            self._enable_apply(EDIT_WATCHDOG_ACTION)
+                            self._publish_details_device_fields()
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_device_fields)
+
+    def _a11y_select_combo(self, combo, item):
+        if combo is None or not item:
+            return False
+        model = combo.get_model()
+        if model is None:
+            return False
+        item_l = item.replace(".*", "").strip().lower()
+        match = None
+        it = model.get_iter_first()
+        while it is not None:
+            label = str(model[it][0] or "")
+            extra = ""
+            try:
+                extra = str(model[it][1] or "")
+            except Exception:
+                extra = ""
+            blob = ("%s %s" % (label, extra)).lower()
+            if (
+                item_l == label.lower()
+                or item_l == extra.lower()
+                or item_l in blob
+                or (label and label.lower() in item_l)
+                or (extra and extra.lower() in item_l)
+            ):
+                match = it
+                break
+            it = model.iter_next(it)
+        if match is None:
+            return False
+        combo.set_active_iter(match)
+        return True
+
+    def _a11y_model_combo(self):
+        want = ""
+        for path in (
+            "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-hw-selected.txt",
+        ):
+            try:
+                want = open(path, "r").read().strip()
+            except Exception:
+                want = ""
+            if want:
+                break
+        if "Sound" in want:
+            return self.widget("sound-model"), EDIT_SOUND_MODEL
+        if "Video" in want:
+            return self.widget("video-model"), EDIT_VIDEO_MODEL
+        if "Watchdog" in want:
+            return self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL
+        return None, None
+
+    def _publish_details_device_fields(self):
+        def _combo_label(combo):
+            try:
+                model = combo.get_model()
+                idx = combo.get_active()
+                if model is None or idx < 0:
+                    return ""
+                label = str(model[idx][0] or "")
+                extra = ""
+                try:
+                    extra = str(model[idx][1] or "")
+                except Exception:
+                    extra = ""
+                return ("%s %s" % (label, extra)).strip()
+            except Exception:
+                return ""
+
+        try:
+            mapping = (
+                ("Type:", self.gfxdetails.widget("graphics-type")),
+                ("Listen type:", self.gfxdetails.widget("graphics-listen-type")),
+                ("graphics-rendernode", self.gfxdetails.widget("graphics-rendernode")),
+                ("Startup Policy:", self.widget("hostdev-usb-startup-policy")),
+                ("Action:", self.widget("watchdog-action")),
+            )
+            current = []
+            for key, combo in mapping:
+                label = _combo_label(combo)
+                open("/tmp/vmm-a11y-combo-%s.txt" % key, "w").write(label)
+                if label:
+                    current.append(label)
+            combo, _edit = self._a11y_model_combo()
+            if combo is not None:
+                label = _combo_label(combo)
+                open("/tmp/vmm-a11y-combo-Model:.txt", "w").write(label)
+                if label:
+                    current.append(label)
+            open("/tmp/vmm-a11y-combo-current.txt", "w").write("\n".join(current))
+            open("/tmp/vmm-a11y-addhw-combo-current.txt", "w").write("\n".join(current))
+        except Exception:
+            pass
+        try:
+            gl = self.gfxdetails.widget("graphics-opengl")
+            open("/tmp/vmm-a11y-gfx-opengl.txt", "w").write(
+                "1" if gl.get_active() else "0"
+            )
+            portauto = self.gfxdetails.widget("graphics-port-auto")
+            open("/tmp/vmm-a11y-gfx-port-auto.txt", "w").write(
+                "1" if portauto.get_active() else "0"
+            )
+            vis = "1" if portauto.get_visible() else "0"
+            open("/tmp/vmm-a11y-gfx-port-auto.txt.visible", "w").write(vis)
+            port = self.gfxdetails.widget("graphics-port")
+            open("/tmp/vmm-a11y-gfx-port.txt", "w").write(
+                str(int(port.get_value()))
+            )
+            pchk = self.gfxdetails.widget("graphics-password-chk")
+            open("/tmp/vmm-a11y-gfx-pass-chk.txt", "w").write(
+                "1" if pchk.get_active() else "0"
+            )
+            open("/tmp/vmm-a11y-gfx-password.txt", "w").write(
+                self.gfxdetails.widget("graphics-password").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-hostdev-rombar.txt", "w").write(
+                "1" if self.widget("hostdev-rombar").get_active() else "0"
+            )
+            open("/tmp/vmm-a11y-video-3d.txt", "w").write(
+                "1" if self.widget("video-3d").get_active() else "0"
+            )
+        except Exception:
+            pass
 
     def _publish_overview_combos(self):
         mapping = (
@@ -3744,9 +4047,17 @@ class vmmDetails(vmmGObjectUI):
         title = _("%(graphicstype)s Server") % {"graphicstype": pretty_type}
         self.gfxdetails.set_dev(gfx)
         self.widget("graphics-title").set_markup("<b>%s</b>" % title)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_sound_page(self, sound):
         uiutil.set_list_selection(self.widget("sound-model"), sound.model)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_smartcard_page(self, sc):
         uiutil.set_list_selection(self.widget("smartcard-mode"), sc.mode)
@@ -3874,6 +4185,10 @@ class vmmDetails(vmmGObjectUI):
         self.widget("hostdev-title").set_markup(devlabel)
         self.widget("hostdev-source").set_text(pretty_name)
         self.widget("hostdev-rombar").set_active(rom_bar)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_video_page(self, vid):
         model = vid.model
@@ -3888,6 +4203,10 @@ class vmmDetails(vmmGObjectUI):
             self._disable_device_remove(
                 _("Cannot remove last video device while Graphics/Display is attached.")
             )
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_watchdog_page(self, watch):
         model = watch.model
@@ -3895,6 +4214,10 @@ class vmmDetails(vmmGObjectUI):
 
         uiutil.set_list_selection(self.widget("watchdog-model"), model)
         uiutil.set_list_selection(self.widget("watchdog-action"), action)
+        try:
+            self._publish_details_device_fields()
+        except Exception:
+            pass
 
     def _refresh_controller_page(self, controller):
         uiutil.set_grid_row_visible(self.widget("device-list-label"), False)

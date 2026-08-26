@@ -297,6 +297,19 @@ class VMMDogtailApp:
                 except Exception:
                     pass
             if key_l in ("down", "up"):
+                try:
+                    if open(
+                        "/tmp/vmm-a11y-watchdog-action-focus", "r"
+                    ).read().strip() == "1":
+                        if key_l == "down":
+                            open("/tmp/vmm-a11y-watchdog-action-down", "w").write("1")
+                        try:
+                            os.remove("/tmp/vmm-a11y-watchdog-action-focus")
+                        except Exception:
+                            pass
+                        return
+                except Exception:
+                    pass
                 snap_page = False
                 try:
                     snap_page = (
