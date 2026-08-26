@@ -424,6 +424,15 @@ class vmmOSList(vmmGObjectUI):
                 return
         except Exception:
             pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
+                show = getattr(self, "_vmm_oslist_show_a11y", None)
+                if show:
+                    show()
+                self.refresh_a11y()
+                return
+        except Exception:
+            pass
         if not src.get_sensitive() or not searchname or selected_label == searchname:
             self.topwin.popdown()
             hide = getattr(self, "_vmm_oslist_hide_a11y", None)

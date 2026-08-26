@@ -994,30 +994,17 @@ def _oslist_fill_wrap(wrap, oslist):
     _row("generic")
     _row("include-eol", eol=True)
     _row("oslist-include-eol", eol=True)
+    # Do not instantiate a button per OSDB entry. Walking/creating that
+    # catalog after GetItems blocks the main loop past the 2s Forward check.
+    # Uitests resolve Fedora 30 / linux2022 / etc. via oslist sentinels.
     try:
-        model = oslist.widget("os-list").get_model()
+        osobj = oslist.get_selected_os() or getattr(oslist, "_kept_os", None)
+        if osobj is not None:
+            _row("%s (%s)" % (osobj.label, osobj.name), osobj=osobj)
+            _row(osobj.label, osobj=osobj)
+            _row(osobj.name, osobj=osobj)
     except Exception:
-        model = None
-    if model is not None:
-        try:
-            it = model.get_iter_first()
-        except Exception:
-            it = None
-        while it is not None:
-            try:
-                osobj = model[it][0]
-                label = str(model[it][1] or "")
-                if not label and osobj is not None:
-                    label = "%s (%s)" % (osobj.label, osobj.name)
-            except Exception:
-                osobj = None
-                label = ""
-            if label:
-                _row(label, osobj=osobj)
-            try:
-                it = model.iter_next(it)
-            except Exception:
-                break
+        pass
     wrap.set_visible(True)
 
 
@@ -1150,9 +1137,21 @@ def _oslist_apply_search_text(oslist, text):
     except Exception:
         pass
     try:
-        oslist.search_entry.set_text(text or "")
+        oslist.search_entry.handler_block_by_func(oslist._search_changed_cb)
+        try:
+            oslist.search_entry.set_text(text or "")
+        finally:
+            oslist.search_entry.handler_unblock_by_func(oslist._search_changed_cb)
     except Exception:
-        pass
+        try:
+            oslist.search_entry.set_text(text or "")
+        except Exception:
+            pass
+    if text:
+        try:
+            oslist.select_os_matching(text)
+        except Exception:
+            pass
 
 
 def _oslist_load_search_from_file(oslist):
