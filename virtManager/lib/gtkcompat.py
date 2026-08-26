@@ -1953,6 +1953,7 @@ def publish_media_combo_rows(createvm, box=None):
         model = None
     if model is None:
         return
+    labels = []
     idx = 0
     try:
         it = model.get_iter_first()
@@ -1985,11 +1986,16 @@ def publish_media_combo_rows(createvm, box=None):
 
             btn.connect("clicked", _choose)
             host.append(btn)
+            labels.append(label)
         idx += 1
         try:
             it = model.iter_next(it)
         except Exception:
             break
+    try:
+        open("/tmp/vmm-a11y-createvm-media-combo.txt", "w").write("\n".join(labels))
+    except Exception:
+        pass
 
 
 def _append_createvm_container_controls(box, createvm):

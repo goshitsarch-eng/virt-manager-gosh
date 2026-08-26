@@ -2997,16 +2997,21 @@ class _SentinelMediaCombo(object):
         ignore = (args, kwargs)
 
     def _rows(self):
-        try:
-            return [
-                line
-                for line in open("/tmp/vmm-a11y-details-media-combo.txt", "r")
-                .read()
-                .splitlines()
-                if line.strip()
-            ]
-        except Exception:
-            return []
+        for path in (
+            "/tmp/vmm-a11y-createvm-media-combo.txt",
+            "/tmp/vmm-a11y-details-media-combo.txt",
+        ):
+            try:
+                rows = [
+                    line
+                    for line in open(path, "r").read().splitlines()
+                    if line.strip()
+                ]
+            except Exception:
+                rows = []
+            if rows:
+                return rows
+        return []
 
     def find(
         self,
@@ -9398,6 +9403,7 @@ class _SentinelNewVMWindow(object):
             _sentinel_method_radio,
             _sentinel_storage_radio,
             _sentinel_named_entry,
+            _sentinel_oslist_entry,
             _sentinel_container_extra,
             _sentinel_url_widgets,
         ):
@@ -9419,6 +9425,14 @@ class _SentinelNewVMWindow(object):
         compact = str(name or "").replace(".*", "").lower()
         if "install-iso-browse" in compact:
             return _SentinelClickButton("install-iso-browse")
+        if "media-combo" in compact:
+            return _SentinelMediaCombo()
+        if "media-entry" in compact:
+            return _SentinelEntry("media-entry", "/tmp/vmm-a11y-media-entry.txt")
+        if "automatically detect" in compact:
+            return _SentinelDetectOs()
+        if "oslist-popover" in compact:
+            return _OslistPopoverSentinel()
         if name and any(
             tok in compact
             for tok in (
