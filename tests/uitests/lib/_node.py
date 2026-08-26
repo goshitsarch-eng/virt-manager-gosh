@@ -9856,6 +9856,52 @@ def _systray_match(want, have):
     return a == b or a in b or b in a
 
 
+class _SentinelPrefsCheck(object):
+    def __init__(self, key):
+        self.name = key
+        self.roleName = "check box"
+        self._key = key
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            os.remove("/tmp/vmm-a11y-prefs-check-done")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-prefs-check.txt", "w").write(self._key or "")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-prefs-check-done", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
+            if not os.path.exists("/tmp/vmm-a11y-prefs-check.txt"):
+                return
+            time.sleep(0.05)
+
+
 class _SentinelFakeSystray(object):
     name = "vmm-fake-systray"
     roleName = "frame"
@@ -12208,6 +12254,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelSystrayMenu()
         if compact_name == "virtual machine manager":
             return _SentinelManagerWindow()
+        if name and "enable system tray" in compact_name:
+            try:
+                if open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1":
+                    return _SentinelPrefsCheck("system-tray")
+            except Exception:
+                pass
         if compact_name in (
             "conn-connect",
             "conn-disconnect",

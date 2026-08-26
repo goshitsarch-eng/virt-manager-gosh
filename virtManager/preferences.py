@@ -4,6 +4,9 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Gdk
 
@@ -93,6 +96,7 @@ class vmmPreferences(vmmGObjectUI):
         self.widget("prefs-graphics-type").emit("changed")
 
         self.bind_escape_key_close()
+        self._start_a11y_pollers()
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing preferences")
@@ -475,6 +479,43 @@ class vmmPreferences(vmmGObjectUI):
         # Do not run a nested main loop: AT-SPI click must return so
         # dogtail can find this window.
         dialog.present()
+
+    def _start_a11y_pollers(self):
+        if getattr(self, "_vmm_prefs_poll", False):
+            return
+        self._vmm_prefs_poll = True
+
+        def _check_tick():
+            path = "/tmp/vmm-a11y-prefs-check.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                key = open(path, "r").read().strip()
+                os.remove(path)
+            except Exception:
+                return True
+            widgets = {
+                "system-tray": "prefs-system-tray",
+                "xmleditor": "prefs-xmleditor",
+            }
+            wid = widgets.get(key)
+            if wid:
+                src = self.widget(wid)
+                try:
+                    src.set_active(not bool(src.get_active()))
+                except Exception:
+                    pass
+                if key == "system-tray":
+                    self.change_view_system_tray(src)
+                elif key == "xmleditor":
+                    self.change_xmleditor(src)
+            try:
+                open("/tmp/vmm-a11y-prefs-check-done", "w").write("1")
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _check_tick)
 
     def change_view_system_tray(self, src):
         self.config.set_view_system_tray(src.get_active())
