@@ -284,6 +284,8 @@ class vmmNetworkList(vmmGObjectUI):
 
     def get_network_selection(self):
         rowdata = self._get_network_row_data()
+        if rowdata is None:
+            return None, None, None, None
         net_type = rowdata.nettype
         net_src = rowdata.source
         net_check_manual = rowdata.manual

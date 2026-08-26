@@ -1208,16 +1208,37 @@ class vmmDetails(vmmGObjectUI):
                         model = combo.get_model() if combo is not None else None
                         if model is None:
                             return True
+                        item_l = item.replace(".*", "").strip().lower()
                         match = None
+                        idx = 0
                         it = model.get_iter_first()
                         while it is not None:
                             label = str(model[it][0] or "")
-                            if item.lower() in label.lower() or label.lower() in item.lower():
+                            ll = label.lower()
+                            if (
+                                item_l in ll
+                                or ll in item_l
+                                or (item_l and item_l.split()[0] in ll)
+                            ):
                                 match = it
                                 break
+                            try:
+                                if re.search(item, label, re.I):
+                                    match = it
+                                    break
+                            except Exception:
+                                pass
+                            idx += 1
                             it = model.iter_next(it)
                         if match is not None:
-                            combo.set_active_iter(match)
+                            try:
+                                combo.set_active(idx)
+                            except Exception:
+                                combo.set_active_iter(match)
+                            try:
+                                self.netlist._on_net_source_changed(combo)
+                            except Exception:
+                                pass
                             self._enable_apply(EDIT_NET_SOURCE)
                         return True
                     if key == "Device model:":
@@ -2899,6 +2920,25 @@ class vmmDetails(vmmGObjectUI):
                 kwargs["mode"],
                 kwargs["portgroup"],
             ) = self.netlist.get_network_selection()
+            if not kwargs["ntype"]:
+                try:
+                    label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
+                except Exception:
+                    label = ""
+                try:
+                    src = open("/tmp/vmm-a11y-net-device.txt", "r").read().strip() or None
+                except Exception:
+                    src = None
+                if "macvtap" in label:
+                    kwargs["ntype"] = virtinst.DeviceInterface.TYPE_DIRECT
+                    kwargs["source"] = src
+                    kwargs["mode"] = "bridge"
+                elif "bridge device" in label:
+                    kwargs["ntype"] = virtinst.DeviceInterface.TYPE_BRIDGE
+                    kwargs["source"] = src
+                elif "plainbridge" in label or "portgroup" in label:
+                    kwargs["ntype"] = virtinst.DeviceInterface.TYPE_VIRTUAL
+                    kwargs["source"] = "plainbridge-portgroups"
 
         if self._edited(EDIT_NET_MAC):
             kwargs["macaddr"] = self.widget("network-mac-entry").get_text()

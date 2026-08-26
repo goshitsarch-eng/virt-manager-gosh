@@ -2154,12 +2154,18 @@ class _SentinelDetailsComboItem(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        label = self.name.replace(".*", "")
         try:
             open("/tmp/vmm-a11y-combo-select.txt", "w").write(
-                "%s\t%s" % (self._combo, self.name.replace(".*", ""))
+                "%s\t%s" % (self._combo, label)
             )
         except Exception:
             pass
+        if self._combo == "net-source":
+            try:
+                open("/tmp/vmm-a11y-net-source.txt", "w").write(label)
+            except Exception:
+                pass
 
 
 class _SentinelDetailsCombo(object):
