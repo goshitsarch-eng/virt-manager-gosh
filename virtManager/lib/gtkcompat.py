@@ -2893,16 +2893,9 @@ def hide_storagebrowse_window(browser):
     except Exception:
         pass
     try:
-        app = Gtk.Application.get_default()
-        if app is not None:
-            app.remove_window(win)
+        win.set_visible(False)
     except Exception:
         pass
-    try:
-        win.close()
-    except Exception:
-        pass
-    browser._vmm_browse_win = None
 
 
 def hide_createconn_window(createconn):

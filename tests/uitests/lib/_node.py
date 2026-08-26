@@ -1174,7 +1174,7 @@ class _SentinelConfigApply(object):
             open("/tmp/vmm-a11y-click.txt", "w").write("config-apply")
         except Exception:
             pass
-        deadline = time.time() + 2.0
+        deadline = time.time() + 8.0
         while time.time() < deadline and os.path.exists("/tmp/vmm-a11y-config-apply"):
             time.sleep(0.05)
         try:

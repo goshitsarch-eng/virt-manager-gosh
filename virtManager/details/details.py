@@ -986,6 +986,25 @@ class vmmDetails(vmmGObjectUI):
 
             def _poll_boot_fields():
                 changed = False
+                apath = "/tmp/vmm-a11y-config-apply"
+                if os.path.exists(apath):
+                    try:
+                        os.remove(apath)
+                    except Exception:
+                        pass
+                    try:
+                        open("/tmp/vmm-a11y-apply-debug.txt", "w").write("boot-poll\n")
+                    except Exception:
+                        pass
+                    try:
+                        self._config_apply()
+                    except Exception as exc:
+                        try:
+                            open("/tmp/vmm-a11y-apply-debug.txt", "w").write(
+                                "boot-poll-err: %s\n" % exc
+                            )
+                        except Exception:
+                            pass
                 for trig, opener in (
                     ("/tmp/vmm-a11y-initrd-browse", self._browse_initrd_clicked_cb),
                     ("/tmp/vmm-a11y-kernel-browse", self._browse_kernel_clicked_cb),
@@ -2227,6 +2246,10 @@ class vmmDetails(vmmGObjectUI):
 
     def _config_apply(self, row=None):
         try:
+            open("/tmp/vmm-a11y-apply-debug.txt", "a").write("start\n")
+        except Exception:
+            pass
+        try:
             self._restore_boot_init_sentinels()
         except Exception:
             pass
@@ -2306,6 +2329,12 @@ class vmmDetails(vmmGObjectUI):
         except Exception as e:
             self.err.show_err(_("Error applying changes: %s") % e)
 
+        try:
+            open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                "done pagetype=%s success=%s\n" % (pagetype, success)
+            )
+        except Exception:
+            pass
         if success is not False:
             self._disable_apply()
             success = True
