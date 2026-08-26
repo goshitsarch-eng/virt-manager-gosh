@@ -209,6 +209,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._addstorage.connect("browse-clicked", _browse_file_cb)
 
         self._mediacombo = vmmMediaCombo(self.conn, self.builder, self.topwin)
+        self._mediacombo._vmm_media_owner = "wizard"
         self._mediacombo.connect("changed", self._iso_changed_cb)
         self._mediacombo.connect("activate", self._iso_activated_cb)
         self._mediacombo.set_mnemonic_label(self.widget("install-iso-label"))
@@ -514,6 +515,11 @@ class vmmCreateVM(vmmGObjectUI):
             self._vmm_media_entry_poll = True
 
             def _poll_media_entry():
+                try:
+                    if open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1":
+                        return True
+                except Exception:
+                    pass
                 path = "/tmp/vmm-a11y-media-entry.txt"
                 set_path = path + ".set"
                 explicit = False

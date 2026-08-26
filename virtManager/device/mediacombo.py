@@ -175,10 +175,11 @@ class vmmMediaCombo(vmmGObjectUI):
             self._init_rows()
 
         self._entry.set_text("")
-        try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
-        except Exception:
-            pass
+        if getattr(self, "_vmm_media_owner", None) != "details":
+            try:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
+            except Exception:
+                pass
         model = self._combo.get_model()
         model.clear()
 
@@ -252,6 +253,19 @@ class vmmMediaCombo(vmmGObjectUI):
             os.remove("/tmp/vmm-a11y-media-select.txt")
         except Exception:
             pass
+        if path:
+            try:
+                model = self._combo.get_model()
+                found = False
+                if model is not None:
+                    for row in model:
+                        if row[self.MEDIA_FIELD_PATH] == path:
+                            found = True
+                            break
+                if not found and model is not None:
+                    model.prepend(self._make_row(path, path, True, path))
+            except Exception:
+                pass
         uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
         self._entry.set_position(-1)
         displayed = ""
@@ -267,14 +281,27 @@ class vmmMediaCombo(vmmGObjectUI):
             displayed = path
         if not displayed:
             displayed = path or ""
+        owner = getattr(self, "_vmm_media_owner", None)
+        customize = False
         try:
-            open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(displayed)
+            customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
         except Exception:
-            pass
-        try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
-        except Exception:
-            pass
+            customize = False
+        if owner == "details" or (customize and path and not str(path).startswith("/dev/")):
+            try:
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+            except Exception:
+                pass
+        elif owner != "details" and not customize:
+            try:
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or displayed)
+            except Exception:
+                pass
+        if owner != "details":
+            try:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+            except Exception:
+                pass
 
     def set_mnemonic_label(self, label):
         label.set_mnemonic_widget(self._entry)

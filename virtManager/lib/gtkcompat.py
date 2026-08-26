@@ -1874,6 +1874,15 @@ def _start_media_select_poll(createvm):
         if not text:
             return True
         try:
+            if open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1":
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+        try:
             if open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip():
                 try:
                     os.remove(path)

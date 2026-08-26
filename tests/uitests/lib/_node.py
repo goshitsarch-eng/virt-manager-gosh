@@ -771,6 +771,21 @@ class _SentinelEntry(object):
     def text(self):
         path = self._path
         if self.name == "media-entry":
+            for alt in (
+                "/tmp/vmm-a11y-disk-source-path.txt",
+                "/tmp/vmm-a11y-media-browse.txt",
+                "/tmp/vmm-a11y-details-media-entry.txt",
+            ):
+                try:
+                    val = open(alt, "r").read().strip()
+                except Exception:
+                    continue
+                if val and (
+                    "iso-vol" in val
+                    or "/pool-" in val
+                    or val.endswith((".iso", ".img", ".qcow2"))
+                ):
+                    return val
             try:
                 if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt"):
                     path = "/tmp/vmm-a11y-details-media-entry.txt"

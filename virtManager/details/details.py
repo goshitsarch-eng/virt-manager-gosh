@@ -365,6 +365,7 @@ class vmmDetails(vmmGObjectUI):
             return signal_cb
 
         self._mediacombo = vmmMediaCombo(self.conn, self.builder, self.topwin)
+        self._mediacombo._vmm_media_owner = "details"
         self.widget("disk-source-align").add(self._mediacombo.top_box)
         self._mediacombo.set_mnemonic_label(self.widget("disk-source-mnemonic"))
         self._mediacombo.connect("changed", _e(EDIT_DISK_PATH))
@@ -5025,6 +5026,10 @@ class vmmDetails(vmmGObjectUI):
         if is_removable:
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
+            try:
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+            except Exception:
+                pass
 
         self._addstorage.set_dev(disk)
 
