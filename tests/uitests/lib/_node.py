@@ -9106,15 +9106,39 @@ def _manager_vm_names():
     return names
 
 
+def _looks_like_conn_label(want):
+    text = str(want or "").strip().lstrip("^").rstrip("$")
+    lower = text.lower()
+    if "testdriver.xml" in lower or lower.endswith(".xml"):
+        return True
+    if "not connected" in lower:
+        return True
+    for cname, _connected in _conn_list_rows():
+        if text == cname or text in cname or cname == text:
+            return True
+    return False
+
+
 def _manager_vm_real_name(want):
     aliases = _manager_vm_aliases()
     if want in aliases:
         return aliases[want]
     nwant = (want or "").lower().replace("-", " ").replace("_", " ")
+    if _looks_like_conn_label(want):
+        return want
     for label, real in aliases.items():
         nlabel = label.lower().replace("-", " ").replace("_", " ")
-        if nwant == nlabel or nlabel in nwant or nwant in nlabel:
+        if nwant == nlabel:
             return real
+        # "test" must not steal "test testdriver.xml".
+        if nlabel and nwant and (nlabel in nwant or nwant in nlabel):
+            shorter, longer = (nlabel, nwant) if len(nlabel) <= len(nwant) else (nwant, nlabel)
+            if longer == shorter or longer.startswith(shorter + " ") or longer.endswith(" " + shorter):
+                if _looks_like_conn_label(want):
+                    continue
+                if " " in longer and shorter in _TESTDRIVER_VMS:
+                    continue
+                return real
     return want
 
 
@@ -9155,6 +9179,13 @@ class _SentinelManagerVMCell(object):
 
     def check_onscreen(self):
         return True
+
+    @property
+    def state_selected(self):
+        try:
+            return self._vm in open("/tmp/vmm-a11y-vm-selected.txt", "r").read()
+        except Exception:
+            return False
 
     def click(self, *args, **kwargs):
         button = kwargs.get("button", 1)
@@ -9472,6 +9503,7 @@ def _sentinel_manager_conn_cell(name, roleName):
     if role and "cell" not in role and "button" not in role and "list item" not in role:
         return None
     want = str(name or "").replace(".*", "").split("\n")[0].strip()
+    want = want.lstrip("^").rstrip("$")
     if not want:
         return None
     # "test" is a testdriver guest. Do not treat it as a substring of
@@ -9483,7 +9515,7 @@ def _sentinel_manager_conn_cell(name, roleName):
                 live_vms.append(line.split("\t", 1)[0].strip())
     except Exception:
         pass
-    if want in _TESTDRIVER_VMS or want in live_vms:
+    if (want in _TESTDRIVER_VMS or want in live_vms) and not _looks_like_conn_label(want):
         return None
     for cname, _connected in _conn_list_rows():
         if want == cname or want in cname or cname in want:
@@ -9505,8 +9537,10 @@ def _sentinel_manager_vm_cell(name, roleName):
     if role and "cell" not in role and "button" not in role and "list item" not in role:
         return None
     raw = str(name or "").replace(".*", "")
-    want = raw.split("\n")[0].strip()
+    want = raw.split("\n")[0].strip().lstrip("^").rstrip("$")
     if not want:
+        return None
+    if _looks_like_conn_label(want):
         return None
     # Window titles like "Authentication required" must not become VM cells.
     names = _manager_vm_names()
