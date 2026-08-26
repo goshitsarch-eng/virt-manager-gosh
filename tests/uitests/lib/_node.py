@@ -11791,16 +11791,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
             )
         if name and str(name).replace(".*", "").lower() in ("remove disk", "delete"):
             role = str(raw_role or "").lower()
-            if _delete_dialog_open() and (
-                not role
-                or any(tok in role for tok in ("frame", "dialog", "window", "panel", "alert"))
+            if not role or any(
+                tok in role for tok in ("frame", "dialog", "window", "panel", "alert")
             ):
-                pretty = (
-                    "Remove Disk"
-                    if "remove" in str(name).replace(".*", "").lower()
-                    else "Delete"
-                )
-                return _SentinelDeleteWindow(pretty)
+                deadline = time.time() + max(1.0, float(timeout or 5))
+                while time.time() < deadline:
+                    if _delete_dialog_open():
+                        pretty = (
+                            "Remove Disk"
+                            if "remove" in str(name).replace(".*", "").lower()
+                            else "Delete"
+                        )
+                        return _SentinelDeleteWindow(pretty)
+                    time.sleep(0.05)
         if name and "init path" in str(name).replace(".*", "").lower():
             return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
         if name and "init args" in str(name).replace(".*", "").lower():

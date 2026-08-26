@@ -1268,7 +1268,9 @@ class vmmManager(vmmGObjectUI):
 
     def do_delete(self, ignore=None):
         conn = self.current_conn() or self._last_conn
-        vm = self.current_vm()
+        vm = self._a11y_resolve_vm()
+        if vm is None:
+            vm = self.current_vm()
         if vm is None:
             self._do_delete_conn(conn)
         else:
