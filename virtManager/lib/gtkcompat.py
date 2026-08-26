@@ -2549,13 +2549,26 @@ def _start_combo_select_poll(createconn):
                     hv = c.widget("hypervisor")
                     model = hv.get_model() if hv is not None else None
                     if model is not None:
+                        want = item.lower().replace(".*", "").replace("^", "").replace("$", "")
+                        best = None
+                        best_score = -1
                         it = model.get_iter_first()
                         while it is not None:
                             label = str(model[it][1] or "")
-                            if item.lower() in label.lower() or label.lower() in item.lower():
-                                uiutil.set_list_selection(hv, model[it][0])
-                                break
+                            ll = label.lower()
+                            score = -1
+                            if ll == want:
+                                score = 1000 + len(ll)
+                            elif want and want in ll:
+                                score = 500 + len(want)
+                            elif ll and ll in want:
+                                score = len(ll)
+                            if score > best_score:
+                                best_score = score
+                                best = model[it][0]
                             it = model.iter_next(it)
+                        if best is not None:
+                            uiutil.set_list_selection(hv, best)
                 except Exception:
                     pass
         try:
