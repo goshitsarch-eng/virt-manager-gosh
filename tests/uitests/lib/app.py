@@ -394,6 +394,13 @@ class VMMDogtailApp:
                         return
                 except Exception:
                     pass
+                try:
+                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1":
+                        want = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+                        if want and want.lower() not in ("none detected", "detecting..."):
+                            open("/tmp/vmm-a11y-os-select.txt", "w").write(want)
+                except Exception:
+                    pass
             if key_l == "escape":
                 try:
                     shown = open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip()
