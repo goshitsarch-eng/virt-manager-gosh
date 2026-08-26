@@ -738,6 +738,11 @@ class _SentinelEntry(object):
                     path = "/tmp/vmm-a11y-details-media-entry.txt"
             except Exception:
                 pass
+        if str(self.name).startswith("Title"):
+            try:
+                return open("/tmp/vmm-a11y-overview-title-current.txt", "r").read()
+            except Exception:
+                pass
         try:
             return open(path, "r").read()
         except Exception:

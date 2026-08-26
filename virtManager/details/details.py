@@ -3315,6 +3315,8 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 current = ""
             if newxml == current:
+                if EDIT_XML not in self._active_edits:
+                    self._active_edits.append(EDIT_XML)
                 return newxml
             try:
                 self._xmleditor.set_xml(newxml)
@@ -3398,9 +3400,9 @@ class vmmDetails(vmmGObjectUI):
 
         success = False
         try:
-            if self._edited(EDIT_XML) and not os.path.exists(
-                "/tmp/vmm-a11y-overview-name-want.txt"
-            ):
+            if (
+                self._edited(EDIT_XML) or os.path.exists("/tmp/vmm-a11y-xml.txt")
+            ) and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
                 if dev:
                     success = self._apply_xmleditor_device(dev)
                 else:
@@ -3572,7 +3574,14 @@ class vmmDetails(vmmGObjectUI):
         def change_cb():
             return self.vm.define_xml(newxml)
 
-        return self._change_config(change_cb, {})
+        ok = self._change_config(change_cb, {})
+        try:
+            open("/tmp/vmm-a11y-overview-title-current.txt", "w").write(
+                self.vm.get_title() or ""
+            )
+        except Exception:
+            pass
+        return ok
 
     def _apply_xmleditor_device(self, devobj):
         newxml = self._load_a11y_xml_editor() or self._xmleditor.get_xml()
@@ -4337,6 +4346,10 @@ class vmmDetails(vmmGObjectUI):
 
         title = self.vm.get_title()
         self.widget("overview-title").set_text(title or "")
+        try:
+            open("/tmp/vmm-a11y-overview-title-current.txt", "w").write(title or "")
+        except Exception:
+            pass
 
         # Hypervisor Details
         self.widget("overview-hv").set_text(self.vm.get_pretty_hv_type())
