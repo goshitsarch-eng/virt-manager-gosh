@@ -296,8 +296,7 @@ class vmmXMLEditor(vmmGObjectUI):
             pass
         try:
             xml = self.get_xml() or self._srcxml or ""
-            if xml:
-                open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml)
+            open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml)
         except Exception:
             pass
 
