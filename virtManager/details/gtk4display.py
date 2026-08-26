@@ -11,6 +11,7 @@ the rest of virt-manager already talks to.
 """
 
 import io
+import os
 import socket
 import struct
 import threading
@@ -556,12 +557,22 @@ class VNCDisplay(_DisplayBase):
         self._qemu_ext_key = False
         self._shared = True
         self._bells = 0
+        self._tls_ca = ""
+        self._tls_client_cert = ""
+        self._tls_client_key = ""
+        self._host = ""
 
     def set_credential(self, cred, value):
         name = str(cred).upper()
         if cred == 1 or name.endswith("PASSWORD"):
             self._password = value or ""
-        elif cred == 2 or "CLIENT" in name:
+        elif "CA" in name or name.endswith("CACERT") or name.endswith("CA_CERT"):
+            self._tls_ca = value or ""
+        elif "KEY" in name:
+            self._tls_client_key = value or ""
+        elif "CERT" in name and "CA" not in name:
+            self._tls_client_cert = value or ""
+        elif cred == 2 or name.endswith("CLIENTNAME") or name.endswith("CLIENT_NAME"):
             self._clientname = value or "libvirt-vnc"
         else:
             self._username = value or ""
@@ -671,6 +682,7 @@ class VNCDisplay(_DisplayBase):
         self._handshake(sock)
 
     def _connect_host(self, host, port):
+        self._host = host or ""
         sock = socket.create_connection((host, port), timeout=15)
         self._handshake(sock)
 
@@ -815,19 +827,40 @@ class VNCDisplay(_DisplayBase):
                 return cand
         return None
 
+    def _tls_ca_file(self):
+        return (
+            getattr(self, "_tls_ca", None)
+            or os.environ.get("VNC_TLS_CA")
+            or os.environ.get("SSL_CERT_FILE")
+            or ""
+        )
+
     def _wrap_tls(self, sock, verify=False):
         import ssl
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_REQUIRED if verify else ssl.CERT_NONE
-        if not verify:
+        ca = self._tls_ca_file()
+        cert = getattr(self, "_tls_client_cert", None) or os.environ.get("VNC_TLS_CERT")
+        key = getattr(self, "_tls_client_key", None) or os.environ.get("VNC_TLS_KEY")
+        do_verify = bool(verify or ca)
+        if do_verify:
+            ctx.verify_mode = ssl.CERT_REQUIRED
             try:
-                ctx.check_hostname = False
+                if ca:
+                    ctx.load_verify_locations(cafile=ca)
+                else:
+                    ctx.load_default_certs()
+            except Exception:
                 ctx.verify_mode = ssl.CERT_NONE
+        else:
+            ctx.verify_mode = ssl.CERT_NONE
+        if cert:
+            try:
+                ctx.load_cert_chain(cert, key or None)
             except Exception:
                 pass
-        return ctx.wrap_socket(sock, server_hostname=None)
+        return ctx.wrap_socket(sock, server_hostname=self._host or None)
 
     def _send_plain_creds(self, sock):
         self._need_vnc_creds(True)
@@ -851,7 +884,7 @@ class VNCDisplay(_DisplayBase):
             raise RuntimeError("VeNCrypt subtypes unsupported: %s" % subtypes)
         sock.sendall(struct.pack("!I", chosen))
         if chosen in _VNC_VENCRYPT_TLS:
-            sock = self._wrap_tls(sock, verify=False)
+            sock = self._wrap_tls(sock, verify=bool(self._tls_ca_file()))
         if chosen in _VNC_VENCRYPT_PLAIN_AUTH:
             self._send_plain_creds(sock)
         elif chosen in _VNC_VENCRYPT_VNC_AUTH:
@@ -1433,6 +1466,10 @@ class SpiceDisplay(_DisplayBase):
                 pass
             try:
                 display_channel.connect("display-invalidate", self._on_invalidate)
+            except TypeError:
+                pass
+            try:
+                display_channel.connect("display-mark", self._on_invalidate)
             except TypeError:
                 pass
             self._refresh_primary()

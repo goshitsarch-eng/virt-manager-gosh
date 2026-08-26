@@ -743,6 +743,8 @@ class vmmManager(vmmGObjectUI):
                 elif fn is not None and vm is None:
                     try:
                         open(path, "w").write(action)
+                        if (action or "") == "Open" and want:
+                            open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
                         open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
                             "no-vm %s want=%s" % (action, want)
                         )

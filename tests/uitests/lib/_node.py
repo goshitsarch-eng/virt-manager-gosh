@@ -4177,6 +4177,17 @@ class _SentinelVMActionItem(object):
                     open("/tmp/vmm-a11y-clone-open.txt", "w").write(vm)
             except Exception:
                 pass
+        if (self.name or "") == "Open":
+            try:
+                vm = ""
+                try:
+                    vm = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
+                except Exception:
+                    vm = ""
+                if vm:
+                    open("/tmp/vmm-a11y-vm-open.txt", "w").write(vm)
+            except Exception:
+                pass
         deadline = time.time() + 6.0
         while time.time() < deadline:
             if os.path.exists("/tmp/vmm-a11y-alert.txt"):
@@ -10050,7 +10061,10 @@ class _SentinelManagerWindow(object):
             return _SentinelConnMenu()
         if compact.startswith("conn-"):
             return _SentinelConnMenuItem(compact)
-        deadline = time.time() + max(0.5, float(timeout or 5))
+        wait = max(0.5, float(timeout or 5))
+        if "\n" in str(name or ""):
+            wait = max(10.0, wait)
+        deadline = time.time() + wait
         last = None
         while time.time() < deadline:
             sent = _sentinel_manager_vm_cell(name, roleName)
@@ -11247,6 +11261,17 @@ def _sentinel_manager_conn_cell(name, roleName):
     return None
 
 
+def _live_vm_names():
+    live = []
+    try:
+        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+            if line.strip():
+                live.append(line.split("\t", 1)[0].strip())
+    except Exception:
+        pass
+    return live
+
+
 def _sentinel_manager_vm_cell(name, roleName):
     if not name:
         return None
@@ -11262,16 +11287,23 @@ def _sentinel_manager_vm_cell(name, roleName):
     # Window titles like "Authentication required" must not become VM cells.
     names = _manager_vm_names()
     aliases = _manager_vm_aliases()
-    live = []
-    try:
-        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
-            if line.strip():
-                live.append(line.split("\t", 1)[0].strip())
-    except Exception:
-        pass
+    live = _live_vm_names()
+    mapped = aliases.get(want, want)
+    # Lifecycle/open uses vmname+"\\n". Do not invent a cell before the
+    # manager published that exact guest; Open would then fire too early.
+    if "\n" in raw:
+        if mapped in live:
+            return _SentinelManagerVMCell(mapped)
+        if want in live:
+            return _SentinelManagerVMCell(want)
+        return None
+    if want in aliases and mapped in live:
+        return _SentinelManagerVMCell(mapped)
+    if want in live:
+        return _SentinelManagerVMCell(want)
     if want in aliases:
         return _SentinelManagerVMCell(aliases[want])
-    if want in names or want in live or want in _TESTDRIVER_VMS:
+    if want in names or want in _TESTDRIVER_VMS:
         return _SentinelManagerVMCell(want)
     real = _manager_vm_real_name(want)
     if (

@@ -893,6 +893,13 @@ def main():
         assert ungrabbed, "grab-sequence did not ungrab pointer"
         disp.set_credential(2, "libvirt-vnc")
         assert disp._clientname == "libvirt-vnc"
+        disp.set_credential("CA_CERT", "/tmp/vnc-ca.pem")
+        disp.set_credential("CLIENT_CERT", "/tmp/vnc-client.pem")
+        disp.set_credential("CLIENT_KEY", "/tmp/vnc-client.key")
+        assert disp._tls_ca == "/tmp/vnc-ca.pem"
+        assert disp._tls_client_cert == "/tmp/vnc-client.pem"
+        assert disp._tls_client_key == "/tmp/vnc-client.key"
+        assert disp._tls_ca_file() == "/tmp/vnc-ca.pem"
         disp._apply_server_cut_text(b"guest-clip")
         assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
         assert disp._choose_vencrypt_subtype([258, 256]) == 256

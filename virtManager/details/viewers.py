@@ -630,6 +630,20 @@ class SpiceViewer(Viewer):
             self._spice_session.set_property("enable-audio", True)
         except Exception:
             pass
+        for prop, envname in (
+            ("ca-file", "SPICE_CA_FILE"),
+            ("cert-file", "SPICE_CERT_FILE"),
+            ("key-file", "SPICE_KEY_FILE"),
+        ):
+            path = os.environ.get(envname) or ""
+            if not path and prop == "ca-file":
+                path = os.environ.get("SSL_CERT_FILE") or ""
+            if not path:
+                continue
+            try:
+                self._spice_session.set_property(prop, path)
+            except Exception:
+                pass
         if SpiceClientGtk is not None:
             gtk_session = SpiceClientGtk.GtkSession.get(self._spice_session)
             gtk_session.set_property("auto-clipboard", True)
