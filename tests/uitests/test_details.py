@@ -2,6 +2,7 @@
 # See the COPYING file in the top-level directory.
 
 import unittest
+import unittest.mock
 
 import tests.utils
 from . import lib
