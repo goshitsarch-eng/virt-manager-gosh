@@ -2945,6 +2945,10 @@ class _SentinelDetailsCheck(object):
             pass
         if "cpu-copy-host" in (self._path or ""):
             try:
+                open(self._path, "w").write("0" if before else "1")
+            except Exception:
+                pass
+            try:
                 open("/tmp/vmm-a11y-copy-host.txt", "w").write(
                     "Copy host CPU configuration (host-passthrough)"
                 )

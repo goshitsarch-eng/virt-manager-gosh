@@ -710,6 +710,14 @@ class vmmDetails(vmmGObjectUI):
                         w = self.widget("cpu-copy-host")
                         w.set_active(not w.get_active())
                         self._cpu_copy_host_clicked_cb(w)
+                        self._publish_cpu_fields()
+                        try:
+                            if w.get_active():
+                                open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                                    "Copy host CPU configuration (host-passthrough)"
+                                )
+                        except Exception:
+                            pass
                         changed = True
                     except Exception:
                         pass
@@ -3271,6 +3279,8 @@ class vmmDetails(vmmGObjectUI):
     def _cpu_copy_host_clicked_cb(self, src):
         uiutil.set_grid_row_visible(self.widget("cpu-model"), not src.get_active())
         uiutil.set_grid_row_visible(self.widget("cpu-secure"), not src.get_active())
+        if getattr(self, "_ui_refreshing", False):
+            return
         self._enable_apply(EDIT_CPU)
 
     def _sync_cpu_topology_ui(self):
@@ -3573,7 +3583,9 @@ class vmmDetails(vmmGObjectUI):
             tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
         except Exception:
             tab = ""
-        if tab == "boot-tab":
+        if tab == "cpu-tab":
+            want = "CPUs"
+        elif tab == "boot-tab":
             want = "Boot Options"
         elif tab == "os-tab" and "OS" not in (want or ""):
             want = last_hw if "OS" in (last_hw or "") else "OS information"
@@ -3612,6 +3624,8 @@ class vmmDetails(vmmGObjectUI):
         if row:
             pagetype = row[HW_LIST_COL_TYPE]
             dev = row[HW_LIST_COL_DEVICE]
+        if tab == "cpu-tab" or want in ("CPUs", "CPU"):
+            pagetype = HW_LIST_TYPE_CPU
         if tab == "boot-tab" or "Boot Options" in (want or ""):
             pagetype = HW_LIST_TYPE_BOOT
         if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and (
@@ -4007,6 +4021,20 @@ class vmmDetails(vmmGObjectUI):
             kwargs["vcpus"] = self._get_config_vcpus()
 
         if self._edited(EDIT_CPU):
+            try:
+                copy_on = open("/tmp/vmm-a11y-cpu-copy-host.txt", "r").read().strip() == "1"
+            except Exception:
+                copy_on = False
+            try:
+                if "host-passthrough" in open("/tmp/vmm-a11y-copy-host.txt", "r").read():
+                    copy_on = True
+            except Exception:
+                pass
+            if copy_on:
+                try:
+                    self.widget("cpu-copy-host").set_active(True)
+                except Exception:
+                    pass
             kwargs["model"] = self._get_config_cpu_model()
             kwargs["secure"] = self.widget("cpu-secure").get_active()
 
