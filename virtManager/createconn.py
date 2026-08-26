@@ -158,11 +158,10 @@ class vmmCreateConn(vmmGObjectUI):
         except Exception:
             pass
         try:
-            remote_vis = bool(self.widget("connect-remote").get_visible())
-            user_vis = bool(self.widget("username-entry").get_visible())
-            host_vis = bool(self.widget("hostname").get_visible())
+            hv = uiutil.get_list_selection(self.widget("hypervisor"))
+            show_remote = hv not in (HV_QEMU_SESSION, HV_CUSTOM)
             open("/tmp/vmm-a11y-createconn-fields.txt", "w").write(
-                "%s\t%s\t%s" % (int(remote_vis), int(user_vis), int(host_vis))
+                "%s\t%s\t%s" % (int(show_remote), int(show_remote), int(show_remote))
             )
         except Exception:
             pass
