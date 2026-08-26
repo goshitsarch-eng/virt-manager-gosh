@@ -3965,6 +3965,14 @@ class vmmDetails(vmmGObjectUI):
                     self._mediacombo._a11y_path = ""
                 except Exception:
                     pass
+                for path in (
+                    "/tmp/vmm-a11y-details-media-path.txt",
+                    "/tmp/vmm-a11y-details-media-entry.txt.set",
+                ):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
             if pagetype is HW_LIST_TYPE_BOOT:
                 for path in (
                     "/tmp/vmm-a11y-boot-init-path.txt",

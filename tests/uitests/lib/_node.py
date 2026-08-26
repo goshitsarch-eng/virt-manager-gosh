@@ -812,6 +812,15 @@ class _SentinelEntry(object):
             # details file means the CDROM was ejected; do not fall through
             # to leftover wizard /pool- paths.
             if details_val is not None and shown and customize != "1":
+                try:
+                    src = open("/tmp/vmm-a11y-disk-source-path.txt", "r").read()
+                    sens = open(
+                        "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                    ).read().strip()
+                    if src == "" and sens != "1":
+                        return ""
+                except Exception:
+                    pass
                 return _pretty_nodedev_label(details_val)
             if details_val is not None and not details_val.strip():
                 return details_val
