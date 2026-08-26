@@ -3,6 +3,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gtk
 
 from ..lib import uiutil
@@ -145,7 +147,9 @@ class vmmMediaCombo(vmmGObjectUI):
 
     def _on_entry_changed_cb(self, src):
         try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write(src.get_text() or "")
+            text = src.get_text() or ""
+            if text:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write(text)
         except Exception:
             pass
         self.emit("changed", self._entry)
@@ -205,8 +209,17 @@ class vmmMediaCombo(vmmGObjectUI):
                 pass
 
     def get_path(self, store_media=True):
+        try:
+            if os.path.exists("/tmp/vmm-a11y-media-entry.txt"):
+                sent = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                if sent:
+                    if store_media and not sent.startswith("/dev"):
+                        self.config.add_iso_path(sent)
+                    return sent
+        except Exception:
+            pass
         ret = uiutil.get_list_selection(self._combo, column=self.MEDIA_FIELD_PATH)
-        if store_media and not ret.startswith("/dev"):
+        if store_media and ret and not ret.startswith("/dev"):
             self.config.add_iso_path(ret)
         return ret
 

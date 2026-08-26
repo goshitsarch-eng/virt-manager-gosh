@@ -400,6 +400,11 @@ class vmmCreateVM(vmmGObjectUI):
                 try:
                     if self._mediacombo is not None and (text or "").strip():
                         self._mediacombo.set_path(text.strip())
+                        self._os_already_detected_for_media = False
+                        self._detectable_media_widget_changed(
+                            getattr(self._mediacombo, "_entry", None),
+                            checkfocus=False,
+                        )
                 except Exception:
                     pass
                 return True
