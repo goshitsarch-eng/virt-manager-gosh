@@ -9491,6 +9491,26 @@ class _SentinelManagerVMCell(object):
             time.sleep(0.05)
 
 
+class _SentinelErrorLabel(object):
+    name = "error-label"
+    roleName = "label"
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-error-label.txt", "r").read()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return bool(self.text)
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+
 class _SentinelManagerWindow(object):
     name = "Virtual Machine Manager"
     roleName = "frame"
@@ -9524,6 +9544,11 @@ class _SentinelManagerWindow(object):
             pass
         try:
             if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                return False
+        except Exception:
+            pass
+        try:
+            if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
                 return False
         except Exception:
             pass
@@ -9694,6 +9719,8 @@ class _SentinelManagerWindow(object):
         ignore = (check_active, recursive, focusable)
         compact = str(name or "").replace(".*", "").lower()
         role = str(roleName or "").lower()
+        if compact == "error-label" or compact == "error label":
+            return _SentinelErrorLabel()
         if compact in ("edit", "view", "file") and (
             not role or ("menu" in role and "item" not in role)
         ):

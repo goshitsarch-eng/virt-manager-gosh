@@ -457,6 +457,10 @@ class vmmManager(vmmGObjectUI):
         gtkcompat.expose_a11y_label(
             "error-label", "error-label", msg or "error", window=self.topwin
         )
+        try:
+            open("/tmp/vmm-a11y-error-label.txt", "w").write(msg or "")
+        except Exception:
+            pass
 
     ################
     # Init methods #
