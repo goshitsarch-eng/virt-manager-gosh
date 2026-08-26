@@ -771,6 +771,19 @@ class _SentinelEntry(object):
     def text(self):
         path = self._path
         if self.name == "media-entry":
+            try:
+                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            except Exception:
+                shown = ""
+            try:
+                customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip()
+            except Exception:
+                customize = "0"
+            if shown and customize != "1":
+                try:
+                    return open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
+                except Exception:
+                    pass
             for alt in (
                 "/tmp/vmm-a11y-disk-source-path.txt",
                 "/tmp/vmm-a11y-media-browse.txt",

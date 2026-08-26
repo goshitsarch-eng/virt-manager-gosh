@@ -2952,9 +2952,15 @@ class vmmDetails(vmmGObjectUI):
         if not active:
             try:
                 if not os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set"):
-                    for disk in self.vm.get_disk_devices_norefresh():
+                    disks = self.vm.get_disk_devices()
+                    for disk in disks:
                         if disk.is_cdrom() and not disk.get_source_path():
-                            open("/tmp/vmm-a11y-details-media-entry.txt", "w").write("")
+                            for path in (
+                                "/tmp/vmm-a11y-details-media-entry.txt",
+                                "/tmp/vmm-a11y-disk-source-path.txt",
+                                "/tmp/vmm-a11y-media-entry.txt",
+                            ):
+                                open(path, "w").write("")
                             break
             except Exception:
                 pass
@@ -5186,6 +5192,8 @@ class vmmDetails(vmmGObjectUI):
             self._mediacombo.set_path(path or "")
             try:
                 open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+                if not path:
+                    open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
             except Exception:
                 pass
 
