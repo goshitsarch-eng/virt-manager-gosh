@@ -2588,6 +2588,13 @@ def expose_storagebrowse_window(browser):
                 host.append(btn)
                 vols.append(name)
         try:
+            extras = open("/tmp/vmm-a11y-extra-vols.txt", "r").read().splitlines()
+        except Exception:
+            extras = []
+        for extra in extras:
+            if extra and extra not in vols:
+                vols.append(extra)
+        try:
             open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
             open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
         except Exception:

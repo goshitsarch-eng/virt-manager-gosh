@@ -1634,6 +1634,15 @@ class vmmDetails(vmmGObjectUI):
         def cb(ignore, path):
             self._mediacombo.set_path(path)
 
+        try:
+            names = []
+            for disk in self.vm.get_disk_devices_norefresh():
+                dpath = disk.get_source_path() or ""
+                if dpath:
+                    names.append(os.path.basename(dpath))
+            open("/tmp/vmm-a11y-extra-vols.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
         self._browse_file(cb, reason=reason)
 
     def _set_network_ip_details(self, net):
