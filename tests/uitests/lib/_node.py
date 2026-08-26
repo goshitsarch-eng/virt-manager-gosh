@@ -7500,6 +7500,8 @@ class _SentinelVMWindow(object):
         view_name = compact.replace("^", "").replace("$", "").strip()
         if view_name == "view" and (not role or "menu" in role):
             return _SentinelViewMenu()
+        if compact == "consoles" and (not role or "menu" in role):
+            return _SentinelConsolesMenu()
         if "view manager" in compact:
             return _SentinelVMFileItem("View Manager")
         if compact == "config-cancel":
