@@ -599,6 +599,8 @@ class vmmManager(vmmGObjectUI):
 
             def _publish_toolbar():
                 try:
+                    if not self.is_visible():
+                        return True
                     vm = self.current_vm()
                     run = bool(vm and vm.is_runable())
                     paused = bool(vm and vm.is_paused())
@@ -622,6 +624,8 @@ class vmmManager(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
                 try:
                     if not os.path.exists(path):
+                        return True
+                    if not self.is_visible():
                         return True
                     action = open(path, "r").read().strip()
                     os.remove(path)
