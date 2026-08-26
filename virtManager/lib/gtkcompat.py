@@ -3569,7 +3569,7 @@ def hide_a11y_keys(prefix):
                 pass
 
 
-def present_a11y_alert(primary, buttons):
+def present_a11y_alert(primary, buttons, secondary=""):
     """
     Fresh AT-SPI alert window. Adding widgets to an existing sidecar is
     invisible after GetItems cache errors; a new window is not.
@@ -3596,10 +3596,19 @@ def present_a11y_alert(primary, buttons):
     lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
     set_accessible_name(lab, primary or "")
     try:
-        open("/tmp/vmm-a11y-alert.txt", "w").write(primary or "")
+        open("/tmp/vmm-a11y-alert.txt", "w").write(
+            "%s\n%s" % (primary or "", secondary or "")
+        )
     except Exception:
         pass
     box.append(lab)
+    if secondary:
+        sec = Gtk.Label(label=secondary)
+        sec.set_wrap(True)
+        sec.set_xalign(0)
+        sec.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        set_accessible_name(sec, secondary)
+        box.append(sec)
     btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     btnbox.set_halign(Gtk.Align.END)
     for label, cb in buttons or []:

@@ -73,7 +73,7 @@ def _launch_dialog(
     # Fresh AT-SPI clones help one-shot errors (run-fail). Reused Extra
     # confirm windows already map; cloning those poisons GetItems.
     if clone_a11y:
-        gtkcompat.present_a11y_alert(primary_text, alert_buttons)
+        gtkcompat.present_a11y_alert(primary_text, alert_buttons, secondary_text)
 
     if widget:
         dialog.get_content_area().add(widget)
