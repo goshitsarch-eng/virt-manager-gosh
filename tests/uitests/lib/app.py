@@ -579,10 +579,11 @@ class VMMDogtailApp:
                     os.remove("/tmp/vmm-a11y-alert-response.txt")
                 except Exception:
                     pass
-            # Do not clobber a replacement alert (search-perms error after Yes).
+            # Do not clobber a replacement alert (apply error after Yes).
+            # Re-read: an empty snapshot can race with the next dialog write.
             try:
                 now = _alert_text()
-                if not now.strip() or now == stored:
+                if now == stored:
                     os.remove("/tmp/vmm-a11y-alert.txt")
             except Exception:
                 pass
@@ -626,7 +627,7 @@ class VMMDogtailApp:
                         pass
                 try:
                     now = _alert_text()
-                    if not now.strip() or now == stored:
+                    if now == stored:
                         os.remove("/tmp/vmm-a11y-alert.txt")
                 except Exception:
                     pass

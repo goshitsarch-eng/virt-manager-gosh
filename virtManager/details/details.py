@@ -3773,7 +3773,8 @@ class vmmDetails(vmmGObjectUI):
                 if typed not in known:
                     self.err.show_err(
                         _("Error changing VM configuration: invalid cache mode '%s'")
-                        % typed
+                        % typed,
+                        modal=True,
                     )
                     return False
                 kwargs["cache"] = typed
