@@ -9301,8 +9301,10 @@ def _looks_like_conn_label(want):
         return True
     if "not connected" in lower:
         return True
+    # Exact connection pretty-name only. "test" is a guest and must not
+    # match the substring inside "test testdriver.xml".
     for cname, _connected in _conn_list_rows():
-        if text == cname or text in cname or cname == text:
+        if text == cname:
             return True
     return False
 
@@ -9550,10 +9552,11 @@ class _SentinelManagerWindow(object):
                 "shutdown": "Shut Down",
             }[compact]
             return _SentinelSnapshotToolbar(pretty, "menu item")
-        sent = _sentinel_manager_conn_cell(name, roleName)
+        # Prefer a VM cell when the caller used vmname+"\\n" (lifecycle).
+        sent = _sentinel_manager_vm_cell(name, roleName)
         if sent is not None:
             return sent
-        sent = _sentinel_manager_vm_cell(name, roleName)
+        sent = _sentinel_manager_conn_cell(name, roleName)
         if sent is not None:
             return sent
         if "conn-menu" in compact:
@@ -9774,16 +9777,29 @@ def _sentinel_manager_conn_cell(name, roleName):
                 live_vms.append(line.split("\t", 1)[0].strip())
     except Exception:
         pass
-    if (want in _TESTDRIVER_VMS or want in live_vms) and not _looks_like_conn_label(want):
+    if want in _TESTDRIVER_VMS or want in live_vms:
         return None
+    if _looks_like_conn_label(want):
+        for cname, _connected in _conn_list_rows():
+            if want == cname or want in cname or cname in want:
+                return _SentinelManagerConnCell(cname)
+        return _SentinelManagerConnCell(want)
     for cname, _connected in _conn_list_rows():
-        if want == cname or want in cname or cname in want:
+        if want == cname:
+            return _SentinelManagerConnCell(cname)
+        # Fuzzy connection labels ("bad uri", "testdriver.xml") but never
+        # a known guest name that is only a prefix of the pretty name.
+        if want and want in cname and want not in _TESTDRIVER_VMS:
+            return _SentinelManagerConnCell(cname)
+        if cname and cname in want and cname not in _TESTDRIVER_VMS:
             return _SentinelManagerConnCell(cname)
     if want and "cell" in role:
         deadline = time.time() + 8.0
         while time.time() < deadline:
             for cname, _connected in _conn_list_rows():
-                if want == cname or want in cname or cname in want:
+                if want == cname or (
+                    want in cname and want not in _TESTDRIVER_VMS
+                ):
                     return _SentinelManagerConnCell(cname)
             time.sleep(0.05)
     return None
@@ -11865,13 +11881,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
             return _SentinelConnMenu()
         try:
-            sent = _sentinel_manager_conn_cell(name, roleName)
+            sent = _sentinel_manager_vm_cell(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
             pass
         try:
-            sent = _sentinel_manager_vm_cell(name, roleName)
+            sent = _sentinel_manager_conn_cell(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
