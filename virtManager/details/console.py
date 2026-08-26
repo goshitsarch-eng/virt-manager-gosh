@@ -277,19 +277,25 @@ class _ConsoleMenu(vmmGObject):
         return None
 
     def select_item(self, item):
-        if item is None:
+        if item is None or getattr(self, "_selecting", False):
             return
+        self._selecting = True
         try:
-            self._selected_label = item.get_label()
-        except Exception:
-            self._selected_label = None
-        for child in self._menu.get_children():
-            if not hasattr(child, "set_active"):
-                continue
             try:
-                child.set_active(child is item)
+                self._selected_label = item.get_label()
             except Exception:
-                pass
+                self._selected_label = None
+            for child in self._menu.get_children():
+                if not hasattr(child, "set_active"):
+                    continue
+                want = child is item
+                try:
+                    if bool(child.get_active()) != want:
+                        child.set_active(want)
+                except Exception:
+                    pass
+        finally:
+            self._selecting = False
 
     ##############
     # Public API #
@@ -1057,19 +1063,24 @@ class vmmConsolePages(vmmGObjectUI):
         if viewer_initialized:
             return
 
-        try:
-            self._consolemenu.refresh_selection(self.vm)
-        except Exception:
-            pass
-
         cpage = self.widget("console-pages").get_current_page()
         # Keep a user-selected serial console across VM start / Console
         # radio reinit, but only while that serial still exists.
+        serial_dev = None
         try:
             _name, dev, _errmsg = self._consolemenu.get_selected()
+            if dev is not None and not hasattr(dev, "gtype"):
+                have = [
+                    d.get_xml_idx()
+                    for d in vmmSerialConsole.get_serialcon_devices(self.vm)
+                ]
+                if dev.get_xml_idx() in have:
+                    serial_dev = dev
+                else:
+                    self._consolemenu._selected_label = None
         except Exception:
-            dev = None
-        if dev is not None and not hasattr(dev, "gtype"):
+            serial_dev = None
+        if serial_dev is not None:
             if cpage == _CONSOLE_PAGE_SERIAL:
                 return
             self._viewer_connect_clicked = True
@@ -1084,13 +1095,15 @@ class vmmConsolePages(vmmGObjectUI):
         self._toggle_first_console_menu_item()
 
     def _on_console_menu_toggled_cb(self, src):
+        if getattr(self._consolemenu, "_selecting", False):
+            return
         try:
             if hasattr(src, "get_active") and not src.get_active():
                 return
         except Exception:
             pass
         try:
-            self._consolemenu.select_item(src)
+            self._consolemenu._selected_label = src.get_label()
         except Exception:
             pass
         self._console_menu_view_selected()
