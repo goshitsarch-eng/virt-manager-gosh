@@ -398,18 +398,21 @@ class vmmCreateVM(vmmGObjectUI):
                     return True
                 self._vmm_media_entry_seen = stamp
                 try:
-                    if self._mediacombo is not None and (text or "").strip():
-                        pathtext = text.strip()
+                    pathtext = (text or "").strip()
+                    if pathtext.startswith("/") and not os.path.exists(pathtext):
+                        try:
+                            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(
+                                _("None detected")
+                            )
+                        except Exception:
+                            pass
+                        try:
+                            self._os_list.search_entry.set_text(_("None detected"))
+                        except Exception:
+                            pass
+                    if self._mediacombo is not None and pathtext:
                         self._mediacombo.set_path(pathtext)
                         self._os_already_detected_for_media = False
-                        if pathtext.startswith("/") and not os.path.exists(pathtext):
-                            try:
-                                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(
-                                    _("None detected")
-                                )
-                                self._os_list.search_entry.set_text(_("None detected"))
-                            except Exception:
-                                pass
                         self._detectable_media_widget_changed(
                             getattr(self._mediacombo, "_entry", None),
                             checkfocus=False,

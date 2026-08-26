@@ -509,6 +509,19 @@ class _SentinelEntry(object):
                 open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
             except Exception:
                 pass
+        if self.name == "media-entry":
+            try:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
+            path = text if text is not None else ""
+            if path.startswith("/") and not os.path.exists(path):
+                try:
+                    open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("None detected")
+                except Exception:
+                    pass
 
 
 class _ArchOptionsSentinel(object):
