@@ -2762,7 +2762,13 @@ class vmmDetails(vmmGObjectUI):
             pass
 
     def vmwindow_has_unapplied_changes(self):
-        return self._has_unapplied_changes(self._get_hw_row())
+        row = self._get_hw_row()
+        if row is None:
+            try:
+                row = self._hw_row_for_label("Overview")
+            except Exception:
+                row = None
+        return self._has_unapplied_changes(row)
 
     def vmwindow_close(self):
         self._disable_apply()

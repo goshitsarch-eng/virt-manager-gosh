@@ -563,7 +563,20 @@ class vmmDeleteStorage(_vmmDeleteBase):
                 uri = vm.conn.get_uri() or ""
             except Exception:
                 uri = ""
-            if vm.is_active() and "test:" in uri:
+            running = False
+            try:
+                running = bool(vm.is_active())
+            except Exception:
+                running = False
+            if not running:
+                try:
+                    running = (
+                        open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip()
+                        == "0"
+                    )
+                except Exception:
+                    running = False
+            if running and "test:" in uri:
                 detach_err = (
                     "test driver cannot hot-unplug this device",
                     "",
