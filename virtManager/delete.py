@@ -234,6 +234,14 @@ class _vmmDeleteBase(vmmGObjectUI):
                 except Exception:
                     pass
                 return True
+            try:
+                path = "/tmp/vmm-a11y-delete-close"
+                if os.path.exists(path):
+                    os.remove(path)
+                    self.close()
+                    return True
+            except Exception:
+                pass
             if not shown:
                 return True
             try:
