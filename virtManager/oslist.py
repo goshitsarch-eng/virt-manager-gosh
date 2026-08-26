@@ -133,10 +133,7 @@ class vmmOSList(vmmGObjectUI):
                     return True
                 try:
                     src = self.widget("include-eol")
-                    src.set_active(not src.get_active())
-                    open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
-                        "1" if src.get_active() else "0"
-                    )
+                    self._set_include_eol_quiet(not src.get_active())
                 except Exception:
                     pass
                 try:
@@ -371,6 +368,30 @@ class vmmOSList(vmmGObjectUI):
         self._show_popover()
         self.widget("os-list").grab_focus()
 
+    def _set_include_eol_quiet(self, active):
+        """Toggle include-eol without refiltering the full OS model.
+
+        After GetItems, TreeModelFilter.refilter() can block the main
+        loop longer than the 2s New VM Forward pagenum check.
+        """
+        src = self.widget("include-eol")
+        self._filter_eol = not bool(active)
+        try:
+            src.handler_block_by_func(self._eol_toggled_cb)
+            try:
+                src.set_active(bool(active))
+            finally:
+                src.handler_unblock_by_func(self._eol_toggled_cb)
+        except Exception:
+            try:
+                src.set_active(bool(active))
+            except Exception:
+                pass
+        try:
+            open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write("1" if active else "0")
+        except Exception:
+            pass
+
     def _eol_toggled_cb(self, src):
         self._filter_eol = not src.get_active()
         self._refilter()
@@ -554,34 +575,30 @@ class vmmOSList(vmmGObjectUI):
                 open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
             except Exception:
                 pass
-        # Enable EOL before refiltering so fedora10 and other retired
-        # distros stay in the model for the selection loop.
-        if vmosobj is not None and vmosobj.eol and not self.widget("include-eol").get_active():
-            self.widget("include-eol").set_active(True)
-        self._clear_filter()
-
-        os_list = self.widget("os-list")
-        try:
-            open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
-                "1" if self.widget("include-eol").get_active() else "0"
-            )
-        except Exception:
-            pass
-
-        for row in os_list.get_model():
-            osobj = row[0]
-            if osobj.name != vmosobj.name:
-                continue
-
-            os_list.get_selection().select_iter(row.iter)
-            self._sync_os_selection()
-            hide = getattr(self, "_vmm_oslist_hide_a11y", None)
-            if hide:
-                try:
-                    hide()
-                except Exception:
-                    pass
-            return
+            try:
+                self.search_entry.set_text(vmosobj.label)
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(vmosobj.label)
+            except Exception:
+                pass
+        # Do not set_active/refilter here: walking the full OS model after
+        # GetItems blocks longer than the 2s Forward pagenum check.
+        if vmosobj is not None and getattr(vmosobj, "eol", False):
+            self._set_include_eol_quiet(True)
+        else:
+            try:
+                open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
+                    "1" if self.widget("include-eol").get_active() else "0"
+                )
+            except Exception:
+                pass
+        hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+        if hide:
+            try:
+                hide()
+            except Exception:
+                pass
+        self.refresh_a11y()
+        return
 
     def get_selected_os(self):
         return self._selected_os or self._kept_os

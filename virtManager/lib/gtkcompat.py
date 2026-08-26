@@ -966,8 +966,12 @@ def _oslist_fill_wrap(wrap, oslist):
         def _choose(_b, obj=osobj, text=label, toggle_eol=eol, lst=oslist):
             if toggle_eol:
                 try:
+                    quiet = getattr(lst, "_set_include_eol_quiet", None)
                     src = lst.widget("include-eol")
-                    src.set_active(not bool(src.get_active()))
+                    if quiet is not None:
+                        quiet(not src.get_active())
+                    else:
+                        src.set_active(not bool(src.get_active()))
                 except Exception:
                     pass
                 _oslist_show_popovers(lst)
