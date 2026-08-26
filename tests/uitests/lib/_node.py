@@ -3450,6 +3450,13 @@ class _SentinelHostListCell(object):
             open(self._select_path, "w").write(self.name or "")
         except Exception:
             pass
+        try:
+            kind = "pool" if "pool" in (self._select_path or "") else (
+                "vol" if "vol" in (self._select_path or "") else "net"
+            )
+            open("/tmp/vmm-a11y-host-active-list.txt", "w").write(kind)
+        except Exception:
+            pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if self.state_selected:

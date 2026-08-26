@@ -77,6 +77,7 @@ class vmmHost(vmmGObjectUI):
         self.widget("config-autoconnect").set_active(self.conn.get_autoconnect())
 
         self._cleanup_on_conn_removed()
+        self._start_host_tab_poll()
 
     #######################
     # Standard UI methods #
@@ -263,11 +264,18 @@ class vmmHost(vmmGObjectUI):
                 nav = "/tmp/vmm-a11y-host-nav.txt"
                 if os.path.exists(nav):
                     direction = open(nav, "r").read().strip().lower()
+                    which = ""
+                    try:
+                        which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                    except Exception:
+                        which = ""
+                    if not which:
+                        page = self.widget("details-tabs").get_current_page()
+                        which = "net" if page == 1 else "pool" if page == 2 else ""
                     os.remove(nav)
-                    page = self.widget("details-tabs").get_current_page()
-                    if page == 1:
+                    if which == "net":
                         self._hostnets._nav_list(direction)
-                    elif page == 2:
+                    elif which == "pool":
                         self._storagelist._nav_list(direction)
             except Exception:
                 pass
@@ -294,9 +302,11 @@ class vmmHost(vmmGObjectUI):
             try:
                 self.widget("details-tabs").set_current_page(page)
                 if page == 1:
+                    open("/tmp/vmm-a11y-host-active-list.txt", "w").write("net")
                     self._hostnets.refresh_page()
                     self._hostnets._publish_a11y_state()
                 elif page == 2:
+                    open("/tmp/vmm-a11y-host-active-list.txt", "w").write("pool")
                     self._storagelist.refresh_page()
                     self._storagelist._publish_a11y_state()
             except Exception:
