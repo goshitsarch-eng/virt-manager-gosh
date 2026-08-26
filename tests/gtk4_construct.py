@@ -794,6 +794,14 @@ def main():
             saved = saved.buffer
         assert saved and len(saved) > 8 and saved[:4] == b"\x89PNG"
         disp.set_scaling(True)
+        disp.set_keep_aspect_ratio(True)
+        assert disp.get_keep_aspect_ratio()
+        dx, dy, dw, dh = disp._fb_dest_rect(8, 4)
+        assert dw == dh == 4 and abs(dx - 2) < 0.01
+        disp.set_keep_aspect_ratio(False)
+        dx, dy, dw, dh = disp._fb_dest_rect(8, 4)
+        assert (dx, dy, dw, dh) == (0, 0, 8, 4)
+        disp.set_keep_aspect_ratio(True)
         disp.set_pointer_grab(True)
         disp.set_grab_keys(gtk4display.GrabSequence.new([37, 64]))
         grabbed = []

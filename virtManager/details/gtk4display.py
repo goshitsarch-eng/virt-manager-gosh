@@ -106,6 +106,7 @@ class _DisplayBase(Gtk.DrawingArea):
         self._fb_size = (0, 0)
         self._open = False
         self._scaling = True
+        self._keep_aspect = True
         self._pointer_grab = True
         self._grabbed_pointer = False
         self._grabbed_keyboard = False
@@ -172,12 +173,27 @@ class _DisplayBase(Gtk.DrawingArea):
         else:
             self._buttons &= ~bit
 
+    def _fb_dest_rect(self, width, height):
+        fw, fh = self._fb_size
+        if fw <= 0 or fh <= 0:
+            return 0, 0, 0, 0
+        if not self._scaling:
+            return 0, 0, fw, fh
+        if self._keep_aspect:
+            scale = min(float(width) / fw, float(height) / fh)
+            dw = fw * scale
+            dh = fh * scale
+            return (width - dw) / 2.0, (height - dh) / 2.0, dw, dh
+        return 0, 0, width, height
+
     def _scale_pointer(self, x, y):
         fw, fh = self._fb_size
-        if self._scaling and fw and fh:
-            x = int(x * fw / max(self.get_width(), 1))
-            y = int(y * fh / max(self.get_height(), 1))
-        return max(0, int(x)), max(0, int(y))
+        dx, dy, dw, dh = self._fb_dest_rect(max(self.get_width(), 1), max(self.get_height(), 1))
+        if dw <= 0 or dh <= 0 or fw <= 0 or fh <= 0:
+            return 0, 0
+        x = (x - dx) * fw / dw
+        y = (y - dy) * fh / dh
+        return max(0, min(fw - 1, int(x))), max(0, min(fh - 1, int(y)))
 
     def _matches_grab_sequence(self):
         keys = []
@@ -206,10 +222,15 @@ class _DisplayBase(Gtk.DrawingArea):
         fw, fh = self._fb_size
         if fw <= 0 or fh <= 0:
             return
-        if self._scaling:
-            sx = float(width) / fw
-            sy = float(height) / fh
-            cr.scale(sx, sy)
+        cr.set_source_rgb(0, 0, 0)
+        cr.rectangle(0, 0, width, height)
+        cr.fill()
+        dx, dy, dw, dh = self._fb_dest_rect(width, height)
+        if dw <= 0 or dh <= 0:
+            return
+        cr.save()
+        cr.translate(dx, dy)
+        cr.scale(dw / fw, dh / fh)
         cr.set_source_surface(self._fb, 0, 0)
         cr.paint()
         if self._cursor_surface is not None:
@@ -217,6 +238,7 @@ class _DisplayBase(Gtk.DrawingArea):
             hx, hy = self._cursor_hot
             cr.set_source_surface(self._cursor_surface, fb_x - hx, fb_y - hy)
             cr.paint()
+        cr.restore()
 
     def _set_framebuffer(self, surface, width, height):
         changed = self._fb_size != (width, height)
@@ -291,8 +313,12 @@ class _DisplayBase(Gtk.DrawingArea):
     def set_pointer_grab(self, val):
         self._pointer_grab = bool(val)
 
-    def set_keep_aspect_ratio(self, _val):
-        return None
+    def set_keep_aspect_ratio(self, val):
+        self._keep_aspect = bool(val)
+        self.queue_draw()
+
+    def get_keep_aspect_ratio(self):
+        return bool(self._keep_aspect)
 
     def set_scaling(self, val):
         self.scaling = bool(val)

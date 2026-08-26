@@ -403,6 +403,7 @@ class VNCViewer(Viewer):
         else:
             display = gtk4display.VNCDisplay()
             display.set_pointer_grab(True)
+            display.set_keep_aspect_ratio(True)
 
         self._set_display(display)
 
@@ -725,6 +726,7 @@ class SpiceViewer(Viewer):
                 display = SpiceClientGtk.Display.new(self._spice_session, channel_id)
             else:
                 display = gtk4display.SpiceDisplay(self._spice_session, channel_id)
+                display.set_keep_aspect_ratio(True)
                 inputs = None
                 if isinstance(channel, SpiceClientGLib.DisplayChannel):
                     for other in list(self._channels):
