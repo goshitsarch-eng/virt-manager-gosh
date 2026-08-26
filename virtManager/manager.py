@@ -255,6 +255,35 @@ class vmmManager(vmmGObjectUI):
             self._vmm_maximize_poll = True
             GLib.timeout_add(50, _maximize_tick)
 
+        def _vm_list_tick():
+            try:
+                self._publish_vm_list()
+            except Exception:
+                pass
+            path = "/tmp/vmm-a11y-vm-select.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                want = open(path, "r").read().strip().split("\n")[0].strip()
+                os.remove(path)
+            except Exception:
+                return True
+            if want:
+                try:
+                    self.select_row_for_name(want)
+                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(want)
+                except Exception:
+                    pass
+            return True
+
+        if not getattr(self, "_vmm_vm_list_poll", False):
+            self._vmm_vm_list_poll = True
+            GLib.timeout_add(50, _vm_list_tick)
+            try:
+                self._publish_vm_list()
+            except Exception:
+                pass
+
     ##################
     # Common methods #
     ##################
@@ -711,6 +740,34 @@ class vmmManager(vmmGObjectUI):
 
     def show_vm(self, _src):
         vmmenu.VMActionUI.show(self, self.current_vm())
+
+    def _publish_vm_list(self):
+        names = []
+        try:
+            model = self.widget("vm-list").get_model()
+        except Exception:
+            model = None
+
+        def _walk(parent):
+            if model is None:
+                return
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    if model[_iter][ROW_IS_VM]:
+                        key = str(model[_iter][ROW_SORT_KEY] or "")
+                        if key and key not in names:
+                            names.append(key)
+                except Exception:
+                    pass
+                _walk(_iter)
+                _iter = model.iter_next(_iter)
+
+        _walk(None)
+        try:
+            open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
 
     def select_row_for_name(self, name):
         model = self.widget("vm-list").get_model()

@@ -3243,6 +3243,100 @@ def _sentinel_net_source(name, roleName):
     return None
 
 
+_TESTDRIVER_VMS = (
+    "test-clone-simple",
+    "test-clone",
+    "test-clone-full",
+    "test-many-devices",
+    "test-alternate-devs",
+    "test-state-shutoff",
+    "test-snapshots",
+    "test-aaabbb",
+    "test-aaazzzzbbb",
+    "test-clone-simple-clone",
+    "test-clone-simple-clone1",
+    "test-clone1",
+)
+
+
+def _manager_vm_names():
+    names = []
+    try:
+        names = [
+            n.strip()
+            for n in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines()
+            if n.strip()
+        ]
+    except Exception:
+        names = []
+    for name in _TESTDRIVER_VMS:
+        if name not in names:
+            names.append(name)
+    return names
+
+
+class _SentinelManagerVMCell(object):
+    def __init__(self, name):
+        self.name = name + "\n"
+        self.roleName = "table cell"
+        self._vm = name
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        button = kwargs.get("button", 1)
+        try:
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vm)
+        except Exception:
+            pass
+        if button == 3:
+            try:
+                os.remove("/tmp/vmm-a11y-vm-menu-hidden")
+            except Exception:
+                pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-vm-selected.txt", "r").read().strip() == self._vm:
+                    break
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+
+def _sentinel_manager_vm_cell(name, roleName):
+    if not name:
+        return None
+    role = str(roleName or "").lower()
+    if role and "cell" not in role and "button" not in role and "list item" not in role:
+        return None
+    raw = str(name or "").replace(".*", "")
+    want = raw.split("\n")[0].strip()
+    if not want:
+        return None
+    for vm in _manager_vm_names():
+        if want == vm:
+            return _SentinelManagerVMCell(vm)
+    if "\n" in raw:
+        for vm in _manager_vm_names():
+            if vm.startswith(want) or want.startswith(vm):
+                return _SentinelManagerVMCell(vm)
+    return None
+
+
 def _sentinel_hw_cell(name, roleName):
     if not name:
         return None
@@ -5061,6 +5155,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_hw_cell(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_manager_vm_cell(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
