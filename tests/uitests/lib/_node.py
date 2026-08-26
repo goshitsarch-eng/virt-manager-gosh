@@ -1913,12 +1913,22 @@ class _SentinelXmlEditor(object):
     def sensitive(self):
         return True
 
-    @property
-    def text(self):
+    def _read(self):
         try:
             return open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
         except Exception:
             return ""
+
+    @property
+    def text(self):
+        xml = self._read()
+        if xml or self._page() != "1":
+            return xml
+        deadline = time.time() + 2.0
+        while not xml and time.time() < deadline:
+            time.sleep(0.05)
+            xml = self._read()
+        return xml
 
     def get_text_override(self):
         # XML-tab click only flips the page sentinel; contents are published
@@ -3663,6 +3673,13 @@ def _sentinel_manager_vm_cell(name, roleName):
     for vm in _manager_vm_names():
         if want == vm:
             return _SentinelManagerVMCell(vm)
+    # Newly migrated/renamed guests appear after dest poll.
+    if want and "cell" in role:
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            time.sleep(0.05)
+            if want in _manager_vm_names():
+                return _SentinelManagerVMCell(want)
     if "\n" in raw:
         for vm in _manager_vm_names():
             if vm.startswith(want) or want.startswith(vm):
