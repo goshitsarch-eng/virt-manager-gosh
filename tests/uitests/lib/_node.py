@@ -9357,7 +9357,13 @@ class _SentinelManagerConnCell(object):
         for name, connected in _conn_list_rows():
             if self._name == name or self._name in name or name in self._name:
                 return name, connected
-        return self._name, True
+        try:
+            for line in open("/tmp/vmm-a11y-conn-status.txt", "r").read().splitlines():
+                if self._name in line and "Not Connected" in line:
+                    return self._name, False
+        except Exception:
+            pass
+        return self._name, False
 
     @property
     def text(self):

@@ -778,6 +778,17 @@ class vmmManager(vmmGObjectUI):
                 self._last_conn = target
             if action == "disconnect":
                 if target is not None and not target.is_disconnected():
+                    try:
+                        pretty = target.get_pretty_desc() or name or ""
+                        if pretty:
+                            open("/tmp/vmm-a11y-conn-list.txt", "w").write(
+                                "%s\t0\n" % pretty
+                            )
+                            open("/tmp/vmm-a11y-conn-status.txt", "w").write(
+                                "%s\t%s - Not Connected\n" % (pretty, pretty)
+                            )
+                    except Exception:
+                        pass
                     target.close()
             elif action == "connect":
                 if target is not None and target.is_disconnected():
