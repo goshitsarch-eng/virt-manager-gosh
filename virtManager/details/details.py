@@ -1939,9 +1939,19 @@ class vmmDetails(vmmGObjectUI):
                         if row is not None:
                             self._vmm_pending_hw_nav = None
                             self._vmm_last_refreshed_hw = hw
+                            idx = self._hw_index_for_row(row)
+                            gtk_row = self._get_hw_row()
+                            gtk_label = (
+                                str(gtk_row[HW_LIST_COL_LABEL] or "")
+                                if gtk_row is not None
+                                else ""
+                            )
                             self._ui_refreshing = True
                             try:
-                                self._refresh_page_body(row)
+                                if idx is not None and gtk_label != hw:
+                                    self._set_hw_selection(idx)
+                                else:
+                                    self._refresh_page_body(row)
                             finally:
                                 self._ui_refreshing = False
                             self._publish_details_device_fields()
@@ -2992,12 +3002,33 @@ class vmmDetails(vmmGObjectUI):
             pass
         return guest
 
+    def _a11y_selected_hw_row(self):
+        """GTK selection, or the hardware-list sentinel if they diverged."""
+        row = self._get_hw_row()
+        want = ""
+        for path in (
+            "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-hw-selected.txt",
+            "/tmp/vmm-a11y-last-hw.txt",
+        ):
+            try:
+                want = open(path, "r").read().strip()
+            except Exception:
+                want = ""
+            if want:
+                break
+        if want:
+            labeled = self._hw_row_for_label(want)
+            if labeled is not None:
+                return labeled
+        return row
+
     def _sync_inactive_cdrom_media(self, guest=None):
         """Publish empty media-entry when the selected CDROM is ejected."""
         if self.vm is None or self.vm.is_active():
             return
         try:
-            row = self._get_hw_row()
+            row = self._a11y_selected_hw_row()
             current = row[HW_LIST_COL_DEVICE] if row else None
             if current is None or not getattr(current, "is_cdrom", lambda: False)():
                 return
