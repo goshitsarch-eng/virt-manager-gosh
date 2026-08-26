@@ -716,6 +716,14 @@ class VMMDogtailApp:
             except Exception:
                 pass
             if (
+                "in use" in (stored or "").lower()
+                and (button_text or "").strip().lower() == "yes"
+            ):
+                try:
+                    open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                except Exception:
+                    pass
+            if (
                 "unapplied" in (stored or "").lower()
                 and (button_text or "").strip().lower() == "yes"
                 and os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
@@ -780,6 +788,14 @@ class VMMDogtailApp:
                     open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
                 except Exception:
                     pass
+                if (
+                    "in use" in (stored or "").lower()
+                    and (button_text or "").strip().lower() == "yes"
+                ):
+                    try:
+                        open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                    except Exception:
+                        pass
                 if (
                     "unapplied" in (stored or "").lower()
                     and (button_text or "").strip().lower() == "yes"

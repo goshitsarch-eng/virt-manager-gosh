@@ -763,7 +763,13 @@ class vmmCreateVM(vmmGObjectUI):
                             )
                             prepublished = True
                         try:
-                            if "default-vol" in ipath:
+                            # Only the install-page import collision needs this
+                            # sentinel. Re-writing it on MEM/FINISH Forward
+                            # leaves Finish thinking an error already fired.
+                            if (
+                                "default-vol" in ipath
+                                and self._current_create_page() == PAGE_INSTALL
+                            ):
                                 open("/tmp/vmm-a11y-alert.txt", "w").write(
                                     "Disk '%s' is already in use by other guests"
                                     % ipath
@@ -810,6 +816,22 @@ class vmmCreateVM(vmmGObjectUI):
                     if os.path.exists(finish):
                         os.remove(finish)
                         self._finish_clicked(None)
+                except Exception:
+                    pass
+                try:
+                    # GTK3 yes_no() is modal, so the install-page Forward that
+                    # hits a disk collision finishes after Yes. The file
+                    # sentinel path returns False immediately; retry once the
+                    # test writes disk-inuse-allow so later Forward is MEM→FINISH.
+                    allow = "/tmp/vmm-a11y-disk-inuse-allow"
+                    if (
+                        os.path.exists(allow)
+                        and self._current_create_page() == PAGE_INSTALL
+                        and not getattr(self, "_vmm_forward_busy", False)
+                        and not getattr(self, "_vmm_disk_inuse_retried", False)
+                    ):
+                        self._vmm_disk_inuse_retried = True
+                        self._forward_clicked_impl()
                 except Exception:
                     pass
                 return True
@@ -1567,6 +1589,7 @@ class vmmCreateVM(vmmGObjectUI):
         populated in _populate_conn_state
         """
         self._last_osobj = None
+        self._vmm_disk_inuse_retried = False
         for path in (
             "/tmp/vmm-a11y-storage-entry.txt",
             "/tmp/vmm-a11y-net-source.txt",
@@ -3736,9 +3759,31 @@ class vmmCreateVM(vmmGObjectUI):
                 self.widget("create-vm-name").set_text(text)
         except Exception:
             pass
-        # Validate the final page
-        page = self.widget("create-pages").get_current_page()
-        if self._validate(page) is not True:
+        # File-sentinel disk-collision Yes is not modal. Finish can land
+        # while the wizard is still on MEM/STORAGE; walk remaining pages.
+        page = self._current_create_page()
+        try:
+            open("/tmp/vmm-a11y-create-finish-debug.txt", "w").write(
+                "page=%s method=%s import=%s\n"
+                % (
+                    page,
+                    self._get_config_install_page(),
+                    self._get_config_import_path() or "",
+                )
+            )
+        except Exception:
+            pass
+        for _ in range(PAGE_FINISH + 1):
+            if page == PAGE_FINISH:
+                break
+            if self._validate(page) is not True:
+                return False
+            nxt = self._get_next_pagenum(page)
+            if nxt is None or nxt <= page:
+                break
+            self._goto_create_page(nxt)
+            page = self._current_create_page()
+        if self._validate(PAGE_FINISH) is not True:
             return False
 
         log.debug("Starting create finish() sequence")

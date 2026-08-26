@@ -437,6 +437,12 @@ class vmmVMWindow(vmmGObjectUI):
     def _customize_cancel(self):
         log.debug("Asking to cancel customization")
 
+        try:
+            open("/tmp/vmm-a11y-alert.txt", "w").write(
+                "This will abort the installation. Are you sure?"
+            )
+        except Exception:
+            pass
         result = self.err.yes_no(_("This will abort the installation. Are you sure?"))
         if not result:
             log.debug("Customize cancel aborted")

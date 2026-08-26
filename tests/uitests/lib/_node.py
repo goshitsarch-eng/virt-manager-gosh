@@ -841,6 +841,14 @@ class _SentinelEntry(object):
             open(self._path, "w").write(text if text is not None else "")
         except Exception:
             pass
+        if self._path in (
+            "/tmp/vmm-a11y-boot-init-path.txt",
+            "/tmp/vmm-a11y-boot-init-args.txt",
+        ):
+            try:
+                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+            except Exception:
+                pass
         if self.name == "media-entry":
             try:
                 open(self._path + ".set", "w").write(text if text is not None else "")
@@ -1612,14 +1620,14 @@ class _SentinelConfigApply(object):
             pending = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
         except Exception:
             pending = None
-        if pending == "":
-            return
-        deadline = time.time() + 2.0
+        deadline = time.time() + (8.0 if pending == "" else 2.0)
         while time.time() < deadline:
             try:
                 if os.path.exists("/tmp/vmm-a11y-alert.txt"):
                     break
-                if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "0":
+                if pending != "" and open(
+                    "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                ).read().strip() == "0":
                     break
             except Exception:
                 pass
@@ -4207,10 +4215,22 @@ class _SentinelNavButton(object):
         except Exception:
             pass
         if self.name == "Finish":
+            try:
+                leftover = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                if "in use" in leftover.lower():
+                    os.remove("/tmp/vmm-a11y-alert.txt")
+            except Exception:
+                pass
             deadline = time.time() + 20.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read().strip()
+                    if alert and "in use" not in alert.lower():
+                        return
+                except Exception:
+                    pass
+                try:
+                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "0":
                         return
                 except Exception:
                     pass
@@ -13188,12 +13208,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pending = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
             except Exception:
                 pending = None
-            if pending == "":
-                return
-            deadline = time.time() + 2.0
+            deadline = time.time() + (8.0 if pending == "" else 2.0)
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "0":
+                    if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                        break
+                    if pending != "" and open(
+                        "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                    ).read().strip() == "0":
                         break
                 except Exception:
                     pass

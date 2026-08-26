@@ -1248,23 +1248,50 @@ class vmmDetails(vmmGObjectUI):
                 changed = False
                 apath = "/tmp/vmm-a11y-config-apply"
                 if os.path.exists(apath):
+                    tab = ""
+                    hw = ""
                     try:
-                        os.remove(apath)
+                        tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
                     except Exception:
-                        pass
+                        tab = ""
                     try:
-                        open("/tmp/vmm-a11y-apply-debug.txt", "w").write("boot-poll\n")
+                        hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
                     except Exception:
-                        pass
+                        hw = ""
+                    last = ""
                     try:
-                        self._config_apply()
-                    except Exception as exc:
+                        last = open("/tmp/vmm-a11y-last-hw.txt", "r").read()
+                    except Exception:
+                        last = ""
+                    on_boot = (
+                        tab == "boot-tab"
+                        or "Boot" in (hw or "")
+                        or "Boot" in (last or "")
+                    )
+                    if on_boot:
+                        try:
+                            os.remove(apath)
+                        except Exception:
+                            pass
                         try:
                             open("/tmp/vmm-a11y-apply-debug.txt", "w").write(
-                                "boot-poll-err: %s\n" % exc
+                                "boot-poll\n"
                             )
                         except Exception:
                             pass
+                        try:
+                            self._restore_boot_init_sentinels()
+                        except Exception:
+                            pass
+                        try:
+                            self._config_apply()
+                        except Exception as exc:
+                            try:
+                                open("/tmp/vmm-a11y-apply-debug.txt", "w").write(
+                                    "boot-poll-err: %s\n" % exc
+                                )
+                            except Exception:
+                                pass
                 for trig, opener in (
                     ("/tmp/vmm-a11y-initrd-browse", self._browse_initrd_clicked_cb),
                     ("/tmp/vmm-a11y-kernel-browse", self._browse_kernel_clicked_cb),
@@ -3688,11 +3715,13 @@ class vmmDetails(vmmGObjectUI):
             pagetype = HW_LIST_TYPE_NIC
         if tab == "boot-tab" or "Boot Options" in (want or ""):
             pagetype = HW_LIST_TYPE_BOOT
-        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and (
+        boot_ctx = (
             pagetype is HW_LIST_TYPE_BOOT
             or tab == "boot-tab"
             or "Boot" in (want or "")
-        ):
+            or "Boot" in (last_hw or "")
+        )
+        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and boot_ctx:
             pagetype = HW_LIST_TYPE_BOOT
         if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt") and (
             pagetype in (None, HW_LIST_TYPE_GENERAL)
@@ -3703,8 +3732,11 @@ class vmmDetails(vmmGObjectUI):
 
         success = False
         try:
-            if self._edited(EDIT_XML) and not os.path.exists(
-                "/tmp/vmm-a11y-overview-name-want.txt"
+            if (
+                self._edited(EDIT_XML)
+                and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+                and pagetype is not HW_LIST_TYPE_BOOT
+                and tab != "boot-tab"
             ):
                 if dev:
                     success = self._apply_xmleditor_device(dev)
