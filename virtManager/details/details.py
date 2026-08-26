@@ -638,6 +638,26 @@ class vmmDetails(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_vsock_cid)
 
+            def _poll_vsock_auto():
+                path = "/tmp/vmm-a11y-vsock-auto.txt.click"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    w = self.vsockdetails.widget("vsock-auto")
+                    if w is not None:
+                        w.set_active(not w.get_active())
+                    self._enable_apply(EDIT_VSOCK_AUTO)
+                    self._publish_details_device_fields()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_vsock_auto)
+
             def _poll_mem_fields():
                 changed = False
                 for fpath, wid, edit in (
