@@ -821,6 +821,11 @@ class _SentinelEntry(object):
             open(self._path, "w").write(text if text is not None else "")
         except Exception:
             pass
+        if self.name == "media-entry":
+            try:
+                open(self._path + ".set", "w").write(text if text is not None else "")
+            except Exception:
+                pass
         needs_set = self._path in (
             "/tmp/vmm-a11y-details-model.txt",
             "/tmp/vmm-a11y-gfx-password.txt",

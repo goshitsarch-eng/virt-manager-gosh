@@ -213,6 +213,15 @@ class vmmMediaCombo(vmmGObjectUI):
 
     def get_path(self, store_media=True):
         try:
+            set_path = "/tmp/vmm-a11y-media-entry.txt.set"
+            if os.path.exists(set_path):
+                sent = open(set_path, "r").read().strip()
+                if sent and store_media and not sent.startswith("/dev"):
+                    self.config.add_iso_path(sent)
+                return sent
+        except Exception:
+            pass
+        try:
             if os.path.exists("/tmp/vmm-a11y-media-entry.txt"):
                 sent = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
                 if sent:
@@ -227,6 +236,10 @@ class vmmMediaCombo(vmmGObjectUI):
         return ret
 
     def set_path(self, path):
+        try:
+            os.remove("/tmp/vmm-a11y-media-entry.txt.set")
+        except Exception:
+            pass
         uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
         self._entry.set_position(-1)
         displayed = ""

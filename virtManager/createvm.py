@@ -515,14 +515,21 @@ class vmmCreateVM(vmmGObjectUI):
 
             def _poll_media_entry():
                 path = "/tmp/vmm-a11y-media-entry.txt"
+                set_path = path + ".set"
+                explicit = False
                 try:
-                    if not os.path.exists(path):
+                    if os.path.exists(set_path):
+                        text = open(set_path, "r").read()
+                        stamp = os.path.getmtime(set_path)
+                        explicit = True
+                    elif os.path.exists(path):
+                        text = open(path, "r").read()
+                        stamp = os.path.getmtime(path)
+                    else:
                         return True
-                    text = open(path, "r").read()
-                    stamp = os.path.getmtime(path)
                 except Exception:
                     return True
-                if getattr(self, "_vmm_media_entry_seen", None) == stamp:
+                if not explicit and getattr(self, "_vmm_media_entry_seen", None) == stamp:
                     return True
                 self._vmm_media_entry_seen = stamp
                 try:
@@ -539,7 +546,17 @@ class vmmCreateVM(vmmGObjectUI):
                             self._os_list.search_entry.set_text(_("None detected"))
                         except Exception:
                             pass
-                    if self._mediacombo is not None and pathtext:
+                    if self._mediacombo is not None and not pathtext and explicit:
+                        try:
+                            self._mediacombo._entry.set_text("")
+                            self._mediacombo._combo.set_active(-1)
+                        except Exception:
+                            pass
+                        try:
+                            open(path, "w").write("")
+                        except Exception:
+                            pass
+                    elif self._mediacombo is not None and pathtext:
                         current = ""
                         try:
                             current = (
