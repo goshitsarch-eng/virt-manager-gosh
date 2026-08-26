@@ -146,12 +146,6 @@ class vmmMediaCombo(vmmGObjectUI):
     ################
 
     def _on_entry_changed_cb(self, src):
-        try:
-            text = src.get_text() or ""
-            if text:
-                open("/tmp/vmm-a11y-media-entry.txt", "w").write(text)
-        except Exception:
-            pass
         self.emit("changed", self._entry)
 
     def _on_entry_activated_cb(self, src):

@@ -524,6 +524,7 @@ class vmmCreateVM(vmmGObjectUI):
                             ipath = (self._get_config_import_path() or "").strip()
                         except Exception:
                             ipath = ""
+                        prepublished = False
                         if (
                             self._should_prepublish_install_forward()
                             and "default-vol" not in ipath
@@ -533,6 +534,7 @@ class vmmCreateVM(vmmGObjectUI):
                             self._write_pagenum_file(
                                 self._get_next_pagenum(PAGE_INSTALL)
                             )
+                            prepublished = True
                         try:
                             if "default-vol" in ipath:
                                 open("/tmp/vmm-a11y-alert.txt", "w").write(
@@ -541,9 +543,11 @@ class vmmCreateVM(vmmGObjectUI):
                                 )
                         except Exception:
                             pass
+                        fwd_ok = None
                         try:
-                            self._forward_clicked_impl()
+                            fwd_ok = self._forward_clicked_impl()
                         except Exception as exc:
+                            fwd_ok = False
                             try:
                                 open("/tmp/vmm-url-debug.log", "a").write(
                                     "forward-impl-exc %s\n" % exc
@@ -554,7 +558,13 @@ class vmmCreateVM(vmmGObjectUI):
                             after = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
                             after = ""
-                        if (
+                        if prepublished and fwd_ok is False:
+                            try:
+                                if self._current_create_page() == PAGE_INSTALL:
+                                    self._write_pagenum_file(PAGE_INSTALL)
+                            except Exception:
+                                pass
+                        elif (
                             after == before
                             and self._should_prepublish_install_forward()
                             and "default-vol" not in ipath
@@ -2189,9 +2199,14 @@ class vmmCreateVM(vmmGObjectUI):
             return bool((self._get_config_import_path() or "").strip())
         if inst == INSTALL_PAGE_ISO:
             try:
-                return bool(self._get_config_local_media())
+                media = (self._get_config_local_media() or "").strip()
             except Exception:
+                media = ""
+            if not media:
                 return False
+            if media.startswith("/dev/") and not os.path.exists(media):
+                return False
+            return True
         if inst == INSTALL_PAGE_MANUAL:
             return True
         return False
