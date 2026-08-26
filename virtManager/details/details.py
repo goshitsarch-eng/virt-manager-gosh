@@ -3159,8 +3159,10 @@ class vmmDetails(vmmGObjectUI):
             last_hw = open("/tmp/vmm-a11y-last-hw.txt", "r").read().strip()
         except Exception:
             last_hw = ""
-        if last_hw:
+        if last_hw and (not want or want == last_hw):
             want = last_hw
+        elif want and last_hw and want != last_hw:
+            want = want
         try:
             tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
         except Exception:
@@ -3283,6 +3285,27 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         if success is not False:
+            labeled = None
+            try:
+                labeled = self._hw_row_for_label(want) if want else None
+                if labeled is None:
+                    labeled = self._get_hw_row()
+                if labeled is not None:
+                    newlab = str(labeled[HW_LIST_COL_LABEL] or "")
+                    clicked = ""
+                    try:
+                        clicked = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                    except Exception:
+                        clicked = ""
+                    # A newer hw-list click can land while Apply is still
+                    # finishing. Do not clobber that selection.
+                    if newlab and (not clicked or clicked == want or clicked == newlab):
+                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
+                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
+                        open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
+                        want = newlab
+            except Exception:
+                labeled = None
             self._disable_apply()
             success = True
             try:
@@ -3302,19 +3325,6 @@ class vmmDetails(vmmGObjectUI):
                 self._repopulate_hw_list()
             except Exception:
                 pass
-            try:
-                labeled = self._hw_row_for_label(want) if want else None
-                if labeled is None:
-                    labeled = self._get_hw_row()
-                if labeled is not None:
-                    newlab = str(labeled[HW_LIST_COL_LABEL] or "")
-                    if newlab:
-                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
-                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
-                        open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
-                        want = newlab
-            except Exception:
-                labeled = None
             try:
                 if labeled is None:
                     labeled = self._hw_row_for_label(want) if want else None
