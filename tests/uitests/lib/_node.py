@@ -739,6 +739,38 @@ class _SentinelNetWarn(object):
         utils.check(lambda: self.onscreen)
 
 
+class _SentinelAddhwFinish(object):
+    """Add Hardware Finish; must not fire New VM Finish via click.txt."""
+
+    name = "Finish"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def check_sensitive(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-addhw-finish", "w").write("1")
+        except Exception:
+            pass
+
+
 class _SentinelAddhwTab(object):
     """Add Hardware notebook page after GetItems hides the real tab panel."""
 
@@ -853,6 +885,30 @@ def _sentinel_console_error(name, roleName):
         except Exception:
             if compact in text.lower():
                 return _SentinelConsoleError(text)
+    return None
+
+
+def _sentinel_addhw_finish(name, roleName, root=None):
+    if not name:
+        return None
+    compact = str(name).replace(".*", "").strip().lower()
+    if compact != "finish":
+        return None
+    role = str(roleName or "").lower()
+    if role and "button" not in role:
+        return None
+    root_name = ""
+    try:
+        root_name = str(getattr(root, "name", "") or "")
+    except Exception:
+        root_name = ""
+    if "add new virtual hardware" in root_name.lower():
+        return _SentinelAddhwFinish()
+    try:
+        if os.path.exists("/tmp/vmm-a11y-addhw-open"):
+            return _SentinelAddhwFinish()
+    except Exception:
+        pass
     return None
 
 
@@ -1728,6 +1784,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             or " on " in name
             or "Virtual Machine Manager" in name
         ):
+            if " on " in name:
+                try:
+                    vis = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    if vis and vis in name:
+                        return True
+                except Exception:
+                    pass
             try:
                 return bool(self.showing and self.visible and not self._a11y_hidden_name())
             except Exception:
@@ -2309,6 +2372,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 pass
             return
         if any(s in nname for s in _SENTINEL_CLICK):
+            if "finish" in nname and os.path.exists("/tmp/vmm-a11y-addhw-open"):
+                try:
+                    open("/tmp/vmm-a11y-addhw-finish", "w").write("1")
+                except Exception:
+                    pass
+                return
             try:
                 with open("/tmp/vmm-a11y-click.txt", "w") as fh:
                     fh.write(raw or nname)
@@ -2840,6 +2909,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_wizard_nav(name, roleName, self)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_addhw_finish(name, roleName, self)
             if sent is not None:
                 return sent
         except Exception:

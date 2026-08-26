@@ -138,6 +138,10 @@ class vmmAddHardware(vmmGObjectUI):
         except Exception:
             pass
         try:
+            open("/tmp/vmm-a11y-addhw-open", "w").write("1")
+        except Exception:
+            pass
+        try:
             gtkcompat.set_accessible_name(self.topwin, "Add New Virtual Hardware")
             self.topwin.set_title("Add New Virtual Hardware")
             gtkcompat._ensure_app_window(self.topwin)
@@ -194,8 +198,31 @@ class vmmAddHardware(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_hw_select)
+        if not getattr(self, "_vmm_addhw_finish_poll", False):
+            self._vmm_addhw_finish_poll = True
+
+            def _poll_addhw_finish():
+                path = "/tmp/vmm-a11y-addhw-finish"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._finish()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_addhw_finish)
 
     def close(self, ignore1=None, ignore2=None):
+        parent = None
+        try:
+            parent = self.topwin.get_transient_for()
+        except Exception:
+            parent = None
         if self.is_visible():
             log.debug("Closing addhw")
             self.topwin.hide()
@@ -203,6 +230,15 @@ class vmmAddHardware(vmmGObjectUI):
             open("/tmp/vmm-a11y-addhw-hidden", "w").write("1")
         except Exception:
             pass
+        try:
+            os.remove("/tmp/vmm-a11y-addhw-open")
+        except Exception:
+            pass
+        if parent is not None:
+            try:
+                parent.present()
+            except Exception:
+                pass
         if self._storagebrowser:
             self._storagebrowser.close()
 

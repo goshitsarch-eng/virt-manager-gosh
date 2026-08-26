@@ -203,6 +203,10 @@ class vmmVMWindow(vmmGObjectUI):
         log.debug("Showing VM details: %s", self.vm)
         vis = self.is_visible()
         self.topwin.present()
+        try:
+            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
+        except Exception:
+            pass
         if vis:
             return
 
@@ -280,6 +284,10 @@ class vmmVMWindow(vmmGObjectUI):
             return
 
         self.topwin.hide()
+        try:
+            os.remove("/tmp/vmm-a11y-vmwindow.txt")
+        except Exception:
+            pass
         self._console.vmwindow_close()
         self._details.vmwindow_close()
 
