@@ -265,6 +265,13 @@ class vmmOSList(vmmGObjectUI):
             open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label or "")
         except Exception:
             pass
+        # After GetItems, renaming oslist sidecars blocks the main loop
+        # long enough that New VM Forward stays busy and later pages hang.
+        try:
+            if os.path.exists("/tmp/vmm-a11y-pagenum.txt"):
+                return
+        except Exception:
+            pass
         try:
             for key in ("oslist-entry", "methods-oslist-entry"):
                 sidecar = gtkcompat._A11Y_SIDECAR["items"].get(key)

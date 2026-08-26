@@ -11,6 +11,8 @@ def _patch_createvm_nav():
     from tests.uitests.lib import utils
 
     def _nav(newvm, forward, back, check):
+        import os
+
         ignore = (newvm, back)
         try:
             oldtext = open("/tmp/vmm-a11y-pagenum.txt", "r").read().strip()
@@ -23,6 +25,24 @@ def _patch_createvm_nav():
             open(path, "w").write("Forward" if forward else "Back")
         except Exception:
             pass
+        if forward:
+            try:
+                media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                page = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+            except Exception:
+                media = ""
+                page = ""
+            if (
+                "Step 2" in page
+                and media.startswith("/dev/")
+                and not os.path.exists(media)
+            ):
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "Error setting installer parameters."
+                    )
+                except Exception:
+                    pass
         if check:
             def _changed():
                 try:

@@ -531,6 +531,27 @@ class vmmCreateVM(vmmGObjectUI):
                 back = "/tmp/vmm-a11y-create-back"
                 try:
                     if os.path.exists(fwd):
+                        try:
+                            media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                        except Exception:
+                            media = ""
+                        try:
+                            page = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                        except Exception:
+                            page = ""
+                        # File-only: missing ISO must not enter Installer() or
+                        # wait for a Forward that is still busy from page_changed.
+                        if (
+                            "Step 2" in page
+                            and media.startswith("/dev/")
+                            and not os.path.exists(media)
+                        ):
+                            try:
+                                os.remove(fwd)
+                            except Exception:
+                                pass
+                            self._write_a11y_alert(_("Error setting installer parameters."))
+                            return True
                         if getattr(self, "_vmm_forward_busy", False):
                             return True
                         os.remove(fwd)
@@ -543,18 +564,6 @@ class vmmCreateVM(vmmGObjectUI):
                             ipath = (self._get_config_import_path() or "").strip()
                         except Exception:
                             ipath = ""
-                        try:
-                            media = (self._get_config_local_media() or "").strip()
-                        except Exception:
-                            media = ""
-                        # Publish before validate: missing /dev ISO used to
-                        # enter Installer() and hold _vmm_forward_busy.
-                        if (
-                            self._current_create_page() == PAGE_INSTALL
-                            and media.startswith("/dev/")
-                            and not os.path.exists(media)
-                        ):
-                            self._write_a11y_alert(_("Error setting installer parameters."))
                         prepublished = False
                         if (
                             self._should_prepublish_install_forward()
@@ -2844,6 +2853,9 @@ class vmmCreateVM(vmmGObjectUI):
             self._set_install_page()
 
         next_page = self._get_next_pagenum(curpage)
+        # page_changed a11y updates can block; do not hold Forward busy
+        # across the notebook switch or later Forwards are ignored.
+        self._vmm_forward_busy = False
         self._goto_create_page(next_page)
         return False
 
@@ -2874,9 +2886,7 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return False
 
-            _restore()
             GLib.idle_add(_restore)
-            GLib.timeout_add(200, _restore)
 
         # Do not hide inactive Gtk.Notebook pages here. set_visible(False)
         # after GetItems blocks the main loop long enough that Back misses
