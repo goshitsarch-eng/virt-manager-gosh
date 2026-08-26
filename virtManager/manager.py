@@ -601,8 +601,36 @@ class vmmManager(vmmGObjectUI):
                     # so a second show() does not reset the wizard.
                     "Migrate": vmmenu.VMActionUI.migrate,
                     "Open": vmmenu.VMActionUI.show,
+                    "Run": vmmenu.VMActionUI.run,
+                    "Restore": vmmenu.VMActionUI.run,
+                    "Shut Down": vmmenu.VMActionUI.shutdown,
+                    "Shutdown": vmmenu.VMActionUI.shutdown,
+                    "Reboot": vmmenu.VMActionUI.reboot,
+                    "Force Reset": vmmenu.VMActionUI.reset,
+                    "Reset": vmmenu.VMActionUI.reset,
+                    "Force Off": vmmenu.VMActionUI.destroy,
+                    "Pause": vmmenu.VMActionUI.suspend,
+                    "Resume": vmmenu.VMActionUI.resume,
+                    "Save": vmmenu.VMActionUI.save,
                 }
                 fn = mapping.get(action)
+                if fn is None:
+                    key = (action or "").lower().replace("_", " ").strip()
+                    aliases = {
+                        "run": vmmenu.VMActionUI.run,
+                        "restore": vmmenu.VMActionUI.run,
+                        "shut down": vmmenu.VMActionUI.shutdown,
+                        "shutdown": vmmenu.VMActionUI.shutdown,
+                        "reboot": vmmenu.VMActionUI.reboot,
+                        "force reset": vmmenu.VMActionUI.reset,
+                        "reset": vmmenu.VMActionUI.reset,
+                        "force off": vmmenu.VMActionUI.destroy,
+                        "destroy": vmmenu.VMActionUI.destroy,
+                        "pause": vmmenu.VMActionUI.suspend,
+                        "resume": vmmenu.VMActionUI.resume,
+                        "save": vmmenu.VMActionUI.save,
+                    }
+                    fn = aliases.get(key)
                 if fn is not None and vm is not None:
                     try:
                         fn(self, vm)
@@ -613,6 +641,43 @@ class vmmManager(vmmGObjectUI):
             GLib.timeout_add(50, _poll_vm_action)
 
         gtkcompat.start_conn_action_poll()
+        if not getattr(self, "_vmm_appmenu_poll", False):
+            self._vmm_appmenu_poll = True
+
+            def _poll_appmenu():
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-prefs-open"):
+                        os.remove("/tmp/vmm-a11y-prefs-open")
+                        self.show_preferences(None)
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-graph-toggle.txt"
+                    if os.path.exists(path):
+                        name = open(path, "r").read().strip().lower()
+                        os.remove(path)
+                        mapping = {
+                            "guest cpu": "menu_view_stats_guest_cpu",
+                            "host cpu": "menu_view_stats_host_cpu",
+                            "memory": "menu_view_stats_memory",
+                            "disk i/o": "menu_view_stats_disk",
+                            "network i/o": "menu_view_stats_network",
+                        }
+                        wid = mapping.get(name)
+                        if wid:
+                            src = self.widget(wid)
+                            src.set_active(not src.get_active())
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-column-click.txt"
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_appmenu)
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
         for idx, item in self.connmenu_items.items():

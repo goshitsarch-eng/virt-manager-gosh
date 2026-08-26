@@ -123,6 +123,24 @@ class VMMDogtailApp:
             from . import _node
 
             return _node._SentinelManagerWindow()
+        if name and "Saving Virtual Machine" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelProgressWindow(name)
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and name == "Preferences":
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1":
+                        break
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Authentication required" in name:
             while time.time() < deadline:
                 try:

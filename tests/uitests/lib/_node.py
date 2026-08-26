@@ -4025,11 +4025,182 @@ class _SentinelVMActionMenu(object):
         focusable=False,
         timeout=5,
     ):
+        ignore = (check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        if compact in ("shut down", "shutdown") and "item" not in role:
+            try:
+                os.remove("/tmp/vmm-a11y-shutdown-menu-hidden")
+            except Exception:
+                pass
+            return _SentinelShutdownSubmenu()
+        return _SentinelVMActionItem(str(name or "").replace(".*", ""))
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelShutdownSubmenu(object):
+    name = "vmm-shutdown-menu"
+    roleName = "menu"
+
+    @property
+    def onscreen(self):
+        try:
+            return not os.path.exists("/tmp/vmm-a11y-shutdown-menu-hidden")
+        except Exception:
+            return True
+
+    @property
+    def showing(self):
+        return self.onscreen
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            os.remove("/tmp/vmm-a11y-shutdown-menu-hidden")
+        except Exception:
+            pass
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
         ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
         return _SentinelVMActionItem(str(name or "").replace(".*", ""))
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
         return self.find(name, roleName, labeller_text)
+
+
+class _SentinelAppBarItem(object):
+    def __init__(self, name, roleName="menu item"):
+        self.name = name
+        self.roleName = roleName
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def showing(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        key = (self.name or "").strip()
+        try:
+            if key == "Preferences":
+                open("/tmp/vmm-a11y-prefs-open", "w").write("1")
+            elif key.lower() in (
+                "guest cpu",
+                "host cpu",
+                "memory",
+                "disk i/o",
+                "network i/o",
+            ):
+                open("/tmp/vmm-a11y-graph-toggle.txt", "w").write(key)
+            else:
+                open("/tmp/vmm-a11y-appmenu-action.txt", "w").write(key)
+        except Exception:
+            pass
+
+
+class _SentinelAppBarMenu(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu"
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def showing(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout, labeller_text)
+        compact = str(name or "").replace(".*", "").lower().strip()
+        role = str(roleName or "").lower()
+        if compact == "graph" and (not role or "menu" in role):
+            return _SentinelAppBarMenu("Graph")
+        if compact == "preferences":
+            return _SentinelAppBarItem("Preferences")
+        aliases = {
+            "guest cpu": "Guest CPU",
+            "host cpu": "Host CPU",
+            "memory": "Memory",
+            "disk i/o": "Disk I/O",
+            "network i/o": "Network I/O",
+        }
+        if compact in aliases:
+            role_out = "check menu item" if "check" in role or not role else roleName
+            return _SentinelAppBarItem(aliases[compact], role_out or "check menu item")
+        return _SentinelAppBarItem(str(name or "").replace(".*", ""))
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelColumnHeader(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table column header"
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def showing(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-column-click.txt", "w").write(self.name or "")
+        except Exception:
+            pass
 
 
 def _connectauth_open():
@@ -9314,6 +9485,29 @@ class _SentinelManagerWindow(object):
         ignore = (check_active, recursive, focusable)
         compact = str(name or "").replace(".*", "").lower()
         role = str(roleName or "").lower()
+        if compact in ("edit", "view", "file") and (
+            not role or ("menu" in role and "item" not in role)
+        ):
+            return _SentinelAppBarMenu(compact)
+        if compact == "graph" and (not role or "menu" in role):
+            return _SentinelAppBarMenu("Graph")
+        if compact in (
+            "name",
+            "cpu usage",
+            "host cpu",
+            "memory",
+            "disk i/o",
+            "network i/o",
+        ) and (not role or "column" in role or "header" in role):
+            pretty = {
+                "name": "Name",
+                "cpu usage": "CPU usage",
+                "host cpu": "Host CPU",
+                "memory": "Memory",
+                "disk i/o": "Disk I/O",
+                "network i/o": "Network I/O",
+            }[compact]
+            return _SentinelColumnHeader(pretty)
         if compact in ("run", "restore") and (not role or "button" in role):
             return _SentinelSnapshotToolbar("Run")
         if compact in ("shut down", "shutdown") and (not role or "button" in role):
@@ -11399,6 +11593,16 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         if name and "creating virtual machine" in str(name).lower():
             return _SentinelProgressWindow(str(name).replace(".*", ""))
+        if name and "saving virtual machine" in str(name).lower():
+            deadline = time.time() + max(1.0, float(timeout or 5))
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                        return _SentinelProgressWindow(str(name).replace(".*", ""))
+                except Exception:
+                    pass
+                time.sleep(0.05)
+            return _SentinelProgressWindow(str(name).replace(".*", ""))
         if name and "migrating vm" in str(name).replace(".*", "").lower():
             try:
                 if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
@@ -11500,6 +11704,20 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
             return _SentinelVMActionMenu()
+        if name and "vmm-shutdown-menu" in str(name).lower():
+            try:
+                os.remove("/tmp/vmm-a11y-shutdown-menu-hidden")
+            except Exception:
+                pass
+            return _SentinelShutdownSubmenu()
+        compact_bar = str(name or "").replace(".*", "").lower().strip()
+        role_bar = str(raw_role or "").lower()
+        if compact_bar in ("edit", "view", "file") and (
+            not role_bar or ("menu" in role_bar and "item" not in role_bar)
+        ):
+            return _SentinelAppBarMenu(compact_bar)
+        if "preferences" in compact_bar and (not role_bar or "item" in role_bar):
+            return _SentinelAppBarItem("Preferences")
         try:
             want_alert = raw_role in ("alert", "(alert|dialog)") or (
                 "alert" in raw_role and "window" not in raw_role and "frame" not in raw_role

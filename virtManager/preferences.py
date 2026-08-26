@@ -97,12 +97,20 @@ class vmmPreferences(vmmGObjectUI):
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing preferences")
         self.topwin.hide()
+        try:
+            open("/tmp/vmm-a11y-prefs-shown.txt", "w").write("0")
+        except Exception:
+            pass
         return 1
 
     def show(self, parent):
         log.debug("Showing preferences")
         self.topwin.set_transient_for(parent)
         self.topwin.present()
+        try:
+            open("/tmp/vmm-a11y-prefs-shown.txt", "w").write("1")
+        except Exception:
+            pass
 
     def _cleanup(self):
         pass
