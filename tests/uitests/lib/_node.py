@@ -6641,6 +6641,123 @@ class _SentinelVMFileItem(object):
             time.sleep(0.05)
 
 
+class _SentinelConsoleItem(object):
+    def __init__(self, name):
+        self.name = str(name or "").replace(".*", "")
+        self.roleName = "menu item"
+
+    def _key(self):
+        return self.name.lower().replace(" ", "-")
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        try:
+            return open(
+                "/tmp/vmm-a11y-console-item-%s.txt" % self._key(), "r"
+            ).read().strip() == "1"
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-console-select.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+
+class _SentinelConsolesMenu(object):
+    name = "Consoles"
+    roleName = "menu"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        return _SentinelConsoleItem(name)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelViewMenu(object):
+    name = "View"
+    roleName = "menu"
+
+    @property
+    def showing(self):
+        return _vmwindow_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").replace("^", "").replace("$", "").lower()
+        if "console" in compact:
+            return _SentinelConsolesMenu()
+        return _SentinelConsoleItem(name)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
 class _SentinelVMFileMenu(object):
     name = "File"
     roleName = "menu"
@@ -6745,6 +6862,9 @@ class _SentinelVMWindow(object):
             return _SentinelStaticLabel("Hypervisor Details")
         if compact == "file" and (not role or "menu" in role):
             return _SentinelVMFileMenu()
+        view_name = compact.replace("^", "").replace("$", "").strip()
+        if view_name == "view" and (not role or "menu" in role):
+            return _SentinelViewMenu()
         if "view manager" in compact:
             return _SentinelVMFileItem("View Manager")
         if compact == "config-cancel":

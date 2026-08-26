@@ -311,6 +311,13 @@ class _ConsoleMenu(vmmGObject):
             if sensitive:
                 item.connect("toggled", self._toggled_cb)
             self._menu.add(item)
+            try:
+                key = str(label or "").lower().replace(" ", "-")
+                open("/tmp/vmm-a11y-console-item-%s.txt" % key, "w").write(
+                    "1" if sensitive else "0"
+                )
+            except Exception:
+                pass
 
         self._menu.show_all()
 
