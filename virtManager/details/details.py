@@ -2122,8 +2122,8 @@ class vmmDetails(vmmGObjectUI):
             if host:
                 return tab, host
         for path in (
-            "/tmp/vmm-a11y-hw-clicked.txt",
             "/tmp/vmm-a11y-last-hw.txt",
+            "/tmp/vmm-a11y-hw-clicked.txt",
             "/tmp/vmm-a11y-hw-selected.txt",
         ):
             try:
@@ -3551,7 +3551,9 @@ class vmmDetails(vmmGObjectUI):
             tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
         except Exception:
             tab = ""
-        if tab == "os-tab" and "OS" not in (want or ""):
+        if tab == "boot-tab":
+            want = "Boot Options"
+        elif tab == "os-tab" and "OS" not in (want or ""):
             want = last_hw if "OS" in (last_hw or "") else "OS information"
         elif tab == "sound-tab" and "Sound" not in (want or ""):
             want = "Sound"
@@ -3588,6 +3590,8 @@ class vmmDetails(vmmGObjectUI):
         if row:
             pagetype = row[HW_LIST_COL_TYPE]
             dev = row[HW_LIST_COL_DEVICE]
+        if tab == "boot-tab" or "Boot Options" in (want or ""):
+            pagetype = HW_LIST_TYPE_BOOT
         if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and (
             pagetype is HW_LIST_TYPE_BOOT
             or tab == "boot-tab"
@@ -3755,15 +3759,41 @@ class vmmDetails(vmmGObjectUI):
                     newlab = str(applied[HW_LIST_COL_LABEL] or "")
                     idx = self._hw_index_for_row(applied)
                     if newlab:
-                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
-                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
-                        open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
-                        self._vmm_last_refreshed_hw = newlab
-                        if idx is not None:
-                            open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
-                                str(idx)
+                        clicked_now = ""
+                        try:
+                            clicked_now = open(
+                                "/tmp/vmm-a11y-hw-clicked.txt", "r"
+                            ).read().strip()
+                        except Exception:
+                            clicked_now = ""
+                        same_unique = False
+                        if clicked_now and newlab:
+                            a = clicked_now.split()[0]
+                            b = newlab.split()[0]
+                            same_unique = a == b and a in (
+                                "Sound",
+                                "Video",
+                                "Watchdog",
+                                "Display",
                             )
-                        want = newlab
+                        # A newer hw-list click can land while Apply is
+                        # finishing. Do not clobber Boot/USB/etc with the
+                        # page we just applied.
+                        if (
+                            not clicked_now
+                            or clicked_now == newlab
+                            or clicked_now == want
+                            or same_unique
+                        ):
+                            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
+                            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
+                            open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
+                            self._vmm_last_refreshed_hw = newlab
+                            if idx is not None:
+                                open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+                                    str(idx)
+                                )
+                            want = newlab
                 if labeled is None:
                     labeled = self._hw_row_for_label(want) if want else None
                 if labeled is not None:
