@@ -132,6 +132,10 @@ class vmmHostNets(vmmGObjectUI):
             self._populate_networks()
         except Exception:
             pass
+        try:
+            self._start_a11y_poll()
+        except Exception:
+            pass
         self._publish_a11y_state()
 
     def _publish_a11y_state(self):

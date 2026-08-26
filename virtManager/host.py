@@ -349,6 +349,21 @@ class vmmHost(vmmGObjectUI):
             except Exception:
                 pass
             try:
+                for prefix, apply_fn in (
+                    ("net", lambda: self._hostnets._net_apply()),
+                    ("pool", lambda: self._storagelist._pool_apply()),
+                ):
+                    path = "/tmp/vmm-a11y-host-%s-action.txt" % prefix
+                    if not os.path.exists(path):
+                        continue
+                    action = open(path, "r").read().strip()
+                    if action != "apply":
+                        continue
+                    os.remove(path)
+                    apply_fn()
+            except Exception:
+                pass
+            try:
                 path = "/tmp/vmm-a11y-host-file-action.txt"
                 if os.path.exists(path):
                     action = open(path, "r").read().strip()
