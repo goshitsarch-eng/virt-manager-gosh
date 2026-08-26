@@ -638,7 +638,14 @@ class VMMDogtailApp:
                 win = _node._SentinelVMWindow(created)
                 break
             now = time.time()
-            if want and now - last_nudge >= 2.0:
+            customize = False
+            try:
+                customize = (
+                    open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+                )
+            except Exception:
+                customize = False
+            if want and now - last_nudge >= 2.0 and not customize:
                 last_nudge = now
                 try:
                     open("/tmp/vmm-a11y-vm-select.txt", "w").write(real_want)

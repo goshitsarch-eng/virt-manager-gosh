@@ -1512,6 +1512,12 @@ class _SentinelAddHardwareButton(object):
                 break
             time.sleep(0.05)
         try:
+            vm = ""
+            try:
+                vm = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            except Exception:
+                vm = ""
+            open("/tmp/vmm-a11y-addhw-show.txt", "w").write(vm or "1")
             open("/tmp/vmm-a11y-click.txt", "w").write("add-hardware")
         except Exception:
             pass

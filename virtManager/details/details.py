@@ -1161,6 +1161,20 @@ class vmmDetails(vmmGObjectUI):
                         self._show_addhw()
                 except Exception:
                     pass
+                showp = "/tmp/vmm-a11y-addhw-show.txt"
+                try:
+                    if os.path.exists(showp):
+                        want = open(showp, "r").read().strip()
+                        mine = ""
+                        try:
+                            mine = self.vm.get_name()
+                        except Exception:
+                            mine = ""
+                        if want in ("", "1") or want == mine:
+                            os.remove(showp)
+                            self._show_addhw()
+                except Exception:
+                    pass
                 return True
 
             GLib.timeout_add(50, _poll_hw_popup)

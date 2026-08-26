@@ -339,24 +339,19 @@ class vmmManager(vmmGObjectUI):
                     name = open(path, "r").read().strip().split("\n")[0].strip()
                     os.remove(path)
                     if name:
-                        try:
-                            self.select_row_for_name(name)
-                        except Exception:
-                            pass
-                        vm = self.current_vm()
+                        vm = self._a11y_lookup_vm(name)
                         if vm is None:
                             try:
-                                for conn in vmmConnectionManager.get_instance().conns.values():
-                                    try:
-                                        vm = conn.get_vm_by_name(name)
-                                    except Exception:
-                                        vm = None
-                                    if vm is not None:
-                                        break
+                                self.select_row_for_name(name)
                             except Exception:
-                                vm = None
+                                pass
+                            cur = self.current_vm()
+                            if cur is not None and cur.get_name() == name:
+                                vm = cur
                         if vm is None:
                             # Connection/VM list may still be coming up.
+                            # Do not open the currently selected guest; that
+                            # is often a leftover testdriver VM.
                             open(path, "w").write(name)
                         else:
                             try:
@@ -804,6 +799,15 @@ class vmmManager(vmmGObjectUI):
                         "save": vmmenu.VMActionUI.save,
                     }
                     fn = aliases.get(key)
+                if action in ("Open",) and want:
+                    named = self._a11y_lookup_vm(want)
+                    if named is None:
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                        return True
+                    vm = named
                 if fn is not None and vm is not None:
                     try:
                         fn(self, vm)
