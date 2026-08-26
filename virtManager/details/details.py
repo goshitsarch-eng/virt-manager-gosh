@@ -3473,7 +3473,9 @@ class vmmDetails(vmmGObjectUI):
             tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
         except Exception:
             tab = ""
-        if tab == "sound-tab" and "Sound" not in (want or ""):
+        if tab == "os-tab" and "OS" not in (want or ""):
+            want = last_hw if "OS" in (last_hw or "") else "OS information"
+        elif tab == "sound-tab" and "Sound" not in (want or ""):
             want = "Sound"
         elif tab == "video-tab" and "Video" not in (want or ""):
             want = "Video"
