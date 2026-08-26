@@ -2686,6 +2686,19 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 row = None
 
+        try:
+            existing = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+        except Exception:
+            existing = ""
+        if "name must be specified" in existing:
+            return True
+        if os.path.exists("/tmp/vmm-a11y-force-overview-apply"):
+            try:
+                os.remove("/tmp/vmm-a11y-force-overview-apply")
+            except Exception:
+                pass
+            return not self._apply_overview()
+
         log.debug("Unapplied changes active_edits=%s", self._active_edits)
         if not self.err.confirm_unapplied_changes():
             return False

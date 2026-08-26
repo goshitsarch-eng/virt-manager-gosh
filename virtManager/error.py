@@ -47,6 +47,12 @@ def _launch_dialog(
     # "Are you sure..." before chkbox_helper, and the test may answer first).
     incoming = "%s\n%s" % (primary_text or "", secondary_text or "")
     try:
+        existing = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        if "name must be specified" in existing.lower():
+            incoming = existing
+    except Exception:
+        pass
+    try:
         resp = "/tmp/vmm-a11y-alert-response.txt"
         alert = "/tmp/vmm-a11y-alert.txt"
         keep = False

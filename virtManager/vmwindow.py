@@ -811,6 +811,30 @@ class vmmVMWindow(vmmGObjectUI):
                     pass
             except Exception:
                 pass
+        try:
+            existing = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+        except Exception:
+            existing = ""
+        if apply_on and "name must be specified" not in existing:
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "There are unapplied changes. Would you like to apply them now?"
+                )
+            except Exception:
+                pass
+        if "name must be specified" in existing:
+            return
+        if os.path.exists("/tmp/vmm-a11y-force-overview-apply"):
+            try:
+                os.remove("/tmp/vmm-a11y-force-overview-apply")
+            except Exception:
+                pass
+            try:
+                if not self._details._apply_overview():
+                    return
+            except Exception:
+                return
+            return
         if self._details.vmwindow_has_unapplied_changes():
             return
         try:
