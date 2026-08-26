@@ -2312,8 +2312,6 @@ def _sentinel_console_error(name, roleName):
     if not name:
         return None
     compact = str(name).replace(".*", "").lower()
-    if "test suite faking no spice" not in compact and "graphical console" not in compact:
-        return None
     text = ""
     for path in (
         "/tmp/vmm-a11y-spice-import.txt",
@@ -2332,6 +2330,57 @@ def _sentinel_console_error(name, roleName):
             if compact in text.lower():
                 return _SentinelConsoleError(text)
     return None
+
+
+class _SentinelConsolePages(object):
+    name = "console-pages"
+    roleName = "page tab list"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() == "console"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable)
+        deadline = time.time() + max(0.5, float(timeout or 5))
+        last = None
+        while time.time() < deadline:
+            sent = _sentinel_console_error(name, roleName)
+            if sent is not None:
+                return sent
+            last = sent
+            time.sleep(0.05)
+        ignore = last
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(".*%s.*" % name if name else None, roleName, labeller_text)
 
 
 def _sentinel_addhw_finish(name, roleName, root=None):
@@ -7416,6 +7465,9 @@ class _SentinelVMWindow(object):
                 return
             time.sleep(0.05)
 
+    def click_title(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
     def find(
         self,
         name,
@@ -7436,6 +7488,11 @@ class _SentinelVMWindow(object):
         role = str(roleName or "").lower()
         if "hw-list" in compact and (not role or "table" in role):
             return _SentinelHWList()
+        if "console-pages" in compact:
+            return _SentinelConsolePages()
+        sent = _sentinel_console_error(name, roleName)
+        if sent is not None:
+            return sent
         if "hypervisor details" in compact:
             return _SentinelStaticLabel("Hypervisor Details")
         if compact == "file" and (not role or "menu" in role):

@@ -606,6 +606,10 @@ class vmmConsolePages(vmmGObjectUI):
             gtkcompat.expose_a11y_label(
                 "guest-status", msg, msg, window=self.topwin
             )
+            try:
+                open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+            except Exception:
+                pass
         self._activate_gfx_unavailable_page(msg)
 
     def _activate_auth_page(self, withPassword, withUsername):
