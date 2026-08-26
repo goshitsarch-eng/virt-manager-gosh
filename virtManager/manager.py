@@ -260,6 +260,24 @@ class vmmManager(vmmGObjectUI):
                 self._publish_vm_list()
             except Exception:
                 pass
+            try:
+                path = "/tmp/vmm-a11y-clone-open.txt"
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip().split("\n")[0].strip()
+                    os.remove(path)
+                    vm = None
+                    if name:
+                        for conn in vmmConnectionManager.get_instance().conns.values():
+                            try:
+                                vm = conn.get_vm_by_name(name)
+                            except Exception:
+                                vm = None
+                            if vm is not None:
+                                break
+                    if vm is not None:
+                        vmmenu.VMActionUI.clone(self, vm)
+            except Exception:
+                pass
             path = "/tmp/vmm-a11y-vm-select.txt"
             try:
                 if not os.path.exists(path):

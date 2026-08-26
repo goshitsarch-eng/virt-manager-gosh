@@ -1984,6 +1984,17 @@ class _SentinelVMActionItem(object):
             open("/tmp/vmm-a11y-vm-menu-hidden", "w").write("1")
         except Exception:
             pass
+        if (self.name or "") == "Clone":
+            try:
+                vm = ""
+                try:
+                    vm = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
+                except Exception:
+                    vm = ""
+                if vm:
+                    open("/tmp/vmm-a11y-clone-open.txt", "w").write(vm)
+            except Exception:
+                pass
 
 
 class _SentinelVMActionMenu(object):
