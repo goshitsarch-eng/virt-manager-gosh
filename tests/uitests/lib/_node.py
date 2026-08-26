@@ -115,15 +115,21 @@ class _SentinelTableCell(object):
 
     @property
     def state_selected(self):
-        # test-many-devices has duplicate NIC/Controller/Disk labels.
-        # When an index is published, only that row is selected.
+        # test-many-devices has duplicate NIC/Controller/Disk labels, so a
+        # matching published index is authoritative. A stale index must not
+        # hide an explicit Sound/Video rename (sb16 -> ac97) or tab match.
+        index_match = None
         if self._index is not None:
             try:
                 cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
                 if cur != "":
-                    return int(cur) == int(self._index)
+                    index_match = int(cur) == int(self._index)
             except Exception:
                 pass
+        if index_match is True:
+            return True
+        name_hit = False
+        unique_hit = False
         for path in (
             "/tmp/vmm-a11y-hw-clicked.txt",
             "/tmp/vmm-a11y-hw-selected.txt",
@@ -133,7 +139,7 @@ class _SentinelTableCell(object):
             except Exception:
                 cur = ""
             if cur == self.name:
-                return True
+                name_hit = True
             if cur and self.name:
                 a = cur.split()[0]
                 b = self.name.split()[0]
@@ -141,21 +147,24 @@ class _SentinelTableCell(object):
                     "Sound",
                     "Video",
                     "Display",
-                    "NIC",
-                    "Controller",
+                    "Watchdog",
                 ):
-                    return True
+                    unique_hit = True
         try:
             tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
             name = self.name or ""
             if tab == "sound-tab" and name.startswith("Sound"):
-                return True
+                unique_hit = True
             if tab == "video-tab" and name.startswith("Video"):
-                return True
+                unique_hit = True
             if tab == "watchdog-tab" and name.startswith("Watchdog"):
-                return True
+                unique_hit = True
         except Exception:
             pass
+        if name_hit or unique_hit:
+            return True
+        if index_match is False:
+            return False
         try:
             cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
             if cur == self.name:

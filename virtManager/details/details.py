@@ -2274,12 +2274,18 @@ class vmmDetails(vmmGObjectUI):
             )
             auto = self.vsockdetails.widget("vsock-auto")
             cid = self.vsockdetails.widget("vsock-cid")
-            open("/tmp/vmm-a11y-vsock-auto.txt", "w").write(
-                "1" if auto.get_active() else "0"
-            )
-            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
-                str(int(uiutil.spin_get_helper(cid) or 0))
-            )
+            # The shared combo poller republishes these every 50ms and
+            # would eat a pending .set / .click sentinel.
+            if not os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.set") and not os.path.exists(
+                "/tmp/vmm-a11y-vsock-auto.txt.click"
+            ):
+                open("/tmp/vmm-a11y-vsock-auto.txt", "w").write(
+                    "1" if auto.get_active() else "0"
+                )
+            if not os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set"):
+                open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
+                    str(int(uiutil.spin_get_helper(cid) or 0))
+                )
             open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write(
                 "1" if cid.get_visible() else "0"
             )
@@ -2925,6 +2931,16 @@ class vmmDetails(vmmGObjectUI):
                     have_toks = [t for t in tokens if t in label.lower()]
                     if want_toks and have_toks and not set(want_toks) & set(have_toks):
                         continue
+                if fuzzy is None:
+                    fuzzy = row
+            want_first = want_l.split()[0] if want_l else ""
+            label_first = label.lower().split()[0] if label else ""
+            if (
+                want_first
+                and want_first == label_first
+                and want_first
+                in ("sound", "video", "watchdog", "display", "tpm", "smartcard")
+            ):
                 if fuzzy is None:
                     fuzzy = row
         return exact if exact is not None else fuzzy
@@ -3685,6 +3701,42 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
             try:
+                applied = None
+                if dev is not None:
+                    applied = self._get_hw_row_for_device(dev)
+                    if applied is None:
+                        try:
+                            want_id = dev.get_xml_id()
+                        except Exception:
+                            want_id = None
+                        if want_id is not None:
+                            try:
+                                for row in self.widget("hw-list").get_model():
+                                    rowdev = row[HW_LIST_COL_DEVICE]
+                                    if (
+                                        rowdev is not None
+                                        and rowdev.get_xml_id() == want_id
+                                    ):
+                                        applied = row
+                                        break
+                            except Exception:
+                                applied = None
+                if applied is None and want:
+                    applied = self._hw_row_for_label(want)
+                if applied is not None:
+                    labeled = applied
+                    newlab = str(applied[HW_LIST_COL_LABEL] or "")
+                    idx = self._hw_index_for_row(applied)
+                    if newlab:
+                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
+                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
+                        open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
+                        if idx is not None:
+                            open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+                                str(idx)
+                            )
+                            self._set_hw_selection(idx, _disable_apply=False)
+                        want = newlab
                 if labeled is None:
                     labeled = self._hw_row_for_label(want) if want else None
                 if labeled is not None:

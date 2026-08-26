@@ -4358,9 +4358,18 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                         col0 = str(model[_iter][0] or "")
                     except Exception:
                         col0 = ""
+                    have_first = have.split()[0] if have else ""
+                    want_first = want.split()[0] if want else ""
+                    unique = have_first == want_first and have_first in (
+                        "Sound",
+                        "Video",
+                        "Watchdog",
+                        "Display",
+                    )
                     if (
                         have == want
                         or col0 == want
+                        or unique
                         or (want and want in have)
                         or (want and want in col0)
                     ):
@@ -4387,11 +4396,21 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 wname = treeview.get_name() or ""
             except Exception:
                 wname = ""
+            published = want
+            try:
+                sel = treeview.get_selection()
+                model, treeiter = sel.get_selected()
+                if model is not None and treeiter is not None:
+                    have = _mnemonic_label(str(model[treeiter][name_column] or ""))
+                    if have:
+                        published = have
+            except Exception:
+                published = want
             if tname == "hw-list" or wname == "hw-list":
                 try:
-                    open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(want)
-                    open("/tmp/vmm-a11y-hw-selected.txt", "w").write(want)
-                    open("/tmp/vmm-a11y-last-hw.txt", "w").write(want)
+                    open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(published)
+                    open("/tmp/vmm-a11y-hw-selected.txt", "w").write(published)
+                    open("/tmp/vmm-a11y-last-hw.txt", "w").write(published)
                 except Exception:
                     pass
             _sync_row_selected()
@@ -4594,11 +4613,23 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 if pending:
                     break
             # Prefer a pending click only while GTK still shows Overview
-            # (the default after a rebuild). A real Sound/Display/etc
-            # selection must win over a stale hw-clicked label.
+            # (the default after a rebuild). After a Sound/Video rename the
+            # tree can still sit on Floppy; keep the unique-type click.
             if pending and selected != pending:
                 if not selected or selected == "Overview":
                     selected = pending
+                else:
+                    p0 = pending.split()[0]
+                    s0 = selected.split()[0]
+                    if p0 != s0 and p0 in (
+                        "Sound",
+                        "Video",
+                        "Watchdog",
+                        "Display",
+                        "TPM",
+                        "Smartcard",
+                    ):
+                        selected = pending
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
         except Exception:
             pass
@@ -4631,6 +4662,22 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         except Exception:
             selected_idx = -1
         try:
+            if selected and selected in names:
+                selected_idx = names.index(selected)
+            elif selected:
+                sel_first = selected.split()[0]
+                if sel_first in (
+                    "Sound",
+                    "Video",
+                    "Watchdog",
+                    "Display",
+                    "TPM",
+                    "Smartcard",
+                ):
+                    for i, name in enumerate(names):
+                        if name.split()[0] == sel_first:
+                            selected_idx = i
+                            break
             open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
                 str(selected_idx) if selected_idx >= 0 else ""
             )
