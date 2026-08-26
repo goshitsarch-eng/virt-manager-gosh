@@ -3,7 +3,10 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -243,6 +246,120 @@ class vmmHostStorage(vmmGObjectUI):
     def refresh_page(self):
         self._populate_vols()
         self.conn.schedule_priority_tick(pollpool=True)
+        self._publish_a11y_state()
+
+    def _publish_a11y_state(self):
+        pools = []
+        selected = ""
+        try:
+            model = self.widget("pool-list").get_model()
+            if model is not None:
+                for row in model:
+                    pool = row[POOL_COLUMN_HANDLE]
+                    if pool is None:
+                        continue
+                    name = pool.get_name()
+                    if name:
+                        pools.append(name)
+            pool = self._current_pool()
+            if pool is not None:
+                selected = pool.get_name() or ""
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-host-pool-list.txt", "w").write("\n".join(pools))
+            open("/tmp/vmm-a11y-host-pool-selected.txt", "w").write(selected)
+        except Exception:
+            pass
+        vols = []
+        volsel = ""
+        try:
+            model = self.widget("vol-list").get_model()
+            if model is not None:
+                for row in model:
+                    name = str(row[VOL_COLUMN_NAME] or "")
+                    if name:
+                        vols.append(name)
+            vol = self._current_vol()
+            if vol is not None:
+                try:
+                    volsel = vol.get_pretty_name(self._current_pool().get_type())
+                except Exception:
+                    volsel = vol.get_name() if hasattr(vol, "get_name") else ""
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-host-vol-list.txt", "w").write("\n".join(vols))
+            open("/tmp/vmm-a11y-host-vol-selected.txt", "w").write(volsel or "")
+        except Exception:
+            pass
+        try:
+            errpage = self.widget("storage-pages").get_current_page() == 1
+            open("/tmp/vmm-a11y-host-pool-error.txt", "w").write("1" if errpage else "0")
+            open("/tmp/vmm-a11y-host-pool-error-text.txt", "w").write(
+                self.widget("storage-error-label").get_text() or ""
+            )
+        except Exception:
+            pass
+
+    def _select_pool_by_name(self, name):
+        if not name:
+            return False
+        pool_list = self.widget("pool-list")
+        model = pool_list.get_model()
+        sel = pool_list.get_selection()
+        if model is None or sel is None:
+            return False
+        it = model.get_iter_first()
+        while it is not None:
+            try:
+                pool = model[it][POOL_COLUMN_HANDLE]
+                have = pool.get_name() if pool is not None else ""
+                if have == name or name in have or have in name:
+                    sel.select_iter(it)
+                    pool_list.grab_focus()
+                    self._publish_a11y_state()
+                    return True
+            except Exception:
+                pass
+            it = model.iter_next(it)
+        return False
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_hostpool_poll", False):
+            return
+        self._vmm_hostpool_poll = True
+
+        def _tick():
+            try:
+                path = "/tmp/vmm-a11y-host-pool-select.txt"
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip()
+                    os.remove(path)
+                    self._select_pool_by_name(name)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-pool-action.txt"
+                if os.path.exists(path):
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                    mapping = {
+                        "stop": self._pool_stop_cb,
+                        "start": self._pool_start_cb,
+                        "delete": self._pool_delete_cb,
+                        "apply": lambda *_a: self._pool_apply(),
+                        "add": self._pool_add_cb,
+                    }
+                    fn = mapping.get(action)
+                    if fn is not None:
+                        fn(None)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     def set_name_hint(self, val):
         self._name_hint = val
@@ -381,6 +498,7 @@ class vmmHostStorage(vmmGObjectUI):
             pool_list.set_model(model)
 
         uiutil.set_list_selection(pool_list, curpool)
+        self._publish_a11y_state()
 
     def _populate_vols(self):
         list_widget = self.widget("vol-list")
@@ -439,6 +557,7 @@ class vmmHostStorage(vmmGObjectUI):
             vadj.set_value(vadj.get_upper() * vscroll_percent)
 
         self.idle_add(_reset_vscroll_position)
+        self._publish_a11y_state()
 
     ##########################
     # Pool lifecycle actions #
@@ -655,6 +774,7 @@ class vmmHostStorage(vmmGObjectUI):
 
     def _pool_selected_cb(self, selection):
         self._refresh_current_pool()
+        self._publish_a11y_state()
 
     def _xmleditor_xml_requested_cb(self, src):
         self._refresh_current_pool()

@@ -3373,6 +3373,414 @@ class _SentinelCreateConnField(object):
         )
 
 
+def _host_dialog_open():
+    try:
+        return bool(open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip())
+    except Exception:
+        return False
+
+
+class _SentinelHostErrorLabel(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "label"
+        self._path = path
+
+    @property
+    def showing(self):
+        try:
+            return open(self._path, "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def text(self):
+        try:
+            return open(self._path.replace(".txt", "-text.txt"), "r").read()
+        except Exception:
+            return ""
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelHostListCell(object):
+    def __init__(self, name, select_path, selected_path):
+        self.name = name
+        self.roleName = "table cell"
+        self._select_path = select_path
+        self._selected_path = selected_path
+
+    @property
+    def state_selected(self):
+        try:
+            return open(self._selected_path, "r").read().strip() == self.name
+        except Exception:
+            return False
+
+    @property
+    def selected(self):
+        return self.state_selected
+
+    @property
+    def focused(self):
+        return self.state_selected
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._select_path, "w").write(self.name or "")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if self.state_selected:
+                return
+            time.sleep(0.05)
+
+
+class _SentinelHostList(object):
+    def __init__(self, name, list_path, select_path, selected_path):
+        self.name = name
+        self.roleName = "table"
+        self._list_path = list_path
+        self._select_path = select_path
+        self._selected_path = selected_path
+
+    def _names(self):
+        try:
+            return [n for n in open(self._list_path, "r").read().splitlines() if n]
+        except Exception:
+            return []
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def findChildren(self, pred, isLambda=False, **kwargs):
+        ignore = (isLambda, kwargs)
+        cells = [
+            _SentinelHostListCell(n, self._select_path, self._selected_path)
+            for n in self._names()
+        ]
+        if pred is None:
+            return cells
+        return [c for c in cells if pred(c)]
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable)
+        want = str(name or "").replace(".*", "")
+        deadline = time.time() + max(0.1, float(timeout))
+        while time.time() < deadline:
+            for n in self._names():
+                if not want or want == n or want in n or n in want:
+                    return _SentinelHostListCell(
+                        n, self._select_path, self._selected_path
+                    )
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelHostTab(object):
+    def __init__(self, name):
+        self.name = str(name or "").replace(".*", "")
+        self.roleName = "page tab"
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        compact = self.name.lower()
+        if "storage" in compact:
+            value = "storage"
+        elif "network" in compact:
+            value = "virtual networks"
+        else:
+            value = "overview"
+        try:
+            open("/tmp/vmm-a11y-host-tab.txt", "w").write(value)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-host-tab.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelHostAction(object):
+    def __init__(self, name, path, value):
+        self.name = name
+        self.roleName = "push button"
+        self._path = path
+        self._value = value
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        if self.name == "net-delete":
+            try:
+                return open("/tmp/vmm-a11y-host-net-delete.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path, "w").write(self._value)
+        except Exception:
+            pass
+
+
+class _SentinelHostPane(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "panel"
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_host_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_xml_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+class _SentinelHostWindow(object):
+    roleName = "dialog"
+
+    def __init__(self):
+        try:
+            self.name = (
+                open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                + " - Connection Details"
+            )
+        except Exception:
+            self.name = "Connection Details"
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_host_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_xml_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+def _sentinel_host_widgets(name, roleName, labeller_text=None):
+    if not _host_dialog_open():
+        return None
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    if "connection details" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        return _SentinelHostWindow()
+    if "tab" in role and any(
+        tok in compact
+        for tok in ("virtual network", "storage", "overview", "network")
+    ):
+        return _SentinelHostTab(name)
+
+    if "network-grid" in compact:
+        return _SentinelHostPane("network-grid")
+    if "storage-grid" in compact:
+        return _SentinelHostPane("storage-grid")
+    if "net-list" in compact:
+        return _SentinelHostList(
+            "net-list",
+            "/tmp/vmm-a11y-host-net-list.txt",
+            "/tmp/vmm-a11y-host-net-select.txt",
+            "/tmp/vmm-a11y-host-net-selected.txt",
+        )
+    if "pool-list" in compact:
+        return _SentinelHostList(
+            "pool-list",
+            "/tmp/vmm-a11y-host-pool-list.txt",
+            "/tmp/vmm-a11y-host-pool-select.txt",
+            "/tmp/vmm-a11y-host-pool-selected.txt",
+        )
+    if "vol-list" in compact:
+        return _SentinelHostList(
+            "vol-list",
+            "/tmp/vmm-a11y-host-vol-list.txt",
+            "/tmp/vmm-a11y-host-vol-select.txt",
+            "/tmp/vmm-a11y-host-vol-selected.txt",
+        )
+    if "net-error-label" in compact:
+        return _SentinelHostErrorLabel("net-error-label", "/tmp/vmm-a11y-host-net-error.txt")
+    if "pool-error-label" in compact:
+        return _SentinelHostErrorLabel("pool-error-label", "/tmp/vmm-a11y-host-pool-error.txt")
+    if compact in (
+        "net-stop",
+        "net-start",
+        "net-delete",
+        "net-add",
+        "pool-stop",
+        "pool-start",
+        "pool-delete",
+        "pool-add",
+    ) and (not role or "button" in role):
+        action = compact.split("-", 1)[-1]
+        prefix = "net" if compact.startswith("net-") else "pool"
+        return _SentinelHostAction(
+            compact, "/tmp/vmm-a11y-host-%s-action.txt" % prefix, action
+        )
+    if "cell" in role and compact:
+        for n in _SentinelHostList(
+            "net-list",
+            "/tmp/vmm-a11y-host-net-list.txt",
+            "/tmp/vmm-a11y-host-net-select.txt",
+            "/tmp/vmm-a11y-host-net-selected.txt",
+        )._names():
+            if compact == n.lower() or compact in n.lower() or n.lower() in compact:
+                return _SentinelHostListCell(
+                    n,
+                    "/tmp/vmm-a11y-host-net-select.txt",
+                    "/tmp/vmm-a11y-host-net-selected.txt",
+                )
+        for n in _SentinelHostList(
+            "pool-list",
+            "/tmp/vmm-a11y-host-pool-list.txt",
+            "/tmp/vmm-a11y-host-pool-select.txt",
+            "/tmp/vmm-a11y-host-pool-selected.txt",
+        )._names():
+            if compact == n.lower() or compact in n.lower() or n.lower() in compact:
+                return _SentinelHostListCell(
+                    n,
+                    "/tmp/vmm-a11y-host-pool-select.txt",
+                    "/tmp/vmm-a11y-host-pool-selected.txt",
+                )
+    return None
+
+
 def _sentinel_createconn_widgets(name, roleName, labeller_text=None):
     compact = str(name or "").replace(".*", "").lower()
     role = str(roleName or "").lower()
@@ -5830,6 +6238,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_createconn_widgets(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_host_widgets(name, roleName, labeller_text)
             if sent is not None:
                 return sent
         except Exception:

@@ -4,6 +4,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from virtinst import log
 
 from .lib import gtkcompat
@@ -84,7 +86,16 @@ class vmmHost(vmmGObjectUI):
         log.debug("Showing host details: %s", self.conn)
         vis = self.is_visible()
         self.topwin.present()
+        try:
+            open("/tmp/vmm-a11y-host-shown.txt", "w").write(self.conn.get_pretty_desc())
+        except Exception:
+            pass
         if vis:
+            try:
+                self._hostnets._publish_a11y_state()
+                self._storagelist._publish_a11y_state()
+            except Exception:
+                pass
             return  # pragma: no cover
 
         vmmEngine.get_instance().increment_window_counter()
@@ -98,6 +109,21 @@ class vmmHost(vmmGObjectUI):
             gtkcompat.attach_notebook_a11y(self.widget("details-tabs"))
         except Exception:
             pass
+        try:
+            open("/tmp/vmm-a11y-host-shown.txt", "w").write(self.conn.get_pretty_desc())
+        except Exception:
+            pass
+        try:
+            self._hostnets._start_a11y_poll()
+            self._hostnets._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            self._storagelist._start_a11y_poll()
+            self._storagelist._publish_a11y_state()
+        except Exception:
+            pass
+        self._start_host_tab_poll()
 
     def close(self, src=None, event=None):
         dummy = src
@@ -108,6 +134,10 @@ class vmmHost(vmmGObjectUI):
 
         self.topwin.hide()
         vmmEngine.get_instance().decrement_window_counter()
+        try:
+            open("/tmp/vmm-a11y-host-shown.txt", "w").write("")
+        except Exception:
+            pass
 
         return 1
 
@@ -221,6 +251,47 @@ class vmmHost(vmmGObjectUI):
 
     def _autoconnect_toggled_cb(self, src):
         self.conn.set_autoconnect(src.get_active())
+
+    def _start_host_tab_poll(self):
+        if getattr(self, "_vmm_host_tab_poll", False):
+            return
+        self._vmm_host_tab_poll = True
+        from gi.repository import GLib
+
+        def _tick():
+            path = "/tmp/vmm-a11y-host-tab.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                raw = open(path, "r").read().strip().lower()
+                os.remove(path)
+            except Exception:
+                return True
+            mapping = {
+                "0": 0,
+                "overview": 0,
+                "1": 1,
+                "virtual networks": 1,
+                "network": 1,
+                "2": 2,
+                "storage": 2,
+            }
+            page = mapping.get(raw)
+            if page is None:
+                return True
+            try:
+                self.widget("details-tabs").set_current_page(page)
+                if page == 1:
+                    self._hostnets.refresh_page()
+                    self._hostnets._publish_a11y_state()
+                elif page == 2:
+                    self._storagelist.refresh_page()
+                    self._storagelist._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     def _page_changed_cb(self, src, child, pagenum):
         if pagenum == 1:

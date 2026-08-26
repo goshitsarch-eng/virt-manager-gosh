@@ -56,6 +56,17 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Connection Details" in name:
+            while time.time() < deadline:
+                try:
+                    shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                    if shown and (shown in name or name in shown or "Connection Details" in name):
+                        from . import _node
+
+                        return _node._SentinelHostWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Add Connection" in name:
             while time.time() < deadline:
                 try:
