@@ -617,6 +617,27 @@ class vmmDetails(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_details_model)
 
+            def _poll_vsock_cid():
+                path = "/tmp/vmm-a11y-vsock-cid.txt.set"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    w = self.vsockdetails.widget("vsock-cid")
+                    if w is not None:
+                        w.set_value(float(text or 0))
+                    self._enable_apply(EDIT_VSOCK_CID)
+                    self._publish_details_device_fields()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_vsock_cid)
+
             def _poll_mem_fields():
                 changed = False
                 for fpath, wid, edit in (
@@ -4213,13 +4234,25 @@ class vmmDetails(vmmGObjectUI):
 
     def _apply_vsock(self, devobj):
         auto_cid, cid = self.vsockdetails.get_values()
+        pending = None
+        try:
+            path = "/tmp/vmm-a11y-vsock-cid.txt.set"
+            if os.path.exists(path):
+                pending = int(float(open(path, "r").read().strip() or 0))
+                os.remove(path)
+                try:
+                    self.vsockdetails.widget("vsock-cid").set_value(pending)
+                except Exception:
+                    pass
+        except Exception:
+            pending = None
 
         kwargs = {}
 
         if self._edited(EDIT_VSOCK_AUTO):
             kwargs["auto_cid"] = auto_cid
-        if self._edited(EDIT_VSOCK_CID):
-            kwargs["cid"] = cid
+        if self._edited(EDIT_VSOCK_CID) or pending is not None:
+            kwargs["cid"] = pending if pending is not None else cid
 
         return self._change_config(self.vm.define_vsock, kwargs, devobj=devobj)
 
