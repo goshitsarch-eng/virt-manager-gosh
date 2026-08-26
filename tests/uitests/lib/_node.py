@@ -11289,13 +11289,18 @@ def _sentinel_manager_vm_cell(name, roleName):
     aliases = _manager_vm_aliases()
     live = _live_vm_names()
     mapped = aliases.get(want, want)
-    # Lifecycle/open uses vmname+"\\n". Do not invent a cell before the
-    # manager published that exact guest; Open would then fire too early.
+    # Lifecycle/open uses vmname+"\\n". Wait until the manager has
+    # published at least one guest so Open is not clicked before connect.
+    # Exact list membership can lag for later testdriver guests.
     if "\n" in raw:
         if mapped in live:
             return _SentinelManagerVMCell(mapped)
         if want in live:
             return _SentinelManagerVMCell(want)
+        if live and (want in _TESTDRIVER_VMS or mapped in _TESTDRIVER_VMS):
+            return _SentinelManagerVMCell(
+                mapped if mapped in _TESTDRIVER_VMS else want
+            )
         return None
     if want in aliases and mapped in live:
         return _SentinelManagerVMCell(mapped)
