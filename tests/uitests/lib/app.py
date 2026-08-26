@@ -201,6 +201,16 @@ class VMMDogtailApp:
                         return _node._SentinelDeleteWindow(name)
                 except Exception:
                     pass
+                # CLI --show-domain-delete of a missing VM raises an
+                # error alert instead of opening Delete.
+                try:
+                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                    if name == "Delete" and alert and "does not have VM" in alert:
+                        from . import _node
+
+                        return _node._SentinelAlert()
+                except Exception:
+                    pass
                 time.sleep(0.1)
         if name and "Add New Virtual Hardware" in name:
             while time.time() < deadline:
@@ -317,8 +327,8 @@ class VMMDogtailApp:
             return "New VM"
         if "--show-host-summary" in joined:
             return ".*Connection Details"
-        if "--show-domain-delete" in joined:
-            return "Delete"
+        # --show-domain-delete IDONTEXIST shows an error alert, not
+        # the Delete window. Tests that expect Delete pass window_name.
         if "--show-systray" in joined:
             return "vmm-fake-systray"
         if (
