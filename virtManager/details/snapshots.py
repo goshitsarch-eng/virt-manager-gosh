@@ -727,6 +727,14 @@ class vmmSnapshotPage(vmmGObjectUI):
         self._publish_a11y_state()
 
     def _populate_snapshot_list(self, select_name=None):
+        dirty_text = None
+        if self._snapshot_desc_dirty():
+            try:
+                dirty_text = (
+                    self.widget("snapshot-description").get_buffer().get_property("text") or ""
+                )
+            except Exception:
+                dirty_text = None
         cursnaps = []
         for i in self._get_selected_snapshots():
             cursnaps.append(i.get_name())
@@ -780,8 +788,16 @@ class vmmSnapshotPage(vmmGObjectUI):
         if select_name:
             self._a11y_want_select = select_name
         if self._a11y_want_select:
-            self._unapplied_changes = False
+            if dirty_text is None:
+                self._unapplied_changes = False
             self._select_snapshot_by_name(self._a11y_want_select, add=False)
+        if dirty_text is not None:
+            try:
+                self.widget("snapshot-description").get_buffer().set_text(dirty_text)
+            except Exception:
+                pass
+            self._unapplied_changes = True
+            self.widget("snapshot-apply").set_sensitive(True)
         self._publish_a11y_state()
 
     def _read_screenshot_file(self, name):
@@ -1059,6 +1075,26 @@ class vmmSnapshotPage(vmmGObjectUI):
                 pass
         return names
 
+    def _snapshot_desc_dirty(self):
+        try:
+            if os.path.exists(_SNAP_DESC + ".set"):
+                return True
+        except Exception:
+            pass
+        snaps = self._get_selected_snapshots()
+        try:
+            desc = self.widget("snapshot-description").get_buffer().get_property("text") or ""
+        except Exception:
+            desc = ""
+        if len(snaps) == 1:
+            try:
+                cur = snaps[0].get_xmlobj().description or ""
+            except Exception:
+                cur = ""
+            if desc != cur:
+                return True
+        return bool(self._unapplied_changes)
+
     def _select_snapshot_by_name(self, name, add=False):
         if not name:
             return False
@@ -1069,9 +1105,11 @@ class vmmSnapshotPage(vmmGObjectUI):
                 pass
         if not add:
             self._a11y_want_select = name
+            current = self._selected_names()
+            switching = bool(current) and name not in current
             # unselect_all() refreshes the row and clears this flag, so
             # confirm before changing the GTK selection.
-            if self._unapplied_changes:
+            if switching and self._snapshot_desc_dirty():
                 if self.err.confirm_unapplied_changes():
                     self._apply()
                 self._unapplied_changes = False
@@ -1123,6 +1161,15 @@ class vmmSnapshotPage(vmmGObjectUI):
         current = buf.get_property("text") or ""
         if current != text:
             buf.set_text(text)
+        snaps = self._get_selected_snapshots()
+        if len(snaps) == 1:
+            try:
+                cur = snaps[0].get_xmlobj().description or ""
+            except Exception:
+                cur = ""
+            if text != cur:
+                self._unapplied_changes = True
+                self.widget("snapshot-apply").set_sensitive(True)
         return True
 
     def _publish_a11y_state(self):
