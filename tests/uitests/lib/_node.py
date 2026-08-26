@@ -1885,10 +1885,19 @@ class _SentinelXmlPageTab(object):
                 break
             time.sleep(0.05)
         if self.name == "XML":
-            deadline = time.time() + 2.0
+            want = "<network"
+            try:
+                which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+            except Exception:
+                which = ""
+            if which == "pool":
+                want = "<pool"
+            deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-xml-contents.txt", "r").read().strip():
+                    page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+                    xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                    if page == "1" and want in xml:
                         break
                 except Exception:
                     pass
@@ -1923,15 +1932,27 @@ class _SentinelXmlEditor(object):
         except Exception:
             return ""
 
+    def _wanted_tag(self):
+        try:
+            which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+        except Exception:
+            which = ""
+        if which == "pool":
+            return "<pool"
+        if which == "net":
+            return "<network"
+        return ""
+
     @property
     def text(self):
-        xml = self._read()
-        if xml or self._page() != "1":
-            return xml
-        deadline = time.time() + 2.0
-        while not xml and time.time() < deadline:
-            time.sleep(0.05)
+        want = self._wanted_tag()
+        deadline = time.time() + 3.0
+        xml = ""
+        while time.time() < deadline:
             xml = self._read()
+            if self._page() == "1" and xml.strip() and (not want or want in xml):
+                return xml
+            time.sleep(0.05)
         return xml
 
     def get_text_override(self):

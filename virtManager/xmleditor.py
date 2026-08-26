@@ -163,6 +163,8 @@ class vmmXMLEditor(vmmGObjectUI):
                                 self._srcbuff.set_text(pending)
                     if want == "XML":
                         self.widget("xml-notebook").set_current_page(_PAGE_XML)
+                        if not (self.get_xml() or "").strip():
+                            self.emit("xml-requested")
                     elif want == "Details":
                         self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
                     self._publish_xml_a11y()
