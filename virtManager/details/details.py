@@ -1641,6 +1641,10 @@ class vmmDetails(vmmGObjectUI):
 
     def _remove_non_disk(self, devobj):
         try:
+            os.remove("/tmp/vmm-a11y-alert-response.txt")
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-alert.txt", "w").write(
                 "Are you sure you want to remove this device?"
             )

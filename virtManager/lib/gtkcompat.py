@@ -5075,14 +5075,6 @@ def _run_modal(window, response_signal="response"):
     for _ in range(20):
         if not ctx.iteration(False):
             break
-    # Always discard leftover Yes/OK from a previous dialog. Same-second
-    # mtimes used to keep a stale response and auto-close the new prompt
-    # before the uitest could read "Are you sure".
-    try:
-        os.remove("/tmp/vmm-a11y-alert-response.txt")
-    except Exception:
-        pass
-
     want_checked = [False]
 
     def _apply_alert_checkbox():
