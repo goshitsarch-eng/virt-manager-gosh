@@ -747,18 +747,20 @@ class vmmConsolePages(vmmGObjectUI):
     #########################
 
     def _init_viewer(self, ginfo, errmsg):
+        try:
+            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                "init-viewer visible=%s viewer=%s errmsg=%s gtype=%s\n"
+                % (
+                    self.is_visible(),
+                    bool(self._viewer),
+                    errmsg,
+                    getattr(ginfo, "gtype", None),
+                )
+            )
+        except Exception:
+            pass
         if self._viewer:
             return
-        if not self.is_visible():
-            if errmsg:
-                self._activate_gfx_unavailable_page(errmsg)
-            elif getattr(ginfo, "gtype", None) == "spice" and SPICE_GTK_IMPORT_ERROR:
-                self._activate_gfx_unavailable_page(
-                    _("Error connecting to graphical console:\n%s")
-                    % ("Error opening SPICE console: %s" % SPICE_GTK_IMPORT_ERROR)
-                )
-            return
-
         if errmsg:
             log.debug("No acceptable graphics to connect to")
             self._activate_gfx_unavailable_page(errmsg)
@@ -934,7 +936,7 @@ class vmmConsolePages(vmmGObjectUI):
 
         if errmsg or not dev or is_graphics:
             self.widget("console-pages").set_current_page(_CONSOLE_PAGE_GRAPHICS)
-            self.idle_add(self._init_viewer, dev, errmsg)
+            self._init_viewer(dev, errmsg)
             return
 
         target_port = dev.get_xml_idx()
@@ -968,11 +970,10 @@ class vmmConsolePages(vmmGObjectUI):
         # We iterate through the 'console' menu and activate the first
         # valid entry... hacky but it works
         self._populate_console_menu()
-        found = self._consolemenu.activate_default()
-        if not found:
-            # Calling this with dev=None will trigger _init_viewer
-            # which shows some meaningful errors
-            self._console_menu_view_selected()
+        self._consolemenu.activate_default()
+        # Always init from the selected item. GTK4 radio toggled() may
+        # not deliver the same signal the GTK3 menu item did.
+        self._console_menu_view_selected()
 
     def _activate_default_console_page(self):
         try:
