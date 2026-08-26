@@ -594,6 +594,14 @@ class vmmCloneVM(vmmGObjectUI):
             return
 
         new_path = self.widget("change-storage-new").get_text()
+        try:
+            text = open("/tmp/vmm-a11y-clone-stg-path.txt", "r").read()
+            if text:
+                new_path = text
+                if self.widget("change-storage-new").get_text() != text:
+                    self.widget("change-storage-new").set_text(text)
+        except Exception:
+            pass
 
         if virtinst.DeviceDisk.path_definitely_exists(self.vm.conn.get_backend(), new_path):
             text1 = _("Cloning will overwrite the existing file")
@@ -962,6 +970,21 @@ class vmmCloneVM(vmmGObjectUI):
                 if os.path.exists("/tmp/vmm-a11y-clone-details"):
                     os.remove("/tmp/vmm-a11y-clone-details")
                     self._show_storage_window()
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1":
+                    path = "/tmp/vmm-a11y-clone-stg-path.txt"
+                    if os.path.exists(path):
+                        text = open(path, "r").read()
+                        stamp = os.path.getmtime(path)
+                        if getattr(self, "_vmm_clone_stg_path_seen", None) != stamp:
+                            self._vmm_clone_stg_path_seen = stamp
+                            if self.widget("change-storage-new").get_text() != text:
+                                self.widget("change-storage-new").set_text(text)
+                    if os.path.exists("/tmp/vmm-a11y-clone-stg-ok"):
+                        os.remove("/tmp/vmm-a11y-clone-stg-ok")
+                        self._storage_dialog_finish()
             except Exception:
                 pass
             try:
