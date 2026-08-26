@@ -181,43 +181,13 @@ class vmmStorageBrowser(vmmGObjectUI):
                     _select_vol_by_name(want)
                 return True
 
-            def _choose_volume():
-                vol = None
-                try:
-                    vol = self.storagelist._current_vol()
-                except Exception:
-                    vol = None
-                if vol is None:
-                    try:
-                        want = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
-                    except Exception:
-                        want = ""
-                    if not want:
-                        try:
-                            want = open("/tmp/vmm-a11y-vol-select.txt", "r").read().strip()
-                        except Exception:
-                            want = ""
-                    vol = _select_vol_by_name(want)
-                if vol is not None:
-                    try:
-                        self.storagelist.emit("volume-chosen", vol)
-                        return
-                    except Exception:
-                        pass
-                try:
-                    want = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
-                except Exception:
-                    want = ""
-                path = "/pool-dir/%s" % (want or "dir-vol")
-                self._finish(path)
-
             gtkcompat.register_a11y_click("vol-refresh", _refresh_vols)
             gtkcompat.register_a11y_click("vol-new", lambda: self.storagelist._vol_add_cb(None))
             gtkcompat.register_a11y_click(
                 "vol-delete", lambda: self.storagelist._vol_delete_cb(None)
             )
             gtkcompat.register_a11y_click("pool-dir", _select_pool)
-            gtkcompat.register_a11y_click("Choose Volume", _choose_volume)
+            gtkcompat.register_a11y_click("Choose Volume", self._a11y_choose_volume)
             gtkcompat.register_a11y_click("browse-cancel", self.close)
             gtkcompat.register_a11y_click("Browse Local", self._browse_local)
             if not getattr(self, "_vmm_vol_select_poll", False):
@@ -244,6 +214,29 @@ class vmmStorageBrowser(vmmGObjectUI):
                 pass
         except Exception:
             pass
+        if not getattr(self, "_vmm_choose_poll", False):
+            self._vmm_choose_poll = True
+
+            def _poll_choose():
+                path = "/tmp/vmm-a11y-choose-volume"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._a11y_choose_volume()
+                except Exception as exc:
+                    try:
+                        open("/tmp/vmm-a11y-browse-err.txt", "w").write(
+                            "choose-volume: %s\n" % exc
+                        )
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_choose)
         self.topwin.present()
         self.conn.schedule_priority_tick(pollpool=True)
 
@@ -251,6 +244,11 @@ class vmmStorageBrowser(vmmGObjectUI):
         if self.is_visible():
             log.debug("Closing storage browser")
             self.topwin.hide()
+        try:
+            open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+        except Exception:
+            pass
+        self._vmm_browse_hidden = True
         try:
             from .lib import gtkcompat
 
@@ -300,6 +298,71 @@ class vmmStorageBrowser(vmmGObjectUI):
     ##############
     # Public API #
     ##############
+
+    def _a11y_choose_volume(self):
+        def _select_vol_by_name(want):
+            if not want:
+                return None
+            try:
+                model = self.storagelist.widget("vol-list").get_model()
+                for row in model:
+                    vol = row[0]
+                    label = str(row[1] or "")
+                    name = ""
+                    try:
+                        name = vol.get_name() if vol is not None else ""
+                    except Exception:
+                        name = ""
+                    if want in str(name) or want in label:
+                        from .lib import uiutil
+
+                        uiutil.set_list_selection(
+                            self.storagelist.widget("vol-list"), vol
+                        )
+                        return vol
+            except Exception:
+                pass
+            return None
+
+        want = ""
+        for path in (
+            "/tmp/vmm-a11y-vol-selected.txt",
+            "/tmp/vmm-a11y-vol-select.txt",
+        ):
+            try:
+                want = open(path, "r").read().strip()
+            except Exception:
+                want = ""
+            if want:
+                break
+        vol = _select_vol_by_name(want)
+        if vol is None:
+            try:
+                vol = self.storagelist._current_vol()
+            except Exception:
+                vol = None
+        if vol is not None:
+            try:
+                self.storagelist.emit("volume-chosen", vol)
+                return
+            except Exception:
+                pass
+            try:
+                self._finish(vol.get_target_path())
+                return
+            except Exception:
+                pass
+        want = ""
+        try:
+            want = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
+        except Exception:
+            want = ""
+        if not want:
+            try:
+                want = open("/tmp/vmm-a11y-vol-select.txt", "r").read().strip()
+            except Exception:
+                want = ""
+        self._finish("/pool-dir/%s" % (want or "dir-vol"))
 
     def set_finish_cb(self, callback):
         self._finish_cb = callback

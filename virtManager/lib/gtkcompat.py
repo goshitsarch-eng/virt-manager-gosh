@@ -2635,10 +2635,17 @@ def expose_storagebrowse_window(browser):
     """Findable storage browser with pool/volume rows."""
     if browser is None:
         return None
+    browser._vmm_browse_hidden = False
     win = getattr(browser, "_vmm_browse_win", None)
     slist = getattr(browser, "storagelist", None)
 
     def _rebuild(box=None):
+        if getattr(browser, "_vmm_browse_hidden", False):
+            try:
+                open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+            except Exception:
+                pass
+            return
         host = box or (win.get_child() if win is not None else None)
         if host is None or slist is None:
             return
@@ -2871,16 +2878,18 @@ def expose_storagebrowse_window(browser):
 
 
 def hide_storagebrowse_window(browser):
+    try:
+        open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+    except Exception:
+        pass
+    if browser is not None:
+        browser._vmm_browse_hidden = True
     win = getattr(browser, "_vmm_browse_win", None) if browser is not None else None
     if win is None:
         return
     try:
         set_accessible_name(win, "vmm-storage-browser (hidden)")
         win.set_title("vmm-storage-browser (hidden)")
-        try:
-            open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
-        except Exception:
-            pass
     except Exception:
         pass
     try:
