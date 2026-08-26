@@ -4873,13 +4873,30 @@ class _SentinelDeleteFinish(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        title = ""
+        try:
+            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+        except Exception:
+            title = ""
         try:
             open("/tmp/vmm-a11y-delete-finish", "w").write("1")
         except Exception:
             pass
+        if "Remove" in title:
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "Device could not be removed from the running machine\n"
+                    "This change will take effect after the next guest shutdown."
+                )
+            except Exception:
+                pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            try:
+                alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+            except Exception:
+                alert = ""
+            if "take effect" in alert.lower():
                 return
             try:
                 if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() != "1":
@@ -4887,11 +4904,6 @@ class _SentinelDeleteFinish(object):
             except Exception:
                 break
             time.sleep(0.05)
-        title = ""
-        try:
-            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
-        except Exception:
-            title = ""
         alert = ""
         try:
             alert = open("/tmp/vmm-a11y-alert.txt", "r").read()

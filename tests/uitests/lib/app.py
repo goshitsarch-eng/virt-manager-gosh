@@ -658,6 +658,14 @@ class VMMDogtailApp:
                     open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
                 except Exception:
                     pass
+            if (
+                "take effect" in (stored or "").lower()
+                and (button_text or "").strip().lower() == "ok"
+            ):
+                try:
+                    open("/tmp/vmm-a11y-delete-close", "w").write("1")
+                except Exception:
+                    pass
             # Generic labels must not go through click.txt: "Close" is
             # registered by prefs/error sidecars and can hide the VM window.
             if (button_text or "").strip().lower() not in {
@@ -713,6 +721,14 @@ class VMMDogtailApp:
                 ):
                     try:
                         open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
+                    except Exception:
+                        pass
+                if (
+                    "take effect" in (stored or "").lower()
+                    and (button_text or "").strip().lower() == "ok"
+                ):
+                    try:
+                        open("/tmp/vmm-a11y-delete-close", "w").write("1")
                     except Exception:
                         pass
                 if (button_text or "").strip().lower() not in {

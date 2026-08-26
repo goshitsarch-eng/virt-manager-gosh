@@ -2906,6 +2906,35 @@ class vmmDetails(vmmGObjectUI):
         dialog = vmmDeleteStorage(disk)
         dialog.show(self.topwin, self.vm)
 
+        def _poll_delete_finish():
+            try:
+                cpath = "/tmp/vmm-a11y-delete-close"
+                if os.path.exists(cpath):
+                    os.remove(cpath)
+                    dialog.close()
+                    return False
+            except Exception:
+                pass
+            path = "/tmp/vmm-a11y-delete-finish"
+            try:
+                if not os.path.exists(path):
+                    return dialog.vm is not None
+                os.remove(path)
+            except Exception:
+                return dialog.vm is not None
+            try:
+                dialog._finish()
+            except Exception as exc:
+                try:
+                    open("/tmp/vmm-a11y-delete-debug.txt", "a").write(
+                        "details finish exc=%s\n" % exc
+                    )
+                except Exception:
+                    pass
+            return dialog.vm is not None
+
+        GLib.timeout_add(50, _poll_delete_finish)
+
     def _config_remove(self):
         if getattr(self, "_config_remove_busy", False):
             return
