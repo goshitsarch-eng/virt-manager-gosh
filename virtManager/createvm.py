@@ -1061,7 +1061,11 @@ class vmmCreateVM(vmmGObjectUI):
         self._cleanup_customize_window()
         if self._storage_browser:
             self._storage_browser.close()
-        self._set_conn(None)
+        self._vmm_closing = True
+        try:
+            self._set_conn(None)
+        finally:
+            self._vmm_closing = False
         self._gdata = None
 
     def _cleanup(self):
@@ -1842,7 +1846,9 @@ class vmmCreateVM(vmmGObjectUI):
                 pass
 
         if not self.conn:
-            if not self.is_visible():
+            # Closing after a successful install must not publish this
+            # error; opening/resetting the wizard still should.
+            if getattr(self, "_vmm_closing", False):
                 return False
             return self._show_startup_error(_("No active connection to install on."))
         self.conn.connect("state-changed", self._conn_state_changed)
