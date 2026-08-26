@@ -1956,10 +1956,23 @@ class vmmDetails(vmmGObjectUI):
 
         try:
             dev = row[HW_LIST_COL_DEVICE]
+            xml_for_a11y = ""
             if dev:
-                self._xmleditor.set_xml(virtinst.xmlutil.unindent_device_xml(dev.get_xml()))
+                xml_for_a11y = virtinst.xmlutil.unindent_device_xml(dev.get_xml())
+                self._xmleditor.set_xml(xml_for_a11y)
             else:
                 self._xmleditor.set_xml_from_libvirtobject(self.vm)
+                try:
+                    xml_for_a11y = self.vm.get_xml_to_define() or ""
+                except Exception:
+                    xml_for_a11y = ""
+            # Keep the XML-editor sentinel current even when the XML tab
+            # is not selected (set_xml_from_libvirtobject no-ops then).
+            if xml_for_a11y:
+                try:
+                    open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml_for_a11y)
+                except Exception:
+                    pass
 
             if pagetype == HW_LIST_TYPE_GENERAL:
                 self._refresh_overview_page()

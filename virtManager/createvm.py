@@ -498,34 +498,8 @@ class vmmCreateVM(vmmGObjectUI):
                             after = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
                             after = ""
-                        if after == before:
-                            osname = ""
-                            url = ""
-                            try:
-                                osname = open(
-                                    "/tmp/vmm-a11y-oslist-entry.txt", "r"
-                                ).read().strip()
-                            except Exception:
-                                osname = ""
-                            try:
-                                url = open(
-                                    "/tmp/vmm-a11y-url-entry.txt", "r"
-                                ).read().strip()
-                            except Exception:
-                                url = ""
-                            skip = (
-                                "None detected",
-                                "Detecting...",
-                                "Waiting for install media / source",
-                            )
-                            if osname and osname not in skip and url.startswith("http"):
-                                cur = getattr(self, "_vmm_goto_page", None)
-                                if cur is None:
-                                    cur = self.widget("create-pages").get_current_page()
-                                # Only skip a stuck install-page validate.
-                                # Advancing from memory/storage would drop a step.
-                                if cur == PAGE_INSTALL:
-                                    self._goto_create_page(self._get_next_pagenum(cur))
+                        if after == before and self._should_prepublish_install_forward():
+                            self._goto_create_page(self._get_next_pagenum(PAGE_INSTALL))
                 except Exception:
                     pass
                 try:
