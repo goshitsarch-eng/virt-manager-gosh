@@ -7870,6 +7870,17 @@ class _SentinelSnapshotToolbar(object):
                 return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "1"
             except Exception:
                 return True
+        if self.name == "Shut Down":
+            try:
+                return (
+                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "r").read().strip()
+                    == "1"
+                )
+            except Exception:
+                try:
+                    return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() != "1"
+                except Exception:
+                    return True
         return True
 
     @property

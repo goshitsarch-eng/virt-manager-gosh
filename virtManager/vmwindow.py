@@ -277,6 +277,9 @@ class vmmVMWindow(vmmGObjectUI):
                     open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
                     open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
                     open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
+                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write(
+                        "0" if run else "1"
+                    )
                 except Exception:
                     pass
                 return True
@@ -631,6 +634,7 @@ class vmmVMWindow(vmmGObjectUI):
             open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
             open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
             open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
+            open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write("1" if stop else "0")
         except Exception:
             pass
         self.widget("control-shutdown").set_sensitive(stop)
