@@ -1933,17 +1933,20 @@ class vmmCreateVM(vmmGObjectUI):
     ################################
 
     def _get_widget_or_file(self, widget_id, path):
-        text = ""
-        try:
-            text = self.widget(widget_id).get_text()
-        except Exception:
-            text = ""
-        if not (text or "").strip():
+        if os.path.exists(path):
             try:
                 text = open(path, "r").read()
             except Exception:
-                text = text or ""
-        return text
+                text = ""
+            try:
+                self.widget(widget_id).set_text(text)
+            except Exception:
+                pass
+            return text
+        try:
+            return self.widget(widget_id).get_text()
+        except Exception:
+            return ""
 
     def _get_config_name(self):
         return self.widget("create-vm-name").get_text()
