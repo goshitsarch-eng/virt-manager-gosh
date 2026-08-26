@@ -986,6 +986,25 @@ class vmmDetails(vmmGObjectUI):
 
             def _poll_boot_fields():
                 changed = False
+                for trig, opener in (
+                    ("/tmp/vmm-a11y-initrd-browse", self._browse_initrd_clicked_cb),
+                    ("/tmp/vmm-a11y-kernel-browse", self._browse_kernel_clicked_cb),
+                    ("/tmp/vmm-a11y-dtb-browse", self._browse_dtb_clicked_cb),
+                ):
+                    if os.path.exists(trig):
+                        try:
+                            os.remove(trig)
+                        except Exception:
+                            pass
+                        try:
+                            opener(None)
+                        except Exception as exc:
+                            try:
+                                open("/tmp/vmm-a11y-browse-err.txt", "w").write(
+                                    "%s: %s\n" % (trig, exc)
+                                )
+                            except Exception:
+                                pass
                 cpath = "/tmp/vmm-a11y-boot-autostart.txt.click"
                 if os.path.exists(cpath):
                     try:
@@ -1912,18 +1931,28 @@ class vmmDetails(vmmGObjectUI):
         if not reason:
             reason = vmmStorageBrowser.REASON_IMAGE
 
-        if self.storage_browser is None:
-            self.storage_browser = vmmStorageBrowser(self.conn)
+        def _do_show():
+            try:
+                if self.storage_browser is None:
+                    self.storage_browser = vmmStorageBrowser(self.conn)
 
-        self.storage_browser.set_finish_cb(callback)
-        self.storage_browser.set_browse_reason(reason)
-        try:
-            self.storage_browser._vmm_boot_browse_target = getattr(
-                self, "_vmm_boot_browse_target", None
-            )
-        except Exception:
-            pass
-        self.storage_browser.show(self.topwin)
+                self.storage_browser.set_finish_cb(callback)
+                self.storage_browser.set_browse_reason(reason)
+                try:
+                    self.storage_browser._vmm_boot_browse_target = getattr(
+                        self, "_vmm_boot_browse_target", None
+                    )
+                except Exception:
+                    pass
+                self.storage_browser.show(self.topwin)
+            except Exception as exc:
+                try:
+                    open("/tmp/vmm-a11y-browse-err.txt", "w").write("%s\n" % exc)
+                except Exception:
+                    pass
+            return False
+
+        GLib.idle_add(_do_show)
 
     def _inspection_refresh_clicked_cb(self, src):
         from ..lib.inspection import vmmInspection
@@ -2087,7 +2116,10 @@ class vmmDetails(vmmGObjectUI):
         self._enable_apply(EDIT_BOOTORDER)
 
     def _disk_source_browse_clicked_cb(self, src):
-        disk = self._get_hw_row()[HW_LIST_COL_DEVICE]
+        row = self._get_hw_row()
+        disk = row[HW_LIST_COL_DEVICE] if row else None
+        if disk is None or not hasattr(disk, "is_floppy"):
+            return
         if disk.is_floppy():
             reason = vmmStorageBrowser.REASON_FLOPPY_MEDIA
         else:

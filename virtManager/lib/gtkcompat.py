@@ -657,6 +657,7 @@ def _start_a11y_click_poll():
                 "finish",
                 "forward",
                 "back",
+                "browse",
             }
             for key, fn in list(_A11Y_CLICK_CBS.items()):
                 k = key.lower()
@@ -677,8 +678,13 @@ def _start_a11y_click_poll():
         if cb is not None:
             try:
                 cb()
-            except Exception:
-                pass
+            except Exception as exc:
+                try:
+                    open("/tmp/vmm-a11y-click-err.txt", "w").write(
+                        "%s: %s\n" % (text, exc)
+                    )
+                except Exception:
+                    pass
         return True
 
     GLib.timeout_add(50, _tick)
