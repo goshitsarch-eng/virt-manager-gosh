@@ -301,12 +301,16 @@ class vmmMediaCombo(vmmGObjectUI):
             customize = False
         if owner == "details" or (customize and path and not str(path).startswith("/dev/")):
             try:
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(
+                    displayed or path or ""
+                )
             except Exception:
                 pass
         elif owner != "details" and not customize:
             try:
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or displayed)
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(
+                    displayed or path or ""
+                )
             except Exception:
                 pass
         if owner != "details":

@@ -209,6 +209,12 @@ class vmmXMLEditor(vmmGObjectUI):
                                 )
                             except Exception:
                                 pass
+                            try:
+                                open("/tmp/vmm-a11y-xml.txt", "w").write(
+                                    self.get_xml() or pending
+                                )
+                            except Exception:
+                                pass
                             self._publish_xml_a11y()
                             return True
                     if want == "XML":

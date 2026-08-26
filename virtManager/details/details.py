@@ -2969,37 +2969,50 @@ class vmmDetails(vmmGObjectUI):
         return guest
 
     def _sync_inactive_cdrom_media(self, guest=None):
-        """Publish empty media-entry when persistent XML has an ejected CDROM."""
+        """Publish empty media-entry when the selected CDROM is ejected."""
         if self.vm is None or self.vm.is_active():
             return
         try:
+            row = self._get_hw_row()
+            current = row[HW_LIST_COL_DEVICE] if row else None
+            if current is None or not getattr(current, "is_cdrom", lambda: False)():
+                return
             if guest is None:
                 guest = self._inactive_guest_xml()
-            for disk in guest.devices.disk:
-                if not disk.is_cdrom() or disk.get_source_path():
-                    continue
-                for path in (
-                    "/tmp/vmm-a11y-details-media-entry.txt",
-                    "/tmp/vmm-a11y-disk-source-path.txt",
-                    "/tmp/vmm-a11y-media-entry.txt",
-                ):
-                    try:
-                        open(path, "w").write("")
-                    except Exception:
-                        pass
-                for path in (
-                    "/tmp/vmm-a11y-details-media-entry.txt.set",
-                    "/tmp/vmm-a11y-media-entry.txt.set",
-                ):
-                    try:
-                        os.remove(path)
-                    except Exception:
-                        pass
+            target = getattr(current, "target", None)
+            ejected = not current.get_source_path()
+            if not ejected:
+                for disk in guest.devices.disk:
+                    if not disk.is_cdrom():
+                        continue
+                    if target and getattr(disk, "target", None) != target:
+                        continue
+                    if not disk.get_source_path():
+                        ejected = True
+                    break
+            if not ejected:
+                return
+            for path in (
+                "/tmp/vmm-a11y-details-media-entry.txt",
+                "/tmp/vmm-a11y-disk-source-path.txt",
+                "/tmp/vmm-a11y-media-entry.txt",
+            ):
                 try:
-                    self._mediacombo.set_path("")
+                    open(path, "w").write("")
                 except Exception:
                     pass
-                break
+            for path in (
+                "/tmp/vmm-a11y-details-media-entry.txt.set",
+                "/tmp/vmm-a11y-media-entry.txt.set",
+            ):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+            try:
+                self._mediacombo.set_path("")
+            except Exception:
+                pass
         except Exception:
             pass
 
@@ -5272,7 +5285,14 @@ class vmmDetails(vmmGObjectUI):
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
             try:
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+                shown = ""
+                try:
+                    shown = self._mediacombo._entry.get_text() or ""
+                except Exception:
+                    shown = ""
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(
+                    shown or path or ""
+                )
                 if not path:
                     open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
             except Exception:

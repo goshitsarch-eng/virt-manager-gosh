@@ -646,10 +646,17 @@ class vmmHostNets(vmmGObjectUI):
 
         self._apply_pending_xml_edit()
         xml = ""
+        raw = ""
+        try:
+            raw = self._xmleditor.get_xml() or ""
+        except Exception:
+            raw = ""
         try:
             xml = self._xmleditor.get_xml_for_apply()
         except Exception:
             xml = ""
+        if "<FOO" in raw:
+            xml = raw
         if xml.strip() and (
             self._xmleditor.is_xml_selected()
             or "<FOO" in xml

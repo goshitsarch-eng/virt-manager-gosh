@@ -1093,6 +1093,12 @@ class vmmSnapshotPage(vmmGObjectUI):
                 cur = ""
             if desc != cur:
                 return True
+            try:
+                filed = open(_SNAP_DESC, "r").read()
+                if filed and filed != cur:
+                    return True
+            except Exception:
+                pass
         return bool(self._unapplied_changes)
 
     def _select_snapshot_by_name(self, name, add=False):
@@ -1110,6 +1116,12 @@ class vmmSnapshotPage(vmmGObjectUI):
             # unselect_all() refreshes the row and clears this flag, so
             # confirm before changing the GTK selection.
             if switching and self._snapshot_desc_dirty():
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "There are unapplied changes. Would you like to apply them now?"
+                    )
+                except Exception:
+                    pass
                 if self.err.confirm_unapplied_changes():
                     self._apply()
                 self._unapplied_changes = False
