@@ -1676,10 +1676,17 @@ class vmmDetails(vmmGObjectUI):
             # even if GTK selection drifted. Do not re-select the row here:
             # _set_hw_selection can fire _hw_changed_cb and steal the confirm.
             want = ""
-            try:
-                want = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
-            except Exception:
-                want = ""
+            for path in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-select.txt",
+                "/tmp/vmm-a11y-hw-selected.txt",
+            ):
+                try:
+                    want = open(path, "r").read().strip()
+                except Exception:
+                    want = ""
+                if want:
+                    break
             labeled = self._hw_row_for_label(want)
             if labeled is not None:
                 row = labeled

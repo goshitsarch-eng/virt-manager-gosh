@@ -210,6 +210,9 @@ class _SentinelTableCell(object):
         try:
             open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(self.name or "")
+            # Publisher overwrites hw-selected with the GTK row (often
+            # Overview). Remove/apply must use this click-only label.
+            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(self.name or "")
         except Exception:
             pass
         if self._index is not None:
@@ -8229,7 +8232,17 @@ def _sentinel_hw_cell(name, roleName):
         selected = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == matched
     except Exception:
         pass
-    return _SentinelTableCell(matched, selected)
+    idx = None
+    try:
+        rows = [
+            n
+            for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+            if n
+        ]
+        idx = rows.index(matched)
+    except Exception:
+        idx = None
+    return _SentinelTableCell(matched, selected, index=idx)
 
 
 def _write_overview_name(text):

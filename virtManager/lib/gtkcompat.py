@@ -4111,6 +4111,21 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         except Exception:
             selected = ""
         try:
+            pending = ""
+            for path in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-select.txt",
+            ):
+                try:
+                    pending = open(path, "r").read().strip()
+                except Exception:
+                    pending = ""
+                if pending:
+                    break
+            # Do not clobber a pending AT-SPI row click with the GTK
+            # selection (still Overview until _poll_hw_select lands).
+            if pending and selected != pending:
+                selected = pending
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
         except Exception:
             pass
