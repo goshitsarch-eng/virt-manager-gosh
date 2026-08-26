@@ -4069,6 +4069,23 @@ class _SentinelHostWindow(object):
         role_pattern = (".*%s.*" % roleName) if roleName else None
         return self.find(name_pattern, role_pattern, labeller_text)
 
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def keyCombo(self, combo, *args, **kwargs):
+        ignore = kwargs
+        combo_l = str(combo or "").lower().replace("control", "ctrl")
+        if combo_l in ("<ctrl>w", "<ctrl>W"):
+            try:
+                open("/tmp/vmm-a11y-host-file-action.txt", "w").write("close")
+            except Exception:
+                pass
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                if not self.showing:
+                    return
+                time.sleep(0.05)
+
 
 def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, list_kind=None):
     if not _host_dialog_open():
