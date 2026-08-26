@@ -1857,6 +1857,71 @@ def _sentinel_xml_widgets(name, roleName):
     return None
 
 
+class _SentinelVMActionItem(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu item"
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def state_selected(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vm-action.txt", "w").write(self.name or "")
+            open("/tmp/vmm-a11y-vm-menu-hidden", "w").write("1")
+        except Exception:
+            pass
+
+
+class _SentinelVMActionMenu(object):
+    name = "vm-action-menu"
+    roleName = "menu"
+    _open = True
+
+    @property
+    def onscreen(self):
+        try:
+            return not os.path.exists("/tmp/vmm-a11y-vm-menu-hidden")
+        except Exception:
+            return True
+
+    @property
+    def showing(self):
+        return self.onscreen
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        return _SentinelVMActionItem(str(name or "").replace(".*", ""))
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
 class _SentinelStorageBrowser(object):
     """Storage browser after GetItems hides the add_window surface."""
 
@@ -3676,6 +3741,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelProgressWindow(str(name).replace(".*", ""))
         if name and "vmm-storage-browser" in str(name).lower():
             return _SentinelStorageBrowser()
+        if name and "vm-action-menu" in str(name).lower():
+            try:
+                os.remove("/tmp/vmm-a11y-vm-menu-hidden")
+            except Exception:
+                pass
+            return _SentinelVMActionMenu()
         try:
             sent = _sentinel_oslist_entry(name, roleName)
             if sent is not None:

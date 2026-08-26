@@ -400,6 +400,49 @@ class vmmManager(vmmGObjectUI):
         self.connmenu.show_all()
         gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
         self.vmmenu._vmm_menu_name = "vm-action-menu"
+        if not getattr(self, "_vmm_vm_action_poll", False):
+            self._vmm_vm_action_poll = True
+
+            def _poll_vm_action():
+                path = "/tmp/vmm-a11y-vm-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                if not action:
+                    return True
+                vm = self.current_vm()
+                if vm is None:
+                    try:
+                        want = open("/tmp/vmm-a11y-hw-select.txt", "r").read().split("\n")[0].strip()
+                    except Exception:
+                        want = ""
+                    if want:
+                        for conn in vmmConnectionManager.get_instance().conns.values():
+                            try:
+                                vm = conn.get_vm_by_name(want)
+                            except Exception:
+                                vm = None
+                            if vm is not None:
+                                break
+                mapping = {
+                    "Delete": vmmenu.VMActionUI.delete,
+                    "Clone": vmmenu.VMActionUI.clone,
+                    "Migrate": vmmenu.VMActionUI.migrate,
+                    "Open": vmmenu.VMActionUI.show,
+                }
+                fn = mapping.get(action)
+                if fn is not None and vm is not None:
+                    try:
+                        fn(self, vm)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_vm_action)
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
         for idx, item in self.connmenu_items.items():

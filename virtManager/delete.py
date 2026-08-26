@@ -17,6 +17,7 @@ from virtinst import xmlutil
 
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
+from .lib import gtkcompat
 from .lib import uiutil
 
 STORAGE_ROW_CONFIRM = 0
@@ -60,6 +61,14 @@ class _vmmDeleteBase(vmmGObjectUI):
         self._set_vm(vm)
         self._reset_state()
         self.topwin.set_transient_for(parent)
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "Delete")
+            self.topwin.set_title("Delete")
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
         self.topwin.present()
 
     def close(self, ignore1=None, ignore2=None):
