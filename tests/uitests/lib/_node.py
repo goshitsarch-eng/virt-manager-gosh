@@ -646,6 +646,35 @@ class _SentinelEntry(object):
                 )
             except Exception:
                 pass
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                if not os.path.exists("/tmp/vmm-a11y-overview-name.txt"):
+                    break
+                time.sleep(0.05)
+        if str(self.name).startswith("Title"):
+            try:
+                open("/tmp/vmm-a11y-overview-title.txt", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                if not os.path.exists("/tmp/vmm-a11y-overview-title.txt"):
+                    break
+                time.sleep(0.05)
+        if str(self.name).startswith("Description"):
+            try:
+                open("/tmp/vmm-a11y-overview-desc.txt", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                if not os.path.exists("/tmp/vmm-a11y-overview-desc.txt"):
+                    break
+                time.sleep(0.05)
         if str(self.name).startswith("Init "):
             try:
                 open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
@@ -1407,6 +1436,22 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
         except Exception:
             pass
         return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
+    if compact in ("title", "title:") or raw in ("Title", "Title:"):
+        return _SentinelEntry("Title:", "/tmp/vmm-a11y-overview-title.txt")
+    if compact in ("description", "description:") or raw in (
+        "Description",
+        "Description:",
+    ):
+        try:
+            if open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1":
+                return _SentinelWizardField(
+                    "Description:",
+                    "/tmp/vmm-a11y-snapshot-new-desc.txt",
+                    _snapshot_new_open,
+                )
+        except Exception:
+            pass
+        return _SentinelEntry("Description:", "/tmp/vmm-a11y-overview-desc.txt")
     if "new path" in compact:
         return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
     if compact == "import-entry" or raw == "import-entry":
@@ -6088,6 +6133,79 @@ class _SentinelHWList(object):
         return self.find(name_pattern, role_pattern, labeller_text)
 
 
+class _SentinelVMFileItem(object):
+    def __init__(self, name):
+        self.name = str(name or "").replace(".*", "")
+        self.roleName = "menu item"
+
+    @property
+    def showing(self):
+        return _vmwindow_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        compact = self.name.lower()
+        if "view manager" in compact:
+            action = "view-manager"
+        elif compact.strip() in ("quit",):
+            action = "quit"
+        elif compact.strip() in ("close",):
+            action = "close"
+        else:
+            return
+        try:
+            open("/tmp/vmm-a11y-vm-file-action.txt", "w").write(action)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-vm-file-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelVMFileMenu(object):
+    name = "File"
+    roleName = "menu"
+
+    @property
+    def showing(self):
+        return _vmwindow_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        return _SentinelVMFileItem(name)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
 class _SentinelVMWindow(object):
     roleName = "frame"
 
@@ -6155,6 +6273,12 @@ class _SentinelVMWindow(object):
             return _SentinelHWList()
         if "hypervisor details" in compact:
             return _SentinelStaticLabel("Hypervisor Details")
+        if compact == "file" and (not role or "menu" in role):
+            return _SentinelVMFileMenu()
+        if "view manager" in compact:
+            return _SentinelVMFileItem("View Manager")
+        if compact == "config-cancel":
+            return _SentinelClickButton("config-cancel")
         if "add-hardware" in compact or compact == "add hardware":
             return _SentinelAddHardwareButton()
         if compact == "shut down" and (not role or "button" in role):
@@ -7402,20 +7526,46 @@ _TESTDRIVER_VMS = (
 )
 
 
-def _manager_vm_names():
-    names = []
+def _manager_vm_aliases():
+    aliases = {}
     try:
-        names = [
-            n.strip()
-            for n in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines()
-            if n.strip()
-        ]
+        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\t", 1)
+            name = parts[0].strip()
+            title = parts[1].strip() if len(parts) > 1 else name
+            if name:
+                aliases[name] = name
+            if title:
+                aliases[title] = name or title
     except Exception:
-        names = []
+        pass
+    for name in _TESTDRIVER_VMS:
+        aliases.setdefault(name, name)
+    aliases.setdefault("test alternate devs title", "test-alternate-devs")
+    return aliases
+
+
+def _manager_vm_names():
+    aliases = _manager_vm_aliases()
+    names = list(aliases.keys())
     for name in _TESTDRIVER_VMS:
         if name not in names:
             names.append(name)
     return names
+
+
+def _manager_vm_real_name(want):
+    aliases = _manager_vm_aliases()
+    if want in aliases:
+        return aliases[want]
+    nwant = (want or "").lower().replace("-", " ").replace("_", " ")
+    for label, real in aliases.items():
+        nlabel = label.lower().replace("-", " ").replace("_", " ")
+        if nwant == nlabel or nlabel in nwant or nwant in nlabel:
+            return real
+    return want
 
 
 class _SentinelManagerVMCell(object):
@@ -7645,9 +7795,12 @@ def _sentinel_manager_vm_cell(name, roleName):
     want = raw.split("\n")[0].strip()
     if not want:
         return None
-    for vm in _manager_vm_names():
-        if want == vm:
-            return _SentinelManagerVMCell(vm)
+    real = _manager_vm_real_name(want)
+    if real:
+        for vm in _manager_vm_names():
+            if want == vm or real == vm or real == _manager_vm_aliases().get(vm, vm):
+                return _SentinelManagerVMCell(real)
+        return _SentinelManagerVMCell(real)
     # Newly migrated/renamed guests appear after dest poll.
     if want and "cell" in role:
         deadline = time.time() + 3.0

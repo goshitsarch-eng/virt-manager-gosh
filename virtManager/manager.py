@@ -846,8 +846,19 @@ class vmmManager(vmmGObjectUI):
                 try:
                     if model[_iter][ROW_IS_VM]:
                         key = str(model[_iter][ROW_SORT_KEY] or "")
-                        if key and key not in names:
-                            names.append(key)
+                        handle = model[_iter][ROW_HANDLE]
+                        real = ""
+                        try:
+                            real = handle.get_name() if handle is not None else ""
+                        except Exception:
+                            real = ""
+                        line = key
+                        if real and key and real != key:
+                            line = "%s\t%s" % (real, key)
+                        elif real:
+                            line = real
+                        if line and line not in names:
+                            names.append(line)
                 except Exception:
                     pass
                 _walk(_iter)

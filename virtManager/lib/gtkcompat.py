@@ -3351,6 +3351,42 @@ def _start_config_apply_poll(details):
         except Exception:
             pass
         try:
+            npath = "/tmp/vmm-a11y-overview-name.txt"
+            if os.path.exists(npath):
+                text = open(npath, "r").read()
+                os.remove(npath)
+                w = d.widget("overview-name")
+                if w is not None:
+                    w.set_text(text)
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(2)
+        except Exception:
+            pass
+        try:
+            tpath = "/tmp/vmm-a11y-overview-title.txt"
+            if os.path.exists(tpath):
+                text = open(tpath, "r").read()
+                os.remove(tpath)
+                w = d.widget("overview-title")
+                if w is not None:
+                    w.set_text(text)
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(3)
+        except Exception:
+            pass
+        try:
+            dpath = "/tmp/vmm-a11y-overview-desc.txt"
+            if os.path.exists(dpath):
+                text = open(dpath, "r").read()
+                os.remove(dpath)
+                w = d.widget("overview-description")
+                if w is not None:
+                    w.get_buffer().set_text(text)
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(6)
+        except Exception:
+            pass
+        try:
             btn = d.widget("config-apply")
             if btn is None or not btn.get_sensitive():
                 return True

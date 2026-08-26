@@ -525,11 +525,48 @@ class vmmDetails(vmmGObjectUI):
                     return True
                 try:
                     self.widget("overview-name").set_text(text)
+                    self._enable_apply(EDIT_NAME)
                 except Exception:
                     pass
                 return True
 
             GLib.timeout_add(50, _poll_overview_name)
+
+            def _poll_overview_title():
+                path = "/tmp/vmm-a11y-overview-title.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.widget("overview-title").set_text(text)
+                    self._enable_apply(EDIT_TITLE)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_overview_title)
+
+            def _poll_overview_desc():
+                path = "/tmp/vmm-a11y-overview-desc.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.widget("overview-description").get_buffer().set_text(text)
+                    self._enable_apply(EDIT_DESC)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_overview_desc)
         try:
             gtkcompat.expose_a11y_entry(
                 "details-media-entry",
@@ -1903,7 +1940,12 @@ class vmmDetails(vmmGObjectUI):
         # This needs to be last
         if self._edited(EDIT_NAME):
             # Renaming is pretty convoluted, so do it here synchronously
-            self.vm.rename_domain(self.widget("overview-name").get_text())
+            new_name = self.widget("overview-name").get_text()
+            self.vm.rename_domain(new_name)
+            try:
+                open("/tmp/vmm-a11y-vmwindow.txt", "w").write(new_name)
+            except Exception:
+                pass
 
             if not kwargs and not hotplug_args:
                 # Saves some useless redefine attempts

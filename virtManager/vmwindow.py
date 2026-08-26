@@ -304,9 +304,30 @@ class vmmVMWindow(vmmGObjectUI):
                     pass
                 return True
 
+            def _poll_vm_file_action():
+                path = "/tmp/vmm-a11y-vm-file-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    if action == "view-manager":
+                        self.view_manager(None)
+                    elif action == "close":
+                        self.close()
+                    elif action == "quit":
+                        self.exit_app(None)
+                except Exception:
+                    pass
+                return True
+
             GLib.timeout_add(50, _poll_vm_page)
             GLib.timeout_add(50, _poll_vm_toolbar_action)
             GLib.timeout_add(50, _publish_vm_toolbar)
+            GLib.timeout_add(50, _poll_vm_file_action)
         if vis:
             return
 
