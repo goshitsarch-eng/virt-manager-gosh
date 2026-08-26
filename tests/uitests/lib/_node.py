@@ -2140,6 +2140,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
             raw_name = getattr(self, "name", None) or ""
         if "config-apply" in raw_name:
             try:
+                if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+                    return True
+            except Exception:
+                pass
+            try:
                 stored = open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
                 if stored in ("0", "1"):
                     return stored == "1"
@@ -2794,6 +2799,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline = time.time() + 2.0
             while time.time() < deadline and os.path.exists("/tmp/vmm-a11y-config-apply"):
                 time.sleep(0.05)
+            try:
+                pending = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
+            except Exception:
+                pending = None
+            if pending == "":
+                return
             deadline = time.time() + 2.0
             while time.time() < deadline:
                 try:
