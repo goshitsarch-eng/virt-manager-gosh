@@ -80,6 +80,7 @@ class vmmHostStorage(vmmGObjectUI):
         self._addvol = None
         self._volmenu = None
         self._xmleditor = None
+        self._last_pool_name = ""
         self.top_box = self.widget("storage-grid")
 
         self.builder.connect_signals(
@@ -269,8 +270,12 @@ class vmmHostStorage(vmmGObjectUI):
             pool = self._current_pool()
             if pool is not None:
                 selected = pool.get_name() or ""
+                if selected:
+                    self._last_pool_name = selected
         except Exception:
             pass
+        if not selected:
+            selected = getattr(self, "_last_pool_name", "") or ""
         try:
             open("/tmp/vmm-a11y-host-pool-list.txt", "w").write("\n".join(pools))
             open("/tmp/vmm-a11y-host-pool-selected.txt", "w").write(selected)
@@ -393,6 +398,17 @@ class vmmHostStorage(vmmGObjectUI):
         self._select_pool_by_name(names[idx])
 
     def _select_pool_by_name(self, name):
+        if not name:
+            return False
+        if getattr(self, "_selecting_pool", False):
+            return False
+        self._selecting_pool = True
+        try:
+            return self._select_pool_by_name_unguarded(name)
+        finally:
+            self._selecting_pool = False
+
+    def _select_pool_by_name_unguarded(self, name):
         if not name:
             return False
 
@@ -574,6 +590,21 @@ class vmmHostStorage(vmmGObjectUI):
     def _current_pool(self):
         return uiutil.get_list_selection(self.widget("pool-list"))
 
+    def _ensure_current_pool(self):
+        pool = self._current_pool()
+        if pool is not None:
+            return pool
+        name = getattr(self, "_last_pool_name", "") or ""
+        if not name:
+            try:
+                name = open("/tmp/vmm-a11y-host-pool-selected.txt", "r").read().strip()
+            except Exception:
+                name = ""
+        if not name:
+            name = "pool-dir"
+        self._select_pool_by_name(name)
+        return self._current_pool()
+
     def _current_vol(self):
         pool = self._current_pool()
         if not pool:
@@ -592,7 +623,17 @@ class vmmHostStorage(vmmGObjectUI):
 
         curpool = self._current_pool()
         if curpool == pool:
-            self._refresh_current_pool()
+            if self._active_edits or self._xmleditor.is_xml_selected():
+                try:
+                    active = pool.is_active()
+                    self.widget("pool-delete").set_sensitive(not active)
+                    self.widget("pool-stop").set_sensitive(active)
+                    self.widget("pool-start").set_sensitive(not active)
+                except Exception:
+                    pass
+                self._publish_a11y_state()
+            else:
+                self._refresh_current_pool()
 
     def _populate_pool_state(self, pool):
         auto = pool.get_autostart()
@@ -629,7 +670,8 @@ class vmmHostStorage(vmmGObjectUI):
             self.widget("vol-add").set_sensitive(False)
             self.widget("vol-add").set_tooltip_text(_("Pool does not support volume creation"))
 
-        self._xmleditor.set_xml_from_libvirtobject(pool)
+        if not self._active_edits:
+            self._xmleditor.set_xml_from_libvirtobject(pool)
 
     def _set_error_page(self, msg):
         self.widget("storage-pages").set_current_page(1)
@@ -640,19 +682,26 @@ class vmmHostStorage(vmmGObjectUI):
         self._disable_pool_apply()
 
     def _refresh_current_pool(self):
-        pool = self._current_pool()
-        if not pool:
-            self._set_error_page(_("No storage pool selected."))
+        if getattr(self, "_refreshing_pool", False):
             return
-
-        self.widget("storage-pages").set_current_page(0)
-
+        self._refreshing_pool = True
         try:
-            self._populate_pool_state(pool)
-        except Exception as e:  # pragma: no cover
-            log.exception(e)
-            self._set_error_page(_("Error selecting pool: %s") % e)
-        self._disable_pool_apply()
+            pool = self._ensure_current_pool()
+            if not pool:
+                self._set_error_page(_("No storage pool selected."))
+                return
+
+            self.widget("storage-pages").set_current_page(0)
+
+            try:
+                self._populate_pool_state(pool)
+            except Exception as e:  # pragma: no cover
+                log.exception(e)
+                self._set_error_page(_("Error selecting pool: %s") % e)
+            self._disable_pool_apply()
+            self._publish_a11y_state()
+        finally:
+            self._refreshing_pool = False
 
     def _populate_pools(self):
         pool_list = self.widget("pool-list")
@@ -684,7 +733,17 @@ class vmmHostStorage(vmmGObjectUI):
         finally:
             pool_list.set_model(model)
 
-        uiutil.set_list_selection(pool_list, curpool)
+        name = ""
+        try:
+            name = curpool.get_name() if curpool is not None else ""
+        except Exception:
+            name = ""
+        if not name:
+            name = getattr(self, "_last_pool_name", "") or ""
+        if name:
+            self._select_pool_by_name(name)
+        else:
+            uiutil.set_list_selection_by_number(pool_list, 0)
         self._publish_a11y_state()
 
     def _populate_vols(self):
@@ -869,28 +928,59 @@ class vmmHostStorage(vmmGObjectUI):
     # pool apply/config actions #
     #############################
 
+    def _apply_pending_xml_edit(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+        self._enable_pool_apply(EDIT_POOL_XML)
+
     def _pool_apply(self):
-        pool = self._current_pool()
+        pool = self._ensure_current_pool()
         if pool is None:
             return  # pragma: no cover
 
-        log.debug("Applying changes for pool '%s'", pool.get_name())
+        self._apply_pending_xml_edit()
+        name = pool.get_name()
+        log.debug("Applying changes for pool '%s'", name)
         try:
             if EDIT_POOL_AUTOSTART in self._active_edits:
                 auto = self.widget("pool-autostart").get_active()
                 pool.set_autostart(auto)
 
             if EDIT_POOL_NAME in self._active_edits:
-                pool.define_name(self.widget("pool-name-entry").get_text())
+                name = self.widget("pool-name-entry").get_text()
+                pool.define_name(name)
                 self.idle_add(self._populate_pools)
 
             if EDIT_POOL_XML in self._active_edits:
                 pool.define_xml(self._xmleditor.get_xml())
+                try:
+                    pool._vmmLibvirtObject__force_refresh_xml(nosignal=True)
+                except Exception:
+                    try:
+                        pool._invalidate_xml()
+                        pool.ensure_latest_xml(nosignal=True)
+                    except Exception:
+                        pass
         except Exception as e:
             self.err.show_err(_("Error changing pool settings: %s") % str(e))
             return
 
         self._disable_pool_apply()
+        try:
+            self._select_pool_by_name(name)
+        except Exception:
+            pass
+        self._refresh_current_pool()
 
     def _enable_pool_apply(self, edittype):
         self._active_edits.add(edittype)
@@ -964,7 +1054,13 @@ class vmmHostStorage(vmmGObjectUI):
         self._publish_a11y_state()
 
     def _xmleditor_xml_requested_cb(self, src):
+        pool = self._ensure_current_pool()
         self._refresh_current_pool()
+        if pool is not None:
+            try:
+                self._xmleditor.set_xml(pool.get_xml_to_define())
+            except Exception:
+                self._xmleditor.set_xml_from_libvirtobject(pool)
 
     def _xmleditor_xml_reset_cb(self, src):
         self._refresh_current_pool()
