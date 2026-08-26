@@ -645,6 +645,9 @@ class _SentinelOslistEntry(object):
         except Exception:
             pass
 
+    def typeText(self, string):
+        self.set_text((self.text or "") + (string or ""))
+
 
 def _sentinel_oslist_entry(name, roleName):
     if not name:
