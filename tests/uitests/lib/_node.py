@@ -373,6 +373,7 @@ class _SentinelTableCell(object):
                 tab = "graphics-tab"
             elif any(key in label for key in ("PCI", "USB ", "Host")):
                 tab = "host-tab"
+                open("/tmp/vmm-a11y-hostdev-clicked.txt", "w").write(label)
             if tab:
                 open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
         except Exception:

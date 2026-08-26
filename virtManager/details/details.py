@@ -1771,6 +1771,20 @@ class vmmDetails(vmmGObjectUI):
                             pending = getattr(self, "_vmm_pending_hw_nav", None)
                             if gtk_label == last or (gtk_label and gtk_label != hw):
                                 if pending == hw:
+                                    clicked = ""
+                                    try:
+                                        clicked = open(
+                                            "/tmp/vmm-a11y-hw-clicked.txt", "r"
+                                        ).read().strip()
+                                    except Exception:
+                                        clicked = ""
+                                    # User already clicked the new row and
+                                    # then edited it (USB startup policy).
+                                    # Do not restore the previous PCI/Floppy
+                                    # label or Apply targets the wrong device.
+                                    if clicked and clicked == hw and clicked != last:
+                                        self._vmm_pending_hw_nav = None
+                                        return True
                                     try:
                                         if last:
                                             open("/tmp/vmm-a11y-last-hw.txt", "w").write(last)
@@ -2100,9 +2114,16 @@ class vmmDetails(vmmGObjectUI):
             tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
         except Exception:
             tab = ""
+        if tab == "host-tab":
+            try:
+                host = open("/tmp/vmm-a11y-hostdev-clicked.txt", "r").read().strip()
+            except Exception:
+                host = ""
+            if host:
+                return tab, host
         for path in (
-            "/tmp/vmm-a11y-last-hw.txt",
             "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-last-hw.txt",
             "/tmp/vmm-a11y-hw-selected.txt",
         ):
             try:
@@ -3548,10 +3569,16 @@ class vmmDetails(vmmGObjectUI):
             want = "TPM"
         elif tab == "vsock-tab" and "VSOCK" not in (want or ""):
             want = "VirtIO VSOCK"
-        elif tab == "host-tab" and not any(
-            tok in (want or "") for tok in ("PCI", "USB", "Host")
-        ):
-            want = want or "PCI"
+        elif tab == "host-tab":
+            host_want = ""
+            try:
+                host_want = open("/tmp/vmm-a11y-hostdev-clicked.txt", "r").read().strip()
+            except Exception:
+                host_want = ""
+            if host_want:
+                want = host_want
+            elif not any(tok in (want or "") for tok in ("PCI", "USB", "Host")):
+                want = want or "PCI"
 
         if not row:
             row = self._get_hw_row()
@@ -3731,11 +3758,11 @@ class vmmDetails(vmmGObjectUI):
                         open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
                         open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
                         open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
+                        self._vmm_last_refreshed_hw = newlab
                         if idx is not None:
                             open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
                                 str(idx)
                             )
-                            self._set_hw_selection(idx, _disable_apply=False)
                         want = newlab
                 if labeled is None:
                     labeled = self._hw_row_for_label(want) if want else None
@@ -4293,6 +4320,42 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_HOSTDEV_USB_STARTUPPOLICY):
             startup_policy = uiutil.get_list_selection(self.widget("hostdev-usb-startup-policy"))
             kwargs["startup_policy"] = startup_policy
+            # startupPolicy is USB-only. A leftover PCI selection after
+            # ROM BAR apply must not receive this edit.
+            if getattr(devobj, "type", None) != "usb":
+                usb_want = ""
+                for path in (
+                    "/tmp/vmm-a11y-hostdev-clicked.txt",
+                    "/tmp/vmm-a11y-hw-clicked.txt",
+                    "/tmp/vmm-a11y-hw-selected.txt",
+                ):
+                    try:
+                        usb_want = open(path, "r").read().strip()
+                    except Exception:
+                        usb_want = ""
+                    if "USB" in usb_want:
+                        break
+                labeled = self._hw_row_for_label(usb_want) if usb_want else None
+                if labeled is None or getattr(
+                    labeled[HW_LIST_COL_DEVICE], "type", None
+                ) != "usb":
+                    try:
+                        for row in self.widget("hw-list").get_model():
+                            rowdev = row[HW_LIST_COL_DEVICE]
+                            if getattr(rowdev, "type", None) == "usb":
+                                label = str(row[HW_LIST_COL_LABEL] or "")
+                                if not usb_want or usb_want in label or label in usb_want:
+                                    labeled = row
+                                    if usb_want and (
+                                        label == usb_want or usb_want in label
+                                    ):
+                                        break
+                    except Exception:
+                        labeled = labeled
+                if labeled is not None and getattr(
+                    labeled[HW_LIST_COL_DEVICE], "type", None
+                ) == "usb":
+                    devobj = labeled[HW_LIST_COL_DEVICE]
 
         return self._change_config(self.vm.define_hostdev, kwargs, devobj=devobj)
 

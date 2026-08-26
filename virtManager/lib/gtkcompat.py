@@ -4621,14 +4621,16 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 else:
                     p0 = pending.split()[0]
                     s0 = selected.split()[0]
-                    if p0 != s0 and p0 in (
+                    same_unique = p0 == s0 and p0 in (
                         "Sound",
                         "Video",
                         "Watchdog",
                         "Display",
-                        "TPM",
-                        "Smartcard",
-                    ):
+                    )
+                    # GTK often still sits on Floppy/PCI after a sentinel
+                    # click. Keep the click unless it is only a Sound/Video
+                    # model rename of the same row.
+                    if not same_unique:
                         selected = pending
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
         except Exception:
