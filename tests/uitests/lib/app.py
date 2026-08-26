@@ -209,43 +209,65 @@ class VMMDogtailApp:
                 except Exception:
                     pass
             if key_l in ("down", "up"):
-                host_list = False
+                which = ""
                 try:
-                    host_list = bool(
-                        open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
-                        or open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
-                    )
+                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
                 except Exception:
-                    host_list = os.path.exists("/tmp/vmm-a11y-host-active-list.txt")
-                if host_list:
                     which = ""
-                    try:
-                        which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
-                    except Exception:
-                        which = "net"
-                    selected_path = (
-                        "/tmp/vmm-a11y-host-pool-selected.txt"
-                        if which == "pool"
-                        else "/tmp/vmm-a11y-host-net-selected.txt"
+                shown = ""
+                try:
+                    shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                except Exception:
+                    shown = ""
+                if which or shown:
+                    paths = {
+                        "pool": (
+                            "/tmp/vmm-a11y-host-pool-list.txt",
+                            "/tmp/vmm-a11y-host-pool-selected.txt",
+                            "/tmp/vmm-a11y-host-pool-select.txt",
+                        ),
+                        "vol": (
+                            "/tmp/vmm-a11y-host-vol-list.txt",
+                            "/tmp/vmm-a11y-host-vol-selected.txt",
+                            "/tmp/vmm-a11y-host-vol-select.txt",
+                        ),
+                    }.get(
+                        which,
+                        (
+                            "/tmp/vmm-a11y-host-net-list.txt",
+                            "/tmp/vmm-a11y-host-net-selected.txt",
+                            "/tmp/vmm-a11y-host-net-select.txt",
+                        ),
                     )
-                    before = ""
+                    list_path, selected_path, select_path = paths
+                    names = []
                     try:
-                        before = open(selected_path, "r").read().strip()
+                        names = [
+                            n for n in open(list_path, "r").read().splitlines() if n
+                        ]
                     except Exception:
-                        before = ""
+                        names = []
+                    cur = ""
+                    try:
+                        cur = open(selected_path, "r").read().strip()
+                    except Exception:
+                        cur = ""
+                    if names:
+                        idx = names.index(cur) if cur in names else 0
+                        if key_l == "down":
+                            idx = min(idx + 1, len(names) - 1)
+                        else:
+                            idx = max(idx - 1, 0)
+                        nxt = names[idx]
+                        try:
+                            open(selected_path, "w").write(nxt)
+                            open(select_path, "w").write(nxt)
+                        except Exception:
+                            pass
                     try:
                         open("/tmp/vmm-a11y-host-nav.txt", "w").write(key_l)
                     except Exception:
                         pass
-                    deadline = time.time() + 3.0
-                    while time.time() < deadline:
-                        try:
-                            now = open(selected_path, "r").read().strip()
-                        except Exception:
-                            now = ""
-                        if now and now != before:
-                            return
-                        time.sleep(0.05)
                     return
             if key_l in ("enter", "return"):
                 try:

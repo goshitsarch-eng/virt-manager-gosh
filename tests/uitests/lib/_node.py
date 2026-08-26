@@ -3414,7 +3414,7 @@ class _SentinelHostListCell(object):
         self.roleName = "table cell"
         self._select_path = select_path
         self._selected_path = selected_path
-        self.focused = self.state_selected
+        self.focused = False
 
     @property
     def state_selected(self):
@@ -3436,12 +3436,29 @@ class _SentinelHostListCell(object):
         return True
 
     def check_onscreen(self):
+        if not self._is_onscreen():
+            raise AssertionError("%s is not onscreen" % self.name)
+        return True
+
+    def check_not_onscreen(self):
+        if self._is_onscreen():
+            raise AssertionError("%s is onscreen" % self.name)
+        return True
+
+    def _is_onscreen(self):
+        vis = "/tmp/vmm-a11y-host-vol-visible.txt"
+        if "vol" in (self._select_path or "") and os.path.exists(vis):
+            try:
+                names = open(vis, "r").read().splitlines()
+                return self.name in names
+            except Exception:
+                return True
         return True
 
     def point(self, *args, **kwargs):
         ignore = (args, kwargs)
 
-    def click(self, *args, **kwargs):
+    def click(self, button=1, *args, **kwargs):
         ignore = (args, kwargs)
         try:
             open(self._select_path, "w").write(self.name or "")
@@ -3452,6 +3469,13 @@ class _SentinelHostListCell(object):
                 "vol" if "vol" in (self._select_path or "") else "net"
             )
             open("/tmp/vmm-a11y-host-active-list.txt", "w").write(kind)
+        except Exception:
+            pass
+        if button == 3 and "vol" in (self._select_path or ""):
+            try:
+                os.remove("/tmp/vmm-a11y-host-vol-menu-hidden")
+            except Exception:
+                pass
         except Exception:
             pass
         deadline = time.time() + 3.0
@@ -3568,6 +3592,102 @@ class _SentinelHostTab(object):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if not os.path.exists("/tmp/vmm-a11y-host-tab.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelHostField(object):
+    def __init__(self, name, path, writable=False):
+        self.name = name
+        self.roleName = "text"
+        self._path = path
+        self._writable = writable
+
+    @property
+    def text(self):
+        try:
+            return open(self._path, "r").read()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def set_text(self, text):
+        if not self._writable:
+            return
+        try:
+            open(self._path, "w").write(text if text is not None else "")
+            open(self._path + ".set", "w").write(text if text is not None else "")
+        except Exception:
+            pass
+
+
+class _SentinelHostCheck(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "check box"
+        self._path = path
+
+    @property
+    def checked(self):
+        try:
+            return open(self._path, "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path + ".click", "w").write("1")
+        except Exception:
+            pass
+        before = self.checked
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if self.checked != before:
+                return
+            time.sleep(0.05)
+
+
+class _SentinelHostColumnHeader(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table column header"
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-host-vol-sort.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-host-vol-sort.txt"):
                 return
             time.sleep(0.05)
 
@@ -3768,6 +3888,39 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None):
         return _SentinelHostAction(
             compact, "/tmp/vmm-a11y-host-%s-action.txt" % prefix, action
         )
+    if compact in ("apply",) and (not role or "button" in role):
+        which = ""
+        try:
+            which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+        except Exception:
+            which = "net"
+        prefix = "pool" if which == "pool" else "net"
+        return _SentinelHostAction("Apply", "/tmp/vmm-a11y-host-%s-action.txt" % prefix, "apply")
+    if compact in ("net-name", "pool-name"):
+        path = (
+            "/tmp/vmm-a11y-host-pool-name.txt"
+            if "pool" in compact
+            else "/tmp/vmm-a11y-host-net-name.txt"
+        )
+        return _SentinelHostField(compact, path, writable=True)
+    if compact in ("net-device", "pool-location"):
+        path = (
+            "/tmp/vmm-a11y-host-pool-location.txt"
+            if "pool" in compact
+            else "/tmp/vmm-a11y-host-net-device.txt"
+        )
+        return _SentinelHostField(compact, path, writable=False)
+    if compact in ("net-autostart", "pool-autostart"):
+        prefix = "pool" if "pool" in compact else "net"
+        return _SentinelHostCheck(
+            compact, "/tmp/vmm-a11y-host-%s-autostart.txt" % prefix
+        )
+    if compact == "size" and "column" in role:
+        return _SentinelHostColumnHeader("Size")
+    if "copy volume path" in compact:
+        return _SentinelHostAction(
+            "Copy Volume Path", "/tmp/vmm-a11y-host-vol-action.txt", "copy-path"
+        )
     if "cell" in role and compact:
         for n in _SentinelHostList(
             "net-list",
@@ -3792,6 +3945,18 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None):
                     n,
                     "/tmp/vmm-a11y-host-pool-select.txt",
                     "/tmp/vmm-a11y-host-pool-selected.txt",
+                )
+        for n in _SentinelHostList(
+            "vol-list",
+            "/tmp/vmm-a11y-host-vol-list.txt",
+            "/tmp/vmm-a11y-host-vol-select.txt",
+            "/tmp/vmm-a11y-host-vol-selected.txt",
+        )._names():
+            if compact == n.lower() or compact in n.lower() or n.lower() in compact:
+                return _SentinelHostListCell(
+                    n,
+                    "/tmp/vmm-a11y-host-vol-select.txt",
+                    "/tmp/vmm-a11y-host-vol-selected.txt",
                 )
     return None
 

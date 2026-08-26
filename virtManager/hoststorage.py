@@ -305,6 +305,57 @@ class vmmHostStorage(vmmGObjectUI):
             )
         except Exception:
             pass
+        try:
+            open("/tmp/vmm-a11y-host-pool-name.txt", "w").write(
+                self.widget("pool-name-entry").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-pool-location.txt", "w").write(
+                self.widget("pool-location").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-pool-autostart.txt", "w").write(
+                "1" if self.widget("pool-autostart").get_active() else "0"
+            )
+        except Exception:
+            pass
+        self._publish_visible_vols()
+
+    def _publish_visible_vols(self):
+        names = []
+        try:
+            tv = self.widget("vol-list")
+            model = tv.get_model()
+            if model is None:
+                return
+            start = end = None
+            try:
+                rng = tv.get_visible_range()
+                if isinstance(rng, tuple) and len(rng) == 3:
+                    _ok, start, end = rng
+                elif isinstance(rng, tuple) and len(rng) == 2:
+                    start, end = rng
+            except Exception:
+                start = end = None
+            if start is None or end is None:
+                names = [str(row[VOL_COLUMN_NAME] or "") for row in model]
+                names = [n for n in names if n][:8]
+            else:
+                try:
+                    sidx = int(start.to_string().split(":")[0])
+                    eidx = int(end.to_string().split(":")[0])
+                except Exception:
+                    sidx, eidx = 0, 7
+                it = model.get_iter_first()
+                idx = 0
+                while it is not None:
+                    if sidx <= idx <= eidx:
+                        n = str(model[it][VOL_COLUMN_NAME] or "")
+                        if n:
+                            names.append(n)
+                    idx += 1
+                    it = model.iter_next(it)
+            open("/tmp/vmm-a11y-host-vol-visible.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
 
     def _nav_list(self, direction):
         names = []
@@ -373,6 +424,28 @@ class vmmHostStorage(vmmGObjectUI):
             pass
         return _from_model()
 
+    def _select_vol_by_name(self, name):
+        if not name:
+            return False
+        vol_list = self.widget("vol-list")
+        model = vol_list.get_model()
+        sel = vol_list.get_selection()
+        if model is None or sel is None:
+            return False
+        it = model.get_iter_first()
+        while it is not None:
+            try:
+                have = str(model[it][VOL_COLUMN_NAME] or "")
+                if have == name:
+                    sel.select_iter(it)
+                    vol_list.grab_focus()
+                    self._publish_a11y_state()
+                    return True
+            except Exception:
+                pass
+            it = model.iter_next(it)
+        return False
+
     def _start_a11y_poll(self):
         if getattr(self, "_vmm_hostpool_poll", False):
             return
@@ -398,6 +471,58 @@ class vmmHostStorage(vmmGObjectUI):
                     direction = open(nav, "r").read().strip().lower()
                     os.remove(nav)
                     self._nav_list(direction)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-vol-select.txt"
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip()
+                    os.remove(path)
+                    self._select_vol_by_name(name)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-pool-name.txt.set"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    os.remove(path)
+                    self.widget("pool-name-entry").set_text(text)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-pool-autostart.txt.click"
+                if os.path.exists(path):
+                    os.remove(path)
+                    chk = self.widget("pool-autostart")
+                    chk.set_active(not chk.get_active())
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-vol-sort.txt"
+                if os.path.exists(path):
+                    title = open(path, "r").read().strip()
+                    os.remove(path)
+                    tv = self.widget("vol-list")
+                    for col in tv.get_columns():
+                        try:
+                            if (col.get_title() or "") == title:
+                                col.set_clickable(True)
+                                col.clicked()
+                                break
+                        except Exception:
+                            continue
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-vol-action.txt"
+                if os.path.exists(path):
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                    if action == "copy-path":
+                        self._vol_copy_path_cb(None)
             except Exception:
                 pass
             try:

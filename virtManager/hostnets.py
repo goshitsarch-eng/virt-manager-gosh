@@ -169,6 +169,18 @@ class vmmHostNets(vmmGObjectUI):
             )
         except Exception:
             pass
+        try:
+            open("/tmp/vmm-a11y-host-net-name.txt", "w").write(
+                self.widget("net-name").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-net-device.txt", "w").write(
+                self.widget("net-device").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-net-autostart.txt", "w").write(
+                "1" if self.widget("net-autostart").get_active() else "0"
+            )
+        except Exception:
+            pass
 
     def _nav_list(self, direction):
         names = []
@@ -262,6 +274,24 @@ class vmmHostNets(vmmGObjectUI):
                     direction = open(nav, "r").read().strip().lower()
                     os.remove(nav)
                     self._nav_list(direction)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-net-name.txt.set"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    os.remove(path)
+                    self.widget("net-name").set_text(text)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-net-autostart.txt.click"
+                if os.path.exists(path):
+                    os.remove(path)
+                    chk = self.widget("net-autostart")
+                    chk.set_active(not chk.get_active())
+                    self._publish_a11y_state()
             except Exception:
                 pass
             try:

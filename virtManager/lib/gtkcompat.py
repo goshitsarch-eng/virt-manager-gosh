@@ -6495,10 +6495,24 @@ def _install_stock_and_enums():
                 return Clipboard(_display)
 
             def set_text(self, text, _length=-1):
+                try:
+                    open("/tmp/vmm-a11y-clipboard.txt", "w").write(text or "")
+                except Exception:
+                    pass
                 if self._clip is None:
                     return
                 try:
                     self._clip.set(text or "")
+                except Exception:
+                    pass
+                try:
+                    import subprocess
+
+                    proc = subprocess.Popen(
+                        ["xclip", "-selection", "clipboard"],
+                        stdin=subprocess.PIPE,
+                    )
+                    proc.communicate((text or "").encode("utf-8"))
                 except Exception:
                     pass
 
