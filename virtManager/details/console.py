@@ -634,7 +634,14 @@ class vmmConsolePages(vmmGObjectUI):
                     msg,
                     window=self.topwin,
                 )
-                open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+                # Window teardown uses this string; do not clobber a real
+                # connection error the uitest is waiting to read.
+                if msg != _("Viewer window closed."):
+                    open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+                try:
+                    open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(msg + "\n")
+                except Exception:
+                    pass
             except Exception:
                 pass
 
@@ -655,7 +662,9 @@ class vmmConsolePages(vmmGObjectUI):
                 "guest-status", msg, msg, window=self.topwin
             )
             try:
-                open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+                if msg != _("Viewer window closed."):
+                    open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(msg + "\n")
             except Exception:
                 pass
         self._activate_gfx_unavailable_page(msg)
@@ -952,11 +961,13 @@ class vmmConsolePages(vmmGObjectUI):
             return
 
         cpage = self.widget("console-pages").get_current_page()
-        if cpage != _CONSOLE_PAGE_UNAVAILABLE:
+        if cpage == _CONSOLE_PAGE_SERIAL:
+            return
+        if cpage == _CONSOLE_PAGE_CONNECT:
             return
 
-        # If we are in this condition it should mean the VM was
-        # just started, so connect to the default page
+        # UNAVAILABLE, or GRAPHICS showing a previous error (SDL, stale
+        # listen config): connect to the current default console.
         self._toggle_first_console_menu_item()
 
     def _on_console_menu_toggled_cb(self, src):

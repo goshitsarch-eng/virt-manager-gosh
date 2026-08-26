@@ -267,6 +267,11 @@ class vmmVMWindow(vmmGObjectUI):
                         btn.set_active(True)
                     except Exception:
                         pass
+                if want == "console":
+                    try:
+                        self.activate_default_console_page()
+                    except Exception:
+                        pass
                 return True
 
             def _publish_vm_toolbar():
