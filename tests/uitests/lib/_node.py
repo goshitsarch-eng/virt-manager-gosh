@@ -3428,10 +3428,6 @@ class _SentinelHostListCell(object):
         return self.state_selected
 
     @property
-    def focused(self):
-        return self.state_selected
-
-    @property
     def showing(self):
         return True
 
