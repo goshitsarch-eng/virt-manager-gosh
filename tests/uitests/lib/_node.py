@@ -9939,16 +9939,18 @@ class _SentinelFakeSystray(object):
                 button = int(args[0])
             except Exception:
                 pass
-        try:
-            open("/tmp/vmm-a11y-systray-click.txt", "w").write(str(int(button)))
-        except Exception:
-            pass
         if int(button) != 1:
+            # Open the menu in the sentinel only. A queued click poller
+            # would reopen it after Escape and fail not-showing checks.
             try:
                 open("/tmp/vmm-a11y-systray-menu.txt", "w").write("1")
             except Exception:
                 pass
         else:
+            try:
+                open("/tmp/vmm-a11y-systray-click.txt", "w").write("1")
+            except Exception:
+                pass
             try:
                 open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
             except Exception:

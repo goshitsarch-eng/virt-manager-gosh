@@ -345,12 +345,20 @@ class VMMDogtailApp:
                     pass
             if key_l == "escape":
                 try:
-                    if open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip() == "1":
+                    shown = open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip()
+                except Exception:
+                    shown = ""
+                if shown == "1":
+                    try:
                         open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
                         open("/tmp/vmm-a11y-systray-escape", "w").write("1")
-                        return
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
+                    try:
+                        os.remove("/tmp/vmm-a11y-systray-click.txt")
+                    except Exception:
+                        pass
+                    return
                 try:
                     with open("/tmp/vmm-a11y-oslist-escape", "w") as fh:
                         fh.write("1")
