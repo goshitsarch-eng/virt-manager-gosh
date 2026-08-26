@@ -582,7 +582,19 @@ class vmmDetails(vmmGObjectUI):
                     try:
                         text = open(fpath, "r").read().strip()
                         os.remove(fpath)
-                        self.widget(wid).set_value(float(text or 0))
+                        val = float(text or 0)
+                        w = self.widget(wid)
+                        if wid == "mem-maxmem":
+                            try:
+                                _lo, upper = w.get_range()
+                                w.set_range(0, upper)
+                            except Exception:
+                                pass
+                        w.set_value(val)
+                        if wid == "mem-maxmem":
+                            curw = self.widget("mem-memory")
+                            if uiutil.spin_get_helper(curw) > val:
+                                curw.set_value(val)
                         self._enable_apply(edit)
                         changed = True
                     except Exception:
@@ -2131,8 +2143,14 @@ class vmmDetails(vmmGObjectUI):
         hotplug_args = {}
 
         if self._edited(EDIT_MEM):
-            maxmem = uiutil.spin_get_helper(self.widget("mem-maxmem"))
-            curmem = uiutil.spin_get_helper(self.widget("mem-memory"))
+            maxmem = int(uiutil.spin_get_helper(self.widget("mem-maxmem")) or 0)
+            curmem = int(uiutil.spin_get_helper(self.widget("mem-memory")) or 0)
+            if curmem > maxmem:
+                curmem = maxmem
+                try:
+                    self.widget("mem-memory").set_value(maxmem)
+                except Exception:
+                    pass
             curmem = int(curmem) * 1024
             maxmem = int(maxmem) * 1024
 

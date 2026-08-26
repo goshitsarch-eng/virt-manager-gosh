@@ -3402,9 +3402,20 @@ def _start_config_apply_poll(details):
                     continue
                 text = open(fpath, "r").read().strip()
                 os.remove(fpath)
+                val = float(text or 0)
                 w = d.widget(wid)
                 if w is not None:
-                    w.set_value(float(text or 0))
+                    if wid == "mem-maxmem":
+                        try:
+                            _lo, upper = w.get_range()
+                            w.set_range(0, upper)
+                        except Exception:
+                            pass
+                    w.set_value(val)
+                    if wid == "mem-maxmem":
+                        curw = d.widget("mem-memory")
+                        if curw is not None and curw.get_value() > val:
+                            curw.set_value(val)
                 if hasattr(d, "_enable_apply"):
                     d._enable_apply(edit)
                 mem_changed = True
