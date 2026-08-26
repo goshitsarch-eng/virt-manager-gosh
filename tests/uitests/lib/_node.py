@@ -9617,6 +9617,8 @@ class _SentinelNewVMWindow(object):
                 return _SentinelStaticLabel(path)
             if path:
                 return _SentinelStaticLabel(path)
+        if "suitable default network" in compact:
+            return _SentinelStaticLabel("Failed to find a suitable default network.")
         if compact in ("cancel",) and (not role or "button" in role):
             return _SentinelClickButton("create-cancel")
         if "architecture options" in compact:
@@ -9691,6 +9693,7 @@ class _SentinelNewVMWindow(object):
             "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
             "virt-type": "/tmp/vmm-a11y-virt-type.txt",
             "Xen Type": "/tmp/vmm-a11y-combo-Xen Type.txt",
+            "net-source": "/tmp/vmm-a11y-net-source.txt",
         }.get(combolabel)
         want = (itemlabel or "").replace(".*", "")
         deadline = time.time() + 4.0
