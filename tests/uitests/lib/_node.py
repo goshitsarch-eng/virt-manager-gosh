@@ -226,6 +226,18 @@ class _SentinelTableCell(object):
                 tab = "disk-tab"
             elif "NIC" in label or "Network" in label:
                 tab = "network-tab"
+            elif label in ("Overview",):
+                tab = "overview-tab"
+            elif "OS information" in label:
+                tab = "os-tab"
+            elif label in ("Performance",):
+                tab = "performance-tab"
+            elif label in ("CPUs", "CPU"):
+                tab = "cpu-tab"
+            elif label in ("Memory",):
+                tab = "memory-tab"
+            elif "Boot" in label:
+                tab = "boot-tab"
             if tab:
                 open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
         except Exception:
@@ -1718,6 +1730,20 @@ class _SentinelAddhwTab(object):
             key in hw for key in ("Disk", "CDROM", "Floppy")
         ):
             return True
+        if self.name == "overview-tab" and "Overview" in hw:
+            return True
+        if self.name == "os-tab" and "OS information" in hw:
+            return True
+        if self.name == "performance-tab" and "Performance" in hw:
+            return True
+        if self.name == "cpu-tab" and ("CPU" in hw or "CPUs" in hw):
+            return True
+        if self.name == "memory-tab" and "Memory" in hw:
+            return True
+        if self.name == "boot-tab" and "Boot" in hw:
+            return True
+        if self.name == "network-tab" and ("NIC" in hw or "Network" in hw):
+            return True
         return False
 
     @property
@@ -1891,6 +1917,12 @@ def _sentinel_addhw_tab(name, roleName):
         "panic-tab",
         "vsock-tab",
         "controller-tab",
+        "overview-tab",
+        "os-tab",
+        "performance-tab",
+        "cpu-tab",
+        "memory-tab",
+        "boot-tab",
     )
     if compact in tabs or raw in tabs:
         return _SentinelAddhwTab(compact)
