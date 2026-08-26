@@ -2385,7 +2385,7 @@ class _SentinelStorageBrowser(object):
         "testvol9.img",
         "UPPER",
         "test-clone-simple.img",
-        "collidevol.img",
+        "collidevol1.img",
         "sharevol.img",
         "backingl3.img",
         "backingl2.img",
@@ -3071,6 +3071,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = self.name or ""
         except Exception:
             name = ""
+        if name in ("Delete", "Remove Disk"):
+            try:
+                return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
         if "Add New Virtual Hardware" in name:
             try:
                 if os.path.exists("/tmp/vmm-a11y-addhw-hidden"):
