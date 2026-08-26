@@ -39,6 +39,7 @@ _VNC_SET_DESKTOP_SIZE = 251
 _VNC_ENC_DESKTOPSIZE = -223
 _VNC_ENC_EXTENDED_DESKTOPSIZE = -308
 _VNC_ENC_TIGHT = 7
+_VNC_ENC_TRLE = 15
 _VNC_ENC_ZRLE = 16
 _VNC_ENC_CURSOR = -239
 _VNC_SEC_NONE = 1
@@ -65,6 +66,27 @@ _VNC_VENCRYPT_PLAIN_AUTH = (
     _VNC_VENCRYPT_X509PLAIN,
 )
 _VNC_VENCRYPT_VNC_AUTH = (_VNC_VENCRYPT_TLSVNC, _VNC_VENCRYPT_X509VNC)
+
+# Linux evdev codes used by SpiceClientGLib.inputs_key_press.
+# Gdk hardware keycodes on X11 are typically evdev + 8.
+_SPICE_EVDEV = {
+    Gdk.KEY_Escape: 1,
+    Gdk.KEY_BackSpace: 14,
+    Gdk.KEY_Tab: 15,
+    Gdk.KEY_Return: 28,
+    Gdk.KEY_Control_L: 29,
+    Gdk.KEY_Control_R: 97,
+    Gdk.KEY_Shift_L: 42,
+    Gdk.KEY_Shift_R: 54,
+    Gdk.KEY_Alt_L: 56,
+    Gdk.KEY_Alt_R: 100,
+    Gdk.KEY_space: 57,
+    Gdk.KEY_Delete: 111,
+    Gdk.KEY_Print: 99,
+    Gdk.KEY_Sys_Req: 99,
+}
+for _i in range(1, 13):
+    _SPICE_EVDEV[getattr(Gdk, "KEY_F%d" % _i)] = 58 + _i
 
 try:
     gi.require_foreign("cairo")
@@ -601,6 +623,7 @@ class VNCDisplay(_DisplayBase):
         encodings = (
             _VNC_ENC_ZRLE,
             _VNC_ENC_TIGHT,
+            _VNC_ENC_TRLE,
             6,  # zlib
             5,  # hextile
             2,  # RRE
@@ -992,6 +1015,74 @@ class VNCDisplay(_DisplayBase):
         if len(data) >= w * h * 3:
             self._blit_rgb24(width, x, y, w, h, data)
 
+    def _decode_rle_tiles(self, width, x, y, w, h, take):
+        # Shared ZRLE/TRLE 64x64 tile decoder. `take(n)` returns n bytes.
+        for ty in range(y, y + h, 64):
+            th = min(64, y + h - ty)
+            for tx in range(x, x + w, 64):
+                tw = min(64, x + w - tx)
+                raw = take(1)
+                if not raw:
+                    return
+                sub = raw[0]
+                if sub == 0:
+                    self._blit_raw(width, tx, ty, tw, th, take(tw * th * 4))
+                elif sub == 1:
+                    pix = take(4)
+                    self._fill_rect(width, tx, ty, tw, th, pix)
+                elif 2 <= sub <= 16:
+                    palette = [take(4) for _ in range(sub)]
+                    bits = 1 if sub <= 2 else 2 if sub <= 4 else 4
+                    for row in range(th):
+                        packed = take((tw * bits + 7) // 8)
+                        bitpos = 0
+                        for col in range(tw):
+                            byte = packed[bitpos // 8]
+                            shift = 8 - bits - (bitpos % 8)
+                            idx = (byte >> shift) & ((1 << bits) - 1)
+                            bitpos += bits
+                            pix = palette[idx] if idx < len(palette) else palette[0]
+                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                elif sub == 128:
+                    count = 0
+                    while count < tw * th:
+                        pix = take(4)
+                        run = 1
+                        while True:
+                            b = take(1)[0]
+                            run += b
+                            if b != 255:
+                                break
+                        for _ in range(run):
+                            col = count % tw
+                            row = count // tw
+                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                            count += 1
+                            if count >= tw * th:
+                                break
+                elif 130 <= sub <= 255:
+                    ncolors = sub - 128
+                    palette = [take(4) for _ in range(ncolors)]
+                    count = 0
+                    while count < tw * th:
+                        idx = take(1)[0]
+                        run = 1
+                        if idx & 0x80:
+                            idx &= 0x7F
+                            while True:
+                                b = take(1)[0]
+                                run += b
+                                if b != 255:
+                                    break
+                        pix = palette[idx] if idx < len(palette) else palette[0]
+                        for _ in range(run):
+                            col = count % tw
+                            row = count // tw
+                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                            count += 1
+                            if count >= tw * th:
+                                break
+
     def _read_zrle(self, sock, width, x, y, w, h):
         import zlib
 
@@ -1012,70 +1103,13 @@ class VNCDisplay(_DisplayBase):
             pos += n
             return out
 
-        for ty in range(y, y + h, 64):
-            th = min(64, y + h - ty)
-            for tx in range(x, x + w, 64):
-                tw = min(64, x + w - tx)
-                if pos >= len(data):
-                    return
-                sub = _take(1)[0]
-                if sub == 0:
-                    self._blit_raw(width, tx, ty, tw, th, _take(tw * th * 4))
-                elif sub == 1:
-                    pix = _take(4)
-                    self._fill_rect(width, tx, ty, tw, th, pix)
-                elif 2 <= sub <= 16:
-                    palette = [_take(4) for _ in range(sub)]
-                    bits = 1 if sub <= 2 else 2 if sub <= 4 else 4
-                    for row in range(th):
-                        packed = _take((tw * bits + 7) // 8)
-                        bitpos = 0
-                        for col in range(tw):
-                            byte = packed[bitpos // 8]
-                            shift = 8 - bits - (bitpos % 8)
-                            idx = (byte >> shift) & ((1 << bits) - 1)
-                            bitpos += bits
-                            pix = palette[idx] if idx < len(palette) else palette[0]
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
-                elif sub == 128:
-                    count = 0
-                    while count < tw * th:
-                        pix = _take(4)
-                        run = 1
-                        while True:
-                            b = _take(1)[0]
-                            run += b
-                            if b != 255:
-                                break
-                        for _ in range(run):
-                            col = count % tw
-                            row = count // tw
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
-                            count += 1
-                            if count >= tw * th:
-                                break
-                elif 130 <= sub <= 255:
-                    ncolors = sub - 128
-                    palette = [_take(4) for _ in range(ncolors)]
-                    count = 0
-                    while count < tw * th:
-                        idx = _take(1)[0]
-                        run = 1
-                        if idx & 0x80:
-                            idx &= 0x7F
-                            while True:
-                                b = _take(1)[0]
-                                run += b
-                                if b != 255:
-                                    break
-                        pix = palette[idx] if idx < len(palette) else palette[0]
-                        for _ in range(run):
-                            col = count % tw
-                            row = count // tw
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
-                            count += 1
-                            if count >= tw * th:
-                                break
+        self._decode_rle_tiles(width, x, y, w, h, _take)
+
+    def _read_trle(self, sock, width, x, y, w, h):
+        def _take(n):
+            return self._recv_n(sock, n)
+
+        self._decode_rle_tiles(width, x, y, w, h, _take)
 
     def _read_cursor(self, sock, hotx, hoty, w, h):
         raw = self._recv_n(sock, max(w, 0) * max(h, 0) * 4)
@@ -1149,6 +1183,8 @@ class VNCDisplay(_DisplayBase):
                 self._read_zlib(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_TIGHT:
                 self._read_tight(sock, width, x, y, w, h)
+            elif enc == _VNC_ENC_TRLE:
+                self._read_trle(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_ZRLE:
                 self._read_zrle(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_CURSOR:
@@ -1480,10 +1516,18 @@ class SpiceDisplay(_DisplayBase):
             log.debug("spice file transfer failed: %s", exc)
             return False
 
+    def _spice_scancode(self, keyval, keycode):
+        mapped = _SPICE_EVDEV.get(int(keyval or 0))
+        if mapped:
+            return mapped
+        if keycode and int(keycode) > 8:
+            return int(keycode) - 8
+        return int(keyval or 0)
+
     def _send_key(self, keyval, keycode, pressed):
         if not self._inputs or SpiceClientGLib is None:
             return
-        scancode = keycode or keyval
+        scancode = self._spice_scancode(keyval, keycode)
         try:
             if pressed:
                 SpiceClientGLib.inputs_key_press(self._inputs, int(scancode))

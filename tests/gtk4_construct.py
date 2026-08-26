@@ -482,6 +482,18 @@ def main():
         toolbar.timed_revealer.force_reveal(True)
         toolbar._on_send_key_button_clicked_cb(toolbar._send_key_button)
         toolbar.cleanup()
+        bar = Gtk.MenuBar()
+        file_item = Gtk.MenuItem(label="File")
+        sub = Gtk.Menu()
+        sub.add(Gtk.MenuItem(label="New Virtual Machine"))
+        file_item.set_submenu(sub)
+        bar.append(file_item)
+        opened = []
+        sub.popup_at_widget = lambda *_a: opened.append(True)
+        file_item._on_pointer_enter()
+        assert not opened, "GTK 3 menubar must not open on hover"
+        file_item._on_clicked()
+        assert opened, "GTK 3 menubar must open on click"
 
     def preferences_grabkeys_widgets():
         from virtManager.preferences import vmmPreferences
@@ -932,6 +944,9 @@ def main():
         payload = st.pack("!I", len(zrle)) + zrle
         disp._zrle_z = None
         disp._read_zrle(FakeSock(payload), 4, 0, 0, 4, 4)
+        disp._alloc_pixels(4, 4)
+        disp._read_trle(FakeSock(b"\x01" + b"\xaa\xbb\xcc\xdd"), 4, 0, 0, 4, 4)
+        assert bytes(disp._pixels[0:4]) == b"\xaa\xbb\xcc\xdd"
         # Cursor pseudo-encoding paints a local overlay; hotspot is x,y
         pixels = (b"\x11\x22\x33\x00" * 4)
         mask = b"\x80\x40"  # (0,0) and (1,1) visible
@@ -946,6 +961,12 @@ def main():
         assert disp._cursor_pixels[7] == 0
         disp.close()
         spice = gtk4display.SpiceDisplay(None)
+        from gi.repository import Gdk as _Gdk
+
+        assert spice._spice_scancode(_Gdk.KEY_Control_L, 0) == 29
+        assert spice._spice_scancode(_Gdk.KEY_F1, 0) == 59
+        assert spice._spice_scancode(_Gdk.KEY_Alt_L, 0) == 56
+        assert spice._spice_scancode(0, 37) == 29
         spice.set_scaling(True)
         spice.set_property("resize-guest", True)
         spice._apply_resize_guest(True)

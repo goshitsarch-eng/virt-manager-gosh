@@ -5869,10 +5869,34 @@ class MenuItem(Gtk.Button):
     def _set_selected(self, selected):
         self.update_state([Gtk.AccessibleState.SELECTED], [bool(selected)])
 
+    def _menubar_parent(self):
+        parent = None
+        try:
+            parent = self.get_parent()
+        except Exception:
+            parent = None
+        return parent if isinstance(parent, MenuBar) else None
+
     def _on_pointer_enter(self, *_args):
         self._set_selected(True)
-        if self._submenu is not None:
+        if self._submenu is None:
+            return
+        bar = self._menubar_parent()
+        if bar is not None:
+            # GTK 3 menubars open on click. Hover only switches after
+            # one menubar menu is already open.
+            opened = getattr(bar, "_vmm_open_item", None)
+            if opened is None:
+                return
+            if opened is not self and getattr(opened, "_submenu", None):
+                try:
+                    opened._submenu.popdown()
+                except Exception:
+                    pass
             self._submenu.popup_at_widget(self)
+            bar._vmm_open_item = self
+            return
+        self._submenu.popup_at_widget(self)
 
     def _on_pointer_leave(self, *_args):
         self._set_selected(False)
@@ -5928,6 +5952,9 @@ class MenuItem(Gtk.Button):
     def _on_clicked(self, *_args):
         self._set_selected(True)
         if self._submenu:
+            bar = self._menubar_parent()
+            if bar is not None:
+                bar._vmm_open_item = self
             self._submenu.popup_at_widget(self)
             return
 
@@ -6362,6 +6389,10 @@ class Menu(Gtk.Box):
     def popdown(self, *_args, **_kwargs):
         self._opened = False
         parent = self._parent_widget
+        if parent is not None and hasattr(parent, "_menubar_parent"):
+            bar = parent._menubar_parent()
+            if bar is not None and getattr(bar, "_vmm_open_item", None) is parent:
+                bar._vmm_open_item = None
         self._sync_menu_a11y_name()
         self._destroy_popover()
         # Toolbar Menu toggle stays active after an item click; reset it
