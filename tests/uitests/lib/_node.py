@@ -123,6 +123,16 @@ class _SentinelTableCell(object):
             open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
         except Exception:
             pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == (
+                    self.name or ""
+                ):
+                    break
+            except Exception:
+                pass
+            time.sleep(0.05)
 
     def find(self, *args, **kwargs):
         raise dogtail.tree.SearchError("sentinel cell has no children")
@@ -756,6 +766,17 @@ class _SentinelConfigApply(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == (
+                        "Boot Options"
+                    ):
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
         try:
             open("/tmp/vmm-a11y-config-apply", "w").write("1")
         except Exception:

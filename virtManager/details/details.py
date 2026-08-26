@@ -1668,6 +1668,8 @@ class vmmDetails(vmmGObjectUI):
         if row:
             pagetype = row[HW_LIST_COL_TYPE]
             dev = row[HW_LIST_COL_DEVICE]
+        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+            pagetype = HW_LIST_TYPE_BOOT
 
         success = False
         try:
@@ -1716,14 +1718,15 @@ class vmmDetails(vmmGObjectUI):
         if success is not False:
             self._disable_apply()
             success = True
-            for path in (
-                "/tmp/vmm-a11y-boot-init-path.txt",
-                "/tmp/vmm-a11y-boot-init-args.txt",
-            ):
-                try:
-                    os.remove(path)
-                except Exception:
-                    pass
+            if pagetype is HW_LIST_TYPE_BOOT:
+                for path in (
+                    "/tmp/vmm-a11y-boot-init-path.txt",
+                    "/tmp/vmm-a11y-boot-init-args.txt",
+                ):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
             try:
                 self._refresh_page()
             except Exception:
