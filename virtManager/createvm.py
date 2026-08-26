@@ -556,6 +556,10 @@ class vmmCreateVM(vmmGObjectUI):
                             open(path, "w").write("")
                         except Exception:
                             pass
+                        try:
+                            os.remove("/tmp/vmm-a11y-media-select.txt")
+                        except Exception:
+                            pass
                     elif self._mediacombo is not None and pathtext:
                         current = ""
                         try:
