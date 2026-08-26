@@ -4799,8 +4799,10 @@ def _run_modal(window, response_signal="response"):
             os.remove(path)
         except Exception:
             return True
-        if not label or not loop.is_running():
+        if not loop.is_running():
             return False
+        if not label:
+            return True
         mapping = {
             "yes": Gtk.ResponseType.YES,
             "no": Gtk.ResponseType.NO,
@@ -4815,7 +4817,7 @@ def _run_modal(window, response_signal="response"):
             window.emit("response", resp)
         except Exception:
             on_response(window, resp)
-        return False
+        return True
 
     GLib.timeout_add(50, _poll_alert_response)
     loop.run()
