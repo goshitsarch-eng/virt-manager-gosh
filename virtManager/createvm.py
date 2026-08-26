@@ -3057,7 +3057,7 @@ class vmmCreateVM(vmmGObjectUI):
                 installer = self._gdata.build_installer()
         except Exception as e:
             msg = _("Error setting installer parameters.")
-            return self.err.val_err(msg, e)
+            return self._write_a11y_alert("%s\n%s" % (msg, e))
 
         try:
             name = virtinst.Guest.generate_name(guest)
