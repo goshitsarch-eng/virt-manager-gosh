@@ -1823,6 +1823,16 @@ class vmmDetails(vmmGObjectUI):
 
     def _config_cancel(self, ignore=None):
         # Remove current changes and deactivate 'apply' button
+        for path in (
+            "/tmp/vmm-a11y-overview-name-want.txt",
+            "/tmp/vmm-a11y-overview-name.txt",
+            "/tmp/vmm-a11y-overview-title.txt",
+            "/tmp/vmm-a11y-overview-desc.txt",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self._refresh_page()
 
     def _load_a11y_xml_editor(self):
