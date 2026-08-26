@@ -42,23 +42,26 @@ def _launch_dialog(
 
     primary_text = fix_text(primary_text)
     secondary_text = fix_text(secondary_text)
-    # Drop stale Yes/OK before publishing the new alert so a leftover
-    # response cannot auto-close this dialog. Keep a Yes already written
-    # for the pre-published Are-you-sure file.
+    # Drop leftover Yes/No from a previous dialog. Keep a response only
+    # when the existing alert text is this same prompt (details pre-publishes
+    # "Are you sure..." before chkbox_helper, and the test may answer first).
+    incoming = "%s\n%s" % (primary_text or "", secondary_text or "")
     try:
         resp = "/tmp/vmm-a11y-alert-response.txt"
         alert = "/tmp/vmm-a11y-alert.txt"
         keep = False
         if os.path.exists(resp) and os.path.exists(alert):
-            keep = os.path.getmtime(resp) >= os.path.getmtime(alert)
+            existing = open(alert, "r").read()
+            if existing.strip() and (
+                (primary_text or "") in existing or existing.strip() in incoming
+            ):
+                keep = os.path.getmtime(resp) >= os.path.getmtime(alert)
         if not keep:
             os.remove(resp)
     except Exception:
         pass
     try:
-        open("/tmp/vmm-a11y-alert.txt", "w").write(
-            "%s\n%s" % (primary_text or "", secondary_text or "")
-        )
+        open("/tmp/vmm-a11y-alert.txt", "w").write(incoming)
     except Exception:
         pass
 

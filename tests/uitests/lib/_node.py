@@ -3981,6 +3981,16 @@ class _SentinelVMActionItem(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        # Drop a stale empty/previous alert so leftover Yes/No cannot
+        # auto-dismiss the confirm this click is about to open.
+        try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-alert-response.txt")
+        except Exception:
+            pass
         try:
             open("/tmp/vmm-a11y-vm-action.txt", "w").write(self.name or "")
             open("/tmp/vmm-a11y-vm-menu-hidden", "w").write("1")
@@ -3997,6 +4007,13 @@ class _SentinelVMActionItem(object):
                     open("/tmp/vmm-a11y-clone-open.txt", "w").write(vm)
             except Exception:
                 pass
+        deadline = time.time() + 6.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            if not os.path.exists("/tmp/vmm-a11y-vm-action.txt"):
+                return
+            time.sleep(0.05)
 
 
 class _SentinelVMActionMenu(object):

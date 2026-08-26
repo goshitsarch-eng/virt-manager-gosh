@@ -1061,6 +1061,13 @@ class VMMDogtailApp:
         extra_opts = extra_opts or []
         uri = uri or self.uri
         os.environ.setdefault("GTK_A11Y", "atspi")
+        import glob
+
+        for path in glob.glob("/tmp/vmm-a11y-*"):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
 
         if allow_debug and tests.utils.TESTCONFIG.debug:
             stdout = sys.stdout

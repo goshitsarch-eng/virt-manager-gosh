@@ -595,6 +595,11 @@ class vmmManager(vmmGObjectUI):
                             break
                 if vm is None:
                     vm = self.current_vm()
+                if vm is not None:
+                    try:
+                        self.select_row_for_name(vm.get_name())
+                    except Exception:
+                        pass
                 mapping = {
                     "Delete": vmmenu.VMActionUI.delete,
                     # Clone is opened from /tmp/vmm-a11y-clone-open.txt
@@ -634,6 +639,19 @@ class vmmManager(vmmGObjectUI):
                 if fn is not None and vm is not None:
                     try:
                         fn(self, vm)
+                    except Exception:
+                        try:
+                            open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                                "%s\n%s" % (action, want)
+                            )
+                        except Exception:
+                            pass
+                elif fn is not None and vm is None:
+                    try:
+                        open(path, "w").write(action)
+                        open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                            "no-vm %s want=%s" % (action, want)
+                        )
                     except Exception:
                         pass
                 return True
