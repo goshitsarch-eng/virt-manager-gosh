@@ -486,9 +486,11 @@ class vmmSnapshotNew(vmmGObjectUI):
         if os.path.exists(_SNAP_NEW_MODE + ".set"):
             mode = open(_SNAP_NEW_MODE + ".set", "r").read().strip().lower()
             if mode.startswith("internal"):
+                self.widget("snapshot-new-mode-external").set_active(False)
                 self.widget("snapshot-new-mode-internal").set_active(True)
                 changed = True
             elif mode.startswith("external"):
+                self.widget("snapshot-new-mode-internal").set_active(False)
                 self.widget("snapshot-new-mode-external").set_active(True)
                 changed = True
         return changed
