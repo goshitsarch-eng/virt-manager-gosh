@@ -2371,9 +2371,21 @@ class vmmAddHardware(vmmGObjectUI):
                         if browse is not None:
                             browse.emit("clicked")
                     elif action == "storage-create":
-                        self._a11y_toggle("storage-create")
+                        create = self._a11y_widget("storage-create")
+                        select = self._a11y_widget("storage-select")
+                        if select is not None:
+                            select.set_active(False)
+                        if create is not None:
+                            create.set_active(True)
+                            create.emit("toggled")
                     elif action == "storage-select":
-                        self._a11y_toggle("storage-select")
+                        create = self._a11y_widget("storage-create")
+                        select = self._a11y_widget("storage-select")
+                        if create is not None:
+                            create.set_active(False)
+                        if select is not None:
+                            select.set_active(True)
+                            select.emit("toggled")
                     elif action == "storage-advanced":
                         self._a11y_expand("storage-advanced")
                     elif action == "tpm-advanced":

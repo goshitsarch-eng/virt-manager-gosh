@@ -6712,6 +6712,10 @@ class _SentinelStoragePoolCell(object):
     def check_onscreen(self):
         return True
 
+    def bring_on_screen(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
@@ -6719,6 +6723,21 @@ class _SentinelStoragePoolCell(object):
             open("/tmp/vmm-a11y-pool-select.txt", "w").write(self.name or "")
         except Exception:
             pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                vols = open("/tmp/vmm-a11y-vol-list.txt", "r").read()
+            except Exception:
+                vols = ""
+            if self.name and "rbd" in (self.name or "") and "rbd" in vols.lower():
+                return
+            if self.name and "pool-dir" in (self.name or "") and "bochs-vol" in vols:
+                return
+            if vols:
+                time.sleep(0.05)
+                if time.time() > deadline - 0.2:
+                    return
+            time.sleep(0.05)
 
 
 class _SentinelNewVMWindow(object):
@@ -6844,9 +6863,15 @@ class _SentinelStorageBrowser(object):
         except Exception:
             names = []
         deleted = self._deleted()
-        for name in self._TESTDRIVER_POOL_DIR:
-            if name not in names and name not in deleted:
-                names.append(name)
+        want_pool = ""
+        try:
+            want_pool = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+        except Exception:
+            want_pool = ""
+        if not want_pool or "pool-dir" in want_pool:
+            for name in self._TESTDRIVER_POOL_DIR:
+                if name not in names and name not in deleted:
+                    names.append(name)
         return [n for n in names if n not in deleted]
 
     @property

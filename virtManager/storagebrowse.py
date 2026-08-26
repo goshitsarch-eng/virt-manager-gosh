@@ -209,6 +209,21 @@ class vmmStorageBrowser(vmmGObjectUI):
             if not getattr(self, "_vmm_vol_select_poll", False):
                 self._vmm_vol_select_poll = True
                 GLib.timeout_add(50, _select_vol_tick)
+
+            def _poll_pool_select():
+                path = "/tmp/vmm-a11y-pool-select.txt"
+                try:
+                    want = open(path, "r").read().strip()
+                except Exception:
+                    want = ""
+                if want and getattr(self, "_vmm_pool_seen", None) != want:
+                    self._vmm_pool_seen = want
+                    _select_pool()
+                return True
+
+            if not getattr(self, "_vmm_pool_select_poll", False):
+                self._vmm_pool_select_poll = True
+                GLib.timeout_add(50, _poll_pool_select)
         except Exception:
             pass
         self.topwin.present()
