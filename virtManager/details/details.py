@@ -695,6 +695,24 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_mem_fields)
+
+            def _poll_media_entry():
+                path = "/tmp/vmm-a11y-details-media-entry.txt.set"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._mediacombo.set_path(text)
+                    self._enable_apply(EDIT_DISK_PATH)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_media_entry)
         try:
             gtkcompat.expose_a11y_spin(
                 "mem-memory",
@@ -2642,10 +2660,11 @@ class vmmDetails(vmmGObjectUI):
         active = self.vm.is_active()
         if not active:
             try:
-                for disk in self.vm.get_disk_devices_norefresh():
-                    if disk.is_cdrom() and not disk.get_source_path():
-                        open("/tmp/vmm-a11y-details-media-entry.txt", "w").write("")
-                        break
+                if not os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set"):
+                    for disk in self.vm.get_disk_devices_norefresh():
+                        if disk.is_cdrom() and not disk.get_source_path():
+                            open("/tmp/vmm-a11y-details-media-entry.txt", "w").write("")
+                            break
             except Exception:
                 pass
         self.widget("overview-name").set_editable(not active)

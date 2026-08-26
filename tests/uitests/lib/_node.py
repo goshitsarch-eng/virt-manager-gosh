@@ -751,6 +751,16 @@ class _SentinelEntry(object):
     def click(self, *args, **kwargs):
         return True
 
+    def click_secondary_icon(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        if self.name == "media-entry":
+            self.set_text("")
+        return True
+
+    def click_combo_entry(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return True
+
     def set_text(self, text):
         try:
             open(self._path, "w").write(text if text is not None else "")
@@ -885,14 +895,40 @@ class _SentinelEntry(object):
             except Exception:
                 pass
         if self.name == "media-entry":
+            value = text if text is not None else ""
+            for path in (
+                "/tmp/vmm-a11y-media-entry.txt",
+                "/tmp/vmm-a11y-details-media-entry.txt",
+            ):
+                try:
+                    open(path, "w").write(value)
+                except Exception:
+                    pass
             try:
-                open("/tmp/vmm-a11y-media-entry.txt", "w").write(
-                    text if text is not None else ""
-                )
+                open("/tmp/vmm-a11y-details-media-entry.txt.set", "w").write(value)
             except Exception:
                 pass
-            path = text if text is not None else ""
-            if path.startswith("/") and not os.path.exists(path):
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if (
+                        not os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set")
+                        and open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        .read()
+                        .strip()
+                        == "1"
+                    ):
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
+            path = value
+            vm_open = False
+            try:
+                vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
+            except Exception:
+                vm_open = False
+            if path.startswith("/") and not os.path.exists(path) and not vm_open:
                 try:
                     open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("None detected")
                 except Exception:
@@ -2720,6 +2756,97 @@ class _SentinelDetailsExpander(object):
             pass
 
 
+class _SentinelMediaComboItem(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu item"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-details-media-entry.txt.set", "w").write(self.name)
+            open("/tmp/vmm-a11y-media-entry.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+
+class _SentinelMediaCombo(object):
+    name = "media-combo"
+    roleName = "combo box"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click_combo_entry(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def _rows(self):
+        try:
+            return [
+                line
+                for line in open("/tmp/vmm-a11y-details-media-combo.txt", "r")
+                .read()
+                .splitlines()
+                if line.strip()
+            ]
+        except Exception:
+            return []
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable)
+        want = str(name or "")
+        deadline = time.time() + max(0.5, float(timeout or 5))
+        while time.time() < deadline:
+            for row in self._rows():
+                try:
+                    if re.search(want, row, re.I | re.DOTALL) or (
+                        want.replace(".*", "") in row
+                    ):
+                        return _SentinelMediaComboItem(row)
+                except Exception:
+                    if want.replace(".*", "") in row:
+                        return _SentinelMediaComboItem(row)
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
 def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     try:
         if not open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
@@ -2800,6 +2927,10 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsCheck("Readonly:", "/tmp/vmm-a11y-disk-readonly.txt")
     if compact.startswith("serial") or "serial:" in compact:
         return _SentinelEntry("Serial:", "/tmp/vmm-a11y-disk-serial.txt")
+    if "media-combo" in compact:
+        return _SentinelMediaCombo()
+    if "media-entry" in compact:
+        return _SentinelEntry("media-entry", "/tmp/vmm-a11y-details-media-entry.txt")
     if "cache mode" in compact:
         return _SentinelDetailsCombo("Cache mode:")
     if "discard mode" in compact:

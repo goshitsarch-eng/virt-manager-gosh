@@ -201,6 +201,15 @@ class vmmMediaCombo(vmmGObjectUI):
                 fill()
             except Exception:
                 pass
+        try:
+            labels = []
+            for row in model:
+                label = row[self.MEDIA_FIELD_LABEL] or ""
+                if label:
+                    labels.append(str(label))
+            open("/tmp/vmm-a11y-details-media-combo.txt", "w").write("\n".join(labels))
+        except Exception:
+            pass
 
     def get_path(self, store_media=True):
         try:
