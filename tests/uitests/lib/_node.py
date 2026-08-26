@@ -894,6 +894,11 @@ class _SentinelClickButton(object):
                 open("/tmp/vmm-a11y-config-remove", "w").write("1")
             except Exception:
                 pass
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                    return
+                time.sleep(0.05)
         if self.name == "New":
             try:
                 open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
@@ -2216,6 +2221,17 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelStaticLabel("No bootable devices")
     if compact == "config-remove":
         return _SentinelClickButton("config-remove")
+    if "menu item" in role or any(
+        tok in compact
+        for tok in (
+            "clear cpu",
+            "coreduo",
+            "application default",
+            "hypervisor default",
+            "host-passthrough",
+        )
+    ):
+        return _SentinelDetailsComboItem("cpu-model", name)
     return None
 
 

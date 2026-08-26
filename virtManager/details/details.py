@@ -1555,7 +1555,12 @@ class vmmDetails(vmmGObjectUI):
         dialog.show(self.topwin, self.vm)
 
     def _config_remove(self):
-        devobj = self._get_hw_row()[HW_LIST_COL_DEVICE]
+        row = self._get_hw_row()
+        if not row:
+            return
+        devobj = row[HW_LIST_COL_DEVICE]
+        if not devobj:
+            return
         if devobj.DEVICE_TYPE == "disk":
             self._remove_disk(devobj)
         else:
