@@ -1874,6 +1874,21 @@ def _start_media_select_poll(createvm):
         if not text:
             return True
         try:
+            current = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+        except Exception:
+            current = ""
+        # A later storage-browser path wins over a leftover combo label.
+        if current and current != text and (
+            "/pool-" in current
+            or current.endswith((".iso", ".img", ".qcow2"))
+            or "iso-vol" in current
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            return True
+        try:
             if os.path.exists("/tmp/vmm-a11y-media-entry.txt.set"):
                 return True
         except Exception:

@@ -472,8 +472,18 @@ class vmmStorageBrowser(vmmGObjectUI):
                     os.remove("/tmp/vmm-a11y-addhw-fs-source.txt.set")
                 except Exception:
                     pass
+                try:
+                    os.remove("/tmp/vmm-a11y-media-select.txt")
+                except Exception:
+                    pass
+                try:
+                    os.remove("/tmp/vmm-a11y-media-entry.txt.set")
+                except Exception:
+                    pass
                 open("/tmp/vmm-a11y-addhw-fs-source.txt", "w").write(path)
                 open("/tmp/vmm-a11y-storage-entry.txt", "w").write(path)
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path)
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path)
                 target = getattr(self, "_vmm_boot_browse_target", None)
                 if target in ("initrd", "kernel", "dtb"):
                     open("/tmp/vmm-a11y-boot-%s.txt" % target, "w").write(path)

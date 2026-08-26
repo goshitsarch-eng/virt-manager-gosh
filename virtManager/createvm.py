@@ -533,7 +533,27 @@ class vmmCreateVM(vmmGObjectUI):
                     return True
                 self._vmm_media_entry_seen = stamp
                 try:
+                    # Re-read so a later storage-browser pick wins over a
+                    # .set that was already in hand when this tick started.
+                    if os.path.exists(set_path):
+                        text = open(set_path, "r").read()
+                        explicit = True
+                    else:
+                        text = open(path, "r").read()
+                        explicit = False
                     pathtext = (text or "").strip()
+                    if explicit and pathtext.startswith("/dev/"):
+                        try:
+                            current = open(path, "r").read().strip()
+                        except Exception:
+                            current = ""
+                        if current and (
+                            "/pool-" in current
+                            or "iso-vol" in current
+                            or current.endswith((".iso", ".img", ".qcow2"))
+                        ):
+                            pathtext = current
+                            explicit = False
                     missing = bool(pathtext.startswith("/") and not os.path.exists(pathtext))
                     if missing:
                         try:
@@ -2668,7 +2688,21 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _browse_iso(self, ignore):
         def set_path(ignore, path):
-            self._mediacombo.set_path(path)
+            if self._mediacombo is not None:
+                self._mediacombo.set_path(path)
+            try:
+                os.remove("/tmp/vmm-a11y-media-entry.txt.set")
+            except Exception:
+                pass
+            try:
+                os.remove("/tmp/vmm-a11y-media-select.txt")
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+            except Exception:
+                pass
 
         self._browse_file(None, cb=set_path, is_media=True)
 

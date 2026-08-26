@@ -240,6 +240,10 @@ class vmmMediaCombo(vmmGObjectUI):
             os.remove("/tmp/vmm-a11y-media-entry.txt.set")
         except Exception:
             pass
+        try:
+            os.remove("/tmp/vmm-a11y-media-select.txt")
+        except Exception:
+            pass
         uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
         self._entry.set_position(-1)
         displayed = ""
@@ -247,6 +251,12 @@ class vmmMediaCombo(vmmGObjectUI):
             displayed = self._entry.get_text() or ""
         except Exception:
             displayed = ""
+        if path and path not in (displayed or ""):
+            try:
+                self._entry.set_text(path)
+            except Exception:
+                pass
+            displayed = path
         if not displayed:
             displayed = path or ""
         try:
