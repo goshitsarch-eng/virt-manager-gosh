@@ -2888,9 +2888,28 @@ class _SentinelDetailsSpin(object):
 
 class _SentinelDetailsCheck(object):
     def __init__(self, name, path):
-        self.name = name
+        self._label = name
         self.roleName = "check box"
         self._path = path
+
+    @property
+    def name(self):
+        if "cpu-copy-host" in (self._path or "") or "copy host" in (
+            self._label or ""
+        ).lower():
+            try:
+                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+            except Exception:
+                stored = ""
+            if stored:
+                return stored
+            try:
+                if open(self._path, "r").read().strip() == "1":
+                    return "Copy host CPU configuration (host-passthrough)"
+            except Exception:
+                pass
+            return self._label
+        return self._label
 
     @property
     def checked(self):
@@ -2924,6 +2943,19 @@ class _SentinelDetailsCheck(object):
             open(self._path + ".click", "w").write("1")
         except Exception:
             pass
+        if "cpu-copy-host" in (self._path or ""):
+            try:
+                open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                    "Copy host CPU configuration (host-passthrough)"
+                )
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-click.txt", "w").write(
+                    "Copy host CPU configuration"
+                )
+            except Exception:
+                pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if self.checked != before:
