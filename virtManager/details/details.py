@@ -685,6 +685,12 @@ class vmmDetails(vmmGObjectUI):
                 window=self.topwin,
                 name_with_value=True,
             )
+            gtkcompat.expose_a11y_check(
+                "details-boot-menu",
+                "Enable boot menu",
+                self.widget("boot-menu"),
+                window=self.topwin,
+            )
         except Exception:
             pass
         if not getattr(self, "_vmm_boot_init_poll", False):
@@ -2099,6 +2105,12 @@ class vmmDetails(vmmGObjectUI):
                     open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml_for_a11y)
                 except Exception:
                     pass
+                try:
+                    xml_l = (xml_for_a11y or "").replace('"', "'").lower()
+                    if "<bootmenu" in xml_l and "enable='yes'" in xml_l:
+                        open("/tmp/vmm-a11y-boot-menu.txt", "w").write("1")
+                except Exception:
+                    pass
 
             if pagetype == HW_LIST_TYPE_GENERAL:
                 self._refresh_overview_page()
@@ -2472,6 +2484,13 @@ class vmmDetails(vmmGObjectUI):
         self._set_network_ip_details(net)
 
         self.netlist.set_dev(net)
+        try:
+            src = net.source or getattr(net, "bridge", None) or ""
+            if src:
+                open("/tmp/vmm-a11y-net-device.txt", "w").write(src)
+                self.netlist.widget("net-manual-source").set_text(src)
+        except Exception:
+            pass
 
     def _refresh_input_page(self, inp):
         dev = vmmAddHardware.input_pretty_name(inp.type, inp.bus)
@@ -2770,6 +2789,10 @@ class vmmDetails(vmmGObjectUI):
         # Boot menu populate
         menu = self.vm.get_boot_menu() or False
         self.widget("boot-menu").set_active(menu)
+        try:
+            open("/tmp/vmm-a11y-boot-menu.txt", "w").write("1" if menu else "0")
+        except Exception:
+            pass
         self._refresh_boot_order()
 
     def _make_boot_rows(self):

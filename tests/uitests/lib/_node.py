@@ -839,6 +839,50 @@ class _SentinelConfigApply(object):
             time.sleep(0.05)
 
 
+class _SentinelBootMenu(object):
+    """Enable boot menu after GetItems hides the details checkbox."""
+
+    name = "Enable boot menu"
+    roleName = "check box"
+
+    def _state(self):
+        try:
+            return open("/tmp/vmm-a11y-boot-menu.txt", "r").read().strip()
+        except Exception:
+            return "0"
+
+    @property
+    def checked(self):
+        return self._state() in ("1", "true", "yes", "on")
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        nxt = "0" if self.checked else "1"
+        try:
+            open("/tmp/vmm-a11y-boot-menu.txt", "w").write(nxt)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("Enable boot menu")
+        except Exception:
+            pass
+
+
 class _SentinelBootTab(object):
     name = "boot-tab"
     roleName = "panel"
@@ -869,6 +913,8 @@ class _SentinelBootTab(object):
             return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
         if name and "init args" in str(name).replace(".*", "").lower():
             return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
+        if name and "boot menu" in str(name).replace(".*", "").lower():
+            return _SentinelBootMenu()
         sent = _sentinel_named_entry(name, roleName, labeller_text)
         if sent is not None:
             return sent
@@ -904,6 +950,10 @@ def _sentinel_container_extra(name, roleName):
         return _SentinelAddhwError("Not supported for containers")
     if "boot-tab" in compact:
         return _SentinelBootTab()
+    if "boot menu" in compact:
+        return _SentinelBootMenu()
+    if compact.replace(".*", "") in ("begin installation",) or "begin installation" in compact:
+        return _SentinelClickButton("Begin Installation")
     if "config-apply" in compact:
         return _SentinelConfigApply()
     return None
@@ -1361,6 +1411,13 @@ class _SentinelAddhwTab(object):
             except Exception:
                 selected = True
             return _SentinelTableCell("No Devices Available", selected)
+        sent = _sentinel_named_entry(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        if "boot menu" in compact:
+            return _SentinelBootMenu()
+        if "media-entry" in compact:
+            return _SentinelEntry("media-entry", "/tmp/vmm-a11y-media-entry.txt")
         raise dogtail.tree.SearchError(
             "Didn't find widget with name='%s' "
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
@@ -1475,6 +1532,7 @@ def _sentinel_addhw_tab(name, roleName):
     tabs = (
         "host-tab",
         "storage-tab",
+        "disk-tab",
         "network-tab",
         "input-tab",
         "graphics-tab",
