@@ -795,6 +795,20 @@ class _SentinelEntry(object):
                 ):
                     return
                 time.sleep(0.05)
+        if self._path == "/tmp/vmm-a11y-overview-desc.txt":
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if (
+                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        .read()
+                        .strip()
+                        == "1"
+                    ):
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
         try:
             open("/tmp/vmm-a11y-entry.txt", "w").write(text if text is not None else "")
         except Exception:
@@ -1063,6 +1077,20 @@ class _SentinelClickButton(object):
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                    return
+                try:
+                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
+        if self.name == "config-cancel":
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() != "1":
+                        return
+                except Exception:
                     return
                 time.sleep(0.05)
         if self.name in ("initrd-browse", "kernel-browse", "dtb-browse"):
@@ -2083,6 +2111,12 @@ class _SentinelAddhwTab(object):
 
     @property
     def showing(self):
+        try:
+            if not _addhw_dialog_open():
+                if open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip() == "1":
+                    return False
+        except Exception:
+            pass
         current = self._current()
         if current == self.name:
             return True
@@ -2358,6 +2392,39 @@ class _SentinelDetailsComboItem(object):
                 open("/tmp/vmm-a11y-net-source.txt", "w").write(label)
             except Exception:
                 pass
+
+
+class _SentinelAddHardwareMenuItem(object):
+    name = "Add Hardware"
+    roleName = "menu item"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-hw-popup-shown.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-hw-popup-shown.txt", "w").write("0")
+            open("/tmp/vmm-a11y-hw-popup-add", "w").write("1")
+            open("/tmp/vmm-a11y-click.txt", "w").write("add-hardware")
+        except Exception:
+            pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            if _addhw_dialog_open():
+                return
+            time.sleep(0.05)
 
 
 class _SentinelRemoveHardware(object):
@@ -3583,11 +3650,15 @@ class _SentinelXmlPageTab(object):
         while time.time() < deadline:
             if not os.path.exists("/tmp/vmm-a11y-xml-tab.txt"):
                 break
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
             time.sleep(0.05)
         if self.name == "XML":
             want = _wizard_xml_want_tag() or "<network"
             deadline = time.time() + 3.0
             while time.time() < deadline:
+                if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                    return
                 try:
                     page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
                     xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
@@ -4034,6 +4105,16 @@ class _SentinelDeleteFinish(object):
             open("/tmp/vmm-a11y-delete-finish", "w").write("1")
         except Exception:
             pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            try:
+                if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() != "1":
+                    return
+            except Exception:
+                return
+            time.sleep(0.05)
 
 
 class _SentinelAlertCheck(object):
@@ -4220,6 +4301,62 @@ class _SentinelAlert(object):
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
         return self.find(name, roleName, labeller_text)
+
+
+class _SentinelDeleteWindow(object):
+    def __init__(self, name=None):
+        try:
+            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read().strip()
+        except Exception:
+            title = ""
+        self.name = name or title or "Delete"
+        self.roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _delete_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_delete_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        compact = str(name or "").replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        if compact.strip() == "delete" or (
+            "delete" in compact and "button" in role and "check" not in role
+        ):
+            return _SentinelDeleteFinish()
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
 
 
 def _sentinel_delete_widgets(name, roleName):
@@ -10567,6 +10704,26 @@ class _VMMDogtailNode(dogtail.tree.Node):
             role = str(raw_role or "").lower()
             if not role or "menu" in role or "item" in role:
                 return _SentinelRemoveHardware()
+        if name and str(name).replace(".*", "").lower().strip() == "add hardware":
+            role = str(raw_role or "").lower()
+            if "menu" in role or "item" in role:
+                try:
+                    if open("/tmp/vmm-a11y-hw-popup-shown.txt", "r").read().strip() == "1":
+                        return _SentinelAddHardwareMenuItem()
+                except Exception:
+                    pass
+        if name and str(name).replace(".*", "").lower() in ("remove disk", "delete"):
+            role = str(raw_role or "").lower()
+            if _delete_dialog_open() and (
+                not role
+                or any(tok in role for tok in ("frame", "dialog", "window", "panel", "alert"))
+            ):
+                pretty = (
+                    "Remove Disk"
+                    if "remove" in str(name).replace(".*", "").lower()
+                    else "Delete"
+                )
+                return _SentinelDeleteWindow(pretty)
         if name and "init path" in str(name).replace(".*", "").lower():
             return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
         if name and "init args" in str(name).replace(".*", "").lower():

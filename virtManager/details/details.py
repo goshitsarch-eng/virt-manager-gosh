@@ -1035,6 +1035,20 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_config_remove)
+        if not getattr(self, "_vmm_hw_popup_poll", False):
+            self._vmm_hw_popup_poll = True
+
+            def _poll_hw_popup():
+                path = "/tmp/vmm-a11y-hw-popup-add"
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                        self._show_addhw()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_hw_popup)
         if not getattr(self, "_vmm_os_publish_poll", False):
             self._vmm_os_publish_poll = True
 
@@ -1230,6 +1244,28 @@ class vmmDetails(vmmGObjectUI):
                         self._enable_apply(EDIT_NET_LINKSTATE)
                     except Exception:
                         pass
+                cset = "/tmp/vmm-a11y-combo-Cache mode:.txt.set"
+                try:
+                    if os.path.exists(cset):
+                        text = open(cset, "r").read().strip()
+                        combo = self._addstorage.widget("disk-cache")
+                        child = combo.get_child() if combo is not None else None
+                        if child is not None and hasattr(child, "set_text"):
+                            child.set_text(text)
+                            try:
+                                combo.set_active(-1)
+                            except Exception:
+                                pass
+                        elif combo is not None:
+                            uiutil.set_list_selection(combo, text)
+                        try:
+                            os.remove(cset)
+                        except Exception:
+                            pass
+                        self._addstorage._a11y_cache_override = text
+                        self._addstorage._change_cb(1)
+                except Exception:
+                    pass
                 npath = "/tmp/vmm-a11y-net-device.txt"
                 nset = npath + ".set"
                 try:
@@ -1588,9 +1624,43 @@ class vmmDetails(vmmGObjectUI):
             def _poll_device_fields():
                 try:
                     _tab, hw = self._details_hw_context()
-                    if hw and hw != getattr(self, "_vmm_last_refreshed_hw", None):
+                    last = getattr(self, "_vmm_last_refreshed_hw", None)
+                    if hw and hw != last:
+                        apply_on = False
+                        try:
+                            apply_on = bool(self.widget("config-apply").get_sensitive())
+                        except Exception:
+                            apply_on = False
+                        if apply_on:
+                            # Do not wipe pending edits. Drive the real
+                            # hw-list change path so unapplied confirm runs.
+                            gtk_row = self._get_hw_row()
+                            gtk_label = (
+                                str(gtk_row[HW_LIST_COL_LABEL] or "")
+                                if gtk_row is not None
+                                else ""
+                            )
+                            pending = getattr(self, "_vmm_pending_hw_nav", None)
+                            if gtk_label == last or (gtk_label and gtk_label != hw):
+                                if pending == hw:
+                                    try:
+                                        if last:
+                                            open("/tmp/vmm-a11y-last-hw.txt", "w").write(last)
+                                            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(last)
+                                    except Exception:
+                                        pass
+                                    self._vmm_pending_hw_nav = None
+                                    return True
+                                self._vmm_pending_hw_nav = hw
+                                newrow = self._hw_row_for_label(hw)
+                                idx = self._hw_index_for_row(newrow)
+                                if idx is not None:
+                                    self._set_hw_selection(idx, _disable_apply=False)
+                                return True
+                            return True
                         row = self._hw_row_for_label(hw)
                         if row is not None:
+                            self._vmm_pending_hw_nav = None
                             self._vmm_last_refreshed_hw = hw
                             self._ui_refreshing = True
                             try:
@@ -2537,6 +2607,11 @@ class vmmDetails(vmmGObjectUI):
         if not newrow or newrow[HW_LIST_COL_KEY] == self._oldhwkey:
             return
 
+        try:
+            self._vmm_pending_hw_nav = str(newrow[HW_LIST_COL_LABEL] or "")
+        except Exception:
+            self._vmm_pending_hw_nav = None
+
         oldhwrow = None
         for row in model:
             if row[HW_LIST_COL_KEY] == self._oldhwkey:
@@ -2658,6 +2733,21 @@ class vmmDetails(vmmGObjectUI):
                 if fuzzy is None:
                     fuzzy = row
         return exact if exact is not None else fuzzy
+
+    def _hw_index_for_row(self, target):
+        if target is None:
+            return None
+        model = self.widget("hw-list").get_model()
+        if not model:
+            return None
+        want_key = target[HW_LIST_COL_KEY]
+        want_lab = str(target[HW_LIST_COL_LABEL] or "")
+        for idx, row in enumerate(model):
+            if row[HW_LIST_COL_KEY] == want_key:
+                return idx
+            if want_lab and str(row[HW_LIST_COL_LABEL] or "") == want_lab:
+                return idx
+        return None
 
     def _remove_non_disk(self, devobj):
         try:
@@ -3670,6 +3760,23 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_DISK):
             vals = self._addstorage.get_values()
             kwargs.update(vals)
+            typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
+            try:
+                combo = self._addstorage.widget("disk-cache")
+                child = combo.get_child() if combo is not None else None
+                if child is not None and hasattr(child, "get_text"):
+                    typed = (child.get_text() or "").strip() or typed
+            except Exception:
+                pass
+            if typed and typed.lower() not in ("hypervisor default",):
+                known = set(virtinst.DeviceDisk.CACHE_MODES)
+                if typed not in known:
+                    self.err.show_err(
+                        _("Error changing VM configuration: invalid cache mode '%s'")
+                        % typed
+                    )
+                    return False
+                kwargs["cache"] = typed
 
         if self._edited(EDIT_DISK_BUS):
             combo = self.widget("disk-bus")

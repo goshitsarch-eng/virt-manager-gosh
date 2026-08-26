@@ -119,6 +119,16 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name in ("Remove Disk", "Delete"):
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelDeleteWindow(name)
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Add New Virtual Hardware" in name:
             while time.time() < deadline:
                 try:

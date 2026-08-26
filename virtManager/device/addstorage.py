@@ -179,6 +179,7 @@ class vmmAddStorage(vmmGObjectUI):
     def reset_state(self):
         self._update_host_space()
         self._active_edits = []
+        self._a11y_cache_override = None
         self.widget("storage-create").set_active(True)
         self.widget("storage-size").set_value(20)
         self.widget("storage-entry").set_text("")
@@ -345,6 +346,7 @@ class vmmAddStorage(vmmGObjectUI):
         serial = disk.serial
 
         self.set_disk_bus(disk.bus)
+        self._a11y_cache_override = None
 
         uiutil.set_list_selection(self.widget("disk-cache"), cache)
         uiutil.set_list_selection(self.widget("disk-discard"), discard)
