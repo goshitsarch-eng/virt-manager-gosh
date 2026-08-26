@@ -3116,22 +3116,23 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         hwsel = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
     except Exception:
         hwsel = ""
-    if "OS information" in hwsel:
-        if "inspection-apps" in compact:
-            return _SentinelInspectionApps()
-        if compact.replace(".*", "").strip() in ("application", "applications"):
-            return _SentinelDetailsExpander(
-                "Application", "/tmp/vmm-a11y-inspection-apps-expand"
-            )
-        if compact.replace(".*", "").strip() == "refresh":
-            return _SentinelInspectionRefresh()
-        if "fake test error" in compact or "no disks" in compact:
-            try:
-                err = open("/tmp/vmm-a11y-inspection-error.txt", "r").read()
-            except Exception:
-                err = ""
-            if err:
-                return _SentinelStaticLabel(err)
+    if "inspection-apps" in compact:
+        return _SentinelInspectionApps()
+    if compact.replace(".*", "").strip() in ("application", "applications"):
+        return _SentinelDetailsExpander(
+            "Application", "/tmp/vmm-a11y-inspection-apps-expand"
+        )
+    if compact.replace(".*", "").strip() == "refresh":
+        return _SentinelInspectionRefresh()
+    if "OS information" in hwsel and (
+        "fake test error" in compact or "no disks" in compact
+    ):
+        try:
+            err = open("/tmp/vmm-a11y-inspection-error.txt", "r").read()
+        except Exception:
+            err = ""
+        if err:
+            return _SentinelStaticLabel(err)
     if "source path" in compact:
         return _SentinelEntry("Source path:", "/tmp/vmm-a11y-fs-source.txt")
     if "target path" in compact:
