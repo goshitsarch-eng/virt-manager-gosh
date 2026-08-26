@@ -9536,22 +9536,23 @@ class _SentinelManagerWindow(object):
             xid = (out.strip().split() or [""])[0]
             if xid:
                 info = subprocess.check_output(
-                    ["xwininfo", "-id", xid], text=True, timeout=2
+                    ["xdotool", "getwindowgeometry", "--shell", xid],
+                    text=True,
+                    timeout=2,
                 )
-                x = y = None
+                vals = {}
                 for line in info.splitlines():
-                    if "Absolute upper-left X" in line:
-                        x = int(line.split(":")[-1].strip())
-                    elif "Absolute upper-left Y" in line:
-                        y = int(line.split(":")[-1].strip())
-                if x is not None and y is not None:
-                    try:
-                        open("/tmp/vmm-a11y-manager-position.txt", "w").write(
-                            "%s %s" % (x, y)
-                        )
-                    except Exception:
-                        pass
-                    return x, y
+                    if "=" in line:
+                        key, val = line.split("=", 1)
+                        vals[key.strip()] = val.strip()
+                x, y = int(vals["X"]), int(vals["Y"])
+                try:
+                    open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                        "%s %s" % (x, y)
+                    )
+                except Exception:
+                    pass
+                return x, y
         except Exception:
             pass
         try:

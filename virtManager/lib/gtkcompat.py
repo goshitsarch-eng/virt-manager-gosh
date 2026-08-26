@@ -242,26 +242,29 @@ def _window_xid(window):
     return None
 
 
+def _xdotool_geometry(xid):
+    import subprocess
+
+    out = subprocess.check_output(
+        ["xdotool", "getwindowgeometry", "--shell", hex(int(xid))],
+        text=True,
+        timeout=2,
+    )
+    vals = {}
+    for line in out.splitlines():
+        if "=" in line:
+            key, val = line.split("=", 1)
+            vals[key.strip()] = val.strip()
+    return int(vals["X"]), int(vals["Y"])
+
+
 def _window_get_position(window):
     xid = _window_xid(window)
     if xid:
         try:
-            import subprocess
-
-            out = subprocess.check_output(
-                ["xwininfo", "-id", hex(int(xid))],
-                text=True,
-                timeout=2,
-            )
-            x = y = None
-            for line in out.splitlines():
-                if "Absolute upper-left X" in line:
-                    x = int(line.split(":")[-1].strip())
-                elif "Absolute upper-left Y" in line:
-                    y = int(line.split(":")[-1].strip())
-            if x is not None and y is not None:
-                window._vmm_win_pos = (x, y)
-                return (x, y)
+            pos = _xdotool_geometry(xid)
+            window._vmm_win_pos = pos
+            return pos
         except Exception:
             pass
     return getattr(window, "_vmm_win_pos", (0, 0))
