@@ -183,6 +183,13 @@ def main():
 
         dlg = vmmAbout()
         dlg.show(None)
+        win = dlg._dialog
+        assert win is not None
+        assert win.get_title() == "About Virtual Machine Manager"
+        dlg._show_license(win)
+        assert dlg._license_win is not None
+        dlg.close()
+        assert dlg._dialog is None
 
     def createvm():
         from virtManager.createvm import vmmCreateVM
@@ -1023,6 +1030,29 @@ def main():
         _pump(GLib, 0.05)
         assert "no disks" in (edetails.widget("details-overview-error").get_text() or "")
 
+    def inspection_perform_path():
+        stub = os.path.join(TOPDIR, "tests", "guestfs_stub")
+        if stub not in sys.path:
+            sys.path.insert(0, stub)
+        from virtManager.lib import inspection as inspmod
+
+        clone = _named_vm("test-clone")
+        data = inspmod._perform_inspection(clone.conn, clone)
+        assert data is not None
+        assert not data.errorstr, data.errorstr
+        assert data.os_type == "linux"
+        assert data.distro == "fedora"
+        assert data.applications
+        assert any(
+            getattr(app, "summary", "") and "test_app1_summary" in app.summary
+            for app in data.applications
+        )
+
+        empty = _named_vm("test")
+        err = inspmod._perform_inspection(empty.conn, empty)
+        assert err.errorstr
+        assert "no operating systems" in err.errorstr.lower()
+
     def createvm_wizard_nav():
         from virtManager.createvm import PAGE_FINISH
         from virtManager.createvm import PAGE_INSTALL
@@ -1560,6 +1590,7 @@ def main():
         ("vnc_protocol_helpers", vnc_protocol_helpers),
         ("vnc_live_handshake", vnc_live_handshake),
         ("inspection_os_page", inspection_os_page),
+        ("inspection_perform_path", inspection_perform_path),
         ("createvm_wizard_nav", createvm_wizard_nav),
         ("addhardware_build", addhardware_build),
         ("vm_start_stop", vm_start_stop),
