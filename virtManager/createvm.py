@@ -633,6 +633,16 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 sel = "/tmp/vmm-a11y-combo-select.txt"
                 try:
+                    if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+                        return True
+                except Exception:
+                    pass
+                try:
+                    if not self.is_visible():
+                        return True
+                except Exception:
+                    pass
+                try:
                     if not os.path.exists(sel):
                         return True
                     raw = open(sel, "r").read().strip()

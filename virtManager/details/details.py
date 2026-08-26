@@ -1534,6 +1534,12 @@ class vmmDetails(vmmGObjectUI):
             self._vmm_overview_combo_poll = True
 
             def _poll_overview_combo():
+                try:
+                    if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+                        # Add Hardware owns Type:/Model:/net-source while it is open.
+                        return True
+                except Exception:
+                    pass
                 sel = "/tmp/vmm-a11y-combo-select.txt"
                 try:
                     if not os.path.exists(sel):
