@@ -559,13 +559,15 @@ class vmmHostNets(vmmGObjectUI):
             return  # pragma: no cover
 
         self._apply_pending_xml_edit()
-        log.debug("Applying changes for network '%s'", net.get_name())
+        name = net.get_name()
+        log.debug("Applying changes for network '%s'", name)
         try:
             if EDIT_NET_AUTOSTART in self._active_edits:
                 auto = self.widget("net-autostart").get_active()
                 net.set_autostart(auto)
             if EDIT_NET_NAME in self._active_edits:
-                net.define_name(self.widget("net-name").get_text())
+                name = self.widget("net-name").get_text()
+                net.define_name(name)
                 self.idle_add(self._populate_networks)
             if EDIT_NET_XML in self._active_edits:
                 net.define_xml(self._xmleditor.get_xml())
@@ -575,6 +577,10 @@ class vmmHostNets(vmmGObjectUI):
             return
         finally:
             self._disable_net_apply()
+        try:
+            self._select_net_by_name(name)
+        except Exception:
+            pass
         self._refresh_current_network()
 
     def _disable_net_apply(self):

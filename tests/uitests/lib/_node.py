@@ -3742,6 +3742,14 @@ class _SentinelHostAction(object):
             open(self._path, "w").write(self._value)
         except Exception:
             pass
+        if self._value == "apply":
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                if not os.path.exists(self._path):
+                    break
+                time.sleep(0.05)
+            time.sleep(0.15)
+            return
         if self._value == "stop" and str(self.name).startswith("net-"):
             deadline = time.time() + 6.0
             while time.time() < deadline:
@@ -3855,7 +3863,16 @@ class _SentinelHostPane(object):
         timeout=5,
     ):
         ignore = (check_active, recursive, focusable, timeout)
-        sent = _sentinel_host_widgets(name, roleName, labeller_text, from_host=True)
+        list_kind = (
+            "net"
+            if self.name == "network-grid"
+            else "pool"
+            if self.name == "storage-grid"
+            else None
+        )
+        sent = _sentinel_host_widgets(
+            name, roleName, labeller_text, from_host=True, list_kind=list_kind
+        )
         if sent is not None:
             return sent
         sent = _sentinel_xml_widgets(name, roleName)
@@ -3928,7 +3945,7 @@ class _SentinelHostWindow(object):
         return self.find(name_pattern, role_pattern, labeller_text)
 
 
-def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False):
+def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, list_kind=None):
     if not _host_dialog_open():
         return None
     compact = str(name or "").replace(".*", "").lower()
@@ -4036,42 +4053,66 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False):
             "Copy Volume Path", "/tmp/vmm-a11y-host-vol-action.txt", "copy-path"
         )
     if "cell" in role and compact:
-        for n in _SentinelHostList(
-            "net-list",
-            "/tmp/vmm-a11y-host-net-list.txt",
-            "/tmp/vmm-a11y-host-net-select.txt",
-            "/tmp/vmm-a11y-host-net-selected.txt",
-        )._names():
-            if compact == n.lower() or compact in n.lower() or n.lower() in compact:
-                return _SentinelHostListCell(
-                    n,
+        if not list_kind:
+            try:
+                list_kind = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+            except Exception:
+                list_kind = "net"
+        lists = []
+        if list_kind in ("net", ""):
+            lists.append(
+                (
+                    "/tmp/vmm-a11y-host-net-list.txt",
                     "/tmp/vmm-a11y-host-net-select.txt",
                     "/tmp/vmm-a11y-host-net-selected.txt",
                 )
-        for n in _SentinelHostList(
-            "pool-list",
-            "/tmp/vmm-a11y-host-pool-list.txt",
-            "/tmp/vmm-a11y-host-pool-select.txt",
-            "/tmp/vmm-a11y-host-pool-selected.txt",
-        )._names():
-            if compact == n.lower() or compact in n.lower() or n.lower() in compact:
-                return _SentinelHostListCell(
-                    n,
+            )
+        if list_kind == "pool":
+            lists.append(
+                (
+                    "/tmp/vmm-a11y-host-pool-list.txt",
                     "/tmp/vmm-a11y-host-pool-select.txt",
                     "/tmp/vmm-a11y-host-pool-selected.txt",
                 )
-        for n in _SentinelHostList(
-            "vol-list",
-            "/tmp/vmm-a11y-host-vol-list.txt",
-            "/tmp/vmm-a11y-host-vol-select.txt",
-            "/tmp/vmm-a11y-host-vol-selected.txt",
-        )._names():
-            if compact == n.lower() or compact in n.lower() or n.lower() in compact:
-                return _SentinelHostListCell(
-                    n,
+            )
+        if list_kind == "vol":
+            lists.append(
+                (
+                    "/tmp/vmm-a11y-host-vol-list.txt",
                     "/tmp/vmm-a11y-host-vol-select.txt",
                     "/tmp/vmm-a11y-host-vol-selected.txt",
                 )
+            )
+        if not lists:
+            lists.append(
+                (
+                    "/tmp/vmm-a11y-host-net-list.txt",
+                    "/tmp/vmm-a11y-host-net-select.txt",
+                    "/tmp/vmm-a11y-host-net-selected.txt",
+                )
+            )
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            exact = None
+            fuzzy = None
+            for list_path, select_path, selected_path in lists:
+                try:
+                    names = [n for n in open(list_path, "r").read().splitlines() if n]
+                except Exception:
+                    names = []
+                for n in names:
+                    if n.lower() == compact:
+                        exact = _SentinelHostListCell(n, select_path, selected_path)
+                        break
+                    if fuzzy is None and (compact in n.lower() or n.lower() in compact):
+                        fuzzy = _SentinelHostListCell(n, select_path, selected_path)
+                if exact is not None:
+                    break
+            if exact is not None:
+                return exact
+            if fuzzy is not None:
+                return fuzzy
+            time.sleep(0.05)
     return None
 
 
