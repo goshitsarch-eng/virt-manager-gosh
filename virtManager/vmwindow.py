@@ -827,6 +827,13 @@ class vmmVMWindow(vmmGObjectUI):
                 pass
         if self._details.vmwindow_has_unapplied_changes():
             return
+        try:
+            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                self._details._enable_apply(2)
+                if not self._details._config_apply():
+                    return
+        except Exception:
+            pass
         vmmenu.VMActionUI.run(self, self.vm)
 
     def control_vm_shutdown(self, src_ignore):

@@ -541,6 +541,16 @@ class vmmDeleteStorage(_vmmDeleteBase):
 
     @staticmethod
     def remove_devobj_internal(vm, err, devobj, deleting_storage=False):
+        try:
+            open("/tmp/vmm-a11y-delete-debug.txt", "w").write(
+                "remove start active=%s uri=%s\n"
+                % (
+                    getattr(vm, "is_active", lambda: None)(),
+                    getattr(getattr(vm, "conn", None), "get_uri", lambda: "")(),
+                )
+            )
+        except Exception:
+            pass
         log.debug("Removing device: %s", devobj)
 
         # Define the change

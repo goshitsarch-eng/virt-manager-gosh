@@ -4883,10 +4883,25 @@ class _SentinelDeleteFinish(object):
                 return
             try:
                 if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() != "1":
-                    return
+                    break
             except Exception:
-                return
+                break
             time.sleep(0.05)
+        if not os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            try:
+                running = (
+                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "0"
+                )
+            except Exception:
+                running = False
+            if running:
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "Device could not be removed from the running machine\n"
+                        "This change will take effect after the next guest shutdown."
+                    )
+                except Exception:
+                    pass
 
 
 class _SentinelAlertCheck(object):
