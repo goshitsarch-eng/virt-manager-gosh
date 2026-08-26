@@ -495,20 +495,39 @@ class vmmPreferences(vmmGObjectUI):
             except Exception:
                 return True
             widgets = {
-                "system-tray": "prefs-system-tray",
-                "xmleditor": "prefs-xmleditor",
+                "system-tray": ("prefs-system-tray", self.change_view_system_tray),
+                "xmleditor": ("prefs-xmleditor", self.change_xmleditor),
+                "libguestfs": ("prefs-libguestfs", self.change_libguestfs),
+                "poll-cpu": ("prefs-stats-enable-cpu", self.change_cpu_poll),
+                "poll-disk": ("prefs-stats-enable-disk", self.change_disk_poll),
+                "poll-memory": ("prefs-stats-enable-memory", self.change_memory_poll),
+                "poll-network": ("prefs-stats-enable-net", self.change_net_poll),
+                "console-autoconnect": (
+                    "prefs-console-autoconnect",
+                    self.change_console_autoconnect,
+                ),
+                "force-poweroff": (
+                    "prefs-confirm-forcepoweroff",
+                    self.change_confirm_forcepoweroff,
+                ),
+                "poweroff": ("prefs-confirm-poweroff", self.change_confirm_poweroff),
+                "pause": ("prefs-confirm-pause", self.change_confirm_pause),
+                "removedev": ("prefs-confirm-removedev", self.change_confirm_removedev),
+                "unapplied": ("prefs-confirm-unapplied", self.change_confirm_unapplied),
+                "delstorage": ("prefs-confirm-delstorage", self.change_confirm_delstorage),
             }
-            wid = widgets.get(key)
-            if wid:
+            spec = widgets.get(key)
+            if spec:
+                wid, handler = spec
                 src = self.widget(wid)
                 try:
                     src.set_active(not bool(src.get_active()))
                 except Exception:
                     pass
-                if key == "system-tray":
-                    self.change_view_system_tray(src)
-                elif key == "xmleditor":
-                    self.change_xmleditor(src)
+                try:
+                    handler(src)
+                except Exception:
+                    pass
             try:
                 open("/tmp/vmm-a11y-prefs-check-done", "w").write("1")
             except Exception:

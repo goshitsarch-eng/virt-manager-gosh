@@ -80,6 +80,10 @@ class vmmXMLEditor(vmmGObjectUI):
         enabled = self.config.get_xmleditor_enabled()
         self._srcview.set_editable(enabled)
         uiutil.set_grid_row_visible(self.widget("xml-warning-box"), not enabled)
+        try:
+            open("/tmp/vmm-a11y-xml-disabled.txt", "w").write("1" if not enabled else "0")
+        except Exception:
+            pass
         key = "xml-editor-%s" % id(self)
         sidecar = gtkcompat._A11Y_SIDECAR.get("items", {}).get(key)
         if sidecar is not None:

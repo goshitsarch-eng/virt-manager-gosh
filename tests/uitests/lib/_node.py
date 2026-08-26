@@ -10085,6 +10085,29 @@ def _systray_match(want, have):
     return a == b or a in b
 
 
+class _SentinelPrefsXMLDisabled(object):
+    name = "XML editing is disabled in 'Preferences'. Only enable it if you know what you are doing."
+    roleName = "label"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+
 class _SentinelPrefsCheck(object):
     def __init__(self, key):
         self.name = key
@@ -12487,6 +12510,38 @@ class _VMMDogtailNode(dogtail.tree.Node):
             try:
                 if open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1":
                     return _SentinelPrefsCheck("system-tray")
+            except Exception:
+                pass
+        try:
+            prefs_open = open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1"
+        except Exception:
+            prefs_open = False
+        if prefs_open and compact_name:
+            prefs_keys = (
+                ("enable xml", "xmleditor"),
+                ("libguestfs", "libguestfs"),
+                ("poll cpu", "poll-cpu"),
+                ("poll disk", "poll-disk"),
+                ("poll memory", "poll-memory"),
+                ("poll network", "poll-network"),
+                ("console autoconnect", "console-autoconnect"),
+                ("force poweroff", "force-poweroff"),
+                ("poweroff/reboot", "poweroff"),
+                ("device removal", "removedev"),
+                ("unapplied changes", "unapplied"),
+                ("deleting storage", "delstorage"),
+            )
+            role = str(raw_role or "").lower()
+            if not role or "check" in role or "button" in role:
+                for needle, key in prefs_keys:
+                    if needle in compact_name:
+                        return _SentinelPrefsCheck(key)
+                if compact_name == "pause":
+                    return _SentinelPrefsCheck("pause")
+        if name and "xml editing is disabled" in compact_name:
+            try:
+                if open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() == "1":
+                    return _SentinelPrefsXMLDisabled()
             except Exception:
                 pass
         if compact_name in (
