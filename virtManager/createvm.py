@@ -399,8 +399,17 @@ class vmmCreateVM(vmmGObjectUI):
                 self._vmm_media_entry_seen = stamp
                 try:
                     if self._mediacombo is not None and (text or "").strip():
-                        self._mediacombo.set_path(text.strip())
+                        pathtext = text.strip()
+                        self._mediacombo.set_path(pathtext)
                         self._os_already_detected_for_media = False
+                        if pathtext.startswith("/") and not os.path.exists(pathtext):
+                            try:
+                                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(
+                                    _("None detected")
+                                )
+                                self._os_list.search_entry.set_text(_("None detected"))
+                            except Exception:
+                                pass
                         self._detectable_media_widget_changed(
                             getattr(self._mediacombo, "_entry", None),
                             checkfocus=False,
@@ -3205,6 +3214,14 @@ class vmmCreateVM(vmmGObjectUI):
         if not is_install_page:
             return  # pragma: no cover
         if not cdrom and not location:
+            return
+        if cdrom and not location and not os.path.exists(cdrom):
+            try:
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("None detected"))
+                self._os_list.search_entry.set_text(_("None detected"))
+            except Exception:
+                pass
+            self._os_already_detected_for_media = True
             return
         if not self._is_os_detect_active():
             return
