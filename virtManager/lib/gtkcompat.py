@@ -3937,6 +3937,20 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 treeview.grab_focus()
             except Exception:
                 pass
+            try:
+                tname = treeview.get_accessible_name() or ""
+            except Exception:
+                tname = ""
+            try:
+                wname = treeview.get_name() or ""
+            except Exception:
+                wname = ""
+            if tname == "hw-list" or wname == "hw-list":
+                try:
+                    open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(want)
+                    open("/tmp/vmm-a11y-hw-selected.txt", "w").write(want)
+                except Exception:
+                    pass
             _sync_row_selected()
         return bool(found)
 
@@ -4136,10 +4150,12 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                     pending = ""
                 if pending:
                     break
-            # Do not clobber a pending AT-SPI row click with the GTK
-            # selection (still Overview until _poll_hw_select lands).
+            # Prefer a pending click only while GTK still shows Overview
+            # (the default after a rebuild). A real Sound/Display/etc
+            # selection must win over a stale hw-clicked label.
             if pending and selected != pending:
-                selected = pending
+                if not selected or selected == "Overview":
+                    selected = pending
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
         except Exception:
             pass
