@@ -164,11 +164,9 @@ class vmmHostNets(vmmGObjectUI):
         except Exception:
             pass
         try:
-            delete_ok = bool(self.widget("net-delete").get_sensitive())
-            net = self._current_network()
-            if net is not None and net._backend is not None and not net._backend.isActive():
-                delete_ok = True
-            open("/tmp/vmm-a11y-host-net-delete.txt", "w").write("1" if delete_ok else "0")
+            open("/tmp/vmm-a11y-host-net-delete.txt", "w").write(
+                "1" if self.widget("net-delete").get_sensitive() else "0"
+            )
         except Exception:
             pass
         try:
@@ -311,15 +309,8 @@ class vmmHostNets(vmmGObjectUI):
                     fn = mapping.get(action)
                     if fn is not None:
                         fn(None)
-                    if action in ("stop", "start"):
-                        try:
-                            net = self._current_network()
-                            if net is not None:
-                                net._refresh_status()
-                        except Exception:
-                            pass
-                        self._refresh_current_network()
-                    self._publish_a11y_state()
+                    if action not in ("stop", "start"):
+                        self._publish_a11y_state()
             except Exception:
                 pass
             return True
@@ -460,7 +451,8 @@ class vmmHostNets(vmmGObjectUI):
         self._populate_net_ipv4_state(net)
         self._populate_net_ipv6_state(net)
 
-        self._xmleditor.set_xml_from_libvirtobject(net)
+        if not self._active_edits:
+            self._xmleditor.set_xml_from_libvirtobject(net)
 
     #############################
     # Network lifecycle actions #
@@ -487,13 +479,23 @@ class vmmHostNets(vmmGObjectUI):
         if net is not None:
             try:
                 net._vmmLibvirtObject__status = None
+                net._refresh_status(cansignal=False)
             except Exception:
                 pass
             try:
-                net._refresh_status()
+                active = net.is_active()
+                self.widget("net-start").set_sensitive(not active)
+                self.widget("net-stop").set_sensitive(active)
+                self.widget("net-delete").set_sensitive(not active)
+                self.widget("net-name").set_editable(not active)
+                icon = active and ICON_RUNNING or ICON_SHUTOFF
+                self.widget("net-state").set_text(net.run_status())
+                self.widget("net-state-icon").set_from_icon_name(icon, Gtk.IconSize.BUTTON)
             except Exception:
                 pass
-        self._refresh_current_network()
+        # Avoid a full page refresh here: it reloads the XML editor and
+        # can wipe an in-progress edit if stop finishes late.
+        self._publish_a11y_state()
 
     def _start_network_cb(self, src):
         net = self._current_network()
@@ -536,11 +538,27 @@ class vmmHostNets(vmmGObjectUI):
     # Net apply/config actions #
     ############################
 
+    def _apply_pending_xml_edit(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+        self._enable_net_apply(EDIT_NET_XML)
+
     def _net_apply(self):
         net = self._current_network()
         if net is None:
             return  # pragma: no cover
 
+        self._apply_pending_xml_edit()
         log.debug("Applying changes for network '%s'", net.get_name())
         try:
             if EDIT_NET_AUTOSTART in self._active_edits:
@@ -557,6 +575,7 @@ class vmmHostNets(vmmGObjectUI):
             return
         finally:
             self._disable_net_apply()
+        self._refresh_current_network()
 
     def _disable_net_apply(self):
         self._active_edits = set()
@@ -594,7 +613,16 @@ class vmmHostNets(vmmGObjectUI):
         # If refreshed network is the current net, refresh the UI
         curnet = self._current_network()
         if curnet == net:
-            self._refresh_current_network()
+            if self._active_edits or self._xmleditor.is_xml_selected():
+                try:
+                    active = net.is_active()
+                    self.widget("net-start").set_sensitive(not active)
+                    self.widget("net-stop").set_sensitive(active)
+                    self.widget("net-delete").set_sensitive(not active)
+                except Exception:
+                    pass
+            else:
+                self._refresh_current_network()
         self._publish_a11y_state()
 
     def _net_selected_cb(self, selection):
