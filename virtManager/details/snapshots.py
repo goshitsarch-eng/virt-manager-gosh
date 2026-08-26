@@ -574,6 +574,7 @@ class vmmSnapshotPage(vmmGObjectUI):
         self._initial_populate = False
         self._unapplied_changes = False
         self._snapshot_new = None
+        self._a11y_want_select = None
 
         self._snapmenu = None
         self._init_ui()
@@ -774,6 +775,8 @@ class vmmSnapshotPage(vmmGObjectUI):
         model.foreach(check_selection, cursnaps)
 
         self._initial_populate = True
+        if self._a11y_want_select:
+            self._select_snapshot_by_name(self._a11y_want_select, add=False)
         self._publish_a11y_state()
 
     def _read_screenshot_file(self, name):
@@ -1054,6 +1057,8 @@ class vmmSnapshotPage(vmmGObjectUI):
     def _select_snapshot_by_name(self, name, add=False):
         if not name:
             return False
+        if not add:
+            self._a11y_want_select = name
         model = self.widget("snapshot-list").get_model()
         selection = self.widget("snapshot-list").get_selection()
         if model is None or selection is None:
@@ -1198,11 +1203,13 @@ class vmmSnapshotPage(vmmGObjectUI):
                     action = open(_SNAP_ACTION, "r").read().strip().lower()
                     os.remove(_SNAP_ACTION)
                     if action == "add":
-                        self._on_add_clicked(None)
+                        GLib.idle_add(lambda: self._on_add_clicked(None) or False)
                     elif action == "start":
-                        self._on_start_clicked(None)
+                        if not self._get_selected_snapshots() and self._a11y_want_select:
+                            self._select_snapshot_by_name(self._a11y_want_select)
+                        GLib.idle_add(lambda: self._on_start_clicked(None) or False)
                     elif action == "delete":
-                        self._on_delete_clicked(None)
+                        GLib.idle_add(lambda: self._on_delete_clicked(None) or False)
                     elif action == "apply":
                         self._on_apply_clicked(None)
                     elif action == "refresh":

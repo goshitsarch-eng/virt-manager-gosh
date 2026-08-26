@@ -5505,6 +5505,8 @@ class _SentinelSnapshotButton(object):
                         return
                 except Exception:
                     pass
+            elif self._value in ("start", "delete"):
+                pass
             elif not os.path.exists("/tmp/vmm-a11y-snapshot-action.txt"):
                 return
             time.sleep(0.05)
