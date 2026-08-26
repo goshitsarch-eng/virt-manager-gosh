@@ -355,3 +355,13 @@ class vmmInspection(vmmGObject):
         # results are available.
         self._cached_data.pop(vm.get_uuid(), None)
         self._q.put((vm.conn.get_uri(), vm.get_name()))
+        # Testdriver fake data is local and cheap; apply it immediately so
+        # the OS page Refresh button updates application summaries without
+        # waiting on the inspection thread.
+        if vm.conn.is_test():
+            try:
+                data = _make_fake_data(vm)
+                vm.set_inspection_data(data)
+                self._cached_data[vm.get_uuid()] = data
+            except Exception:
+                pass
