@@ -280,6 +280,10 @@ class vmmCloneVM(vmmGObjectUI):
             open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("0")
         except Exception:
             pass
+        try:
+            os.remove("/tmp/vmm-a11y-clone-stg-doclone-user")
+        except Exception:
+            pass
         return 1
 
     def close(self, ignore1=None, ignore2=None):
@@ -503,9 +507,17 @@ class vmmCloneVM(vmmGObjectUI):
             self._storage_dialog.present()
             open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("1")
             open("/tmp/vmm-a11y-clone-stg-path.txt", "w").write(new or "")
-            open("/tmp/vmm-a11y-clone-stg-doclone.txt", "w").write(
-                "1" if do_clone else "0"
-            )
+            user_doclone = None
+            try:
+                user_doclone = open(
+                    "/tmp/vmm-a11y-clone-stg-doclone-user", "r"
+                ).read().strip()
+            except Exception:
+                user_doclone = None
+            if user_doclone not in ("0", "1"):
+                open("/tmp/vmm-a11y-clone-stg-doclone.txt", "w").write(
+                    "1" if do_clone else "0"
+                )
         except Exception:
             pass
 
@@ -515,12 +527,20 @@ class vmmCloneVM(vmmGObjectUI):
 
         # Sync 'do clone' checkbox, and main dialog combo
         do_clone = self.widget("change-storage-doclone").get_active()
-        try:
-            want = open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+        for path in (
+            "/tmp/vmm-a11y-clone-stg-doclone-user",
+            "/tmp/vmm-a11y-clone-stg-doclone.txt",
+        ):
+            try:
+                want = open(path, "r").read().strip()
+            except Exception:
+                continue
             if want in ("0", "1"):
                 do_clone = want == "1"
-                if bool(self.widget("change-storage-doclone").get_active()) != do_clone:
-                    self.widget("change-storage-doclone").set_active(do_clone)
+                break
+        try:
+            if bool(self.widget("change-storage-doclone").get_active()) != do_clone:
+                self.widget("change-storage-doclone").set_active(do_clone)
         except Exception:
             pass
         sinfo.set_clone_requested(do_clone)
@@ -782,7 +802,16 @@ class vmmCloneVM(vmmGObjectUI):
             try:
                 if os.path.exists("/tmp/vmm-a11y-clone-details"):
                     os.remove("/tmp/vmm-a11y-clone-details")
-                    self._show_storage_window()
+                    already = False
+                    try:
+                        already = (
+                            open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip()
+                            == "1"
+                        )
+                    except Exception:
+                        already = False
+                    if not already:
+                        self._show_storage_window()
             except Exception:
                 pass
             try:

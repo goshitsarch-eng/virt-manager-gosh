@@ -2681,6 +2681,36 @@ class _SentinelCloneCreateNew(object):
         nxt = "0" if self.checked else "1"
         try:
             open("/tmp/vmm-a11y-clone-stg-doclone.txt", "w").write(nxt)
+            open("/tmp/vmm-a11y-clone-stg-doclone-user", "w").write(nxt)
+        except Exception:
+            pass
+        try:
+            rows = _clone_storage_rows()
+            lines = []
+            for row in rows:
+                clone = nxt == "1" if row["cloneable"] else row["clone"]
+                text = row["text"].replace("\n", " | ")
+                if clone:
+                    text = text.replace("Share disk with", "Clone this disk")
+                    if "Clone this disk" not in text:
+                        text = (text + " | Clone this disk").strip(" |")
+                else:
+                    text = text.replace("Clone this disk", "Share disk with")
+                    if "Share disk with" not in text:
+                        text = (text + " | Share disk with").strip(" |")
+                lines.append(
+                    "%s\t%s\t%s\t%s\t%s\t%s"
+                    % (
+                        row["target"],
+                        row["orig"],
+                        row["new"],
+                        "1" if row["cloneable"] else "0",
+                        "1" if clone else "0",
+                        text,
+                    )
+                )
+            if lines:
+                open("/tmp/vmm-a11y-clone-storage.txt", "w").write("\n".join(lines))
         except Exception:
             pass
 
