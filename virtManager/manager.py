@@ -523,23 +523,50 @@ class vmmManager(vmmGObjectUI):
                 try:
                     if not os.path.exists(path):
                         return True
-                    action = open(path, "r").read().strip()
+                    raw = open(path, "r").read().strip()
                     os.remove(path)
                 except Exception:
                     return True
-                mapping = {
-                    "disconnect": self.close_conn,
-                    "connect": self.open_conn,
-                    "delete": self.do_delete,
-                    "details": self.show_host,
-                    "create": lambda *_a: self.new_vm(None),
-                }
-                fn = mapping.get(action)
-                if fn is not None:
+                parts = raw.split("\t", 1)
+                action = parts[0].strip()
+                name = parts[1].strip() if len(parts) > 1 else ""
+                if not name:
                     try:
-                        fn(None)
+                        name = open("/tmp/vmm-a11y-selected-conn.txt", "r").read().strip()
+                    except Exception:
+                        name = ""
+                if name:
+                    try:
+                        self.select_row_for_name(name)
                     except Exception:
                         pass
+                conn = self._conn_by_label(name) if name else None
+                try:
+                    if action == "disconnect":
+                        target = conn or self.current_conn() or self._last_conn
+                        if target is not None and not target.is_disconnected():
+                            target.close()
+                    elif action == "connect":
+                        target = conn or self.current_conn() or self._last_conn
+                        if target is not None and target.is_disconnected():
+                            target.connect_once(
+                                "open-completed", self._conn_open_completed_cb
+                            )
+                            target.open()
+                    elif action == "delete":
+                        if conn is not None:
+                            self._last_conn = conn
+                        self.do_delete(None)
+                    elif action == "details":
+                        self.show_host(None)
+                    elif action == "create":
+                        self.new_vm(None)
+                except Exception:
+                    pass
+                try:
+                    self._publish_vm_list()
+                except Exception:
+                    pass
                 return True
 
             GLib.timeout_add(50, _poll_conn_action)
@@ -723,6 +750,26 @@ class vmmManager(vmmGObjectUI):
         if row[ROW_IS_CONN]:
             return handle
         return handle.conn
+
+    def _conn_by_label(self, name):
+        if not name:
+            return None
+        matches = []
+        try:
+            conns = list(vmmConnectionManager.get_instance().conns.values())
+        except Exception:
+            conns = []
+        for conn in conns:
+            try:
+                pretty = conn.get_pretty_desc() or ""
+                uri = conn.get_uri() or ""
+            except Exception:
+                continue
+            if name == pretty or name == uri:
+                return conn
+            if name in pretty or pretty in name or name in uri:
+                matches.append(conn)
+        return matches[0] if matches else None
 
     def get_row(self, conn_or_vm):
         def _walk(model, rowiter, obj):

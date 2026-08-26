@@ -4013,7 +4013,9 @@ class _SentinelManagerConnCell(object):
         ignore = (args, kwargs)
         self.click()
         try:
-            open("/tmp/vmm-a11y-conn-action.txt", "w").write("connect")
+            open("/tmp/vmm-a11y-conn-action.txt", "w").write(
+                "connect\t%s" % (self._name or "")
+            )
         except Exception:
             pass
 
@@ -4034,8 +4036,15 @@ class _SentinelConnMenuItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         key = (self.name or "").replace("conn-", "")
+        target = ""
         try:
-            open("/tmp/vmm-a11y-conn-action.txt", "w").write(key)
+            target = open("/tmp/vmm-a11y-selected-conn.txt", "r").read().strip()
+        except Exception:
+            target = ""
+        try:
+            open("/tmp/vmm-a11y-conn-action.txt", "w").write(
+                "%s\t%s" % (key, target) if target else key
+            )
             open("/tmp/vmm-a11y-conn-menu-hidden", "w").write("1")
         except Exception:
             pass
