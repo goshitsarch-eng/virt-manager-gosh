@@ -712,6 +712,11 @@ class _SentinelClickButton(object):
                 open("/tmp/vmm-a11y-config-remove", "w").write("1")
             except Exception:
                 pass
+        if self.name == "New":
+            try:
+                open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
+            except Exception:
+                pass
         if self.name == "Browse":
             try:
                 xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
@@ -2404,6 +2409,81 @@ class _SentinelStoragePoolCell(object):
             open("/tmp/vmm-a11y-pool-select.txt", "w").write(self.name or "")
         except Exception:
             pass
+
+
+class _SentinelNewVMWindow(object):
+    """New VM wizard after GetItems hides the methods window."""
+
+    name = "New VM"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        try:
+            return os.path.exists("/tmp/vmm-a11y-newvm-shown.txt") or os.path.exists(
+                "/tmp/vmm-a11y-pagenum.txt"
+            )
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        for fn in (
+            _sentinel_method_radio,
+            _sentinel_storage_radio,
+            _sentinel_named_entry,
+            _sentinel_container_extra,
+            _sentinel_url_widgets,
+        ):
+            try:
+                if fn is _sentinel_named_entry:
+                    sent = fn(name, roleName, labeller_text)
+                else:
+                    sent = fn(name, roleName)
+                if sent is not None:
+                    return sent
+            except Exception:
+                pass
+        try:
+            sent = _sentinel_wizard_nav(name, roleName, self)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        compact = str(name or "").replace(".*", "").lower()
+        if "install-iso-browse" in compact:
+            return _SentinelClickButton("install-iso-browse")
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        labeller_pattern = (".*%s.*" % labeller_text) if labeller_text else None
+        return self.find(name_pattern, role_pattern, labeller_pattern)
 
 
 class _SentinelStorageBrowser(object):
@@ -4317,6 +4397,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         if name and "creating virtual machine" in str(name).lower():
             return _SentinelProgressWindow(str(name).replace(".*", ""))
+        if name and "new vm" in str(name).replace(".*", "").lower():
+            role = str(roleName or "").lower()
+            if not role or any(
+                tok in role for tok in ("frame", "dialog", "window", "panel", "list")
+            ):
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-newvm-shown.txt") or os.path.exists(
+                        "/tmp/vmm-a11y-pagenum.txt"
+                    ):
+                        return _SentinelNewVMWindow()
+                except Exception:
+                    pass
         if name and "vmm-storage-browser" in str(name).lower():
             return _SentinelStorageBrowser()
         if name and "config-remove" in str(name).replace(".*", "").lower():

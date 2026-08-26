@@ -272,6 +272,10 @@ class vmmCreateVM(vmmGObjectUI):
             pass
         gtkcompat.expose_createvm_methods_window(self)
         gtkcompat.expose_oslist_activate_window(self._os_list)
+        try:
+            open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
+        except Exception:
+            pass
         if not getattr(self, "_vmm_os_select_poll", False):
             self._vmm_os_select_poll = True
 

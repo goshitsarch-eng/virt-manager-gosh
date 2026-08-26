@@ -368,7 +368,7 @@ class vmmManager(vmmGObjectUI):
 
         tool = self.widget("vm-toolbar")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-new"), "New")
-        gtkcompat.register_a11y_click("New", self.new_vm)
+        gtkcompat.register_a11y_click("New", lambda: self.new_vm(None))
         gtkcompat.ensure_button_accessible_name(self.widget("vm-open"), "Open")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-run"), "Run")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-pause"), "Pause")
