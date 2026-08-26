@@ -2910,6 +2910,8 @@ class vmmDetails(vmmGObjectUI):
         """
         When user changes the hw-list selection
         """
+        if getattr(self, "builder", None) is None:
+            return
         newrow = self._get_hw_row()
         model = self.widget("hw-list").get_model()
 
@@ -2951,17 +2953,27 @@ class vmmDetails(vmmGObjectUI):
         active = self.vm.is_active()
         if not active:
             try:
-                if not os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set"):
-                    disks = self.vm.get_disk_devices()
-                    for disk in disks:
-                        if disk.is_cdrom() and not disk.get_source_path():
-                            for path in (
-                                "/tmp/vmm-a11y-details-media-entry.txt",
-                                "/tmp/vmm-a11y-disk-source-path.txt",
-                                "/tmp/vmm-a11y-media-entry.txt",
-                            ):
-                                open(path, "w").write("")
-                            break
+                self.vm._invalidate_xml()
+            except Exception:
+                pass
+            try:
+                disks = self.vm.get_disk_devices()
+                for disk in disks:
+                    if disk.is_cdrom() and not disk.get_source_path():
+                        for path in (
+                            "/tmp/vmm-a11y-details-media-entry.txt",
+                            "/tmp/vmm-a11y-disk-source-path.txt",
+                            "/tmp/vmm-a11y-media-entry.txt",
+                            "/tmp/vmm-a11y-details-media-entry.txt.set",
+                        ):
+                            try:
+                                if path.endswith(".set"):
+                                    os.remove(path)
+                                else:
+                                    open(path, "w").write("")
+                            except Exception:
+                                pass
+                        break
             except Exception:
                 pass
         self.widget("overview-name").set_editable(not active)

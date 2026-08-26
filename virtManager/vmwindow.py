@@ -279,6 +279,10 @@ class vmmVMWindow(vmmGObjectUI):
             self._vmm_vm_page_poll = True
 
             def _poll_vm_page():
+                if getattr(self, "builder", None) is None or self.vm is None:
+                    return True
+                if not self.is_visible():
+                    return True
                 path = "/tmp/vmm-a11y-vm-page.txt"
                 try:
                     if not os.path.exists(path):
@@ -307,7 +311,7 @@ class vmmVMWindow(vmmGObjectUI):
 
             def _publish_vm_toolbar():
                 vm = self.vm
-                if vm is None:
+                if vm is None or getattr(self, "builder", None) is None:
                     return True
                 try:
                     if not self.is_visible():
@@ -337,6 +341,8 @@ class vmmVMWindow(vmmGObjectUI):
             def _poll_vm_toolbar_action():
                 path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
                 try:
+                    if getattr(self, "builder", None) is None:
+                        return True
                     if not os.path.exists(path):
                         return True
                     if not self.is_visible():
