@@ -847,6 +847,18 @@ class _SentinelBootMenu(object):
 
     def _state(self):
         try:
+            hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+        except Exception:
+            hw = ""
+        if "Boot" in hw:
+            try:
+                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                xml_l = (xml or "").replace('"', "'").lower()
+                if "<bootmenu" in xml_l and "enable='yes'" in xml_l:
+                    return "1"
+            except Exception:
+                pass
+        try:
             return open("/tmp/vmm-a11y-boot-menu.txt", "r").read().strip()
         except Exception:
             return "0"

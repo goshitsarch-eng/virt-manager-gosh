@@ -695,6 +695,10 @@ class vmmDetails(vmmGObjectUI):
                 open("/tmp/vmm-a11y-boot-menu.txt", "w").write("0")
             except Exception:
                 pass
+            try:
+                os.remove("/tmp/vmm-a11y-xml-contents.txt")
+            except Exception:
+                pass
         except Exception:
             pass
         if not getattr(self, "_vmm_boot_init_poll", False):

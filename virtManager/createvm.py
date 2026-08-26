@@ -1352,6 +1352,7 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-alert-response.txt",
             "/tmp/vmm-a11y-boot-menu.txt",
             "/tmp/vmm-a11y-xml.txt",
+            "/tmp/vmm-a11y-xml-contents.txt",
         ):
             try:
                 os.unlink(path)
