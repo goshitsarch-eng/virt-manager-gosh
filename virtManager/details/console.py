@@ -335,12 +335,21 @@ class _ConsoleMenu(vmmGObject):
     def activate_default(self):
         for child in self._menu.get_children():
             if child.get_sensitive() and hasattr(child, "toggled"):
+                if hasattr(child, "set_active"):
+                    child.set_active(True)
                 child.toggled()
                 return True
         return False
 
     def get_selected(self):
         row = self._get_selected_menu_item()
+        if not row:
+            for child in self._menu.get_children():
+                if getattr(child, "get_sensitive", lambda: False)() and hasattr(
+                    child, "vmm_data"
+                ):
+                    row = child
+                    break
         if not row:
             row = self._menu.get_children()[0]
         return row.get_label(), row.vmm_data, row.get_tooltip_text()
@@ -433,6 +442,20 @@ class vmmConsolePages(vmmGObjectUI):
             def _poll_console_select():
                 if self.vm is None:
                     return False
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-reinit.txt"):
+                        os.remove("/tmp/vmm-a11y-console-reinit.txt")
+                        try:
+                            self._activate_default_console_page()
+                        except Exception as exc:
+                            try:
+                                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                                    "reinit-err %s\n" % exc
+                                )
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
                 path = "/tmp/vmm-a11y-console-select.txt"
                 try:
                     if not os.path.exists(path):
@@ -952,6 +975,13 @@ class vmmConsolePages(vmmGObjectUI):
             self._console_menu_view_selected()
 
     def _activate_default_console_page(self):
+        try:
+            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                "activate-default runable=%s viewer=%s\n"
+                % (self.vm.is_runable(), bool(self._viewer))
+            )
+        except Exception:
+            pass
         if self.vm.is_runable():
             self._show_vm_status_unavailable()
             return

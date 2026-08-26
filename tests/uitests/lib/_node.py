@@ -7855,17 +7855,22 @@ class _SentinelSnapshotPageRadio(object):
             open("/tmp/vmm-a11y-vm-page.txt", "w").write(self._page)
         except Exception:
             pass
-        try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
-        except Exception:
-            pass
+        if self._page == "console":
+            try:
+                open("/tmp/vmm-a11y-console-reinit.txt", "w").write("1")
+            except Exception:
+                pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() == self._page:
-                    return
+                current = open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip()
             except Exception:
-                pass
+                current = ""
+            if current == self._page:
+                if self._page != "console" or not os.path.exists(
+                    "/tmp/vmm-a11y-console-reinit.txt"
+                ):
+                    return
             time.sleep(0.05)
 
 
