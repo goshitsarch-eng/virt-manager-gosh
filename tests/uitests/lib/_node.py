@@ -161,10 +161,28 @@ class _SentinelTableCell(object):
                 unique_hit = True
         except Exception:
             pass
-        if name_hit or unique_hit:
-            return True
+        # Sound sb16 -> ac97 keeps a unique-type/tab match even if the
+        # published index is still Floppy. Duplicate NIC/Sound labels
+        # must not stay selected when the index moved to the next copy.
+        if unique_hit:
+            if index_match is not False:
+                return True
+            try:
+                rows = [
+                    n
+                    for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                    if n
+                ]
+                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                at = rows[int(cur)]
+                if at.split()[0] != (self.name or "").split()[0]:
+                    return True
+            except Exception:
+                return True
         if index_match is False:
             return False
+        if name_hit:
+            return True
         try:
             cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
             if cur == self.name:
