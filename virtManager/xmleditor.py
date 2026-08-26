@@ -25,6 +25,7 @@ if "VIRTINST_TEST_SUITE_FAKE_NO_SOURCEVIEW" in os.environ:
     log.debug("Faking missing GtkSource for test suite")
     have_gtksourceview = False
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 if have_gtksourceview:
@@ -151,8 +152,6 @@ class vmmXMLEditor(vmmGObjectUI):
                 except Exception:
                     pass
                 return True
-
-            from gi.repository import GLib
 
             GLib.timeout_add(50, _poll_xml_tab)
 
