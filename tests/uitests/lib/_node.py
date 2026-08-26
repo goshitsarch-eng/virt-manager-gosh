@@ -1431,7 +1431,11 @@ class _SentinelAddhwTab(object):
         if "boot menu" in compact:
             return _SentinelBootMenu()
         if "media-entry" in compact:
-            return _SentinelEntry("media-entry", "/tmp/vmm-a11y-media-entry.txt")
+            return _SentinelEntry(
+                "media-entry", "/tmp/vmm-a11y-details-media-entry.txt"
+            )
+        if compact.replace(".*", "").strip() in ("browse", "_browse"):
+            return _SentinelClickButton("Browse")
         raise dogtail.tree.SearchError(
             "Didn't find widget with name='%s' "
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)

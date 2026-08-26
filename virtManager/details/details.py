@@ -691,6 +691,9 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("boot-menu"),
                 window=self.topwin,
             )
+            gtkcompat.register_a11y_click(
+                "Browse", self._disk_source_browse_clicked_cb
+            )
             try:
                 open("/tmp/vmm-a11y-boot-menu.txt", "w").write("0")
             except Exception:
@@ -2504,6 +2507,10 @@ class vmmDetails(vmmGObjectUI):
         if is_removable:
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
+        try:
+            open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+        except Exception:
+            pass
 
         self._addstorage.set_dev(disk)
 
