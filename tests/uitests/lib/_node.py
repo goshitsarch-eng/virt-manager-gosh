@@ -1095,6 +1095,8 @@ def _sentinel_method_radio(name, roleName):
         return None
     if "tab" in compact:
         return None
+    if "network selection" in compact:
+        return None
     if any(
         token in compact
         for token in (
@@ -9578,6 +9580,7 @@ class _SentinelNewVMWindow(object):
     ):
         ignore = (check_active, recursive, focusable, timeout)
         for fn in (
+            _sentinel_net_source,
             _sentinel_method_radio,
             _sentinel_storage_radio,
             _sentinel_named_entry,
