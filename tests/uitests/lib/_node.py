@@ -3276,6 +3276,10 @@ class _SentinelCreateConnConnect(object):
                 break
             time.sleep(0.05)
         try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-createconn-connect", "w").write("1")
         except Exception:
             pass
@@ -3334,10 +3338,39 @@ class _SentinelCreateConnField(object):
         return True
 
     def set_text(self, text):
+        self._text = text if text is not None else ""
+        uri = "/tmp/vmm-a11y-createconn-uri-label.txt"
         try:
-            open(self._path, "w").write(text if text is not None else "")
+            os.remove(uri)
         except Exception:
             pass
+        try:
+            open(self._path, "w").write(self._text)
+        except Exception:
+            pass
+        needle = self._text
+        deadline = time.time() + 8
+        while time.time() < deadline:
+            try:
+                got = open(uri, "r").read()
+            except Exception:
+                got = ""
+            if got and (
+                not needle
+                or needle in got
+                or ("[%s]" % needle) in got
+            ):
+                return
+            time.sleep(0.05)
+        got = ""
+        try:
+            got = open(uri, "r").read()
+        except Exception:
+            pass
+        raise AssertionError(
+            "createconn %s %r did not apply (uri=%r)"
+            % (self.name, self._text, got)
+        )
 
 
 def _sentinel_createconn_widgets(name, roleName, labeller_text=None):
@@ -4052,6 +4085,13 @@ def _sentinel_manager_conn_cell(name, roleName):
     for cname, _connected in _conn_list_rows():
         if want == cname or want in cname or cname in want:
             return _SentinelManagerConnCell(cname)
+    if want and "cell" in role:
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            for cname, _connected in _conn_list_rows():
+                if want == cname or want in cname or cname in want:
+                    return _SentinelManagerConnCell(cname)
+            time.sleep(0.05)
     return None
 
 
