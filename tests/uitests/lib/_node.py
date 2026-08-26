@@ -943,6 +943,11 @@ class _SentinelAddHardwareButton(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            if not _addhw_dialog_open():
+                break
+            time.sleep(0.05)
         try:
             open("/tmp/vmm-a11y-click.txt", "w").write("add-hardware")
         except Exception:
@@ -2173,6 +2178,8 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         if _addhw_dialog_open():
             return _SentinelAddhwWindow()
         return None
+    if compact == "finish" and (not role or "button" in role):
+        return _SentinelAddhwFinish()
     if not _addhw_dialog_open() and compact not in (
         "controller",
         "storage",
@@ -2217,8 +2224,6 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
                 return _SentinelAddhwCell(row)
         if compact in addhw_types or any(tok in compact for tok in addhw_types):
             return _SentinelAddhwCell(want)
-    if compact == "finish" and (not role or "button" in role):
-        return _SentinelAddhwFinish()
     if compact == "cancel" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Cancel",
@@ -5948,6 +5953,8 @@ class _SentinelVMWindow(object):
 
     @property
     def active(self):
+        if _addhw_dialog_open():
+            return False
         if _vmwindow_open():
             return True
         return self.showing
