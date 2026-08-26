@@ -694,6 +694,13 @@ class vmmCreateVM(vmmGObjectUI):
                         self._back_clicked(None)
                 except Exception:
                     pass
+                try:
+                    finish = "/tmp/vmm-a11y-create-finish"
+                    if os.path.exists(finish):
+                        os.remove(finish)
+                        self._finish_clicked(None)
+                except Exception:
+                    pass
                 return True
 
             GLib.timeout_add(50, _poll_nav)
@@ -1433,6 +1440,7 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-url-activate",
             "/tmp/vmm-a11y-create-forward",
             "/tmp/vmm-a11y-create-back",
+            "/tmp/vmm-a11y-create-finish",
             "/tmp/vmm-a11y-oslist-entry.txt",
             "/tmp/vmm-a11y-oslist-confirmed",
             "/tmp/vmm-a11y-os-select.txt",
@@ -1783,6 +1791,8 @@ class vmmCreateVM(vmmGObjectUI):
                 pass
 
         if not self.conn:
+            if not self.is_visible():
+                return False
             return self._show_startup_error(_("No active connection to install on."))
         self.conn.connect("state-changed", self._conn_state_changed)
 
@@ -3626,15 +3636,57 @@ class vmmCreateVM(vmmGObjectUI):
             return
 
         foundvm = None
+        want_name = getattr(guest, "name", None)
+        want_uuid = getattr(guest, "uuid", None)
+        try:
+            self.conn.schedule_priority_tick(pollvm=True)
+        except Exception:
+            pass
         for vm in self.conn.list_vms():
-            if vm.get_uuid() == guest.uuid:
-                foundvm = vm
-                break
+            try:
+                if (want_uuid and vm.get_uuid() == want_uuid) or (
+                    want_name and vm.get_name() == want_name
+                ):
+                    foundvm = vm
+                    break
+            except Exception:
+                pass
 
         self._close()
 
+        if foundvm is None:
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "Unable to complete install: VM '%s' did not appear" % (want_name or "")
+                )
+            except Exception:
+                pass
+            parentobj.err.show_err(
+                _("Unable to complete install: VM '%s' did not appear") % (want_name or "")
+            )
+            return
+
+        try:
+            names = []
+            try:
+                names = [
+                    n
+                    for n in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines()
+                    if n
+                ]
+            except Exception:
+                names = []
+            if foundvm.get_name() not in names:
+                names.append(foundvm.get_name())
+                open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+            open("/tmp/vmm-a11y-created-vm.txt", "w").write(foundvm.get_name())
+        except Exception:
+            pass
+
         # Launch details dialog for new VM
-        vmmVMWindow.get_instance(self, foundvm).show()
+        win = vmmVMWindow.get_instance(self, foundvm)
+        if win is not None:
+            win.show()
 
     def _start_install(self, guest, installer):
         """

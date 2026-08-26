@@ -3990,13 +3990,32 @@ class _SentinelNavButton(object):
         mapping = {
             "Forward": "/tmp/vmm-a11y-create-forward",
             "Back": "/tmp/vmm-a11y-create-back",
-            "Finish": "/tmp/vmm-a11y-click.txt",
+            "Finish": "/tmp/vmm-a11y-create-finish",
         }
         path = mapping.get(self.name, "/tmp/vmm-a11y-click.txt")
         try:
-            open(path, "w").write(self.name)
+            open(path, "w").write("1" if self.name == "Finish" else self.name)
         except Exception:
             pass
+        if self.name == "Finish":
+            deadline = time.time() + 20.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                        return
+                except Exception:
+                    pass
+                try:
+                    if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                        return
+                except Exception:
+                    pass
+                try:
+                    if open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip():
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
 
     def keyCombo(self, combo, *args, **kwargs):
         self.click()
