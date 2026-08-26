@@ -2171,7 +2171,10 @@ class vmmDetails(vmmGObjectUI):
                         self._ui_refreshing = False
                     if labeled[HW_LIST_COL_TYPE] == HW_LIST_TYPE_CPU:
                         try:
-                            mode = self.vm.xmlobj.cpu.mode or ""
+                            guest = self.vm.get_xmlobj(
+                                inactive=not self.vm.is_active()
+                            )
+                            mode = guest.cpu.mode or ""
                             if mode in ("host-model", "host-passthrough"):
                                 self.widget("cpu-copy-host").set_active(True)
                         except Exception:
@@ -2954,8 +2957,11 @@ class vmmDetails(vmmGObjectUI):
         return self.vm.get_xmlobj().os.is_x86() and len(features) > 0
 
     def _refresh_config_cpu(self):
-        # Set topology first, because it impacts vcpus values
-        cpu = self.vm.xmlobj.cpu
+        # Set topology first, because it impacts vcpus values.
+        # Use inactive XML when the guest is shut off: testdriver's
+        # active XML can lag the just-defined CPU mode.
+        guest = self.vm.get_xmlobj(inactive=not self.vm.is_active())
+        cpu = guest.cpu
         show_top = cpu.has_topology()
         self.widget("cpu-topology-enable").set_active(show_top)
 
@@ -2970,7 +2976,7 @@ class vmmDetails(vmmGObjectUI):
             self.widget("cpu-topology-expander").set_expanded(True)
 
         host_active_count = self.vm.conn.host_active_processor_count()
-        vcpus = self.vm.xmlobj.vcpus
+        vcpus = guest.vcpus
 
         self.widget("cpu-vcpus").set_value(int(vcpus))
         self.widget("state-host-cpus").set_text(str(host_active_count))
@@ -2996,18 +3002,7 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("cpu-model"), virtinst.DomainCpu.SPECIAL_MODE_HV_DEFAULT, column=2
             )
 
-        copyhost = self.widget("cpu-copy-host")
-        try:
-            copyhost.set_active(bool(is_host))
-        except Exception:
-            pass
-        try:
-            open("/tmp/vmm-a11y-cpu-refresh-debug.txt", "w").write(
-                "mode=%r is_host=%s active=%s\n"
-                % (cpu.mode, is_host, copyhost.get_active())
-            )
-        except Exception:
-            pass
+        self.widget("cpu-copy-host").set_active(bool(is_host))
         text = _("Copy host CP_U configuration")
         if is_host:
             text += " (%s)" % cpu.mode
