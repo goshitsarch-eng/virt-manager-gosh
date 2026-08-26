@@ -9881,12 +9881,29 @@ class _SentinelManagerConnCell(object):
     def doubleClick(self, *args, **kwargs):
         ignore = (args, kwargs)
         self.click()
+        _name, connected = self._row()
         try:
-            open("/tmp/vmm-a11y-conn-action.txt", "w").write(
-                "connect\t%s" % (self._name or "")
-            )
+            if connected:
+                open("/tmp/vmm-a11y-click.txt", "w").write("Connection Details")
+            else:
+                open("/tmp/vmm-a11y-conn-action.txt", "w").write(
+                    "connect\t%s" % (self._name or "")
+                )
         except Exception:
             pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip():
+                    return
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
 
 
 class _SentinelConnMenuItem(object):
