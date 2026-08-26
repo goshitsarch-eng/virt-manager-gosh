@@ -1299,6 +1299,14 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_vm_state(self):
         active = self.vm.is_active()
+        if not active:
+            try:
+                for disk in self.vm.get_disk_devices_norefresh():
+                    if disk.is_cdrom() and not disk.get_source_path():
+                        open("/tmp/vmm-a11y-details-media-entry.txt", "w").write("")
+                        break
+            except Exception:
+                pass
         self.widget("overview-name").set_editable(not active)
 
         reason = self.vm.run_status_reason()
@@ -2507,10 +2515,10 @@ class vmmDetails(vmmGObjectUI):
         if is_removable:
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
-        try:
-            open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
-        except Exception:
-            pass
+            try:
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
+            except Exception:
+                pass
 
         self._addstorage.set_dev(disk)
 
