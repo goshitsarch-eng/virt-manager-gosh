@@ -607,6 +607,16 @@ class vmmDetails(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_force_overview_apply)
 
+            def _poll_details_model():
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-details-model.txt.set"):
+                        self._a11y_consume_model_text()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_details_model)
+
             def _poll_mem_fields():
                 changed = False
                 for fpath, wid, edit in (
@@ -1983,6 +1993,32 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_device_fields)
+
+    def _a11y_consume_model_text(self):
+        for path in (
+            "/tmp/vmm-a11y-details-model.txt.set",
+            "/tmp/vmm-a11y-details-model.txt",
+        ):
+            try:
+                text = open(path, "r").read().strip()
+            except Exception:
+                text = ""
+            if not text:
+                continue
+            combo, edit, change_cb = self._a11y_model_combo()
+            if combo is not None:
+                try:
+                    self._a11y_select_combo(combo, text)
+                except Exception:
+                    pass
+                if edit:
+                    self._enable_apply(edit)
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            return text
+        return None
 
     def _a11y_select_combo(self, combo, item):
         if combo is None or not item:
@@ -3989,11 +4025,14 @@ class vmmDetails(vmmGObjectUI):
 
     def _apply_sound(self, devobj):
         kwargs = {}
-
+        model = None
         if self._edited(EDIT_SOUND_MODEL):
             model = uiutil.get_list_selection(self.widget("sound-model"))
-            if model:
-                kwargs["model"] = model
+        pending = self._a11y_consume_model_text()
+        if pending:
+            model = pending
+        if model:
+            kwargs["model"] = model
 
         return self._change_config(self.vm.define_sound, kwargs, devobj=devobj)
 
@@ -4083,11 +4122,14 @@ class vmmDetails(vmmGObjectUI):
 
     def _apply_video(self, devobj):
         kwargs = {}
-
+        model = None
         if self._edited(EDIT_VIDEO_MODEL):
             model = uiutil.get_list_selection(self.widget("video-model"))
-            if model:
-                kwargs["model"] = model
+        pending = self._a11y_consume_model_text()
+        if pending:
+            model = pending
+        if model:
+            kwargs["model"] = model
 
         if self._edited(EDIT_VIDEO_3D):
             kwargs["accel3d"] = self.widget("video-3d").get_active()
@@ -4134,9 +4176,14 @@ class vmmDetails(vmmGObjectUI):
 
     def _apply_watchdog(self, devobj):
         kwargs = {}
-
+        model = None
         if self._edited(EDIT_WATCHDOG_MODEL):
-            kwargs["model"] = uiutil.get_list_selection(self.widget("watchdog-model"))
+            model = uiutil.get_list_selection(self.widget("watchdog-model"))
+        pending = self._a11y_consume_model_text()
+        if pending:
+            model = pending
+        if model:
+            kwargs["model"] = model
 
         if self._edited(EDIT_WATCHDOG_ACTION):
             kwargs["action"] = uiutil.get_list_selection(self.widget("watchdog-action"))
