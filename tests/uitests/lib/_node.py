@@ -525,6 +525,75 @@ class _ArchOptionsSentinel(object):
         self.click()
 
 
+class _SentinelMethodRadio(object):
+    def __init__(self, name, key):
+        self.name = name
+        self.roleName = "radio button"
+        self._key = key
+
+    def _flag(self, suffix):
+        try:
+            return open("/tmp/vmm-a11y-method-%s-%s" % (self._key, suffix), "r").read().strip()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return self._flag("sensitive") != "0"
+
+    @property
+    def checked(self):
+        try:
+            return open("/tmp/vmm-a11y-method-active.txt", "r").read().strip() == self._key
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-method-active.txt", "w").write(self._key)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+
+def _sentinel_method_radio(name, roleName):
+    if not name:
+        return None
+    role = str(roleName or "").lower()
+    if role and "radio" not in role and "button" not in role and "check" not in role:
+        return None
+    compact = str(name).replace(".*", "").lower()
+    mapping = (
+        ("local", "local", "Local install media (ISO image or CDROM)"),
+        ("import", "import", "Import existing disk image"),
+        ("manual", "manual", "Manual install"),
+        ("network", "tree", "Network Install (HTTP, HTTPS, or FTP)"),
+        ("application", "app", "Application"),
+        ("operating system", "os", "Operating system"),
+        ("container", "container", "Container"),
+        ("virtual machine", "hvm", "Virtual machine"),
+    )
+    for needle, key, pretty in mapping:
+        if needle in compact:
+            return _SentinelMethodRadio(pretty, key)
+    return None
+
+
 class _SentinelKernelInfo(object):
     name = "Kernel/initrd settings can be configured"
     roleName = "label"
@@ -3046,6 +3115,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_storage_radio(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_method_radio(name, roleName)
             if sent is not None:
                 return sent
         except Exception:

@@ -541,6 +541,33 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
 
+    def _publish_method_a11y(self):
+        mapping = (
+            ("method-local", "local"),
+            ("method-tree", "tree"),
+            ("method-manual", "manual"),
+            ("method-import", "import"),
+        )
+        active = ""
+        for wid, key in mapping:
+            src = self.widget(wid)
+            try:
+                open("/tmp/vmm-a11y-method-%s-sensitive" % key, "w").write(
+                    "1" if src is not None and src.get_sensitive() else "0"
+                )
+            except Exception:
+                pass
+            try:
+                if src is not None and src.get_active():
+                    active = key
+            except Exception:
+                pass
+        if active:
+            try:
+                open("/tmp/vmm-a11y-method-active.txt", "w").write(active)
+            except Exception:
+                pass
+
     def _publish_arch_a11y(self):
         mapping = (
             ("arch", "/tmp/vmm-a11y-arch.txt"),
@@ -1120,6 +1147,10 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("virt-install-box").set_visible(not is_container_only and not is_vz_container)
 
         self.widget("kernel-info-box").set_visible(not installable_arch)
+        try:
+            self._publish_method_a11y()
+        except Exception:
+            pass
 
     def _populate_conn_state(self):
         """
