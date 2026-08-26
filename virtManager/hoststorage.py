@@ -601,8 +601,14 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 name = ""
         if not name:
-            name = "pool-dir"
-        self._select_pool_by_name(name)
+            try:
+                model = self.widget("pool-list").get_model()
+                pool0 = model[0][POOL_COLUMN_HANDLE] if model is not None and len(model) else None
+                name = pool0.get_name() if pool0 is not None else ""
+            except Exception:
+                name = ""
+        if name:
+            self._select_pool_by_name(name)
         return self._current_pool()
 
     def _current_vol(self):
@@ -686,7 +692,11 @@ class vmmHostStorage(vmmGObjectUI):
             return
         self._refreshing_pool = True
         try:
-            pool = self._ensure_current_pool()
+            pool = (
+                self._current_pool()
+                if getattr(self, "_selecting_pool", False)
+                else self._ensure_current_pool()
+            )
             if not pool:
                 self._set_error_page(_("No storage pool selected."))
                 return

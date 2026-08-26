@@ -368,8 +368,14 @@ class vmmHostNets(vmmGObjectUI):
             except Exception:
                 name = ""
         if not name:
-            name = "default"
-        self._select_net_by_name(name)
+            try:
+                model = self.widget("net-list").get_model()
+                net0 = model[0][0] if model is not None and len(model) else None
+                name = net0.get_name() if net0 is not None else ""
+            except Exception:
+                name = ""
+        if name:
+            self._select_net_by_name(name)
         return self._current_network()
 
     def _set_error_page(self, msg):
@@ -385,7 +391,11 @@ class vmmHostNets(vmmGObjectUI):
             return
         self._refreshing_net = True
         try:
-            net = self._ensure_current_network()
+            net = (
+                self._current_network()
+                if getattr(self, "_selecting_net", False)
+                else self._ensure_current_network()
+            )
             if not net:
                 self._set_error_page(_("No virtual network selected."))
                 return
