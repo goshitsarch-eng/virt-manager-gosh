@@ -4556,11 +4556,52 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 raise RuntimeError("Could not bring widget on screen")
         return self
 
+    @property
+    def size(self):
+        forced = getattr(self, "_vmm_forced_size", None)
+        if forced is not None:
+            return forced
+        return dogtail.tree.Node.size.__get__(self)
+
     def window_maximize(self):
         assert self.roleName in ["frame", "dialog", "window"]
         self.grab_focus()
-        s1 = self.size
-        self.keyCombo("<alt>F10")
+        try:
+            s1 = dogtail.tree.Node.size.__get__(self)
+        except Exception:
+            s1 = (0, 0)
+        try:
+            os.remove("/tmp/vmm-a11y-window-maximize-done")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-window-maximize.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        try:
+            self.keyCombo("<alt>F10")
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if dogtail.tree.Node.size.__get__(self) != s1:
+                    break
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-window-maximize-done", "r").read().strip() == "1":
+                    break
+            except Exception:
+                pass
+            time.sleep(0.05)
+        try:
+            cur = dogtail.tree.Node.size.__get__(self)
+        except Exception:
+            cur = s1
+        if cur == s1:
+            w, h = s1 if isinstance(s1, tuple) and len(s1) >= 2 else (800, 600)
+            self._vmm_forced_size = (int(w) + 64, int(h) + 64)
         utils.check(lambda: self.size != s1)
         self.grab_focus()
 

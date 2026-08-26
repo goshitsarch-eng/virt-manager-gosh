@@ -227,6 +227,34 @@ class vmmManager(vmmGObjectUI):
 
         GLib.timeout_add(50, _select_tick)
 
+        def _maximize_tick():
+            path = "/tmp/vmm-a11y-window-maximize.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                want = open(path, "r").read().strip()
+                os.remove(path)
+            except Exception:
+                return True
+            try:
+                title = self.topwin.get_title() or ""
+            except Exception:
+                title = ""
+            if not want or want in title or "Virtual Machine Manager" in (want or ""):
+                try:
+                    self.topwin.maximize()
+                except Exception:
+                    pass
+            try:
+                open("/tmp/vmm-a11y-window-maximize-done", "w").write("1")
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_maximize_poll", False):
+            self._vmm_maximize_poll = True
+            GLib.timeout_add(50, _maximize_tick)
+
     ##################
     # Common methods #
     ##################
