@@ -9297,6 +9297,32 @@ class _SentinelManagerWindow(object):
     ):
         ignore = (check_active, recursive, focusable)
         compact = str(name or "").replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        if compact in ("run", "restore") and (not role or "button" in role):
+            return _SentinelSnapshotToolbar("Run")
+        if compact in ("shut down", "shutdown") and (not role or "button" in role):
+            return _SentinelSnapshotToolbar("Shut Down")
+        if compact == "pause" and (not role or "button" in role):
+            return _SentinelSnapshotToolbar("Pause", "toggle button")
+        if compact == "menu" and (not role or "button" in role or "toggle" in role):
+            return _SentinelSnapshotToolbar("Menu", "toggle button")
+        if compact in (
+            "force off",
+            "save",
+            "reset",
+            "reboot",
+            "shut down",
+            "shutdown",
+        ) and (not role or "item" in role or "menu" in role):
+            pretty = {
+                "force off": "Force Off",
+                "save": "Save",
+                "reset": "Reset",
+                "reboot": "Reboot",
+                "shut down": "Shut Down",
+                "shutdown": "Shut Down",
+            }[compact]
+            return _SentinelSnapshotToolbar(pretty, "menu item")
         sent = _sentinel_manager_conn_cell(name, roleName)
         if sent is not None:
             return sent

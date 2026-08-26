@@ -471,6 +471,67 @@ class vmmManager(vmmGObjectUI):
         gtkcompat.ensure_button_accessible_name(
             self.widget("vm-shutdown")._button, "Shut Down"
         )
+        if not getattr(self, "_vmm_toolbar_poll", False):
+            self._vmm_toolbar_poll = True
+
+            def _publish_toolbar():
+                try:
+                    vm = self.current_vm()
+                    run = bool(vm and vm.is_runable())
+                    paused = bool(vm and vm.is_paused())
+                    stoppable = bool(vm and vm.is_stoppable())
+                    label = "Run"
+                    if vm is not None and vm.managedsave_supported and vm.has_managed_save():
+                        label = "Restore"
+                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
+                    open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write(
+                        "1" if paused else "0"
+                    )
+                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write(
+                        "1" if stoppable else "0"
+                    )
+                except Exception:
+                    pass
+                return True
+
+            def _poll_toolbar_action():
+                path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                vm = self.current_vm()
+                if vm is None:
+                    return True
+                try:
+                    key = (action or "").lower().replace("_", " ").strip()
+                    if action in ("Run", "Restore") or key == "run":
+                        vmmenu.VMActionUI.run(self, vm)
+                    elif action == "Pause" or key == "pause":
+                        self.pause_vm_button(self.widget("vm-pause"))
+                    elif action in ("Shut Down", "Shutdown") or key in (
+                        "shut down",
+                        "shutdown",
+                    ):
+                        vmmenu.VMActionUI.shutdown(self, vm)
+                    elif key in ("force off", "destroy", "power off"):
+                        vmmenu.VMActionUI.destroy(self, vm)
+                    elif key == "save":
+                        vmmenu.VMActionUI.save(self, vm)
+                    elif key == "reset":
+                        vmmenu.VMActionUI.reset(self, vm)
+                    elif key == "reboot":
+                        vmmenu.VMActionUI.reboot(self, vm)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _publish_toolbar)
+            GLib.timeout_add(50, _poll_toolbar_action)
 
         for c in gtkcompat.get_children(tool):
             if hasattr(c, "set_homogeneous"):
