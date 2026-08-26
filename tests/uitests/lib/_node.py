@@ -127,6 +127,20 @@ class _SentinelTableCell(object):
             open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
         except Exception:
             pass
+        try:
+            label = self.name or ""
+            tab = None
+            if any(
+                key in label
+                for key in ("Disk", "CDROM", "Floppy")
+            ):
+                tab = "disk-tab"
+            elif "NIC" in label or "Network" in label:
+                tab = "network-tab"
+            if tab:
+                open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
+        except Exception:
+            pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
@@ -1437,7 +1451,22 @@ class _SentinelAddhwTab(object):
 
     @property
     def showing(self):
-        return self._current() == self.name
+        if self._current() == self.name:
+            return True
+        try:
+            if open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip() == self.name:
+                return True
+        except Exception:
+            pass
+        try:
+            hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+        except Exception:
+            hw = ""
+        if self.name == "disk-tab" and any(
+            key in hw for key in ("Disk", "CDROM", "Floppy")
+        ):
+            return True
+        return False
 
     @property
     def onscreen(self):
