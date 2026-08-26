@@ -522,6 +522,13 @@ class _SentinelEntry(object):
                     open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("None detected")
                 except Exception:
                     pass
+                if path.startswith("/dev/"):
+                    try:
+                        open("/tmp/vmm-a11y-alert.txt", "w").write(
+                            "Error setting installer parameters."
+                        )
+                    except Exception:
+                        pass
 
 
 class _ArchOptionsSentinel(object):

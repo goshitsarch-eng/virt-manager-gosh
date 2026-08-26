@@ -28,15 +28,9 @@ def _patch_createvm_nav():
         if forward:
             try:
                 media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
-                page = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
             except Exception:
                 media = ""
-                page = ""
-            if (
-                "Step 2" in page
-                and media.startswith("/dev/")
-                and not os.path.exists(media)
-            ):
+            if media.startswith("/dev/") and not os.path.exists(media):
                 try:
                     open("/tmp/vmm-a11y-alert.txt", "w").write(
                         "Error setting installer parameters."

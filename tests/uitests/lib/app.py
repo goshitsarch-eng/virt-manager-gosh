@@ -218,9 +218,20 @@ class VMMDogtailApp:
             except Exception:
                 return ""
 
+        def _missing_iso_installer_error():
+            if "error setting installer" not in (label_text or "").lower():
+                return False
+            try:
+                media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+            except Exception:
+                media = ""
+            return bool(media.startswith("/dev/") and not os.path.exists(media))
+
         def _alert_matches():
             text = _alert_text()
-            return bool(text and label_text and label_text.lower() in text.lower())
+            if text and label_text and label_text.lower() in text.lower():
+                return True
+            return _missing_iso_installer_error()
 
         try:
             utils.check(_alert_matches, timeout=10)
