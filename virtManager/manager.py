@@ -554,9 +554,10 @@ class vmmManager(vmmGObjectUI):
                             )
                             target.open()
                     elif action == "delete":
-                        if conn is not None:
-                            self._last_conn = conn
-                        self.do_delete(None)
+                        target = conn or self.current_conn() or self._last_conn
+                        if target is not None:
+                            self._last_conn = target
+                            self._do_delete_conn(target)
                     elif action == "details":
                         self.show_host(None)
                     elif action == "create":
@@ -1197,6 +1198,10 @@ class vmmManager(vmmGObjectUI):
                 text = gtkcompat._strip_pango_markup(crow[ROW_MARKUP] or "")
                 lines.append("%s\t%s" % (key, text))
             open("/tmp/vmm-a11y-conn-status.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
+        try:
+            self._publish_vm_list()
         except Exception:
             pass
 

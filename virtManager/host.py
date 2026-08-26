@@ -97,6 +97,7 @@ class vmmHost(vmmGObjectUI):
                 self._storagelist._publish_a11y_state()
             except Exception:
                 pass
+            self._publish_overview_state()
             return  # pragma: no cover
 
         vmmEngine.get_instance().increment_window_counter()
@@ -124,6 +125,7 @@ class vmmHost(vmmGObjectUI):
             self._storagelist._publish_a11y_state()
         except Exception:
             pass
+        self._publish_overview_state()
         self._start_host_tab_poll()
 
     def close(self, src=None, event=None):
@@ -233,6 +235,28 @@ class vmmHost(vmmGObjectUI):
     # UI listeners #
     ################
 
+    def _publish_overview_state(self):
+        try:
+            open("/tmp/vmm-a11y-host-overview-name.txt", "w").write(
+                self.widget("overview-name").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-host-autoconnect.txt", "w").write(
+                "1" if self.widget("config-autoconnect").get_active() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            desc = self.conn.get_pretty_desc() if self.conn else ""
+            title = _("%(connection)s - Connection Details") % {"connection": desc}
+            self.topwin.set_title(title)
+            gtkcompat.set_accessible_name(self.topwin, title)
+            open("/tmp/vmm-a11y-host-shown.txt", "w").write(desc or "")
+        except Exception:
+            pass
+
     def _view_manager_cb(self, src):
         from .manager import vmmManager
 
@@ -249,9 +273,11 @@ class vmmHost(vmmGObjectUI):
     def _overview_name_changed_cb(self, src):
         src = self.widget("overview-name")
         self.conn.set_config_pretty_name(src.get_text())
+        self._publish_overview_state()
 
     def _autoconnect_toggled_cb(self, src):
         self.conn.set_autoconnect(src.get_active())
+        self._publish_overview_state()
 
     def _start_host_tab_poll(self):
         if getattr(self, "_vmm_host_tab_poll", False):
@@ -278,6 +304,37 @@ class vmmHost(vmmGObjectUI):
                             self._hostnets._nav_list(direction)
                         else:
                             self._storagelist._nav_list(direction)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-overview-name.txt.set"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    os.remove(path)
+                    self.widget("overview-name").set_text(text)
+                    self._publish_overview_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-autoconnect.txt.click"
+                if os.path.exists(path):
+                    os.remove(path)
+                    chk = self.widget("config-autoconnect")
+                    chk.set_active(not chk.get_active())
+                    self._publish_overview_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-file-action.txt"
+                if os.path.exists(path):
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                    if action == "view-manager":
+                        self._view_manager_cb(None)
+                    elif action == "quit":
+                        self._exit_app_cb(None)
+                    elif action == "close":
+                        self.close()
             except Exception:
                 pass
             path = "/tmp/vmm-a11y-host-tab.txt"
@@ -326,6 +383,7 @@ class vmmHost(vmmGObjectUI):
 
     def _conn_state_changed_cb(self, conn):
         self._refresh_conn_state()
+        self._publish_overview_state()
 
     def _conn_resources_sampled_cb(self, conn):
         self._refresh_resources()

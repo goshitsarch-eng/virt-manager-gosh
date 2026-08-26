@@ -3622,11 +3622,25 @@ class _SentinelHostField(object):
     def set_text(self, text):
         if not self._writable:
             return
+        want = text if text is not None else ""
         try:
-            open(self._path, "w").write(text if text is not None else "")
-            open(self._path + ".set", "w").write(text if text is not None else "")
+            open(self._path, "w").write(want)
+            open(self._path + ".set", "w").write(want)
         except Exception:
             pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if open(self._path, "r").read() == want:
+                    if "overview-name" in (self._path or ""):
+                        shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                        if shown == want:
+                            return
+                    else:
+                        return
+            except Exception:
+                pass
+            time.sleep(0.05)
 
 
 class _SentinelHostCheck(object):
@@ -3723,6 +3737,89 @@ class _SentinelHostAction(object):
             open(self._path, "w").write(self._value)
         except Exception:
             pass
+        if self._value == "stop" and str(self.name).startswith("net-"):
+            deadline = time.time() + 6.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-host-net-delete.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
+
+
+class _SentinelHostFileItem(object):
+    def __init__(self, name):
+        self.name = str(name or "").replace(".*", "")
+        self.roleName = "menu item"
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        compact = self.name.lower()
+        if "view manager" in compact:
+            action = "view-manager"
+        elif compact.strip() in ("quit",):
+            action = "quit"
+        elif compact.strip() in ("close",):
+            action = "close"
+        else:
+            return
+        try:
+            open("/tmp/vmm-a11y-host-file-action.txt", "w").write(action)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-host-file-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelHostFileMenu(object):
+    def __init__(self, name="File"):
+        self.name = name
+        self.roleName = "menu"
+
+    @property
+    def showing(self):
+        return _host_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        return _SentinelHostFileItem(name)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
 
 
 class _SentinelHostPane(object):
@@ -3753,7 +3850,7 @@ class _SentinelHostPane(object):
         timeout=5,
     ):
         ignore = (check_active, recursive, focusable, timeout)
-        sent = _sentinel_host_widgets(name, roleName, labeller_text)
+        sent = _sentinel_host_widgets(name, roleName, labeller_text, from_host=True)
         if sent is not None:
             return sent
         sent = _sentinel_xml_widgets(name, roleName)
@@ -3809,7 +3906,7 @@ class _SentinelHostWindow(object):
         timeout=5,
     ):
         ignore = (check_active, recursive, focusable, timeout)
-        sent = _sentinel_host_widgets(name, roleName, labeller_text)
+        sent = _sentinel_host_widgets(name, roleName, labeller_text, from_host=True)
         if sent is not None:
             return sent
         sent = _sentinel_xml_widgets(name, roleName)
@@ -3826,7 +3923,7 @@ class _SentinelHostWindow(object):
         return self.find(name_pattern, role_pattern, labeller_text)
 
 
-def _sentinel_host_widgets(name, roleName, labeller_text=None):
+def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False):
     if not _host_dialog_open():
         return None
     compact = str(name or "").replace(".*", "").lower()
@@ -3841,6 +3938,20 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None):
         for tok in ("virtual network", "storage", "overview", "network")
     ):
         return _SentinelHostTab(name)
+    if from_host:
+        if compact in ("file",) and (not role or ("menu" in role and "item" not in role)):
+            return _SentinelHostFileMenu()
+        if "view manager" in compact or compact.strip() in ("quit", "close"):
+            if not role or "item" in role or "menu" in role:
+                return _SentinelHostFileItem(name)
+        if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
+            return _SentinelHostField(
+                "Name:", "/tmp/vmm-a11y-host-overview-name.txt", writable=True
+            )
+        if "autoconnect" in compact and (not role or "check" in role):
+            return _SentinelHostCheck(
+                "Autoconnect:", "/tmp/vmm-a11y-host-autoconnect.txt"
+            )
 
     if "network-grid" in compact:
         return _SentinelHostPane("network-grid")

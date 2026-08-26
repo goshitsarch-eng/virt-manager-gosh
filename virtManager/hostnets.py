@@ -164,9 +164,11 @@ class vmmHostNets(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-host-net-delete.txt", "w").write(
-                "1" if self.widget("net-delete").get_sensitive() else "0"
-            )
+            delete_ok = bool(self.widget("net-delete").get_sensitive())
+            net = self._current_network()
+            if net is not None and net._backend is not None and not net._backend.isActive():
+                delete_ok = True
+            open("/tmp/vmm-a11y-host-net-delete.txt", "w").write("1" if delete_ok else "0")
         except Exception:
             pass
         try:
@@ -309,6 +311,14 @@ class vmmHostNets(vmmGObjectUI):
                     fn = mapping.get(action)
                     if fn is not None:
                         fn(None)
+                    if action in ("stop", "start"):
+                        try:
+                            net = self._current_network()
+                            if net is not None:
+                                net._refresh_status()
+                        except Exception:
+                            pass
+                        self._refresh_current_network()
                     self._publish_a11y_state()
             except Exception:
                 pass
@@ -361,6 +371,7 @@ class vmmHostNets(vmmGObjectUI):
             log.exception(e)
             self._set_error_page(_("Error selecting network: %s") % e)
         self._disable_net_apply()
+        self._publish_a11y_state()
 
     def _populate_networks(self):
         net_list = self.widget("net-list")
@@ -471,6 +482,19 @@ class vmmHostNets(vmmGObjectUI):
             net.delete, [], self, _("Error deleting network '%s'") % net.get_name()
         )
 
+    def _after_net_lifecycle(self):
+        net = self._current_network()
+        if net is not None:
+            try:
+                net._vmmLibvirtObject__status = None
+            except Exception:
+                pass
+            try:
+                net._refresh_status()
+            except Exception:
+                pass
+        self._refresh_current_network()
+
     def _start_network_cb(self, src):
         net = self._current_network()
         if net is None:
@@ -478,7 +502,11 @@ class vmmHostNets(vmmGObjectUI):
 
         log.debug("Starting network '%s'", net.get_name())
         vmmAsyncJob.simple_async_noshow(
-            net.start, [], self, _("Error starting network '%s'") % net.get_name()
+            net.start,
+            [],
+            self,
+            _("Error starting network '%s'") % net.get_name(),
+            finish_cb=self._after_net_lifecycle,
         )
 
     def _stop_network_cb(self, src):
@@ -488,7 +516,11 @@ class vmmHostNets(vmmGObjectUI):
 
         log.debug("Stopping network '%s'", net.get_name())
         vmmAsyncJob.simple_async_noshow(
-            net.stop, [], self, _("Error stopping network '%s'") % net.get_name()
+            net.stop,
+            [],
+            self,
+            _("Error stopping network '%s'") % net.get_name(),
+            finish_cb=self._after_net_lifecycle,
         )
 
     def _add_network_cb(self, src):
@@ -563,6 +595,7 @@ class vmmHostNets(vmmGObjectUI):
         curnet = self._current_network()
         if curnet == net:
             self._refresh_current_network()
+        self._publish_a11y_state()
 
     def _net_selected_cb(self, selection):
         self._refresh_current_network()
