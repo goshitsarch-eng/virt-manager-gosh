@@ -1875,6 +1875,11 @@ def _start_media_select_poll(createvm):
         if not text:
             return True
         try:
+            if os.path.exists("/tmp/vmm-a11y-media-entry.txt.set"):
+                return True
+        except Exception:
+            pass
+        try:
             os.remove(path)
         except Exception:
             pass
