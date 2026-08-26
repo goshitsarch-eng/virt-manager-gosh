@@ -360,6 +360,23 @@ class _ConsoleMenu(vmmGObject):
         except Exception:
             pass
 
+    def refresh_selection(self, vm):
+        self.rebuild_menu(vm)
+        if self._selected_label:
+            for child in self._menu.get_children():
+                try:
+                    if child.get_label() == self._selected_label:
+                        return
+                except Exception:
+                    continue
+            self._selected_label = None
+        for child in self._menu.get_children():
+            if getattr(child, "get_sensitive", lambda: False)() and hasattr(
+                child, "vmm_data"
+            ):
+                self.select_item(child)
+                return
+
     def activate_default(self):
         selected = self._get_selected_menu_item()
         if (
@@ -1040,18 +1057,21 @@ class vmmConsolePages(vmmGObjectUI):
         if viewer_initialized:
             return
 
-        cpage = self.widget("console-pages").get_current_page()
-        if cpage == _CONSOLE_PAGE_SERIAL:
-            return
+        try:
+            self._consolemenu.refresh_selection(self.vm)
+        except Exception:
+            pass
 
+        cpage = self.widget("console-pages").get_current_page()
         # Keep a user-selected serial console across VM start / Console
-        # radio reinit. Otherwise activate_default would steal back the
-        # first graphical item (SerialSwitch).
+        # radio reinit, but only while that serial still exists.
         try:
             _name, dev, _errmsg = self._consolemenu.get_selected()
         except Exception:
             dev = None
         if dev is not None and not hasattr(dev, "gtype"):
+            if cpage == _CONSOLE_PAGE_SERIAL:
+                return
             self._viewer_connect_clicked = True
             self._console_menu_view_selected()
             return
