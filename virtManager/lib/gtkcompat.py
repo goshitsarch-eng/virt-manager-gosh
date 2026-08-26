@@ -3116,13 +3116,12 @@ def _start_config_apply_poll(details):
                 w = d.widget(wid)
                 if w is not None and w.get_text() != text:
                     w.set_text(text)
-            if hasattr(d, "_enable_apply"):
-                from virtManager.details.details import EDIT_INIT
-
-                if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") or os.path.exists(
-                    "/tmp/vmm-a11y-boot-init-args.txt"
-                ):
-                    d._enable_apply(EDIT_INIT)
+            if hasattr(d, "_enable_apply") and (
+                os.path.exists("/tmp/vmm-a11y-boot-init-path.txt")
+                or os.path.exists("/tmp/vmm-a11y-boot-init-args.txt")
+            ):
+                # EDIT_INIT == 17; avoid importing details from gtkcompat.
+                d._enable_apply(17)
         except Exception:
             pass
         try:

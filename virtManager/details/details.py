@@ -1705,6 +1705,14 @@ class vmmDetails(vmmGObjectUI):
         if success is not False:
             self._disable_apply()
             success = True
+            for path in (
+                "/tmp/vmm-a11y-boot-init-path.txt",
+                "/tmp/vmm-a11y-boot-init-args.txt",
+            ):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
             try:
                 self._refresh_page()
             except Exception:
@@ -1853,7 +1861,7 @@ class vmmDetails(vmmGObjectUI):
                 msg = _("Cannot set kernel arguments without specifying a kernel path")
                 return self.err.val_err(msg)
 
-        if self._edited(EDIT_INIT):
+        if self._edited(EDIT_INIT) or os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
             kwargs["init"] = self._get_text("boot-init-path")
             kwargs["initargs"] = self._get_text("boot-init-args") or ""
             if not kwargs["init"]:
@@ -1861,6 +1869,10 @@ class vmmDetails(vmmGObjectUI):
                     open("/tmp/vmm-a11y-alert.txt", "w").write(
                         _("An init path must be specified")
                     )
+                except Exception:
+                    pass
+                try:
+                    self._enable_apply(EDIT_INIT)
                 except Exception:
                     pass
                 return False
