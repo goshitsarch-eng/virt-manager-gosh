@@ -161,6 +161,14 @@ class _SentinelTableCell(object):
         ignore = (args, kwargs)
         return self
 
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    @property
+    def focused(self):
+        return self.state_selected
+
     def click(self, *args, **kwargs):
         name = self.name or ""
         browser_open = False
@@ -5945,6 +5953,96 @@ def _vmwindow_open(want=None):
     return True
 
 
+def _hw_list_names():
+    try:
+        return [n for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines() if n]
+    except Exception:
+        return []
+
+
+class _SentinelStaticLabel(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "label"
+
+    @property
+    def text(self):
+        return self.name
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelHWList(object):
+    name = "hw-list"
+    roleName = "table"
+
+    def _cells(self):
+        deadline = time.time() + 3.0
+        names = []
+        while time.time() < deadline:
+            names = _hw_list_names()
+            if names:
+                break
+            time.sleep(0.05)
+        return [_SentinelTableCell(n) for n in names]
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def findChildren(self, pred, isLambda=False, **kwargs):
+        ignore = (isLambda, kwargs)
+        cells = self._cells()
+        if pred is None:
+            return cells
+        return [c for c in cells if pred(c)]
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable)
+        sent = _sentinel_hw_cell(name, roleName or "table cell")
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
 class _SentinelVMWindow(object):
     roleName = "frame"
 
@@ -6008,10 +6106,20 @@ class _SentinelVMWindow(object):
             return sent
         compact = str(name or "").replace(".*", "").lower()
         role = str(roleName or "").lower()
+        if "hw-list" in compact and (not role or "table" in role):
+            return _SentinelHWList()
+        if "hypervisor details" in compact:
+            return _SentinelStaticLabel("Hypervisor Details")
         if "add-hardware" in compact or compact == "add hardware":
             return _SentinelAddHardwareButton()
         if compact == "shut down" and (not role or "button" in role):
             return _SentinelSnapshotToolbar("Shut Down")
+        sent = _sentinel_container_extra(name, roleName)
+        if sent is not None:
+            return sent
+        sent = _sentinel_xml_widgets(name, roleName)
+        if sent is not None:
+            return sent
         sent = _sentinel_addhw_tab(name, roleName)
         if sent is not None:
             return sent

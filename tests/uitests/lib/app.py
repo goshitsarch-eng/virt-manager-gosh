@@ -298,6 +298,37 @@ class VMMDogtailApp:
                     except Exception:
                         pass
                     return
+                hw_names = []
+                try:
+                    hw_names = [
+                        n
+                        for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                        if n
+                    ]
+                except Exception:
+                    hw_names = []
+                vm_open = False
+                try:
+                    vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
+                except Exception:
+                    vm_open = False
+                if vm_open and hw_names:
+                    cur = ""
+                    try:
+                        cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+                    except Exception:
+                        cur = ""
+                    idx = hw_names.index(cur) if cur in hw_names else 0
+                    if key_l == "down":
+                        idx = min(idx + 1, len(hw_names) - 1)
+                    else:
+                        idx = max(idx - 1, 0)
+                    nxt = hw_names[idx]
+                    try:
+                        open("/tmp/vmm-a11y-hw-select.txt", "w").write(nxt)
+                    except Exception:
+                        pass
+                    return
                 which = ""
                 try:
                     which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
