@@ -860,6 +860,9 @@ class _SentinelEntry(object):
             "/tmp/vmm-a11y-gfx-password.txt",
             "/tmp/vmm-a11y-fs-source.txt",
             "/tmp/vmm-a11y-fs-target.txt",
+            "/tmp/vmm-a11y-disk-bus.txt",
+            "/tmp/vmm-a11y-details-mac-entry.txt",
+            "/tmp/vmm-a11y-mac-entry.txt",
         ) or (
             self._path.startswith("/tmp/vmm-a11y-combo-")
             and not self._path.endswith("-current.txt")
@@ -2043,6 +2046,10 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
         return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
     if compact == "import-entry" or raw == "import-entry":
         return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
+    if "disk bus" in compact:
+        return _SentinelEntry("Disk bus:", "/tmp/vmm-a11y-disk-bus.txt")
+    if compact in ("mac-entry",) or raw == "mac-entry":
+        return _SentinelEntry("mac-entry", "/tmp/vmm-a11y-details-mac-entry.txt")
     if compact == "media-entry" or raw == "media-entry":
         path = "/tmp/vmm-a11y-media-entry.txt"
         try:
@@ -3305,6 +3312,12 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsCheck("Shareable:", "/tmp/vmm-a11y-disk-shareable.txt")
     if "readonly" in compact:
         return _SentinelDetailsCheck("Readonly:", "/tmp/vmm-a11y-disk-readonly.txt")
+    if "disk bus" in compact:
+        return _SentinelEntry("Disk bus:", "/tmp/vmm-a11y-disk-bus.txt")
+    if "removable" in compact:
+        return _SentinelDetailsCheck("Removable:", "/tmp/vmm-a11y-disk-removable.txt")
+    if compact in ("mac-entry",) or "mac-entry" in compact:
+        return _SentinelEntry("mac-entry", "/tmp/vmm-a11y-details-mac-entry.txt")
     if compact.startswith("serial") or "serial:" in compact:
         return _SentinelEntry("Serial:", "/tmp/vmm-a11y-disk-serial.txt")
     if "media-combo" in compact:

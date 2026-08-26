@@ -1377,6 +1377,7 @@ class vmmDetails(vmmGObjectUI):
                 for cpath, wid, edit in (
                     ("/tmp/vmm-a11y-disk-shareable.txt.click", "disk-shareable", EDIT_DISK),
                     ("/tmp/vmm-a11y-disk-readonly.txt.click", "disk-readonly", EDIT_DISK),
+                    ("/tmp/vmm-a11y-disk-removable.txt.click", "disk-removable", EDIT_DISK),
                 ):
                     if not os.path.exists(cpath):
                         continue
@@ -1437,6 +1438,39 @@ class vmmDetails(vmmGObjectUI):
                             if w is not None and (w.get_text() or "") != text:
                                 w.set_text(text)
                                 self._enable_apply(EDIT_NET_SOURCE)
+                except Exception:
+                    pass
+                bset = "/tmp/vmm-a11y-disk-bus.txt.set"
+                try:
+                    if os.path.exists(bset):
+                        text = open(bset, "r").read().strip()
+                        os.remove(bset)
+                        combo = self.widget("disk-bus")
+                        if text:
+                            try:
+                                child = combo.get_child() if combo is not None else None
+                                if child is not None and hasattr(child, "set_text"):
+                                    child.set_text(text)
+                            except Exception:
+                                pass
+                            try:
+                                uiutil.set_list_selection(combo, text.lower())
+                            except Exception:
+                                pass
+                            open("/tmp/vmm-a11y-disk-bus.txt", "w").write(text)
+                            self._enable_apply(EDIT_DISK_BUS)
+                except Exception:
+                    pass
+                mset = "/tmp/vmm-a11y-details-mac-entry.txt.set"
+                try:
+                    if os.path.exists(mset):
+                        text = open(mset, "r").read().strip()
+                        os.remove(mset)
+                        w = self.widget("network-mac-entry")
+                        if w is not None:
+                            w.set_text(text)
+                        open("/tmp/vmm-a11y-details-mac-entry.txt", "w").write(text)
+                        self._enable_apply(EDIT_NET_MAC)
                 except Exception:
                     pass
                 spath = "/tmp/vmm-a11y-disk-serial.txt"
@@ -3585,6 +3619,12 @@ class vmmDetails(vmmGObjectUI):
             tab = ""
         if tab == "cpu-tab":
             want = "CPUs"
+        elif tab == "disk-tab":
+            if not any(tok in (want or "") for tok in ("Disk", "CDROM", "Floppy")):
+                want = want or "IDE Disk 2"
+        elif tab == "network-tab":
+            if "NIC" not in (want or "") and "Network" not in (want or ""):
+                want = want or "NIC"
         elif tab == "boot-tab":
             want = "Boot Options"
         elif tab == "os-tab" and "OS" not in (want or ""):
@@ -3626,6 +3666,12 @@ class vmmDetails(vmmGObjectUI):
             dev = row[HW_LIST_COL_DEVICE]
         if tab == "cpu-tab" or want in ("CPUs", "CPU"):
             pagetype = HW_LIST_TYPE_CPU
+        if tab == "disk-tab" or any(
+            tok in (want or "") for tok in ("Disk", "CDROM", "Floppy")
+        ):
+            pagetype = HW_LIST_TYPE_DISK
+        if tab == "network-tab" or "NIC" in (want or ""):
+            pagetype = HW_LIST_TYPE_NIC
         if tab == "boot-tab" or "Boot Options" in (want or ""):
             pagetype = HW_LIST_TYPE_BOOT
         if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and (
@@ -4204,11 +4250,16 @@ class vmmDetails(vmmGObjectUI):
             combo = self.widget("disk-bus")
             typed = ""
             try:
-                child = combo.get_child()
-                if child is not None and hasattr(child, "get_text"):
-                    typed = (child.get_text() or "").strip()
+                typed = open("/tmp/vmm-a11y-disk-bus.txt", "r").read().strip()
             except Exception:
                 typed = ""
+            if not typed:
+                try:
+                    child = combo.get_child()
+                    if child is not None and hasattr(child, "get_text"):
+                        typed = (child.get_text() or "").strip()
+                except Exception:
+                    typed = ""
             if typed:
                 kwargs["bus"] = typed.lower()
             else:
@@ -4298,7 +4349,17 @@ class vmmDetails(vmmGObjectUI):
                 pass
 
         if self._edited(EDIT_NET_MAC):
-            kwargs["macaddr"] = self.widget("network-mac-entry").get_text()
+            mac = ""
+            try:
+                mac = open("/tmp/vmm-a11y-details-mac-entry.txt", "r").read().strip()
+            except Exception:
+                mac = ""
+            if mac:
+                try:
+                    self.widget("network-mac-entry").set_text(mac)
+                except Exception:
+                    pass
+            kwargs["macaddr"] = mac or self.widget("network-mac-entry").get_text()
             virtinst.DeviceInterface.check_mac_in_use(self.conn.get_backend(), kwargs["macaddr"])
 
         if self._edited(EDIT_NET_LINKSTATE):
