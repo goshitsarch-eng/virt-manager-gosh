@@ -466,6 +466,14 @@ class vmmCloneVM(vmmGObjectUI):
 
     def _show_storage_window(self):
         tgt = uiutil.get_list_selection(self.widget("storage-list"))
+        if not tgt or tgt == "separator":
+            if not self._storage_list:
+                return
+            tgt = next(iter(self._storage_list))
+            try:
+                uiutil.set_list_selection(self.widget("storage-list"), tgt)
+            except Exception:
+                pass
         sinfo = self._storage_list[tgt]
 
         # If storage paths are dependent on manually entered clone name,
@@ -622,6 +630,9 @@ class vmmCloneVM(vmmGObjectUI):
         return cloner
 
     def _finish(self):
+        if getattr(self, "_vmm_clone_finishing", False):
+            return
+        self._vmm_clone_finishing = True
         try:
             cloner = self._build_final_cloner()
             if not cloner:
@@ -629,31 +640,37 @@ class vmmCloneVM(vmmGObjectUI):
         except Exception as e:
             msg = _("Error with clone settings: %s") % str(e)
             return self.err.show_err(msg)
+        finally:
+            if "cloner" not in locals() or not cloner:
+                self._vmm_clone_finishing = False
 
-        self.set_finish_cursor()
+        try:
+            self.set_finish_cursor()
 
-        title = _("Creating virtual machine clone '%s'") % cloner.new_guest.name
+            title = _("Creating virtual machine clone '%s'") % cloner.new_guest.name
 
-        text = title
-        if cloner.get_nonshare_diskinfos():
-            text = (
-                _(
-                    "Creating virtual machine clone '%s' and selected "
-                    "storage (this may take a while)"
+            text = title
+            if cloner.get_nonshare_diskinfos():
+                text = (
+                    _(
+                        "Creating virtual machine clone '%s' and selected "
+                        "storage (this may take a while)"
+                    )
+                    % cloner.new_guest.name
                 )
-                % cloner.new_guest.name
-            )
 
-        progWin = vmmAsyncJob(
-            self._async_clone,
-            [cloner],
-            self._finish_cb,
-            [self.conn, cloner],
-            title,
-            text,
-            self.topwin,
-        )
-        progWin.run()
+            progWin = vmmAsyncJob(
+                self._async_clone,
+                [cloner],
+                self._finish_cb,
+                [self.conn, cloner],
+                title,
+                text,
+                self.topwin,
+            )
+            progWin.run()
+        finally:
+            self._vmm_clone_finishing = False
 
     #################
     # A11y sentinels #
@@ -717,14 +734,27 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-clone-row-toggle.txt"
-                if os.path.exists(path):
-                    target = open(path, "r").read().strip()
-                    os.remove(path)
-                    sinfo = (self._storage_list or {}).get(target)
-                    if sinfo is not None and sinfo.is_cloneable():
-                        sinfo.set_clone_requested(not sinfo.is_clone_requested())
-                        self._publish_a11y_state()
+                changed = False
+                for row in open("/tmp/vmm-a11y-clone-storage.txt", "r").read().splitlines():
+                    parts = row.split("\t")
+                    if len(parts) < 5:
+                        continue
+                    sinfo = (self._storage_list or {}).get(parts[0])
+                    if sinfo is None or not sinfo.is_cloneable():
+                        continue
+                    want = parts[4] in ("1", "true", "yes")
+                    if bool(sinfo.is_clone_requested()) != want:
+                        sinfo.set_clone_requested(want)
+                        changed = True
+                if changed:
+                    try:
+                        model = self.widget("storage-list").get_model()
+                        for row in model:
+                            if row[0] != "separator":
+                                model.emit("row-changed", row.path, row.iter)
+                    except Exception:
+                        pass
+                    self._publish_a11y_state()
             except Exception:
                 pass
             try:
@@ -754,7 +784,8 @@ class vmmCloneVM(vmmGObjectUI):
             try:
                 if os.path.exists("/tmp/vmm-a11y-clone-finish"):
                     os.remove("/tmp/vmm-a11y-clone-finish")
-                    self._finish()
+                    if not getattr(self, "_vmm_clone_finishing", False):
+                        self._finish()
                     return True
             except Exception:
                 pass

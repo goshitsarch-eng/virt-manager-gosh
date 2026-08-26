@@ -2447,24 +2447,21 @@ class _SentinelCloneChkCell(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
-        try:
-            open("/tmp/vmm-a11y-clone-row-toggle.txt", "w").write(self._target)
-        except Exception:
-            pass
         rows = _clone_storage_rows()
         lines = []
         for row in rows:
             clone = row["clone"]
+            text = row["text"]
             if row["target"] == self._target and row["cloneable"]:
                 clone = not clone
-                text = row["text"]
                 if clone:
                     text = text.replace("Share disk with", "Clone this disk")
+                    if "Clone this disk" not in text:
+                        text = (text + "\nClone this disk").strip()
                 else:
                     text = text.replace("Clone this disk", "Share disk with")
                     if "Share disk with" not in text:
                         text = (text + "\nShare disk with").strip()
-                    row["text"] = text
             lines.append(
                 "%s\t%s\t%s\t%s\t%s\t%s"
                 % (
@@ -2473,7 +2470,7 @@ class _SentinelCloneChkCell(object):
                     row["new"],
                     "1" if row["cloneable"] else "0",
                     "1" if clone else "0",
-                    row["text"],
+                    text,
                 )
             )
         try:
