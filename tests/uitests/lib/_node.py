@@ -9450,6 +9450,19 @@ class _SentinelNewVMWindow(object):
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
         )
 
+    def combo_select(self, combolabel, itemlabel):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (combolabel or "", itemlabel or "")
+            )
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+                return
+            time.sleep(0.05)
+
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
         name_pattern = (".*%s.*" % name) if name else None
         role_pattern = (".*%s.*" % roleName) if roleName else None

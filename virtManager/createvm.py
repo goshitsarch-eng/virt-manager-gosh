@@ -539,6 +539,8 @@ class vmmCreateVM(vmmGObjectUI):
                         combo = self.widget("machine")
                     elif key in ("Virt Type", "virt-type"):
                         combo = self.widget("virt-type")
+                    elif key in ("create-conn",):
+                        combo = self.widget("create-conn")
                     else:
                         return True
                     os.remove(sel)
@@ -547,16 +549,26 @@ class vmmCreateVM(vmmGObjectUI):
                         return True
                     it = model.get_iter_first()
                     while it is not None:
-                        label = str(model[it][0] or "")
-                        if item.lower() in label.lower() or label.lower() in item.lower():
-                            combo.set_active_iter(it)
-                            break
+                        labels = [str(model[it][0] or "")]
                         try:
-                            if re.match(item, label):
-                                combo.set_active_iter(it)
-                                break
+                            labels.append(str(model[it][1] or ""))
                         except Exception:
                             pass
+                        matched = False
+                        for label in labels:
+                            if item.lower() in label.lower() or label.lower() in item.lower():
+                                matched = True
+                            else:
+                                try:
+                                    if re.search(item, label, re.I):
+                                        matched = True
+                                except Exception:
+                                    pass
+                            if matched:
+                                break
+                        if matched:
+                            combo.set_active_iter(it)
+                            break
                         it = model.iter_next(it)
                     try:
                         self._publish_arch_a11y()

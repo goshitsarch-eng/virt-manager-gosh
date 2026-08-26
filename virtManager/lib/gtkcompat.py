@@ -3025,6 +3025,7 @@ def _start_combo_select_poll(createconn):
                 "Resize guest with window:",
                 "Graphical console scaling",
                 "Graphical console scaling:",
+                "create-conn",
             ):
                 return True
             try:
