@@ -6,6 +6,7 @@
 
 import os
 import re
+import time
 
 from gi.repository import GLib
 from gi.repository import Gtk
@@ -896,6 +897,9 @@ class vmmDetails(vmmGObjectUI):
             gtkcompat.register_a11y_click(
                 "IP address", lambda: self._refresh_ip_clicked_cb(None)
             )
+            gtkcompat.register_a11y_click(
+                "IP address:", lambda: self._refresh_ip_clicked_cb(None)
+            )
             gtkcompat.expose_a11y_button(
                 "config-remove",
                 "config-remove",
@@ -903,6 +907,55 @@ class vmmDetails(vmmGObjectUI):
                 window=self.topwin,
             )
             gtkcompat.register_a11y_click("config-remove", self._config_remove)
+            if not getattr(self, "_vmm_network_ip_poll", False):
+                self._vmm_network_ip_poll = True
+
+                def _poll_network_ip():
+                    try:
+                        if open(
+                            "/tmp/vmm-a11y-network-ip-refresh", "r"
+                        ).read().strip():
+                            os.remove("/tmp/vmm-a11y-network-ip-refresh")
+                            self._refresh_ip()
+                            return True
+                    except Exception:
+                        pass
+                    want = ""
+                    for path in (
+                        "/tmp/vmm-a11y-hw-clicked.txt",
+                        "/tmp/vmm-a11y-hw-selected.txt",
+                    ):
+                        try:
+                            want = open(path, "r").read().strip()
+                        except Exception:
+                            want = ""
+                        if want:
+                            break
+                    if not want or (
+                        "NIC" not in want and "Network" not in want
+                    ):
+                        return True
+                    try:
+                        current_for = open(
+                            "/tmp/vmm-a11y-network-ip-for.txt", "r"
+                        ).read().strip()
+                    except Exception:
+                        current_for = ""
+                    if current_for == want:
+                        return True
+                    labeled = self._hw_row_for_label(want)
+                    if labeled is None:
+                        return True
+                    net = labeled[HW_LIST_COL_DEVICE]
+                    if net is None:
+                        return True
+                    try:
+                        self._set_network_ip_details(net)
+                    except Exception:
+                        pass
+                    return True
+
+                GLib.timeout_add(50, _poll_network_ip)
             try:
                 open("/tmp/vmm-a11y-boot-menu.txt", "w").write("0")
             except Exception:
@@ -2355,10 +2408,51 @@ class vmmDetails(vmmGObjectUI):
             if label:
                 label += "\n"
             label += ipv6
-        self.widget("network-ip").set_text(label or _("Unknown"))
+        text = label or _("Unknown")
+        self.widget("network-ip").set_text(text)
+        try:
+            open("/tmp/vmm-a11y-network-ip.txt", "w").write(text)
+            want = ""
+            for path in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-select.txt",
+                "/tmp/vmm-a11y-hw-selected.txt",
+            ):
+                try:
+                    want = open(path, "r").read().strip()
+                except Exception:
+                    want = ""
+                if want:
+                    break
+            open("/tmp/vmm-a11y-network-ip-for.txt", "w").write(
+                want or (getattr(net, "macaddr", None) or "")
+            )
+            open("/tmp/vmm-a11y-network-ip-stamp", "w").write(str(time.time()))
+        except Exception:
+            pass
 
     def _refresh_ip(self):
-        net = self._get_hw_row()[HW_LIST_COL_DEVICE]
+        net = None
+        want = ""
+        for path in (
+            "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-hw-select.txt",
+            "/tmp/vmm-a11y-hw-selected.txt",
+        ):
+            try:
+                want = open(path, "r").read().strip()
+            except Exception:
+                want = ""
+            if want:
+                break
+        labeled = self._hw_row_for_label(want) if want else None
+        if labeled is not None:
+            net = labeled[HW_LIST_COL_DEVICE]
+        if net is None:
+            row = self._get_hw_row()
+            net = row[HW_LIST_COL_DEVICE] if row else None
+        if net is None:
+            return
         self.vm.refresh_ips(net)
         self._set_network_ip_details(net)
 

@@ -14,6 +14,18 @@ from virtinst import log
 from . import utils
 
 
+def _looks_like_ip_label(want):
+    text = str(want or "").strip()
+    if text == "Unknown":
+        return True
+    if "/128" in text or text.startswith("fd00") or text.startswith("10.0.0."):
+        return True
+    parts = text.split(".")
+    if len(parts) == 4 and all(p.isdigit() for p in parts):
+        return True
+    return text.count(":") >= 2
+
+
 # GTK4 AT-SPI role names differ from GTK3 in several common cases.
 # Keep the original uitest strings and expand them to accept both.
 _GTK4_ROLE_ALIASES = {
@@ -283,6 +295,19 @@ class _SentinelTableCell(object):
             except Exception:
                 pass
             time.sleep(0.05)
+        if "NIC" in (self.name or ""):
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                try:
+                    for_dev = open(
+                        "/tmp/vmm-a11y-network-ip-for.txt", "r"
+                    ).read().strip()
+                    ips = open("/tmp/vmm-a11y-network-ip.txt", "r").read()
+                    if ips and for_dev == (self.name or ""):
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
 
     def doubleClick(self, *args, **kwargs):
         self.click(*args, **kwargs)
@@ -996,6 +1021,24 @@ class _SentinelClickButton(object):
                 try:
                     if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
                         break
+                except Exception:
+                    pass
+                time.sleep(0.05)
+        if self.name in ("IP address", "IP address:"):
+            old = ""
+            try:
+                old = open("/tmp/vmm-a11y-network-ip-stamp", "r").read()
+            except Exception:
+                old = ""
+            try:
+                open("/tmp/vmm-a11y-network-ip-refresh", "w").write("1")
+            except Exception:
+                pass
+            deadline = time.time() + 5.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-network-ip-stamp", "r").read() != old:
+                        return
                 except Exception:
                     pass
                 time.sleep(0.05)
@@ -2046,6 +2089,25 @@ class _SentinelAddhwTab(object):
             )
         if compact.replace(".*", "").strip() in ("browse", "_browse"):
             return _SentinelClickButton("Browse")
+        if "label" in str(roleName or "").lower() or not roleName:
+            want = raw.replace(".*", "")
+            if _looks_like_ip_label(want):
+                deadline = time.time() + (timeout or 5)
+                while time.time() < deadline:
+                    try:
+                        ips = open("/tmp/vmm-a11y-network-ip.txt", "r").read()
+                    except Exception:
+                        ips = ""
+                    if want and ips and want in ips:
+                        return _SentinelStaticLabel(want)
+                    time.sleep(0.05)
+            else:
+                try:
+                    ips = open("/tmp/vmm-a11y-network-ip.txt", "r").read()
+                except Exception:
+                    ips = ""
+                if want and ips and want in ips:
+                    return _SentinelStaticLabel(want)
         raise dogtail.tree.SearchError(
             "Didn't find widget with name='%s' "
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
