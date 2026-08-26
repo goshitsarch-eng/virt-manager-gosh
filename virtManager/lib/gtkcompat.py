@@ -4901,19 +4901,37 @@ def _run_modal(window, response_signal="response"):
     except Exception:
         pass
 
-    def _poll_alert_response():
-        if not loop.is_running():
-            return False
+    want_checked = [False]
+
+    def _apply_alert_checkbox():
         try:
             if os.path.exists("/tmp/vmm-a11y-alert-check.txt"):
                 os.remove("/tmp/vmm-a11y-alert-check.txt")
-                box = getattr(window, "chk_vbox", None)
-                if box is not None:
-                    for child in get_children(box):
-                        if hasattr(child, "set_active"):
-                            child.set_active(not child.get_active())
+                want_checked[0] = True
+            if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
+                want_checked[0] = True
         except Exception:
             pass
+        if not want_checked[0]:
+            return
+        try:
+            open("/tmp/vmm-a11y-alert-checked.txt", "w").write("1")
+        except Exception:
+            pass
+        box = getattr(window, "chk_vbox", None)
+        if box is None:
+            return
+        for child in get_children(box):
+            if hasattr(child, "set_active"):
+                try:
+                    child.set_active(True)
+                except Exception:
+                    pass
+
+    def _poll_alert_response():
+        if not loop.is_running():
+            return False
+        _apply_alert_checkbox()
         try:
             if os.path.exists("/tmp/vmm-a11y-alert-details.txt"):
                 os.remove("/tmp/vmm-a11y-alert-details.txt")
@@ -4942,6 +4960,7 @@ def _run_modal(window, response_signal="response"):
         resp = mapping.get(label.lower())
         if resp is None:
             return True
+        _apply_alert_checkbox()
         try:
             window.emit("response", resp)
         except Exception:

@@ -482,6 +482,14 @@ class _errorDialog(Gtk.Window):
             chkbox = Gtk.CheckButton(label=chktext)
             self.chk_vbox.add(chkbox)
             chkbox.show()
+            try:
+                os.remove("/tmp/vmm-a11y-alert-checked.txt")
+            except Exception:
+                pass
+            try:
+                os.remove("/tmp/vmm-a11y-alert-check.txt")
+            except Exception:
+                pass
 
         res = _launch_dialog(
             self,
@@ -494,7 +502,14 @@ class _errorDialog(Gtk.Window):
         )
 
         if chktext:
-            res = [res, bool(chkbox.get_active())]
+            checked = bool(chkbox.get_active())
+            try:
+                if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
+                    checked = True
+                    os.remove("/tmp/vmm-a11y-alert-checked.txt")
+            except Exception:
+                pass
+            res = [res, checked]
         self.hide()
         gtkcompat.hide_a11y_keys("err-")
 

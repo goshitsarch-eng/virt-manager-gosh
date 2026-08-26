@@ -3100,6 +3100,10 @@ class _SentinelAlertCheck(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
+            open("/tmp/vmm-a11y-alert-checked.txt", "w").write("1")
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-alert-check.txt", "w").write("1")
         except Exception:
             pass
