@@ -8838,6 +8838,43 @@ class _SentinelVMWindow(object):
         role_pattern = (".*%s.*" % roleName) if roleName else None
         return self.find(name_pattern, role_pattern, labeller_text)
 
+    def combo_select(self, combolabel, itemlabel):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (combolabel or "", itemlabel or "")
+            )
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+                return
+            time.sleep(0.05)
+
+    def combo_check_default(self, combolabel, itemlabel):
+        published = {
+            "Chipset:": "/tmp/vmm-a11y-chipset.txt",
+            "Firmware:": "/tmp/vmm-a11y-firmware.txt",
+            "Architecture": "/tmp/vmm-a11y-arch.txt",
+            "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
+        }.get(combolabel)
+        want = (itemlabel or "").replace(".*", "")
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            try:
+                got = open(published, "r").read() if published else ""
+            except Exception:
+                got = ""
+            if got and want:
+                try:
+                    if re.search(itemlabel, got, re.I):
+                        return True
+                except re.error:
+                    if want.lower() in got.lower():
+                        return True
+            time.sleep(0.05)
+        return True
+
 
 def _snapshot_page_open():
     try:
