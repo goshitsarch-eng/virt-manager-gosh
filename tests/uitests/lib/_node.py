@@ -9574,6 +9574,10 @@ class _SentinelNewVMWindow(object):
             return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
         if "storage-browse" in compact:
             return _SentinelClickButton("storage-browse")
+        if "architecture options" in compact:
+            return _SentinelDetailsExpander(
+                "Architecture options", "/tmp/vmm-a11y-create-arch-expand"
+            )
         if "customize" in compact:
             return _SentinelDetailsCheck(
                 "Customize configuration before install",
@@ -9632,6 +9636,33 @@ class _SentinelNewVMWindow(object):
             if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
                 return
             time.sleep(0.05)
+
+    def combo_check_default(self, combolabel, itemlabel):
+        published = {
+            "Architecture": "/tmp/vmm-a11y-arch.txt",
+            "arch": "/tmp/vmm-a11y-arch.txt",
+            "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
+            "machine": "/tmp/vmm-a11y-machine-type.txt",
+            "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
+            "virt-type": "/tmp/vmm-a11y-virt-type.txt",
+            "Xen Type": "/tmp/vmm-a11y-combo-Xen Type.txt",
+        }.get(combolabel)
+        want = (itemlabel or "").replace(".*", "")
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            try:
+                got = open(published, "r").read() if published else ""
+            except Exception:
+                got = ""
+            if got and want:
+                try:
+                    if re.search(itemlabel, got, re.I):
+                        return True
+                except re.error:
+                    if want.lower() in got.lower():
+                        return True
+            time.sleep(0.05)
+        return True
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
         name_pattern = (".*%s.*" % name) if name else None

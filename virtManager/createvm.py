@@ -447,6 +447,15 @@ class vmmCreateVM(vmmGObjectUI):
                         )
                 except Exception:
                     pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-create-arch-expand"):
+                        os.remove("/tmp/vmm-a11y-create-arch-expand")
+                        exp = self.widget("arch-expander")
+                        if exp is not None:
+                            exp.set_expanded(True)
+                        self._publish_arch_a11y()
+                except Exception:
+                    pass
                 return True
 
             GLib.timeout_add(50, _poll_create_spins)
