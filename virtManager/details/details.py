@@ -2985,11 +2985,6 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if getattr(self._mediacombo, "_a11y_path", None):
-                    return
-            except Exception:
-                pass
-            try:
                 if open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip():
                     return
             except Exception:
@@ -3961,6 +3956,11 @@ class vmmDetails(vmmGObjectUI):
                 os.remove("/tmp/vmm-a11y-xml.txt")
             except Exception:
                 pass
+            if pagetype is HW_LIST_TYPE_DISK:
+                try:
+                    os.remove("/tmp/vmm-a11y-media-browse.txt")
+                except Exception:
+                    pass
             if pagetype is HW_LIST_TYPE_BOOT:
                 for path in (
                     "/tmp/vmm-a11y-boot-init-path.txt",
@@ -4812,6 +4812,13 @@ class vmmDetails(vmmGObjectUI):
                 if getattr(self, "_ui_refreshing", False):
                     return False
                 if self._active_edits == [EDIT_DISK_PATH]:
+                    pending = ""
+                    try:
+                        pending = getattr(self._mediacombo, "_a11y_path", None) or ""
+                    except Exception:
+                        pending = ""
+                    if pending:
+                        return False
                     self._disable_apply()
                 return False
 
@@ -5315,6 +5322,33 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         if is_removable:
+            pending = ""
+            try:
+                pending = getattr(self._mediacombo, "_a11y_path", None) or ""
+            except Exception:
+                pending = ""
+            if not pending:
+                try:
+                    pending = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+                except Exception:
+                    pending = ""
+            user_pending = False
+            try:
+                user_pending = EDIT_DISK_PATH in getattr(self, "_active_edits", [])
+            except Exception:
+                user_pending = False
+            if not user_pending:
+                try:
+                    user_pending = (
+                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        .read()
+                        .strip()
+                        == "1"
+                    )
+                except Exception:
+                    user_pending = False
+            if user_pending and pending and pending != (path or ""):
+                path = pending
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
             try:
