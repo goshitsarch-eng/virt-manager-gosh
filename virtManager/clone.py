@@ -972,7 +972,7 @@ class vmmCloneVM(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-window-close.txt"
                 if os.path.exists(path):
                     want = open(path, "r").read().strip()
-                    if "Clone" in want:
+                    if "Clone Virtual Machine" in want:
                         os.remove(path)
                         self.close()
                         open("/tmp/vmm-a11y-window-close-done", "w").write("1")
