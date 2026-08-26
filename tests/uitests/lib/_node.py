@@ -4333,17 +4333,19 @@ class _SentinelWizardField(object):
     def set_text(self, text):
         want = text if text is not None else ""
         try:
-            open(self._path, "w").write(want)
             open(self._path + ".set", "w").write(want)
         except Exception:
             pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
             try:
-                if open(self._path, "r").read() == want:
-                    return
+                applied = not os.path.exists(self._path + ".set")
+                got = open(self._path, "r").read()
             except Exception:
-                pass
+                applied = False
+                got = ""
+            if applied and got == want:
+                return
             time.sleep(0.05)
 
     def typeText(self, string):

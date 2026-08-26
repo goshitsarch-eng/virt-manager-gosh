@@ -445,9 +445,24 @@ class vmmCreateVolume(vmmGObjectUI):
         except Exception:
             pass
 
+    def _a11y_load_pending_xml(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+
     def _a11y_finish(self):
         try:
             self._apply_createvol_fields()
+            self._a11y_load_pending_xml()
             self._finish()
             self._publish_a11y_state()
         except Exception:
@@ -488,7 +503,15 @@ class vmmCreateVolume(vmmGObjectUI):
 
         def _fields_tick():
             try:
-                self._apply_createvol_fields()
+                if self._apply_createvol_fields():
+                    for path in (
+                        _CREATEVOL_NAME + ".set",
+                        _CREATEVOL_BACKING + ".set",
+                    ):
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
                 self._publish_a11y_state()
             except Exception:
                 pass

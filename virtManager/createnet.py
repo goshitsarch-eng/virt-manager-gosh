@@ -653,9 +653,24 @@ class vmmCreateNetwork(vmmGObjectUI):
         uiutil.set_list_selection(combo, best, column=column)
         return True
 
+    def _a11y_load_pending_xml(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+
     def _a11y_finish(self):
         try:
             self._apply_createnet_fields()
+            self._a11y_load_pending_xml()
             self.finish(None)
             self._publish_a11y_state()
         except Exception:
@@ -670,6 +685,21 @@ class vmmCreateNetwork(vmmGObjectUI):
         def _fields_tick():
             try:
                 if self._apply_createnet_fields():
+                    for path in (
+                        "/tmp/vmm-a11y-createnet-name.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv4-network.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv4-start.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv4-end.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv6-network.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv6-start.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv6-end.txt.set",
+                        "/tmp/vmm-a11y-createnet-domain.txt.set",
+                        "/tmp/vmm-a11y-createnet-device.txt.set",
+                    ):
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
                     self._publish_a11y_state()
             except Exception:
                 pass
