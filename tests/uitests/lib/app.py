@@ -192,11 +192,13 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 try:
-                    text = open("/tmp/vmm-a11y-alert.txt", "r").read().strip()
-                    if text:
+                    title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+                    if name in title or (
+                        name == "Remove Disk" and "Remove" in title
+                    ):
                         from . import _node
 
-                        return _node._SentinelAlert(text)
+                        return _node._SentinelDeleteWindow(name)
                 except Exception:
                     pass
                 time.sleep(0.1)
