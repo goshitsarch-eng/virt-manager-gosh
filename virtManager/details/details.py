@@ -2071,9 +2071,24 @@ class vmmDetails(vmmGObjectUI):
             pass
         pagetype = None
         dev = None
+        want = ""
+        for path in (
+            "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-hw-select.txt",
+            "/tmp/vmm-a11y-hw-selected.txt",
+        ):
+            try:
+                want = open(path, "r").read().strip()
+            except Exception:
+                want = ""
+            if want:
+                break
 
         if not row:
             row = self._get_hw_row()
+            labeled = self._hw_row_for_label(want)
+            if labeled is not None:
+                row = labeled
         if row:
             pagetype = row[HW_LIST_COL_TYPE]
             dev = row[HW_LIST_COL_DEVICE]
@@ -2147,7 +2162,17 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                self._refresh_page()
+                labeled = self._hw_row_for_label(want) if want else None
+                if labeled is not None:
+                    self._ui_refreshing = True
+                    try:
+                        self._refresh_page_body(labeled)
+                    finally:
+                        self._ui_refreshing = False
+                    if labeled[HW_LIST_COL_TYPE] == HW_LIST_TYPE_CPU:
+                        self._publish_cpu_fields()
+                else:
+                    self._refresh_page()
             except Exception:
                 pass
             try:

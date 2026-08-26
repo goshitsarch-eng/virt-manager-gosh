@@ -2558,6 +2558,7 @@ def _start_combo_select_poll(createconn):
                 "Cache mode:",
                 "Discard mode:",
                 "Portgroup:",
+                "cpu-model",
             ):
                 return True
             try:
