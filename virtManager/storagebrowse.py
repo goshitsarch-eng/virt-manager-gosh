@@ -112,6 +112,8 @@ class vmmStorageBrowser(vmmGObjectUI):
                 pass
 
             def _refresh_vols():
+                if getattr(self, "_vmm_browse_hidden", False):
+                    return
                 try:
                     open("/tmp/vmm-a11y-vol-refresh", "w").write("1")
                 except Exception:

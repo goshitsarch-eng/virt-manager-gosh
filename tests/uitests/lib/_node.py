@@ -1087,6 +1087,14 @@ class _SentinelMethodRadio(object):
             open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
         except Exception:
             pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-method-active.txt", "r").read().strip() == self._key:
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
 
 
 def _sentinel_method_radio(name, roleName):
