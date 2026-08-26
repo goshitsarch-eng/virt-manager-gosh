@@ -1561,14 +1561,13 @@ def _oslist_show_popovers(oslist):
         reopen = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
     except Exception:
         reopen = False
-    if not reopen:
-        try:
-            if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") and os.path.exists(
-                "/tmp/vmm-a11y-oslist-confirmed"
-            ):
-                return
-        except Exception:
-            pass
+    try:
+        if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") and os.path.exists(
+            "/tmp/vmm-a11y-oslist-confirmed"
+        ):
+            return
+    except Exception:
+        pass
     try:
         text = (oslist.search_entry.get_text() or "").strip()
         if not text:

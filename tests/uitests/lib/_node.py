@@ -493,6 +493,10 @@ class _OslistRowSentinel(object):
             open("/tmp/vmm-a11y-os-select.txt", "w").write(want)
             open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
             open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+            try:
+                os.remove("/tmp/vmm-a11y-oslist-reopen")
+            except Exception:
+                pass
         except Exception:
             pass
         deadline = time.time() + 3.0
