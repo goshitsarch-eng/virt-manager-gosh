@@ -5903,6 +5903,8 @@ class _SentinelVMWindow(object):
 
     @property
     def active(self):
+        if _vmwindow_open():
+            return True
         return self.showing
 
     def grab_focus(self, *args, **kwargs):

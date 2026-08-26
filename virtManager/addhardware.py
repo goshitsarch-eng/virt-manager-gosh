@@ -1961,11 +1961,11 @@ class vmmAddHardware(vmmGObjectUI):
             except Exception:
                 return ""
         strings = []
-        for idx in range(len(row)):
+        for idx in range(8):
             try:
                 val = row[idx]
             except Exception:
-                continue
+                break
             if isinstance(val, str) and val:
                 strings.append(val)
         if strings:
@@ -2156,36 +2156,39 @@ class vmmAddHardware(vmmGObjectUI):
             open(_ADDHW_HOSTDEV_SELECTED, "w").write(selected)
         except Exception:
             pass
-        try:
-            keys = (
-                "Type:",
-                "Model:",
-                "Device type:",
-                "Bus type:",
-                "net-source",
-                "Device model:",
-                "Portgroup:",
-                "Listen type:",
-                "Address:",
-                "graphics-rendernode",
-                "Startup Policy:",
-                "Device Type:",
-                "char-target-name",
-                "Action:",
-                "Mode:",
-                "Driver:",
-                "Format:",
-                "Cache mode:",
-                "Discard mode:",
-            )
-            lines = []
-            for key in keys:
+        lines = []
+        keys = (
+            "Type:",
+            "Model:",
+            "Device type:",
+            "Bus type:",
+            "net-source",
+            "Device model:",
+            "Portgroup:",
+            "Listen type:",
+            "Address:",
+            "graphics-rendernode",
+            "Startup Policy:",
+            "Device Type:",
+            "char-target-name",
+            "Action:",
+            "Mode:",
+            "Driver:",
+            "Format:",
+            "Cache mode:",
+            "Discard mode:",
+        )
+        for key in keys:
+            try:
                 wid = self._a11y_combo_widget_name(key)
                 if not wid:
                     continue
                 label = self._a11y_combo_label(wid)
                 if label:
                     lines.append("%s\t%s" % (key, label))
+            except Exception:
+                pass
+        try:
             last_key = getattr(self, "_vmm_addhw_last_combo_key", "")
             last_label = getattr(self, "_vmm_addhw_last_combo_label", "")
             if last_key and last_label:
@@ -2319,16 +2322,26 @@ class vmmAddHardware(vmmGObjectUI):
                         item = item.strip()
                         wid = self._a11y_combo_widget_name(key)
                         handled = False
+                        err = ""
                         if wid:
-                            col = 0
-                            if wid == "net-source":
-                                col = 0
-                            handled = self._a11y_select_combo(wid, item, column=col)
+                            try:
+                                handled = self._a11y_select_combo(wid, item, column=0)
+                            except Exception as exc:
+                                err = str(exc)
+                                handled = False
                         if handled:
                             os.remove(_ADDHW_COMBO)
                             self._vmm_addhw_last_combo_key = key
                             self._vmm_addhw_last_combo_label = self._a11y_combo_label(wid)
                             self._publish_a11y_state()
+                        else:
+                            try:
+                                open("/tmp/vmm-a11y-addhw-combo-debug.txt", "w").write(
+                                    "key=%s item=%s wid=%s page=%s err=%s"
+                                    % (key, item, wid, self._a11y_current_page(), err)
+                                )
+                            except Exception:
+                                pass
             except Exception:
                 pass
             try:
