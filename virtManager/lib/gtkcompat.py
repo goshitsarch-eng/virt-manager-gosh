@@ -2560,6 +2560,7 @@ def expose_storagebrowse_window(browser):
 
                 btn.connect("clicked", _pick_pool)
                 host.append(btn)
+        vols = []
         if vmodel is not None:
             for row in vmodel:
                 try:
@@ -2585,6 +2586,12 @@ def expose_storagebrowse_window(browser):
 
                 btn.connect("clicked", _pick_vol)
                 host.append(btn)
+                vols.append(name)
+        try:
+            open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
+            open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
+        except Exception:
+            pass
         choose = Gtk.Button(label="Choose Volume")
         choose.set_accessible_role(Gtk.AccessibleRole.BUTTON)
         ensure_activate_clicked(choose)
@@ -2648,6 +2655,10 @@ def hide_storagebrowse_window(browser):
     try:
         set_accessible_name(win, "vmm-storage-browser (hidden)")
         win.set_title("vmm-storage-browser (hidden)")
+        try:
+            open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+        except Exception:
+            pass
     except Exception:
         pass
     try:

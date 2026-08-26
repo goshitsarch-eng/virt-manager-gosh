@@ -684,6 +684,15 @@ class _SentinelClickButton(object):
             open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
         except Exception:
             pass
+        if self.name == "Browse":
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
 
 
 class _SentinelBootstrapCheck(object):
@@ -1826,6 +1835,64 @@ def _sentinel_xml_widgets(name, roleName):
         pretty = "XML" if compact == "xml" else "Details"
         return _SentinelXmlPageTab(pretty)
     return None
+
+
+class _SentinelStorageBrowser(object):
+    """Storage browser after GetItems hides the add_window surface."""
+
+    name = "vmm-storage-browser"
+    roleName = "dialog"
+
+    def _vols(self):
+        try:
+            return open("/tmp/vmm-a11y-vol-list.txt", "r").read().splitlines()
+        except Exception:
+            return []
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable)
+        want = str(name or "").replace(".*", "")
+        deadline = time.time() + max(0.1, float(timeout))
+        while time.time() < deadline:
+            for vol in self._vols():
+                if want and want in vol:
+                    return _SentinelTableCell(vol)
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
 
 
 class _SentinelProgressWindow(object):
@@ -3587,6 +3654,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         if name and "creating virtual machine" in str(name).lower():
             return _SentinelProgressWindow(str(name).replace(".*", ""))
+        if name and "vmm-storage-browser" in str(name).lower():
+            return _SentinelStorageBrowser()
         try:
             sent = _sentinel_oslist_entry(name, roleName)
             if sent is not None:
