@@ -512,6 +512,41 @@ def main():
         dialog.add_buttons("_Cancel", Gtk.ResponseType.REJECT, "_OK", Gtk.ResponseType.ACCEPT)
         assert dialog.get_widget_for_response(Gtk.ResponseType.ACCEPT) or True
 
+    def window_accel_and_resize():
+        from virtManager.lib import gtkcompat
+        from gi.repository import Gtk
+
+        win = Gtk.Window(title="accel-resize")
+        win.set_default_size(240, 180)
+        close_item = gtkcompat.MenuItem(label="_Close")
+        activated = []
+        close_item.connect("clicked", lambda *_a: activated.append("close"))
+        group = gtkcompat.AccelGroup()
+        group.add_shortcut("<Shift><Control>w", lambda: gtkcompat._activate_builder_item(close_item))
+        gtkcompat._accel_group_enable(win, group)
+        groups = Gtk.accel_groups_from_object(win)
+        assert groups and groups[0] is group
+        gtkcompat._activate_builder_item(close_item)
+        assert activated == ["close"]
+        gtkcompat._accel_group_disable(win, group)
+        assert group._controller is None
+        gtkcompat._accel_group_enable(win, group)
+        assert group._controller is not None
+        settings = Gtk.Settings.get_default()
+        settings.set_property("gtk-menu-bar-accel", None)
+        assert settings.get_property("gtk-menu-bar-accel") is None
+        settings.set_property("gtk-menu-bar-accel", "F10")
+        assert settings.get_property("gtk-menu-bar-accel") == "F10"
+        from gi.repository import Gdk
+
+        clip = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
+        clip.set_text("primary-text", -1)
+        assert clip._xclip_sel == "primary"
+        win.resize(320, 240)
+        assert win.get_size()[0] >= 1 and win.get_size()[1] >= 1
+        win.resize(1, 1)
+        win.close()
+
     def createconn_hypervisors():
         from virtManager.createconn import vmmCreateConn
 
@@ -959,6 +994,42 @@ def main():
         assert disp._cursor_surface is not None
         assert disp._cursor_pixels[3] == 255
         assert disp._cursor_pixels[7] == 0
+        # LastRect ends the update; DesktopName carries a UTF-8 title
+        disp._read_fb_update(
+            FakeSock(
+                b"\x00"
+                + st.pack("!H", 2)
+                + st.pack("!HHHHi", 0, 0, 0, 0, -307)
+                + st.pack("!I", 7)
+                + b"guest42"
+                + st.pack("!HHHHi", 0, 0, 0, 0, -224)
+            ),
+            4,
+            4,
+        )
+        assert disp._name == "guest42"
+        # XCursor: fg red, bg blue, bitmap+mask one visible pixel
+        xc = st.pack("!HHHHi", 3, 4, 1, 1, -232)
+        xc += b"\xff\x00\x00" + b"\x00\x00\xff" + b"\x80" + b"\x80"
+        disp._read_fb_update(FakeSock(b"\x00" + st.pack("!H", 1) + xc), 4, 4)
+        assert disp._cursor_hot == (3, 4)
+        assert disp._cursor_pixels[2] == 255
+        assert disp._cursor_pixels[3] == 255
+        disp.set_allow_resize(True)
+        assert disp.get_allow_resize()
+        disp.set_allow_resize(False)
+        assert not disp.get_allow_resize()
+        sent = []
+
+        class _Cap:
+            def sendall(self, data):
+                sent.append(data)
+
+        disp._sock = _Cap()
+        disp._open = True
+        disp._qemu_ext_key = True
+        disp._send_key(97, 0, True)
+        assert sent and sent[0][:2] == b"\xff\x00"
         disp.close()
         spice = gtk4display.SpiceDisplay(None)
         from gi.repository import Gdk as _Gdk
@@ -1747,6 +1818,7 @@ def main():
         ("xmleditor_pages", xmleditor_pages),
         ("console_pages", console_pages),
         ("preferences_grabkeys_widgets", preferences_grabkeys_widgets),
+        ("window_accel_and_resize", window_accel_and_resize),
         ("createconn_hypervisors", createconn_hypervisors),
         ("storagebrowse_reasons", storagebrowse_reasons),
         ("clone_storage_dialog", clone_storage_dialog),

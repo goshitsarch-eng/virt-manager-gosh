@@ -255,7 +255,12 @@ def _xdotool_geometry(xid):
         if "=" in line:
             key, val = line.split("=", 1)
             vals[key.strip()] = val.strip()
-    return int(vals["X"]), int(vals["Y"])
+    return (
+        int(vals["X"]),
+        int(vals["Y"]),
+        int(vals.get("WIDTH", 0) or 0),
+        int(vals.get("HEIGHT", 0) or 0),
+    )
 
 
 def _window_get_position(window):
@@ -267,11 +272,32 @@ def _window_get_position(window):
             pass
         try:
             pos = _xdotool_geometry(xid)
-            window._vmm_win_pos = pos
-            return pos
+            window._vmm_win_pos = pos[:2]
+            if pos[2] > 0 and pos[3] > 0:
+                window._vmm_win_size = pos[2:4]
+            return pos[:2]
         except Exception:
             pass
     return getattr(window, "_vmm_win_pos", (0, 0))
+
+
+def _window_get_size(window):
+    xid = _window_xid(window)
+    if xid:
+        try:
+            _x, _y, width, height = _xdotool_geometry(xid)
+            if width > 0 and height > 0:
+                window._vmm_win_size = (width, height)
+                return (width, height)
+        except Exception:
+            pass
+    stored = getattr(window, "_vmm_win_size", None)
+    if stored and stored[0] > 1 and stored[1] > 1:
+        return stored
+    try:
+        return (max(1, int(window.get_width())), max(1, int(window.get_height())))
+    except Exception:
+        return (1, 1)
 
 
 def _window_move(window, x, y):
@@ -308,13 +334,250 @@ def _window_move(window, x, y):
             time.sleep(0.05)
             got = _xdotool_geometry(xid)
             if abs(got[0] - want[0]) <= 2 and abs(got[1] - want[1]) <= 2:
-                window._vmm_win_pos = got
+                window._vmm_win_pos = got[:2]
                 return
             target_x = want[0] + (want[0] - got[0])
             target_y = want[1] + (want[1] - got[1])
         window._vmm_win_pos = want
     except Exception:
         pass
+
+
+def _window_resize(window, width, height):
+    """
+    GTK 3 gtk_window_resize() changes a mapped window. GTK 4 only has
+    set_default_size(), which does not always update the on-screen size
+    (livetests compare AT-SPI geometry after View -> Resize to VM).
+
+    resize(1, 1) is the GTK 3 shrink-wrap trick used by dialogs; do not
+    force a 1x1 X11 window in that case.
+    """
+    width = max(1, int(width))
+    height = max(1, int(height))
+    try:
+        window.set_default_size(width, height)
+    except Exception:
+        pass
+    if width <= 1 or height <= 1:
+        window._vmm_win_size = None
+        return
+    window._vmm_win_size = (width, height)
+    xid = _window_xid(window)
+    if not xid:
+        return
+    try:
+        import subprocess
+        import time
+
+        for _try in range(8):
+            subprocess.check_call(
+                [
+                    "xdotool",
+                    "windowsize",
+                    hex(int(xid)),
+                    str(width),
+                    str(height),
+                ],
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.05)
+            _x, _y, got_w, got_h = _xdotool_geometry(xid)
+            if abs(got_w - width) <= 4 and abs(got_h - height) <= 4:
+                window._vmm_win_size = (got_w, got_h)
+                return
+        window._vmm_win_size = (width, height)
+    except Exception:
+        pass
+
+
+# GTK 4 dropped gtk-menu-bar-accel / gtk-enable-mnemonics. Console grab
+# disables those settings so guest Ctrl+Shift+W / F10 / Alt+F reach the VM.
+_GTK_SETTINGS_OVERRIDES = {}
+
+
+class AccelGroup:
+    """GTK 3 accel group stand-in: a Gtk.ShortcutController we can detach."""
+
+    def __init__(self):
+        self._shortcuts = []
+        self._controller = None
+        self._window = None
+
+    def add_shortcut(self, trigger, callback):
+        self._shortcuts.append((trigger, callback))
+
+# GTK 3 .ui accelerators stripped by convert_ui_gtk4.py
+_BUILDER_WINDOW_ACCELS = {
+    "vmm-vmwindow": (
+        ("<Shift><Control>w", "close4"),
+        ("<Shift><Control>q", "quit3"),
+    ),
+    "vmm-manager": (
+        ("<Control>w", "menu_file_close"),
+        ("<Control>q", "menu_file_quit"),
+    ),
+    "vmm-host": (
+        ("<Control>w", "menu-file-close"),
+        ("<Control>q", "menu-file-quit"),
+    ),
+}
+
+
+def accel_groups_from_object(obj):
+    return list(getattr(obj, "_vmm_accel_groups", None) or [])
+
+
+def _accel_group_enable(window, group):
+    if group is None or window is None:
+        return
+    groups = list(getattr(window, "_vmm_accel_groups", None) or [])
+    if group not in groups:
+        groups.append(group)
+    window._vmm_accel_groups = groups
+    if getattr(group, "_controller", None) is not None:
+        return
+    sc = Gtk.ShortcutController()
+    try:
+        sc.set_scope(Gtk.ShortcutScope.GLOBAL)
+    except Exception:
+        pass
+    for trigger_str, callback in list(getattr(group, "_shortcuts", None) or []):
+        trigger = Gtk.ShortcutTrigger.parse_string(trigger_str)
+        if trigger is None:
+            continue
+
+        def _run(*_a, cb=callback):
+            try:
+                return bool(cb())
+            except Exception:
+                return False
+
+        sc.add_shortcut(Gtk.Shortcut.new(trigger, Gtk.CallbackAction.new(_run)))
+    window.add_controller(sc)
+    group._controller = sc
+    group._window = window
+
+
+def _accel_group_disable(window, group):
+    if group is None:
+        return
+    sc = getattr(group, "_controller", None)
+    if sc is None:
+        return
+    try:
+        (window or getattr(group, "_window", None)).remove_controller(sc)
+    except Exception:
+        pass
+    group._controller = None
+
+
+def _activate_builder_item(item):
+    if item is None:
+        return False
+    for meth in ("activate", "emit"):
+        try:
+            if meth == "emit":
+                item.emit("clicked")
+            else:
+                item.activate()
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def _menubar_accel_active():
+    val = _GTK_SETTINGS_OVERRIDES.get("gtk-menu-bar-accel", "F10")
+    return bool(val)
+
+
+def _open_first_menubar_menu(window, builder=None):
+    if not _menubar_accel_active():
+        return False
+    bar = None
+    if builder is not None:
+        for name in ("details-menubar", "menubar1", "menubar"):
+            try:
+                bar = builder.get_object(name)
+            except Exception:
+                bar = None
+            if bar is not None:
+                break
+    if bar is None:
+        return False
+    items = list(getattr(bar, "_items", None) or [])
+    if not items and hasattr(bar, "get_first_child"):
+        child = bar.get_first_child()
+        while child is not None:
+            items.append(child)
+            child = child.get_next_sibling() if hasattr(child, "get_next_sibling") else None
+    if not items:
+        return False
+    first = items[0]
+    submenu = getattr(first, "_submenu", None)
+    if submenu is None:
+        try:
+            first.activate()
+        except Exception:
+            return False
+        return True
+    try:
+        submenu.popup_at_widget(first)
+        bar._vmm_open_item = first
+    except Exception:
+        return False
+    return True
+
+
+def install_window_accelerators(builder, window, windowname=None):
+    """
+    Reinstall the GTK 3 File->Close / Quit accelerators as GTK 4 shortcuts
+    so Ctrl+W / Ctrl+Shift+W still close windows, and so console grab can
+    detach them via remove_accel_group().
+    """
+    if window is None or builder is None:
+        return None
+    if getattr(window, "_vmm_accels_installed", False):
+        return getattr(window, "_vmm_accel_groups", [None])[0]
+    name = windowname
+    if not name:
+        try:
+            name = Gtk.Buildable.get_buildable_id(window)
+        except Exception:
+            name = None
+    mapping = _BUILDER_WINDOW_ACCELS.get(name or "")
+    group = AccelGroup()
+    if mapping:
+        for trigger, widget_id in mapping:
+            item = builder.get_object(widget_id)
+            if item is None:
+                continue
+            group.add_shortcut(trigger, lambda it=item: _activate_builder_item(it))
+    try:
+        f10 = Gtk.ShortcutTrigger.parse_string("F10")
+        if f10 is not None:
+            sc = Gtk.ShortcutController()
+            try:
+                sc.set_scope(Gtk.ShortcutScope.GLOBAL)
+            except Exception:
+                pass
+            sc.add_shortcut(
+                Gtk.Shortcut.new(
+                    f10,
+                    Gtk.CallbackAction.new(
+                        lambda *_a: _open_first_menubar_menu(window, builder)
+                    ),
+                )
+            )
+            window.add_controller(sc)
+    except Exception:
+        pass
+    window._vmm_accel_groups = [group]
+    window._vmm_accels_installed = True
+    _accel_group_enable(window, group)
+    return group
 
 
 def _publish_window_state_marker(window, hidden):
@@ -6777,7 +7040,7 @@ def _patch_widget_methods():
     if not hasattr(Gtk.Window, "get_size"):
 
         def get_size(self):
-            return (self.get_width(), self.get_height())
+            return _window_get_size(self)
 
         Gtk.Window.get_size = get_size
 
@@ -6847,7 +7110,7 @@ def _patch_widget_methods():
         Gtk.Widget.get_allocation = get_allocation
 
     def resize(self, width, height):
-        self.set_default_size(max(1, int(width)), max(1, int(height)))
+        _window_resize(self, width, height)
 
     Gtk.Window.resize = resize
 
@@ -6856,10 +7119,12 @@ def _patch_widget_methods():
 
     Gtk.Window.set_type_hint = set_type_hint
 
-    def add_accel_group(self, *_args):
+    def add_accel_group(self, group, *_args):
+        _accel_group_enable(self, group)
         return None
 
-    def remove_accel_group(self, *_args):
+    def remove_accel_group(self, group, *_args):
+        _accel_group_disable(self, group)
         return None
 
     Gtk.Window.add_accel_group = add_accel_group
@@ -6973,11 +7238,24 @@ def _patch_widget_methods():
 
             return self.add_tick_callback(_tick)
         if signal == "configure-event":
+            last = [None]
 
             def _on_notify(w, *_a):
                 callback(w, None, *args)
 
-            return orig_connect(self, "notify::default-width", _on_notify)
+            def _tick(w, _clock):
+                try:
+                    alloc = (w.get_width(), w.get_height())
+                except Exception:
+                    alloc = None
+                if alloc and alloc != last[0] and alloc[0] > 0 and alloc[1] > 0:
+                    last[0] = alloc
+                    callback(w, None, *args)
+                return True
+
+            orig_connect(self, "notify::default-width", _on_notify)
+            orig_connect(self, "notify::default-height", _on_notify)
+            return self.add_tick_callback(_tick)
         if signal == "button-press-event":
             gesture = Gtk.GestureClick()
             gesture.set_button(0)
@@ -7156,7 +7434,8 @@ def _install_stock_and_enums():
 
     Gtk.EntryIconPosition = _EntryIconPosition
     Gtk.get_current_event = _get_current_event
-    Gtk.accel_groups_from_object = lambda _obj: []
+    Gtk.AccelGroup = AccelGroup
+    Gtk.accel_groups_from_object = accel_groups_from_object
 
     if not hasattr(Gdk, "SELECTION_CLIPBOARD"):
         Gdk.SELECTION_CLIPBOARD = "CLIPBOARD"
@@ -7166,13 +7445,24 @@ def _install_stock_and_enums():
     if not hasattr(Gtk, "Clipboard"):
 
         class Clipboard:
-            def __init__(self, display=None):
+            def __init__(self, display=None, selection=None):
                 self._display = display or Gdk.Display.get_default()
-                self._clip = self._display.get_clipboard() if self._display else None
+                self._selection = selection
+                primary = selection in (
+                    getattr(Gdk, "SELECTION_PRIMARY", "PRIMARY"),
+                    "PRIMARY",
+                )
+                self._xclip_sel = "primary" if primary else "clipboard"
+                self._clip = None
+                if self._display is not None:
+                    if primary and hasattr(self._display, "get_primary_clipboard"):
+                        self._clip = self._display.get_primary_clipboard()
+                    else:
+                        self._clip = self._display.get_clipboard()
 
             @staticmethod
-            def get(_selection=None):
-                return Clipboard()
+            def get(selection=None):
+                return Clipboard(selection=selection)
 
             @staticmethod
             def get_default(_display=None):
@@ -7183,17 +7473,16 @@ def _install_stock_and_enums():
                     open("/tmp/vmm-a11y-clipboard.txt", "w").write(text or "")
                 except Exception:
                     pass
-                if self._clip is None:
-                    return
-                try:
-                    self._clip.set(text or "")
-                except Exception:
-                    pass
+                if self._clip is not None:
+                    try:
+                        self._clip.set(text or "")
+                    except Exception:
+                        pass
                 try:
                     import subprocess
 
                     proc = subprocess.Popen(
-                        ["xclip", "-selection", "clipboard"],
+                        ["xclip", "-selection", self._xclip_sel],
                         stdin=subprocess.PIPE,
                     )
                     proc.communicate((text or "").encode("utf-8"))
@@ -7211,7 +7500,7 @@ def _install_stock_and_enums():
                     import subprocess
 
                     out = subprocess.check_output(
-                        ["xclip", "-selection", "clipboard", "-o"],
+                        ["xclip", "-selection", self._xclip_sel, "-o"],
                         timeout=1,
                     )
                     return out.decode("utf-8", "replace")
@@ -7243,6 +7532,8 @@ def _install_stock_and_enums():
     orig_settings_set = Gtk.Settings.set_property
 
     def settings_get_property(self, name):
+        if name in _GTK_SETTINGS_OVERRIDES:
+            return _GTK_SETTINGS_OVERRIDES[name]
         try:
             return orig_settings_get(self, name)
         except TypeError:
@@ -7253,6 +7544,8 @@ def _install_stock_and_enums():
             raise
 
     def settings_set_property(self, name, value):
+        if name in ("gtk-menu-bar-accel", "gtk-enable-mnemonics"):
+            _GTK_SETTINGS_OVERRIDES[name] = value
         try:
             return orig_settings_set(self, name, value)
         except TypeError:

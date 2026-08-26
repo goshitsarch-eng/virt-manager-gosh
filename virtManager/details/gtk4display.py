@@ -42,6 +42,12 @@ _VNC_ENC_TIGHT = 7
 _VNC_ENC_TRLE = 15
 _VNC_ENC_ZRLE = 16
 _VNC_ENC_CURSOR = -239
+_VNC_ENC_XCURSOR = -232
+_VNC_ENC_LASTRECT = -224
+_VNC_ENC_DESKTOPNAME = -307
+_VNC_ENC_QEMU_EXT_KEY = -258
+_VNC_MSG_CLIENT_QEMU = 255
+_VNC_QEMU_EXT_KEY = 0
 _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
 _VNC_SEC_VENCRYPT = 19
@@ -67,26 +73,87 @@ _VNC_VENCRYPT_PLAIN_AUTH = (
 )
 _VNC_VENCRYPT_VNC_AUTH = (_VNC_VENCRYPT_TLSVNC, _VNC_VENCRYPT_X509VNC)
 
-# Linux evdev codes used by SpiceClientGLib.inputs_key_press.
-# Gdk hardware keycodes on X11 are typically evdev + 8.
+# Linux evdev codes used by SpiceClientGLib.inputs_key_press and QEMU
+# VNC extended key events. Gdk hardware keycodes on X11 are evdev + 8.
 _SPICE_EVDEV = {
     Gdk.KEY_Escape: 1,
     Gdk.KEY_BackSpace: 14,
     Gdk.KEY_Tab: 15,
     Gdk.KEY_Return: 28,
+    Gdk.KEY_KP_Enter: 96,
     Gdk.KEY_Control_L: 29,
     Gdk.KEY_Control_R: 97,
     Gdk.KEY_Shift_L: 42,
     Gdk.KEY_Shift_R: 54,
     Gdk.KEY_Alt_L: 56,
     Gdk.KEY_Alt_R: 100,
+    Gdk.KEY_Meta_L: 125,
+    Gdk.KEY_Meta_R: 126,
+    Gdk.KEY_Super_L: 125,
+    Gdk.KEY_Super_R: 126,
+    Gdk.KEY_Menu: 127,
     Gdk.KEY_space: 57,
-    Gdk.KEY_Delete: 111,
+    Gdk.KEY_Caps_Lock: 58,
+    Gdk.KEY_Num_Lock: 69,
+    Gdk.KEY_Scroll_Lock: 70,
     Gdk.KEY_Print: 99,
     Gdk.KEY_Sys_Req: 99,
+    Gdk.KEY_Home: 102,
+    Gdk.KEY_Up: 103,
+    Gdk.KEY_Page_Up: 104,
+    Gdk.KEY_Left: 105,
+    Gdk.KEY_Right: 106,
+    Gdk.KEY_End: 107,
+    Gdk.KEY_Down: 108,
+    Gdk.KEY_Page_Down: 109,
+    Gdk.KEY_Insert: 110,
+    Gdk.KEY_Delete: 111,
+    Gdk.KEY_minus: 12,
+    Gdk.KEY_equal: 13,
+    Gdk.KEY_bracketleft: 26,
+    Gdk.KEY_bracketright: 27,
+    Gdk.KEY_semicolon: 39,
+    Gdk.KEY_apostrophe: 40,
+    Gdk.KEY_grave: 41,
+    Gdk.KEY_backslash: 43,
+    Gdk.KEY_comma: 51,
+    Gdk.KEY_period: 52,
+    Gdk.KEY_slash: 53,
+    Gdk.KEY_KP_Multiply: 55,
+    Gdk.KEY_KP_Subtract: 74,
+    Gdk.KEY_KP_Add: 78,
+    Gdk.KEY_KP_Decimal: 83,
+    Gdk.KEY_KP_Divide: 98,
 }
 for _i in range(1, 13):
     _SPICE_EVDEV[getattr(Gdk, "KEY_F%d" % _i)] = 58 + _i
+for _digit, _code in (("1", 2), ("2", 3), ("3", 4), ("4", 5), ("5", 6),
+                      ("6", 7), ("7", 8), ("8", 9), ("9", 10), ("0", 11)):
+    _SPICE_EVDEV[getattr(Gdk, "KEY_%s" % _digit)] = _code
+    _SPICE_EVDEV[getattr(Gdk, "KEY_KP_%s" % _digit)] = {
+        "1": 79, "2": 80, "3": 81, "4": 75, "5": 76,
+        "6": 77, "7": 71, "8": 72, "9": 73, "0": 82,
+    }[_digit]
+for _letter, _code in zip(
+    "QWERTYUIOPASDFGHJKLZXCVBNM",
+    (
+        16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        30, 31, 32, 33, 34, 35, 36, 37, 38,
+        44, 45, 46, 47, 48, 49, 50,
+    ),
+):
+    _SPICE_EVDEV[getattr(Gdk, "KEY_%s" % _letter)] = _code
+    _SPICE_EVDEV[getattr(Gdk, "KEY_%s" % _letter.lower())] = _code
+
+
+def _linux_scancode(keyval, keycode):
+    mapped = _SPICE_EVDEV.get(int(keyval or 0))
+    if mapped:
+        return mapped
+    if keycode and int(keycode) > 8:
+        return int(keycode) - 8
+    return int(keyval or 0)
+
 
 try:
     gi.require_foreign("cairo")
@@ -392,6 +459,12 @@ class _DisplayBase(Gtk.DrawingArea):
     def set_force_size(self, val):
         self._force_size = bool(val)
 
+    def set_allow_resize(self, val):
+        self.set_property("resize-guest", bool(val))
+
+    def get_allow_resize(self):
+        return bool(self.get_property("resize-guest"))
+
     def set_grab_keys(self, seq):
         self._grab_keys = seq or GrabSequence()
 
@@ -477,6 +550,7 @@ class VNCDisplay(_DisplayBase):
         self._tight_z = [None, None, None, None]
         self._zrle_z = None
         self._buttons = 0
+        self._qemu_ext_key = False
 
     def set_credential(self, cred, value):
         name = str(cred).upper()
@@ -537,12 +611,24 @@ class VNCDisplay(_DisplayBase):
             pass
 
     def _send_key(self, keyval, keycode, pressed):
-        ignore = keycode
         sock = self._sock
         if not sock or not self._open:
             return
         try:
-            sock.sendall(struct.pack("!BBxxI", 4, 1 if pressed else 0, int(keyval)))
+            if self._qemu_ext_key:
+                scancode = _linux_scancode(keyval, keycode)
+                sock.sendall(
+                    struct.pack(
+                        "!BBHII",
+                        _VNC_MSG_CLIENT_QEMU,
+                        _VNC_QEMU_EXT_KEY,
+                        1 if pressed else 0,
+                        int(keyval or 0),
+                        int(scancode),
+                    )
+                )
+            else:
+                sock.sendall(struct.pack("!BBxxI", 4, 1 if pressed else 0, int(keyval or 0)))
         except Exception:
             pass
 
@@ -621,6 +707,9 @@ class VNCDisplay(_DisplayBase):
         )
         # SetEncodings: nEncodings is U16. Advertise common QEMU encodings.
         encodings = (
+            _VNC_ENC_QEMU_EXT_KEY,
+            _VNC_ENC_LASTRECT,
+            _VNC_ENC_DESKTOPNAME,
             _VNC_ENC_ZRLE,
             _VNC_ENC_TIGHT,
             _VNC_ENC_TRLE,
@@ -632,7 +721,9 @@ class VNCDisplay(_DisplayBase):
             _VNC_ENC_DESKTOPSIZE,
             _VNC_ENC_EXTENDED_DESKTOPSIZE,
             _VNC_ENC_CURSOR,
+            _VNC_ENC_XCURSOR,
         )
+        self._qemu_ext_key = True
         sock.sendall(struct.pack("!BBH", 2, 0, len(encodings)))
         for enc in encodings:
             sock.sendall(struct.pack("!i", enc))
@@ -1143,6 +1234,49 @@ class VNCDisplay(_DisplayBase):
             pass
         GLib.idle_add(self.queue_draw)
 
+    def _read_xcursor(self, sock, hotx, hoty, w, h):
+        fg = self._recv_n(sock, 3)
+        bg = self._recv_n(sock, 3)
+        rowmask = (max(w, 0) + 7) // 8
+        bitmap = self._recv_n(sock, rowmask * max(h, 0))
+        mask = self._recv_n(sock, rowmask * max(h, 0))
+        if w <= 0 or h <= 0 or cairo is None:
+            self._cursor_surface = None
+            self._cursor_pixels = None
+            return
+
+        def _bit(data, row, col):
+            idx = row * rowmask + (col // 8)
+            if idx >= len(data):
+                return False
+            return bool((data[idx] >> (7 - (col % 8))) & 1)
+
+        pixels = bytearray(w * h * 4)
+        for row in range(h):
+            for col in range(w):
+                if not _bit(mask, row, col):
+                    continue
+                src = (row * w + col) * 4
+                color = fg if _bit(bitmap, row, col) else bg
+                # cairo ARGB32 little-endian stores B,G,R,A
+                pixels[src] = color[2]
+                pixels[src + 1] = color[1]
+                pixels[src + 2] = color[0]
+                pixels[src + 3] = 255
+        self._cursor_pixels = pixels
+        self._cursor_hot = (int(hotx), int(hoty))
+        try:
+            self._cursor_surface = cairo.ImageSurface.create_for_data(
+                memoryview(pixels), cairo.FORMAT_ARGB32, w, h, w * 4
+            )
+        except Exception:
+            self._cursor_surface = None
+        try:
+            self.set_cursor(Gdk.Cursor.new_from_name("none"))
+        except Exception:
+            pass
+        GLib.idle_add(self.queue_draw)
+
     def _publish_fb(self, width, height):
         if cairo is None:
             return
@@ -1156,6 +1290,18 @@ class VNCDisplay(_DisplayBase):
         nrects = struct.unpack("!H", self._recv_n(sock, 2))[0]
         for _ in range(nrects):
             x, y, w, h, enc = struct.unpack("!HHHHi", self._recv_n(sock, 12))
+            if enc == _VNC_ENC_LASTRECT:
+                break
+            if enc == _VNC_ENC_DESKTOPNAME:
+                nlen = struct.unpack("!I", self._recv_n(sock, 4))[0]
+                self._name = self._recv_n(sock, nlen).decode("utf-8", "replace")
+                continue
+            if enc == _VNC_ENC_QEMU_EXT_KEY:
+                self._qemu_ext_key = True
+                continue
+            if enc == _VNC_ENC_XCURSOR:
+                self._read_xcursor(sock, x, y, w, h)
+                continue
             if enc == _VNC_ENC_DESKTOPSIZE:
                 width, height = w, h
                 self._alloc_pixels(width, height)
@@ -1517,12 +1663,7 @@ class SpiceDisplay(_DisplayBase):
             return False
 
     def _spice_scancode(self, keyval, keycode):
-        mapped = _SPICE_EVDEV.get(int(keyval or 0))
-        if mapped:
-            return mapped
-        if keycode and int(keycode) > 8:
-            return int(keycode) - 8
-        return int(keyval or 0)
+        return _linux_scancode(keyval, keycode)
 
     def _send_key(self, keyval, keycode, pressed):
         if not self._inputs or SpiceClientGLib is None:

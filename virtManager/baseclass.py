@@ -409,6 +409,10 @@ class vmmGObjectUI(vmmGObject):
             try:
                 from .lib import gtkcompat
 
+                if filename and not self._external_topwin:
+                    gtkcompat.install_window_accelerators(
+                        self.builder, self.topwin, windowname
+                    )
                 gtkcompat.ensure_window_a11y_box(self.topwin)
                 title = ""
                 try:
