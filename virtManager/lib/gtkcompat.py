@@ -232,6 +232,62 @@ def _toplevel_base_title(window):
     )
 
 
+def _window_xid(window):
+    try:
+        surface = window.get_surface()
+        if surface is not None and hasattr(surface, "get_xid"):
+            return surface.get_xid()
+    except Exception:
+        pass
+    return None
+
+
+def _window_get_position(window):
+    xid = _window_xid(window)
+    if xid:
+        try:
+            import subprocess
+
+            out = subprocess.check_output(
+                ["xwininfo", "-id", hex(int(xid))],
+                text=True,
+                timeout=2,
+            )
+            x = y = None
+            for line in out.splitlines():
+                if "Absolute upper-left X" in line:
+                    x = int(line.split(":")[-1].strip())
+                elif "Absolute upper-left Y" in line:
+                    y = int(line.split(":")[-1].strip())
+            if x is not None and y is not None:
+                window._vmm_win_pos = (x, y)
+                return (x, y)
+        except Exception:
+            pass
+    return getattr(window, "_vmm_win_pos", (0, 0))
+
+
+def _window_move(window, x, y):
+    try:
+        window._vmm_win_pos = (int(x), int(y))
+    except Exception:
+        window._vmm_win_pos = (0, 0)
+    xid = _window_xid(window)
+    if not xid:
+        return
+    try:
+        import subprocess
+
+        subprocess.check_call(
+            ["xdotool", "windowmove", hex(int(xid)), str(int(x)), str(int(y))],
+            timeout=2,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
 def _publish_window_state_marker(window, hidden):
     """
     Always-mapped sidecar label. AT-SPI cache often keeps the real
@@ -6593,13 +6649,14 @@ def _patch_widget_methods():
     if not hasattr(Gtk.Window, "get_position"):
 
         def get_position(self):
-            return (0, 0)
+            return _window_get_position(self)
 
         Gtk.Window.get_position = get_position
 
     if not hasattr(Gtk.Window, "move"):
 
-        def move(self, *_args):
+        def move(self, x=0, y=0, *_args):
+            _window_move(self, x, y)
             return None
 
         Gtk.Window.move = move

@@ -225,6 +225,55 @@ class vmmManager(vmmGObjectUI):
             self._vmm_maximize_poll = True
             GLib.timeout_add(50, _maximize_tick)
 
+        def _close_tick():
+            path = "/tmp/vmm-a11y-window-close.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                want = open(path, "r").read().strip()
+            except Exception:
+                return True
+            try:
+                title = self.topwin.get_title() or ""
+            except Exception:
+                title = ""
+            for_manager = "Virtual Machine Manager" in want or (
+                want and want == title
+            )
+            if not for_manager:
+                return True
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            try:
+                self.close()
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_close_poll", False):
+            self._vmm_close_poll = True
+            GLib.timeout_add(50, _close_tick)
+
+        def _pos_tick():
+            try:
+                if self.is_visible():
+                    x, y = self.topwin.get_position()
+                    open("/tmp/vmm-a11y-manager-position.txt", "w").write("%s %s" % (x, y))
+                    open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_pos_poll", False):
+            self._vmm_pos_poll = True
+            GLib.timeout_add(200, _pos_tick)
+
         def _createconn_open_tick():
             path = "/tmp/vmm-a11y-createconn-open"
             try:
@@ -334,6 +383,10 @@ class vmmManager(vmmGObjectUI):
         except Exception:
             pass
         self.topwin.present()
+        try:
+            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
+        except Exception:
+            pass
         if vis:
             return
 
@@ -343,6 +396,11 @@ class vmmManager(vmmGObjectUI):
             self.prev_position = None
 
         vmmEngine.get_instance().increment_window_counter()
+        try:
+            x, y = self.topwin.get_position()
+            open("/tmp/vmm-a11y-manager-position.txt", "w").write("%s %s" % (x, y))
+        except Exception:
+            pass
 
     def close(self, src_ignore=None, src2_ignore=None):
         if not self.is_visible():
@@ -359,6 +417,10 @@ class vmmManager(vmmGObjectUI):
         except Exception:
             pass
         vmmEngine.get_instance().decrement_window_counter()
+        try:
+            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("0")
+        except Exception:
+            pass
 
         return 1
 

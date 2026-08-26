@@ -87,6 +87,23 @@ def _virt_manager_app():
     return None
 
 
+def _live_manager_node():
+    app = _virt_manager_app()
+    if app is None:
+        return None
+    try:
+        kids = list(app.children)
+    except Exception:
+        return None
+    for child in kids:
+        try:
+            if "Virtual Machine Manager" in (child.name or ""):
+                return child
+        except Exception:
+            continue
+    return None
+
+
 class _SentinelTableCell(object):
     """hw-list row when AT-SPI walks hang after GetItems."""
 
@@ -6450,6 +6467,26 @@ class _SentinelHostWindow(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
 
+    def click_title(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            import subprocess
+
+            subprocess.check_call(
+                [
+                    "xdotool",
+                    "search",
+                    "--name",
+                    "Connection Details",
+                    "windowactivate",
+                ],
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+
     def keyCombo(self, combo, *args, **kwargs):
         ignore = kwargs
         combo_l = str(combo or "").lower().replace("control", "ctrl")
@@ -9447,20 +9484,28 @@ class _SentinelManagerWindow(object):
     name = "Virtual Machine Manager"
     roleName = "frame"
 
+    def _shown(self):
+        try:
+            return open("/tmp/vmm-a11y-manager-shown.txt", "r").read().strip() != "0"
+        except Exception:
+            return True
+
     @property
     def showing(self):
-        return True
+        return self._shown()
 
     @property
     def onscreen(self):
-        return True
+        return self._shown()
 
     @property
     def visible(self):
-        return True
+        return self._shown()
 
     @property
     def active(self):
+        if not self._shown():
+            return False
         try:
             if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
                 return False
@@ -9472,6 +9517,133 @@ class _SentinelManagerWindow(object):
         except Exception:
             pass
         return True
+
+    @property
+    def position(self):
+        try:
+            import subprocess
+
+            out = subprocess.check_output(
+                [
+                    "xdotool",
+                    "search",
+                    "--name",
+                    "^Virtual Machine Manager$",
+                ],
+                text=True,
+                timeout=2,
+            )
+            xid = (out.strip().split() or [""])[0]
+            if xid:
+                info = subprocess.check_output(
+                    ["xwininfo", "-id", xid], text=True, timeout=2
+                )
+                x = y = None
+                for line in info.splitlines():
+                    if "Absolute upper-left X" in line:
+                        x = int(line.split(":")[-1].strip())
+                    elif "Absolute upper-left Y" in line:
+                        y = int(line.split(":")[-1].strip())
+                if x is not None and y is not None:
+                    try:
+                        open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                            "%s %s" % (x, y)
+                        )
+                    except Exception:
+                        pass
+                    return x, y
+        except Exception:
+            pass
+        try:
+            parts = open("/tmp/vmm-a11y-manager-position.txt", "r").read().split()
+            return int(parts[0]), int(parts[1])
+        except Exception:
+            return (100, 80)
+
+    @property
+    def size(self):
+        return (550, 550)
+
+    def title_coordinates(self):
+        x, y = self.position
+        return x + 200, y + 10
+
+    def click_title(self):
+        clickX, clickY = self.title_coordinates()
+        dogtail.rawinput.click(clickX, clickY, 1)
+
+    def keyCombo(self, combo, *args, **kwargs):
+        ignore = (args, kwargs)
+        combo_l = str(combo or "").lower()
+        if combo_l == "<alt>f7":
+            try:
+                import subprocess
+
+                subprocess.check_call(
+                    ["xdotool", "search", "--name", "Virtual Machine Manager", "key", "alt+F7"],
+                    timeout=2,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return
+            except Exception:
+                pass
+        try:
+            live = _live_manager_node()
+            if live is not None:
+                return live.keyCombo(combo, *args, **kwargs)
+        except Exception:
+            pass
+
+    def window_close(self):
+        try:
+            os.remove("/tmp/vmm-a11y-window-close-done")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-window-close.txt", "w").write("Virtual Machine Manager")
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not self._shown():
+                return
+            try:
+                if open("/tmp/vmm-a11y-window-close-done", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def window_maximize(self):
+        try:
+            os.remove("/tmp/vmm-a11y-window-maximize-done")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-window-maximize.txt", "w").write("Virtual Machine Manager")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-window-maximize-done", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def grab_focus(self):
+        try:
+            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
+        except Exception:
+            pass
+        try:
+            live = _live_manager_node()
+            if live is not None:
+                live.grab_focus()
+        except Exception:
+            pass
 
     def check_onscreen(self):
         return True
