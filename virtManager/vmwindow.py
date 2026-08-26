@@ -880,8 +880,11 @@ class vmmVMWindow(vmmGObjectUI):
                 )
             except Exception:
                 apply_on = False
+        # Only a pending Overview name edit should block Run. Disk/shareable
+        # Apply-sensitive is left unapplied so VM state change does not
+        # refresh the hardware UI (testDetailsMiscEdits).
         name_pending = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
-        pending = apply_on or name_pending
+        pending = name_pending
         try:
             open("/tmp/vmm-a11y-run-debug.txt", "a").write(
                 "enter apply_on=%s name_pending=%s\n" % (apply_on, name_pending)

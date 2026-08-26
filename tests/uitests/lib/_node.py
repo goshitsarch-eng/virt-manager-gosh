@@ -9338,12 +9338,7 @@ class _SentinelSnapshotToolbar(object):
         ignore = (args, kwargs)
         if self.name in ("Run", "Restore"):
             try:
-                pending = (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
-                    == "1"
-                    or os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
-                )
-                if pending:
+                if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
                     open("/tmp/vmm-a11y-alert.txt", "w").write(
                         "There are unapplied changes. Would you like to apply them now?"
                     )
