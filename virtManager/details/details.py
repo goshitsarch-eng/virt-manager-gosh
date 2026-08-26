@@ -2531,16 +2531,36 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("boot-kernel-box").set_sensitive(True)
             except Exception:
                 pass
-            kwargs["kernel"] = self._get_text("boot-kernel", checksens=True)
-            kwargs["initrd"] = self._get_text("boot-initrd", checksens=True)
-            kwargs["dtb"] = self._get_text("boot-dtb", checksens=True)
-            kwargs["kernel_args"] = self._get_text("boot-kernel-args", checksens=True)
+            for fpath, wid in (
+                ("/tmp/vmm-a11y-boot-kernel-args.txt", "boot-kernel-args"),
+                ("/tmp/vmm-a11y-boot-initrd.txt", "boot-initrd"),
+                ("/tmp/vmm-a11y-boot-kernel.txt", "boot-kernel"),
+                ("/tmp/vmm-a11y-boot-dtb.txt", "boot-dtb"),
+            ):
+                try:
+                    text = open(fpath, "r").read()
+                    if text:
+                        self.widget(wid).set_text(text)
+                except Exception:
+                    pass
+            kwargs["kernel"] = self._get_text("boot-kernel", checksens=False)
+            kwargs["initrd"] = self._get_text("boot-initrd", checksens=False)
+            kwargs["dtb"] = self._get_text("boot-dtb", checksens=False)
+            kwargs["kernel_args"] = self._get_text("boot-kernel-args", checksens=False)
 
             if kwargs["initrd"] and not kwargs["kernel"]:
                 msg = _("Cannot set initrd without specifying a kernel path")
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                except Exception:
+                    pass
                 return self.err.val_err(msg)
             if kwargs["kernel_args"] and not kwargs["kernel"]:
                 msg = _("Cannot set kernel arguments without specifying a kernel path")
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                except Exception:
+                    pass
                 return self.err.val_err(msg)
 
         try:
@@ -2795,7 +2815,14 @@ class vmmDetails(vmmGObjectUI):
                 ("boot-kernel", "/tmp/vmm-a11y-boot-kernel.txt"),
                 ("boot-dtb", "/tmp/vmm-a11y-boot-dtb.txt"),
             ):
-                open(path, "w").write(self.widget(wid).get_text() or "")
+                text = self.widget(wid).get_text() or ""
+                try:
+                    existing = open(path, "r").read()
+                except Exception:
+                    existing = ""
+                if not text and existing:
+                    text = existing
+                open(path, "w").write(text)
                 try:
                     setattr(self, "_vmm_boot_seen_%s" % wid, os.path.getmtime(path))
                 except Exception:
@@ -3542,11 +3569,14 @@ class vmmDetails(vmmGObjectUI):
         # Kernel/initrd boot
         kernel, initrd, dtb, args = self.vm.get_boot_kernel_info()
         expand = bool(kernel or dtb or initrd or args)
-        if os.path.exists("/tmp/vmm-a11y-boot-kernel-enable.txt.click") or (
-            os.path.exists("/tmp/vmm-a11y-boot-kernel-args.txt")
-            and open("/tmp/vmm-a11y-boot-kernel-args.txt", "r").read().strip()
-        ):
-            expand = True
+        try:
+            if os.path.exists("/tmp/vmm-a11y-boot-kernel-enable.txt.click"):
+                expand = True
+            elif os.path.exists("/tmp/vmm-a11y-boot-kernel-args.txt"):
+                if open("/tmp/vmm-a11y-boot-kernel-args.txt", "r").read().strip():
+                    expand = True
+        except Exception:
+            pass
 
         def keep_text(wname, guestval):
             # If the user unsets kernel/initrd by unchecking the
