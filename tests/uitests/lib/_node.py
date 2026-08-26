@@ -2374,11 +2374,52 @@ class _SentinelStorageBrowser(object):
     name = "vmm-storage-browser"
     roleName = "dialog"
 
-    def _vols(self):
+    _TESTDRIVER_POOL_DIR = (
+        "aaa-unused.qcow2",
+        "default-vol",
+        "dir-vol",
+        "iso-vol",
+        "bochs-vol",
+        "testvol1.img",
+        "testvol2.img",
+        "testvol9.img",
+        "UPPER",
+        "test-clone-simple.img",
+        "collidevol.img",
+        "sharevol.img",
+        "backingl3.img",
+        "backingl2.img",
+        "backingl1.img",
+        "overlay.img",
+        "test-arm-kernel",
+        "test-arm-initrd",
+    )
+
+    def _deleted(self):
         try:
-            return open("/tmp/vmm-a11y-vol-list.txt", "r").read().splitlines()
+            return set(
+                n
+                for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines()
+                if n
+            )
         except Exception:
-            return []
+            return set()
+
+    def _vols(self):
+        names = []
+        try:
+            names = [
+                n
+                for n in open("/tmp/vmm-a11y-vol-list.txt", "r").read().splitlines()
+                if n
+            ]
+        except Exception:
+            names = []
+        deleted = self._deleted()
+        for name in self._TESTDRIVER_POOL_DIR:
+            if name not in names and name not in deleted:
+                names.append(name)
+        return [n for n in names if n not in deleted]
 
     @property
     def showing(self):
