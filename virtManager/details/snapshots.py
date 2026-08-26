@@ -777,6 +777,8 @@ class vmmSnapshotPage(vmmGObjectUI):
         model.foreach(check_selection, cursnaps)
 
         self._initial_populate = True
+        if select_name:
+            self._a11y_want_select = select_name
         if self._a11y_want_select:
             self._unapplied_changes = False
             self._select_snapshot_by_name(self._a11y_want_select, add=False)
