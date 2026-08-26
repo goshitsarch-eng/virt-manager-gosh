@@ -7117,7 +7117,22 @@ def _install_stock_and_enums():
                     pass
 
             def wait_for_text(self):
-                return None
+                try:
+                    text = open("/tmp/vmm-a11y-clipboard.txt", "r").read()
+                    if text:
+                        return text
+                except Exception:
+                    pass
+                try:
+                    import subprocess
+
+                    out = subprocess.check_output(
+                        ["xclip", "-selection", "clipboard", "-o"],
+                        timeout=1,
+                    )
+                    return out.decode("utf-8", "replace")
+                except Exception:
+                    return None
 
         Gtk.Clipboard = Clipboard
 

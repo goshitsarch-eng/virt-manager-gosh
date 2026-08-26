@@ -1088,6 +1088,20 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_os_publish)
+        if not getattr(self, "_vmm_inspection_refresh_poll", False):
+            self._vmm_inspection_refresh_poll = True
+
+            def _poll_inspection_refresh():
+                path = "/tmp/vmm-a11y-inspection-refresh.txt"
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                        self._inspection_refresh_clicked_cb(None)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_inspection_refresh)
         if not getattr(self, "_vmm_boot_fields_poll", False):
             self._vmm_boot_fields_poll = True
 
@@ -4327,6 +4341,12 @@ class vmmDetails(vmmGObjectUI):
         )
         if self.vm.inspection.errorstr:
             self.widget("details-overview-error").set_text(self.vm.inspection.errorstr)
+            try:
+                open("/tmp/vmm-a11y-inspection-error.txt", "w").write(
+                    self.vm.inspection.errorstr
+                )
+            except Exception:
+                pass
             inspection_supported = False
 
         self.widget("details-inspection-apps").set_visible(inspection_supported)
@@ -4362,6 +4382,11 @@ class vmmDetails(vmmGObjectUI):
                     summary = _("%(summary)s ...") % {"summary": summary[0:pos]}
 
             apps_model.append([name, version, summary])
+        try:
+            lines = ["\t".join(str(c) for c in row) for row in apps_model]
+            open("/tmp/vmm-a11y-inspection-apps.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
 
     def _refresh_stats_page(self):
         def _multi_color(text1, text2):

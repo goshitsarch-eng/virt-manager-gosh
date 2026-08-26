@@ -548,6 +548,19 @@ def main():
         serial = vmmSerialConsole(vm, port, name)
         assert serial._box is not None
         serial._serial_popup.show_all()
+        from virtManager.details.console import _TimedRevealer
+
+        toolbar = Gtk.Box()
+        revealer = _TimedRevealer(toolbar)
+        revealer.force_reveal(True)
+        revealer._handle_pointer(True)
+        revealer._handle_pointer(False)
+        revealer.cleanup()
+        from gi.repository import Gdk
+
+        clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clip.set_text("/pool-dir/UPPER", -1)
+        assert clip.wait_for_text() == "/pool-dir/UPPER"
 
     def manager_selection():
         from virtManager.manager import vmmManager

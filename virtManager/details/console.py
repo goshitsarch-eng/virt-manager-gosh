@@ -60,7 +60,14 @@ class _TimedRevealer(vmmGObject):
         self._ebox.show_all()
 
         self._ebox.connect("enter-notify-event", self._enter_notify)
-        self._ebox.connect("leave-notify-event", self._enter_notify)
+        self._ebox.connect("leave-notify-event", self._leave_notify)
+        try:
+            motion = Gtk.EventControllerMotion()
+            motion.connect("enter", lambda *_a: self._handle_pointer(True))
+            motion.connect("leave", lambda *_a: self._handle_pointer(False))
+            self._ebox.add_controller(motion)
+        except Exception:
+            pass
 
     def _cleanup(self):
         self._ebox.destroy()
@@ -70,10 +77,16 @@ class _TimedRevealer(vmmGObject):
         self._timeout_id = None
 
     def _enter_notify(self, ignore1, ignore2):
-        x, y = self._ebox.get_pointer()
-        alloc = self._ebox.get_allocation()
-        entered = bool(x >= 0 and y >= 0 and x < alloc.width and y < alloc.height)
+        self._handle_pointer(True)
+        ignore = ignore1
+        ignore = ignore2
 
+    def _leave_notify(self, ignore1, ignore2):
+        self._handle_pointer(False)
+        ignore = ignore1
+        ignore = ignore2
+
+    def _handle_pointer(self, entered):
         if not self._in_fullscreen:
             return
 

@@ -209,6 +209,7 @@ class vmmSerialConsole(vmmGObject):
         self._datastream = _DataStream(self.vm)
 
         self._serial_popup = None
+        self._serial_popover = None
         self._serial_copy = None
         self._serial_paste = None
         self._init_popup()
@@ -247,6 +248,27 @@ class vmmSerialConsole(vmmGObject):
             self._vteterminal.connect("button-press-event", self._show_serial_rcpopup)
         except Exception:
             pass
+        try:
+            click = Gtk.GestureClick()
+            click.set_button(3)
+            click.connect("pressed", self._on_serial_right_click)
+            self._vteterminal.add_controller(click)
+        except Exception:
+            pass
+        try:
+            popover = Gtk.Popover()
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            copy_b = Gtk.Button(label=_("Copy"))
+            copy_b.connect("clicked", self._serial_copy_text)
+            paste_b = Gtk.Button(label=_("Paste"))
+            paste_b.connect("clicked", self._serial_paste_text)
+            box.append(copy_b)
+            box.append(paste_b)
+            popover.set_child(box)
+            self._vteterminal.set_context_menu(popover)
+            self._serial_popover = popover
+        except Exception:
+            self._serial_popover = None
         self._vteterminal.connect("commit", self._datastream.send_data, self._vteterminal)
         self._vteterminal.show()
 
@@ -387,20 +409,72 @@ class vmmSerialConsole(vmmGObject):
     def _scrollbar_adjustment_changed(self, adjustment, scrollbar):
         scrollbar.set_visible(adjustment.get_upper() > adjustment.get_page_size())
 
+    def _on_serial_right_click(self, _gest, _n, x, y):
+        class _Ev:
+            button = 3
+
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        self._show_serial_rcpopup(self._vteterminal, _Ev(x, y))
+
     def _show_serial_rcpopup(self, src, event):
-        if event.button != 3:
+        if getattr(event, "button", 3) != 3:
             return
 
         self._serial_popup.show_all()
 
-        if src.get_has_selection():
-            self._serial_copy.set_sensitive(True)
-        else:
-            self._serial_copy.set_sensitive(False)
-        self._serial_popup.popup_at_pointer(event)
+        has_sel = False
+        try:
+            has_sel = bool(src.get_has_selection())
+        except Exception:
+            has_sel = False
+        self._serial_copy.set_sensitive(has_sel)
+        try:
+            self._serial_popup.popup_at_widget(src)
+        except Exception:
+            try:
+                self._serial_popup.popup_at_pointer(event)
+            except Exception:
+                pass
 
     def _serial_copy_text(self, src_ignore):
-        self._vteterminal.copy_clipboard()
+        term = self._vteterminal
+        if term is None:
+            return
+        try:
+            if not term.get_has_selection():
+                return
+        except Exception:
+            return
+        try:
+            term.copy_clipboard_format(Vte.Format.TEXT)
+        except Exception:
+            try:
+                term.copy_clipboard()
+            except Exception:
+                pass
+        try:
+            text = term.get_text_selected(Vte.Format.TEXT)
+            if text:
+                Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+        except Exception:
+            pass
 
     def _serial_paste_text(self, src_ignore):
-        self._vteterminal.paste_clipboard()
+        term = self._vteterminal
+        if term is None:
+            return
+        try:
+            term.paste_clipboard()
+            return
+        except Exception:
+            pass
+        try:
+            clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+            text = clip.wait_for_text()
+            if text:
+                term.paste_text(text)
+        except Exception:
+            pass

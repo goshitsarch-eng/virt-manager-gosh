@@ -2776,6 +2776,66 @@ class _SentinelDetailsCheck(object):
             time.sleep(0.05)
 
 
+class _SentinelInspectionApps(object):
+    name = "inspection-apps"
+    roleName = "table"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def visible(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click_expander(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-inspection-apps-expand", "w").write("1")
+        except Exception:
+            pass
+
+    def fmt_nodes(self):
+        try:
+            return open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
+        except Exception:
+            return ""
+
+
+class _SentinelInspectionRefresh(object):
+    name = "Refresh"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-inspection-refresh.txt", "w").write("1")
+        except Exception:
+            pass
+
+
 class _SentinelDetailsExpander(object):
     def __init__(self, name, path):
         self.name = name
@@ -3044,6 +3104,27 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsSpin("vsock-cid", "/tmp/vmm-a11y-vsock-cid.txt")
     if compact == "vsock-auto":
         return _SentinelDetailsCheck("vsock-auto", "/tmp/vmm-a11y-vsock-auto.txt")
+    hwsel = ""
+    try:
+        hwsel = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+    except Exception:
+        hwsel = ""
+    if "OS information" in hwsel:
+        if "inspection-apps" in compact:
+            return _SentinelInspectionApps()
+        if compact.replace(".*", "").strip() in ("application", "applications"):
+            return _SentinelDetailsExpander(
+                "Application", "/tmp/vmm-a11y-inspection-apps-expand"
+            )
+        if compact.replace(".*", "").strip() == "refresh":
+            return _SentinelInspectionRefresh()
+        if "fake test error" in compact or "no disks" in compact:
+            try:
+                err = open("/tmp/vmm-a11y-inspection-error.txt", "r").read()
+            except Exception:
+                err = ""
+            if err:
+                return _SentinelStaticLabel(err)
     if "source path" in compact:
         return _SentinelEntry("Source path:", "/tmp/vmm-a11y-fs-source.txt")
     if "target path" in compact:

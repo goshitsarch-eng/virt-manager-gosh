@@ -968,10 +968,17 @@ class vmmHostStorage(vmmGObjectUI):
         if not vol:
             return  # pragma: no cover
 
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         target_path = vol.get_target_path()
-        if target_path:
-            clipboard.set_text(target_path, -1)
+        if not target_path:
+            return
+        try:
+            display = Gdk.Display.get_default()
+            if display is not None:
+                display.get_clipboard().set(target_path)
+        except Exception:
+            pass
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clipboard.set_text(target_path, -1)
 
     def _vol_add_cb(self, src):
         pool = self._current_pool()
