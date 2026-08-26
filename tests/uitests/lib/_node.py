@@ -4076,6 +4076,12 @@ class _SentinelXmlEditor(object):
             xml = self.text
         return xml
 
+    def _xml_editing_enabled(self):
+        try:
+            return open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() == "0"
+        except Exception:
+            return False
+
     def set_text(self, text):
         try:
             open("/tmp/vmm-a11y-xml.txt", "w").write(text or "")
@@ -4088,6 +4094,12 @@ class _SentinelXmlEditor(object):
             if not os.path.exists("/tmp/vmm-a11y-click.txt"):
                 return
             time.sleep(0.05)
+
+    def typeText(self, string):
+        # Disabled editor must ignore keystrokes (testPrefsXMLEditor).
+        if not self._xml_editing_enabled():
+            return
+        self.set_text((self._read() or "") + (string or ""))
 
     def check_onscreen(self):
         utils.check(lambda: self.onscreen)
