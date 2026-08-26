@@ -7731,11 +7731,28 @@ def _manager_vm_real_name(want):
     return want
 
 
+def _vm_renamed_to(name):
+    current = name
+    try:
+        for line in open("/tmp/vmm-a11y-vm-renamed.txt", "r").read().splitlines():
+            if "\t" not in line:
+                continue
+            old, new = line.split("\t", 1)
+            if old == current:
+                current = new
+    except Exception:
+        pass
+    return current
+
+
 class _SentinelManagerVMCell(object):
     def __init__(self, name):
-        self.name = name + "\n"
         self.roleName = "table cell"
         self._vm = name
+
+    @property
+    def name(self):
+        return _vm_renamed_to(self._vm) + "\n"
 
     @property
     def showing(self):

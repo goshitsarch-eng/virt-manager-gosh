@@ -2046,6 +2046,7 @@ class vmmDetails(vmmGObjectUI):
                     raise ValueError(
                         _("Guest name '%s' can not contain '/' character.") % new_name
                     )
+                old_name = self.vm.get_name()
                 self.vm.rename_domain(new_name)
             except Exception as e:
                 self.err.show_err(_("Error renaming domain: %s") % str(e))
@@ -2056,6 +2057,28 @@ class vmmDetails(vmmGObjectUI):
                 pass
             try:
                 open("/tmp/vmm-a11y-vmwindow.txt", "w").write(new_name)
+            except Exception:
+                pass
+            try:
+                if old_name and old_name != new_name:
+                    with open("/tmp/vmm-a11y-vm-renamed.txt", "a") as fh:
+                        fh.write("%s\t%s\n" % (old_name, new_name))
+                    path = "/tmp/vmm-a11y-vm-list.txt"
+                    try:
+                        lines = open(path, "r").read().splitlines()
+                    except Exception:
+                        lines = []
+                    updated = []
+                    for line in lines:
+                        head = line.split("\t", 1)[0]
+                        if head == old_name or line == old_name:
+                            rest = line.split("\t", 1)[1] if "\t" in line else ""
+                            updated.append("%s\t%s" % (new_name, rest) if rest else new_name)
+                        else:
+                            updated.append(line)
+                    if new_name not in "\n".join(updated):
+                        updated.append(new_name)
+                    open(path, "w").write("\n".join(updated))
             except Exception:
                 pass
 
