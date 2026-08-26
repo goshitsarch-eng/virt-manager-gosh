@@ -4262,6 +4262,24 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 matched = bool(_select_index(itext))
             except Exception:
                 matched = False
+            want_name = ""
+            try:
+                want_name = open("/tmp/vmm-a11y-hw-select.txt", "r").read().strip()
+            except Exception:
+                want_name = ""
+            if matched and want_name:
+                try:
+                    sel = treeview.get_selection()
+                    model, treeiter = sel.get_selected()
+                    have = ""
+                    if model is not None and treeiter is not None:
+                        have = _mnemonic_label(str(model[treeiter][name_column] or ""))
+                    if have != want_name and want_name not in have and have not in want_name:
+                        matched = bool(_select_name(want_name))
+                except Exception:
+                    matched = bool(_select_name(want_name))
+            elif not matched and want_name:
+                matched = bool(_select_name(want_name))
             if matched:
                 try:
                     os.remove(ipath)
