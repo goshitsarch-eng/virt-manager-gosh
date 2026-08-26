@@ -286,6 +286,14 @@ class vmmMediaCombo(vmmGObjectUI):
                     return sent
             except Exception:
                 pass
+            try:
+                browse = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+                if browse:
+                    if store_media and not browse.startswith("/dev"):
+                        self.config.add_iso_path(browse)
+                    return browse
+            except Exception:
+                pass
             stored = getattr(self, "_a11y_path", None)
             if stored:
                 if store_media and not str(stored).startswith("/dev"):

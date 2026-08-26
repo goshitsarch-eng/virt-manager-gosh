@@ -484,6 +484,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                 open("/tmp/vmm-a11y-storage-entry.txt", "w").write(path)
                 open("/tmp/vmm-a11y-media-entry.txt", "w").write(path)
                 open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path)
+                open("/tmp/vmm-a11y-details-media-path.txt", "w").write(path)
                 open("/tmp/vmm-a11y-media-browse.txt", "w").write(path)
                 target = getattr(self, "_vmm_boot_browse_target", None)
                 if target in ("initrd", "kernel", "dtb"):

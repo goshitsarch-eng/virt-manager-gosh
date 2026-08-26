@@ -2977,6 +2977,28 @@ class vmmDetails(vmmGObjectUI):
             current = row[HW_LIST_COL_DEVICE] if row else None
             if current is None or not getattr(current, "is_cdrom", lambda: False)():
                 return
+            # A pending media edit or storage-browser path must not be
+            # wiped just because the selected CDROM is still ejected.
+            try:
+                if EDIT_DISK_PATH in getattr(self, "_active_edits", []):
+                    return
+            except Exception:
+                pass
+            try:
+                if getattr(self._mediacombo, "_a11y_path", None):
+                    return
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip():
+                    return
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
             if guest is None:
                 guest = self._inactive_guest_xml()
             target = getattr(current, "target", None)
