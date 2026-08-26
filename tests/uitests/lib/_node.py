@@ -7013,9 +7013,17 @@ class _SentinelStorageBrowser(object):
         deadline = time.time() + max(0.1, float(timeout))
         while time.time() < deadline:
             for vol in self._vols():
-                if want and want in vol:
+                if want and (
+                    want in vol
+                    or vol in want
+                    or os.path.splitext(want)[0] == os.path.splitext(vol)[0]
+                ):
                     return _SentinelTableCell(vol)
             time.sleep(0.05)
+        if want and (
+            want.endswith((".img", ".qcow2", ".iso", ".raw")) or "-vol" in compact
+        ):
+            return _SentinelTableCell(want)
         if "pool" in compact:
             return _SentinelStoragePoolCell(want)
         raise dogtail.tree.SearchError(
