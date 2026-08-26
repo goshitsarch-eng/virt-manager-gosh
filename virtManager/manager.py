@@ -290,11 +290,27 @@ class vmmManager(vmmGObjectUI):
                             self.select_row_for_name(name)
                         except Exception:
                             pass
-                        if self.current_vm() is None:
+                        vm = self.current_vm()
+                        if vm is None:
+                            try:
+                                for conn in vmmConnectionManager.get_instance().conns.values():
+                                    try:
+                                        vm = conn.get_vm_by_name(name)
+                                    except Exception:
+                                        vm = None
+                                    if vm is not None:
+                                        break
+                            except Exception:
+                                vm = None
+                        if vm is None:
                             # Connection/VM list may still be coming up.
                             open(path, "w").write(name)
                         else:
-                            self.activate_row_for_name(name)
+                            try:
+                                self.select_row_for_name(name)
+                            except Exception:
+                                pass
+                            vmmenu.VMActionUI.show(self, vm)
             except Exception:
                 pass
             return True
@@ -882,6 +898,15 @@ class vmmManager(vmmGObjectUI):
                 _iter = model.iter_next(_iter)
 
         _walk(None)
+        if not names:
+            try:
+                for conn in vmmConnectionManager.get_instance().conns.values():
+                    for vm in conn.list_vms():
+                        n = vm.get_name()
+                        if n and n not in names:
+                            names.append(n)
+            except Exception:
+                pass
         try:
             open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
         except Exception:
@@ -912,22 +937,51 @@ class vmmManager(vmmGObjectUI):
         if model is None or sel is None or not name:
             return False
 
-        def _find(parent):
+        exact_vm = None
+        exact_any = None
+        sub_vm = None
+        sub_any = None
+
+        def _walk(parent):
+            nonlocal exact_vm, exact_any, sub_vm, sub_any
             _iter = model.iter_children(parent) if parent else model.get_iter_first()
             while _iter is not None:
                 try:
                     have = str(model[_iter][ROW_SORT_KEY] or "")
-                    if have == name or name in have:
-                        sel.select_iter(_iter)
-                        return True
+                    is_vm = bool(model[_iter][ROW_IS_VM])
+                    real = ""
+                    try:
+                        handle = model[_iter][ROW_HANDLE]
+                        if is_vm and handle is not None:
+                            real = handle.get_name() or ""
+                    except Exception:
+                        real = ""
+                    if have == name or (real and real == name):
+                        if is_vm and exact_vm is None:
+                            exact_vm = _iter
+                        elif exact_any is None:
+                            exact_any = _iter
+                    elif is_vm and (
+                        name in have
+                        or have in name
+                        or (real and (name in real or real in name))
+                    ):
+                        if sub_vm is None:
+                            sub_vm = _iter
+                    elif name in have or have in name:
+                        if sub_any is None:
+                            sub_any = _iter
                 except Exception:
                     pass
-                if _find(_iter):
-                    return True
+                _walk(_iter)
                 _iter = model.iter_next(_iter)
-            return False
 
-        return bool(_find(None))
+        _walk(None)
+        chosen = exact_vm or exact_any or sub_vm or sub_any
+        if chosen is None:
+            return False
+        sel.select_iter(chosen)
+        return True
 
     def activate_row_for_name(self, name=None):
         if name:
