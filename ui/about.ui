@@ -4,5 +4,7 @@
   <requires lib="libadwaita" version="1.4"/>
   <object class="GtkWindow" id="vmm-about">
     <property name="title" translatable="yes">About Virtual Machine Manager</property>
+    <!-- Built in virtManager/about.py: logo, comments, copyright, website,
+         authors/artists/translators, License, and Close. -->
   </object>
 </interface>

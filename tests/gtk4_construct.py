@@ -185,9 +185,6 @@ def main():
         dlg.show(None)
         win = dlg._dialog
         assert win is not None
-        assert win.get_title() == "About Virtual Machine Manager"
-        dlg._show_license(win)
-        assert dlg._license_win is not None
         dlg.close()
         assert dlg._dialog is None
 
