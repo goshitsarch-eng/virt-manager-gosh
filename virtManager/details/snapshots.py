@@ -776,6 +776,7 @@ class vmmSnapshotPage(vmmGObjectUI):
 
         self._initial_populate = True
         if self._a11y_want_select:
+            self._unapplied_changes = False
             self._select_snapshot_by_name(self._a11y_want_select, add=False)
         self._publish_a11y_state()
 

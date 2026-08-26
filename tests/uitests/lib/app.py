@@ -832,8 +832,10 @@ class VMMDogtailApp:
         except subprocess.TimeoutExpired:
             log.warning("App didn't exit gracefully from SIGINT. Killing...")
             self._proc.kill()
-            self.wait_for_exit()
-            raise
+            try:
+                self.wait_for_exit()
+            except subprocess.TimeoutExpired:
+                pass
 
     #####################################
     # virt-manager launching entrypoint #

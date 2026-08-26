@@ -5218,6 +5218,17 @@ class _SentinelVMWindow(object):
     def grab_focus(self, *args, **kwargs):
         ignore = (args, kwargs)
 
+    def window_close(self):
+        try:
+            open("/tmp/vmm-a11y-window-close.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not _vmwindow_open(self._vmname):
+                return
+            time.sleep(0.05)
+
     def find(
         self,
         name,

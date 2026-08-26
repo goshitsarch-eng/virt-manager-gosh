@@ -264,6 +264,23 @@ class vmmVMWindow(vmmGObjectUI):
                         pass
                 return True
 
+            def _publish_vm_toolbar():
+                vm = self.vm
+                if vm is None:
+                    return True
+                try:
+                    run = vm.is_runable()
+                    paused = vm.is_paused()
+                    label = "Restore" if (
+                        vm.managedsave_supported and vm.has_managed_save()
+                    ) else "Run"
+                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
+                    open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
+                except Exception:
+                    pass
+                return True
+
             def _poll_vm_toolbar_action():
                 path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
                 try:
@@ -287,6 +304,7 @@ class vmmVMWindow(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_vm_page)
             GLib.timeout_add(50, _poll_vm_toolbar_action)
+            GLib.timeout_add(50, _publish_vm_toolbar)
         if vis:
             return
 
