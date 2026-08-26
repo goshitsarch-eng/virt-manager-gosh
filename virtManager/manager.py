@@ -774,6 +774,22 @@ class vmmManager(vmmGObjectUI):
                         os.remove(path)
                 except Exception:
                     pass
+                try:
+                    path = "/tmp/vmm-a11y-appmenu-action.txt"
+                    if os.path.exists(path):
+                        action = open(path, "r").read().strip()
+                        os.remove(path)
+                        key = action.lower().replace(".", "")
+                        if key == "delete":
+                            self.do_delete()
+                        elif key == "quit":
+                            self.exit_app()
+                        elif key in ("clone", "clone..."):
+                            vm = self._a11y_resolve_vm()
+                            if vm is not None:
+                                vmmenu.VMActionUI.clone(self, vm)
+                except Exception:
+                    pass
                 return True
 
             GLib.timeout_add(50, _poll_appmenu)

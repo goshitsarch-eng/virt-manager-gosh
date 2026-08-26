@@ -4013,7 +4013,7 @@ class _SentinelVMActionItem(object):
             open("/tmp/vmm-a11y-vm-menu-hidden", "w").write("1")
         except Exception:
             pass
-        if (self.name or "") == "Clone":
+        if (self.name or "").rstrip(".") == "Clone":
             try:
                 vm = ""
                 try:
@@ -9687,6 +9687,16 @@ class _SentinelManagerWindow(object):
             not role or ("menu" in role and "item" not in role)
         ):
             return _SentinelAppBarMenu(compact)
+        if compact in ("delete", "quit", "preferences", "clone...") and (
+            not role or "item" in role
+        ):
+            pretty = {
+                "delete": "Delete",
+                "quit": "Quit",
+                "preferences": "Preferences",
+                "clone...": "Clone...",
+            }[compact]
+            return _SentinelAppBarItem(pretty)
         if compact == "graph" and (not role or "menu" in role):
             return _SentinelAppBarMenu("Graph")
         if compact in (
@@ -11930,6 +11940,17 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelAppBarMenu(compact_bar)
         if "preferences" in compact_bar and (not role_bar or "item" in role_bar):
             return _SentinelAppBarItem("Preferences")
+        if compact_bar in ("delete", "quit", "clone...") and (
+            not role_bar or "item" in role_bar
+        ):
+            pretty = {
+                "delete": "Delete",
+                "quit": "Quit",
+                "clone...": "Clone...",
+            }[compact_bar]
+            if compact_bar == "clone...":
+                return _SentinelVMActionItem("Clone...")
+            return _SentinelAppBarItem(pretty)
         try:
             want_alert = raw_role in ("alert", "(alert|dialog)") or (
                 "alert" in raw_role and "window" not in raw_role and "frame" not in raw_role
