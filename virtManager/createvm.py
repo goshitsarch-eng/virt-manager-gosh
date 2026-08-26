@@ -1940,11 +1940,22 @@ class vmmCreateVM(vmmGObjectUI):
     # UI state getters and helpers #
     ################################
 
-    def _entry_get_text(self, widget_id):
-        widgets = [self.widget(widget_id)]
+    def _lookup_entry_widgets(self, widget_id):
+        widgets = []
+        try:
+            widgets.append(self.widget(widget_id))
+        except Exception:
+            pass
         combo_id = widget_id.replace("-entry", "-combo")
         if combo_id != widget_id:
-            widgets.append(self.widget(combo_id))
+            try:
+                widgets.append(self.widget(combo_id))
+            except Exception:
+                pass
+        return widgets
+
+    def _entry_get_text(self, widget_id):
+        widgets = self._lookup_entry_widgets(widget_id)
         for w in widgets:
             if w is None:
                 continue
@@ -1958,10 +1969,7 @@ class vmmCreateVM(vmmGObjectUI):
         return ""
 
     def _entry_set_text(self, widget_id, text):
-        widgets = [self.widget(widget_id)]
-        combo_id = widget_id.replace("-entry", "-combo")
-        if combo_id != widget_id:
-            widgets.append(self.widget(combo_id))
+        widgets = self._lookup_entry_widgets(widget_id)
         for w in widgets:
             if w is None:
                 continue
