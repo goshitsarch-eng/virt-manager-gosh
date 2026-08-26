@@ -1236,7 +1236,13 @@ class _SentinelConfigApply(object):
     @property
     def sensitive(self):
         try:
-            if open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip():
+            hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+        except Exception:
+            hw = ""
+        try:
+            if "Boot" in hw and open(
+                "/tmp/vmm-a11y-boot-init-path.txt", "r"
+            ).read().strip():
                 return True
         except Exception:
             pass
@@ -1266,10 +1272,6 @@ class _SentinelConfigApply(object):
                 time.sleep(0.05)
         try:
             open("/tmp/vmm-a11y-config-apply", "w").write("1")
-        except Exception:
-            pass
-        try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("config-apply")
         except Exception:
             pass
         deadline = time.time() + 8.0

@@ -2890,6 +2890,18 @@ class vmmDetails(vmmGObjectUI):
             elif pagetype is HW_LIST_TYPE_NIC:
                 success = self._apply_network(dev)
             elif pagetype is HW_LIST_TYPE_GRAPHICS:
+                try:
+                    open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                        "gfx edits=%s kwargs=%s\n"
+                        % (
+                            self._active_edits,
+                            self.gfxdetails.get_values()
+                            if self._edited(EDIT_GFX)
+                            else {},
+                        )
+                    )
+                except Exception:
+                    pass
                 success = self._apply_graphics(dev)
             elif pagetype is HW_LIST_TYPE_SOUND:
                 success = self._apply_sound(dev)
@@ -2910,6 +2922,12 @@ class vmmDetails(vmmGObjectUI):
             elif pagetype is HW_LIST_TYPE_VSOCK:
                 success = self._apply_vsock(dev)
         except Exception as e:
+            try:
+                open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                    "exc=%s\n" % e
+                )
+            except Exception:
+                pass
             self.err.show_err(_("Error applying changes: %s") % e)
 
         try:
