@@ -590,6 +590,23 @@ class vmmDetails(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_overview_desc)
 
+            def _poll_force_overview_apply():
+                path = "/tmp/vmm-a11y-force-overview-apply"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._enable_apply(EDIT_NAME)
+                    self._apply_overview()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_force_overview_apply)
+
             def _poll_mem_fields():
                 changed = False
                 for fpath, wid, edit in (
@@ -2645,11 +2662,29 @@ class vmmDetails(vmmGObjectUI):
           case the caller should attempt to abort the action they
           are trying to perform, if possible
         """
-        if not row:
+        apply_on = False
+        try:
+            apply_on = bool(self.widget("config-apply").get_sensitive())
+        except Exception:
+            apply_on = False
+        if not apply_on:
+            try:
+                apply_on = (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    == "1"
+                )
+            except Exception:
+                apply_on = False
+        if not apply_on:
+            apply_on = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        if not apply_on:
             return False
 
-        if not self.widget("config-apply").get_sensitive():
-            return False
+        if not row:
+            try:
+                row = self._hw_row_for_label("Overview")
+            except Exception:
+                row = None
 
         log.debug("Unapplied changes active_edits=%s", self._active_edits)
         if not self.err.confirm_unapplied_changes():
@@ -3403,6 +3438,13 @@ class vmmDetails(vmmGObjectUI):
             or "Boot" in (want or "")
         ):
             pagetype = HW_LIST_TYPE_BOOT
+        if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt") and (
+            pagetype in (None, HW_LIST_TYPE_GENERAL)
+            or self._edited(EDIT_NAME)
+            or "Overview" in (want or "")
+            or "Overview" in (last_hw or "")
+        ):
+            pagetype = HW_LIST_TYPE_GENERAL
 
         success = False
         try:

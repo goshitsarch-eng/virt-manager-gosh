@@ -556,14 +556,6 @@ class vmmVMWindow(vmmGObjectUI):
         pages = self.widget("details-pages")
         if pages.get_current_page() == DETAILS_PAGE_DETAILS:
             leaving = not is_details
-            if leaving:
-                try:
-                    if self._details.widget("config-apply").get_sensitive():
-                        open("/tmp/vmm-a11y-alert.txt", "w").write(
-                            "There are unapplied changes. Would you like to apply them now?"
-                        )
-                except Exception:
-                    pass
             if leaving and self._details.vmwindow_has_unapplied_changes():
                 self._sync_toolbar_page_buttons(pages.get_current_page())
                 return
@@ -817,12 +809,6 @@ class vmmVMWindow(vmmGObjectUI):
                     self._details.widget("overview-name").set_text(want)
                 except Exception:
                     pass
-            except Exception:
-                pass
-            try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(
-                    "There are unapplied changes. Would you like to apply them now?"
-                )
             except Exception:
                 pass
         if self._details.vmwindow_has_unapplied_changes():

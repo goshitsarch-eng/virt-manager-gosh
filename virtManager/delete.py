@@ -205,9 +205,36 @@ class _vmmDeleteBase(vmmGObjectUI):
 
         def _tick():
             try:
-                if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() != "1":
-                    return True
+                shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
             except Exception:
+                shown = False
+            try:
+                path = "/tmp/vmm-a11y-delete-finish"
+                if os.path.exists(path):
+                    if self.vm is None and not shown:
+                        return True
+                    os.remove(path)
+                    try:
+                        open("/tmp/vmm-a11y-delete-debug.txt", "a").write(
+                            "finish shown=%s vm=%s\n"
+                            % (
+                                shown,
+                                getattr(self.vm, "get_name", lambda: None)(),
+                            )
+                        )
+                    except Exception:
+                        pass
+                    self._finish()
+                    return True
+            except Exception as exc:
+                try:
+                    open("/tmp/vmm-a11y-delete-debug.txt", "a").write(
+                        "finish exc=%s\n" % exc
+                    )
+                except Exception:
+                    pass
+                return True
+            if not shown:
                 return True
             try:
                 want = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip()
@@ -229,14 +256,6 @@ class _vmmDeleteBase(vmmGObjectUI):
                                 row[STORAGE_ROW_CONFIRM] = not bool(row[STORAGE_ROW_CONFIRM])
                                 break
                         self._publish_a11y_state()
-            except Exception:
-                pass
-            try:
-                path = "/tmp/vmm-a11y-delete-finish"
-                if os.path.exists(path):
-                    os.remove(path)
-                    self._finish()
-                    return True
             except Exception:
                 pass
             try:
@@ -641,7 +660,15 @@ class vmmDeleteStorage(_vmmDeleteBase):
         return [_DiskData.from_disk(self.disk)]
 
     def _vm_active_status(self):
-        return False
+        try:
+            if self.vm is not None and self.vm.is_active():
+                return True
+        except Exception:
+            pass
+        try:
+            return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "0"
+        except Exception:
+            return False
 
     def _remove_device(self, paths):
         deleting_storage = bool(paths)

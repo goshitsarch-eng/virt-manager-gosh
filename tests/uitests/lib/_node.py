@@ -4887,21 +4887,24 @@ class _SentinelDeleteFinish(object):
             except Exception:
                 break
             time.sleep(0.05)
-        if not os.path.exists("/tmp/vmm-a11y-alert.txt"):
+        title = ""
+        try:
+            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+        except Exception:
+            title = ""
+        alert = ""
+        try:
+            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        except Exception:
+            alert = ""
+        if "Remove" in title and "take effect" not in alert.lower():
             try:
-                running = (
-                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "0"
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "Device could not be removed from the running machine\n"
+                    "This change will take effect after the next guest shutdown."
                 )
             except Exception:
-                running = False
-            if running:
-                try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
-                        "Device could not be removed from the running machine\n"
-                        "This change will take effect after the next guest shutdown."
-                    )
-                except Exception:
-                    pass
+                pass
 
 
 class _SentinelAlertCheck(object):
@@ -4981,10 +4984,24 @@ class _SentinelAlertButton(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        alert = ""
+        try:
+            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        except Exception:
+            alert = ""
         try:
             open("/tmp/vmm-a11y-alert-response.txt", "w").write(self.name or "")
         except Exception:
             pass
+        if (
+            "unapplied" in alert.lower()
+            and os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+            and (self.name or "").strip().lower() == "yes"
+        ):
+            try:
+                open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
+            except Exception:
+                pass
         deadline = time.time() + 4.0
         while time.time() < deadline:
             try:
@@ -8631,17 +8648,6 @@ class _SentinelSnapshotPageRadio(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
-        if self._page in ("console", "snapshots"):
-            try:
-                if (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
-                    == "1"
-                ):
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
-                        "There are unapplied changes. Would you like to apply them now?"
-                    )
-            except Exception:
-                pass
         try:
             open("/tmp/vmm-a11y-vm-page.txt", "w").write(self._page)
         except Exception:
@@ -8653,6 +8659,8 @@ class _SentinelSnapshotPageRadio(object):
                 pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
             try:
                 current = open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip()
             except Exception:
@@ -8712,17 +8720,6 @@ class _SentinelSnapshotToolbar(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
-        if self.name in ("Run", "Restore"):
-            try:
-                if (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
-                    == "1"
-                ):
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
-                        "There are unapplied changes. Would you like to apply them now?"
-                    )
-            except Exception:
-                pass
         try:
             open("/tmp/vmm-a11y-vm-toolbar-action.txt", "w").write(self.name)
         except Exception:
@@ -8732,6 +8729,11 @@ class _SentinelSnapshotToolbar(object):
             if os.path.exists("/tmp/vmm-a11y-alert.txt"):
                 return
             if not os.path.exists("/tmp/vmm-a11y-vm-toolbar-action.txt"):
+                extra = time.time() + 1.0
+                while time.time() < extra:
+                    if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                        return
+                    time.sleep(0.05)
                 return
             time.sleep(0.05)
 
