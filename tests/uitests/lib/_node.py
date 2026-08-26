@@ -2996,6 +2996,12 @@ class _SentinelMediaCombo(object):
     def click_combo_entry(self, *args, **kwargs):
         ignore = (args, kwargs)
 
+    def fmt_nodes(self):
+        return "\n".join(self._rows())
+
+    def print_nodes(self):
+        print(self.fmt_nodes())
+
     def _rows(self):
         for path in (
             "/tmp/vmm-a11y-createvm-media-combo.txt",
@@ -9404,6 +9410,7 @@ class _SentinelNewVMWindow(object):
             _sentinel_storage_radio,
             _sentinel_named_entry,
             _sentinel_oslist_entry,
+            _sentinel_oslist_popover,
             _sentinel_container_extra,
             _sentinel_url_widgets,
         ):
