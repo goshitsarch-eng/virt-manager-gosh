@@ -438,8 +438,15 @@ class _SentinelEntry(object):
 
     @property
     def text(self):
+        path = self._path
+        if self.name == "media-entry":
+            try:
+                if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt"):
+                    path = "/tmp/vmm-a11y-details-media-entry.txt"
+            except Exception:
+                pass
         try:
-            return open(self._path, "r").read()
+            return open(path, "r").read()
         except Exception:
             return ""
 
@@ -1123,7 +1130,13 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
     if compact == "import-entry" or raw == "import-entry":
         return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
     if compact == "media-entry" or raw == "media-entry":
-        return _SentinelEntry("media-entry", "/tmp/vmm-a11y-media-entry.txt")
+        path = "/tmp/vmm-a11y-media-entry.txt"
+        try:
+            if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt"):
+                path = "/tmp/vmm-a11y-details-media-entry.txt"
+        except Exception:
+            pass
+        return _SentinelEntry("media-entry", path)
     if compact == "install-url-entry" or raw == "install-url-entry":
         return _SentinelEntry("install-url-entry", "/tmp/vmm-a11y-url-entry.txt")
     if compact == "install-urlopts-entry" or raw == "install-urlopts-entry":
