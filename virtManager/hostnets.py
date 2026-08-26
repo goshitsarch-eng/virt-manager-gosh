@@ -173,7 +173,12 @@ class vmmHostNets(vmmGObjectUI):
     def _nav_list(self, direction):
         names = []
         try:
-            names = [n.get_name() for n in self.conn.list_nets() if n.get_name()]
+            model = self.widget("net-list").get_model()
+            if model is not None:
+                for row in model:
+                    net = row[0]
+                    if net is not None and net.get_name():
+                        names.append(net.get_name())
         except Exception:
             names = []
         if not names:
