@@ -310,6 +310,15 @@ class vmmVMWindow(vmmGObjectUI):
                 if vm is None:
                     return True
                 try:
+                    if not self.is_visible():
+                        return True
+                    shown = ""
+                    try:
+                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    except Exception:
+                        shown = ""
+                    if shown and shown != vm.get_name():
+                        return True
                     run = vm.is_runable()
                     paused = vm.is_paused()
                     label = "Restore" if (
@@ -329,6 +338,15 @@ class vmmVMWindow(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
                 try:
                     if not os.path.exists(path):
+                        return True
+                    if not self.is_visible():
+                        return True
+                    shown = ""
+                    try:
+                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    except Exception:
+                        shown = ""
+                    if shown and self.vm is not None and shown != self.vm.get_name():
                         return True
                     action = open(path, "r").read().strip()
                     os.remove(path)
