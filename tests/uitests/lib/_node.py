@@ -4783,7 +4783,6 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             open("/tmp/vmm-a11y-window-close.txt", "w").write(name)
-            open("/tmp/vmm-a11y-click.txt", "w").write("win-close")
         except Exception:
             pass
         if " on " in name or name in (

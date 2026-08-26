@@ -645,8 +645,33 @@ def _start_a11y_click_poll():
         cb = _A11Y_CLICK_CBS.get(text) or _A11Y_CLICK_CBS.get(text.lower())
         if cb is None:
             want = text.lower()
+            generic = {
+                "close",
+                "ok",
+                "cancel",
+                "yes",
+                "no",
+                "apply",
+                "clone",
+                "delete",
+                "finish",
+                "forward",
+                "back",
+            }
             for key, fn in list(_A11Y_CLICK_CBS.items()):
-                if want in key.lower() or key.lower() in want:
+                k = key.lower()
+                if k == want:
+                    cb = fn
+                    break
+                # Short/generic labels must be exact. "Close" used to
+                # match .win-close-* and hide the manager.
+                if want in generic or k in generic:
+                    continue
+                if want.startswith("win-close") or k.startswith(".win-close"):
+                    continue
+                if len(want) < 4:
+                    continue
+                if want in k or (len(k) >= 4 and k in want):
                     cb = fn
                     break
         if cb is not None:

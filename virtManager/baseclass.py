@@ -410,9 +410,17 @@ class vmmGObjectUI(vmmGObject):
                 from .lib import gtkcompat
 
                 gtkcompat.ensure_window_a11y_box(self.topwin)
+                title = ""
+                try:
+                    title = self.topwin.get_title() or ""
+                except Exception:
+                    title = ""
+                # Do not register the generic name "Close": click_alert_button
+                # writes that label for error dialogs, and a fuzzy/exact
+                # match here would hide the manager and exit the app.
                 gtkcompat.expose_a11y_button(
                     "win-close-%s" % id(self.topwin),
-                    "Close",
+                    ".win-close-%s" % (title or "window"),
                     self.close,
                     window=self.topwin,
                 )

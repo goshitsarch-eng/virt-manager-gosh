@@ -20,6 +20,7 @@ from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .asyncjob import vmmAsyncJob
+from .engine import vmmEngine
 from .storagebrowse import vmmStorageBrowser
 
 
@@ -244,6 +245,11 @@ class vmmCloneVM(vmmGObjectUI):
         self._reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.resize(1, 1)
+        already = False
+        try:
+            already = bool(self.topwin.get_visible())
+        except Exception:
+            already = False
         try:
             gtkcompat.set_accessible_name(self.topwin, "Clone Virtual Machine")
             self.topwin.set_title("Clone Virtual Machine")
@@ -286,6 +292,8 @@ class vmmCloneVM(vmmGObjectUI):
         except Exception:
             pass
         self.topwin.present()
+        if not already:
+            vmmEngine.get_instance().increment_window_counter()
 
     def _storage_dialog_close(self):
         self._storage_dialog.hide()
@@ -301,6 +309,11 @@ class vmmCloneVM(vmmGObjectUI):
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing clone wizard")
+        was_visible = False
+        try:
+            was_visible = bool(self.topwin and self.topwin.get_visible())
+        except Exception:
+            was_visible = False
         self._storage_dialog_close()
         self.topwin.hide()
 
@@ -311,6 +324,8 @@ class vmmCloneVM(vmmGObjectUI):
             open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("0")
         except Exception:
             pass
+        if was_visible:
+            vmmEngine.get_instance().decrement_window_counter()
         return 1
 
     def _vm_removed_cb(self, _conn, vm):
@@ -797,6 +812,7 @@ class vmmCloneVM(vmmGObjectUI):
                         except Exception:
                             parent = None
                         self.show(parent, vm)
+                        return True
             except Exception:
                 pass
             try:
