@@ -118,6 +118,10 @@ class _SentinelTableCell(object):
     def check_onscreen(self):
         return True
 
+    def bring_on_screen(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
     def click(self, *args, **kwargs):
         try:
             open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
