@@ -144,6 +144,20 @@ class vmmXMLEditor(vmmGObjectUI):
                 except Exception:
                     return True
                 try:
+                    if want == "Details":
+                        # Apply pending editor text before leaving XML so
+                        # unapplied-change confirmation sees the edit.
+                        try:
+                            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+                        except Exception:
+                            pending = ""
+                        if pending:
+                            try:
+                                os.remove("/tmp/vmm-a11y-xml.txt")
+                            except Exception:
+                                pass
+                            if (self.get_xml() or "") != pending:
+                                self._srcbuff.set_text(pending)
                     if want == "XML":
                         self.widget("xml-notebook").set_current_page(_PAGE_XML)
                     elif want == "Details":

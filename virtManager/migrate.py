@@ -263,17 +263,6 @@ class vmmMigrateDialog(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-xml.txt"
-                if os.path.exists(path) and self._xmleditor.is_xml_selected():
-                    text = open(path, "r").read()
-                    stamp = os.path.getmtime(path)
-                    if getattr(self, "_vmm_migrate_xml_seen", None) != stamp:
-                        self._vmm_migrate_xml_seen = stamp
-                        if text and (self._xmleditor.get_xml() or "") != text:
-                            self._xmleditor.set_xml(text)
-            except Exception:
-                pass
-            try:
                 path = "/tmp/vmm-a11y-migrate-address.txt"
                 if os.path.exists(path):
                     text = open(path, "r").read()
