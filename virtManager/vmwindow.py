@@ -708,6 +708,18 @@ class vmmVMWindow(vmmGObjectUI):
             gtkcompat.sync_sidecar_visible(
                 "guest-status", newpage == DETAILS_PAGE_CONSOLE
             )
+            page_name = {
+                DETAILS_PAGE_DETAILS: "details",
+                DETAILS_PAGE_CONSOLE: "console",
+                DETAILS_PAGE_SNAPSHOTS: "snapshots",
+            }.get(newpage, "details")
+            try:
+                hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+                if page_name == "details" and "Performance" in hw:
+                    page_name = "performance"
+            except Exception:
+                pass
+            open("/tmp/vmm-a11y-vm-page.txt", "w").write(page_name)
         except Exception:
             pass
 

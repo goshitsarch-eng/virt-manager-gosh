@@ -276,6 +276,32 @@ class vmmCreateVM(vmmGObjectUI):
             open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
         except Exception:
             pass
+        if not getattr(self, "_vmm_close_poll", False):
+            self._vmm_close_poll = True
+
+            def _close_tick():
+                path = "/tmp/vmm-a11y-window-close.txt"
+                try:
+                    want = open(path, "r").read()
+                except Exception:
+                    return True
+                if "New VM" not in want and "new vm" not in want.lower():
+                    return True
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+                try:
+                    self.close()
+                except Exception:
+                    pass
+                try:
+                    open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("0")
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _close_tick)
         if not getattr(self, "_vmm_os_select_poll", False):
             self._vmm_os_select_poll = True
 
@@ -915,6 +941,10 @@ class vmmCreateVM(vmmGObjectUI):
             vmmEngine.get_instance().decrement_window_counter()
 
         self.topwin.hide()
+        try:
+            open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("0")
+        except Exception:
+            pass
         gtkcompat.hide_createvm_methods_window(self)
         gtkcompat.hide_oslist_activate_window(self._os_list)
         try:

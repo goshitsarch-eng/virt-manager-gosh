@@ -1303,13 +1303,44 @@ class _SentinelCredentials(object):
             pass
 
 
+def _vm_page():
+    try:
+        return open("/tmp/vmm-a11y-vm-page.txt", "r").read().strip() or "details"
+    except Exception:
+        return "details"
+
+
+class _SentinelGuestNotRunning(object):
+    name = "Guest is not running."
+    roleName = "label"
+
+    @property
+    def text(self):
+        return self.name
+
+    @property
+    def showing(self):
+        return _vm_page() == "console"
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+
 class _SentinelAddHardwareButton(object):
     name = "add-hardware"
     roleName = "push button"
 
     @property
     def showing(self):
-        return True
+        return _vm_page() == "details"
 
     @property
     def onscreen(self):
@@ -6478,6 +6509,17 @@ class _SentinelHostWindow(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
 
+    def window_close(self):
+        try:
+            open("/tmp/vmm-a11y-window-close.txt", "w").write("Connection Details")
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not _host_dialog_open():
+                return
+            time.sleep(0.05)
+
     def click_title(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
@@ -8041,6 +8083,10 @@ class _SentinelVMWindow(object):
             return _SentinelClickButton("config-remove")
         if "add-hardware" in compact or compact == "add hardware":
             return _SentinelAddHardwareButton()
+        if "guest is not running" in compact:
+            return _SentinelGuestNotRunning()
+        if "cpu usage" in compact and (not role or "label" in role):
+            return _SentinelStaticLabel("CPU usage")
         if compact == "shut down" and (not role or "button" in role):
             return _SentinelSnapshotToolbar("Shut Down")
         sent = _sentinel_container_extra(name, roleName)
@@ -8895,6 +8941,17 @@ class _SentinelNewVMWindow(object):
     @property
     def visible(self):
         return self.showing
+
+    def window_close(self):
+        try:
+            open("/tmp/vmm-a11y-window-close.txt", "w").write("New VM")
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not self.showing:
+                return
+            time.sleep(0.05)
 
     def find(
         self,

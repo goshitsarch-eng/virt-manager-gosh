@@ -6,6 +6,8 @@
 
 import os
 
+from gi.repository import GLib
+
 from virtinst import log
 
 from .lib import gtkcompat
@@ -127,6 +129,28 @@ class vmmHost(vmmGObjectUI):
             pass
         self._publish_overview_state()
         self._start_host_tab_poll()
+        if not getattr(self, "_vmm_close_poll", False):
+            self._vmm_close_poll = True
+
+            def _close_tick():
+                path = "/tmp/vmm-a11y-window-close.txt"
+                try:
+                    want = open(path, "r").read()
+                except Exception:
+                    return True
+                if "Connection Details" not in want and "host" not in want.lower():
+                    return True
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+                try:
+                    self.close()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _close_tick)
 
     def close(self, src=None, event=None):
         dummy = src

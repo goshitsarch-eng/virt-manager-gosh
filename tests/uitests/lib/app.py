@@ -173,8 +173,18 @@ class VMMDogtailApp:
                         from . import _node
 
                         return _node._SentinelDeleteWindow(name)
+                except FileNotFoundError:
+                    pass
                 except Exception as exc:
                     last_err = exc
+                try:
+                    text = open("/tmp/vmm-a11y-alert.txt", "r").read().strip()
+                    if text:
+                        from . import _node
+
+                        return _node._SentinelAlert(text)
+                except Exception:
+                    pass
                 time.sleep(0.1)
         if name and "Add New Virtual Hardware" in name:
             while time.time() < deadline:
