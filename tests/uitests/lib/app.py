@@ -46,16 +46,29 @@ class VMMDogtailApp:
             return self._find_best_window(roleName, check_active)
         last_err = None
         deadline = time.time() + 12
-        if name == "Clone Virtual Machine":
-            while time.time() < deadline:
-                try:
-                    if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1":
-                        from . import _node
 
-                        return _node._SentinelCloneWindow()
-                except Exception as exc:
-                    last_err = exc
+        def _sentinel_is(path, expect="1"):
+            try:
+                return open(path, "r").read().strip() == expect
+            except Exception:
+                return False
+
+        def _wait_sentinel(path, factory, seconds=6, expect="1"):
+            end = min(deadline, time.time() + seconds)
+            while time.time() < end:
+                if _sentinel_is(path, expect):
+                    return factory()
                 time.sleep(0.1)
+            return None
+
+        if name == "Clone Virtual Machine":
+            from . import _node
+
+            found = _wait_sentinel(
+                "/tmp/vmm-a11y-clone-shown.txt", _node._SentinelCloneWindow
+            )
+            if found is not None:
+                return found
         if name and "Connection Details" in name:
             while time.time() < deadline:
                 try:
@@ -181,33 +194,23 @@ class VMMDogtailApp:
                     last_err = exc
                 time.sleep(0.1)
         if name in ("Remove Disk", "Delete"):
-            while time.time() < deadline:
-                try:
-                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
-                        from . import _node
+            from . import _node
 
-                        return _node._SentinelDeleteWindow(name)
-                except FileNotFoundError:
-                    pass
-                except Exception as exc:
-                    last_err = exc
+            end = min(deadline, time.time() + 6)
+            while time.time() < end:
+                if _sentinel_is("/tmp/vmm-a11y-delete-shown.txt"):
+                    return _node._SentinelDeleteWindow(name)
                 try:
                     title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
                     if name in title or (
                         name == "Remove Disk" and "Remove" in title
                     ):
-                        from . import _node
-
                         return _node._SentinelDeleteWindow(name)
                 except Exception:
                     pass
-                # CLI --show-domain-delete of a missing VM raises an
-                # error alert instead of opening Delete.
                 try:
                     alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
                     if name == "Delete" and alert and "does not have VM" in alert:
-                        from . import _node
-
                         return _node._SentinelAlert()
                 except Exception:
                     pass
@@ -253,6 +256,10 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        # Sentinel waits must not consume the whole deadline, or a
+        # missing *.shown file becomes the raised error (Clone/Delete).
+        if time.time() >= deadline - 0.5:
+            deadline = time.time() + 6
         while time.time() < deadline:
             try:
                 return self.root.find(
