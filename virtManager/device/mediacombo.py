@@ -213,7 +213,8 @@ class vmmMediaCombo(vmmGObjectUI):
             pass
 
     def get_path(self, store_media=True):
-        if getattr(self, "_vmm_media_owner", None) != "details":
+        owner = getattr(self, "_vmm_media_owner", None)
+        if owner != "details":
             try:
                 browse = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
                 if browse:
@@ -222,24 +223,34 @@ class vmmMediaCombo(vmmGObjectUI):
                     return browse
             except Exception:
                 pass
-        try:
-            set_path = "/tmp/vmm-a11y-media-entry.txt.set"
-            if os.path.exists(set_path):
-                sent = open(set_path, "r").read().strip()
-                if sent and store_media and not sent.startswith("/dev"):
-                    self.config.add_iso_path(sent)
-                return sent
-        except Exception:
-            pass
-        try:
-            if os.path.exists("/tmp/vmm-a11y-media-entry.txt"):
-                sent = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
-                if sent:
-                    if store_media and not sent.startswith("/dev"):
+            try:
+                set_path = "/tmp/vmm-a11y-media-entry.txt.set"
+                if os.path.exists(set_path):
+                    sent = open(set_path, "r").read().strip()
+                    if sent and store_media and not sent.startswith("/dev"):
                         self.config.add_iso_path(sent)
                     return sent
-        except Exception:
-            pass
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-media-entry.txt"):
+                    sent = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                    if sent:
+                        if store_media and not sent.startswith("/dev"):
+                            self.config.add_iso_path(sent)
+                        return sent
+            except Exception:
+                pass
+        else:
+            try:
+                set_path = "/tmp/vmm-a11y-details-media-entry.txt.set"
+                if os.path.exists(set_path):
+                    sent = open(set_path, "r").read().strip()
+                    if sent and store_media and not sent.startswith("/dev"):
+                        self.config.add_iso_path(sent)
+                    return sent
+            except Exception:
+                pass
         ret = uiutil.get_list_selection(self._combo, column=self.MEDIA_FIELD_PATH)
         if store_media and ret and not ret.startswith("/dev"):
             self.config.add_iso_path(ret)

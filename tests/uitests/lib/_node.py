@@ -779,11 +779,21 @@ class _SentinelEntry(object):
                 customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip()
             except Exception:
                 customize = "0"
-            if shown and customize != "1":
-                try:
-                    return open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
-                except Exception:
-                    pass
+            details_val = None
+            try:
+                if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt"):
+                    details_val = open(
+                        "/tmp/vmm-a11y-details-media-entry.txt", "r"
+                    ).read()
+            except Exception:
+                details_val = None
+            # After install the details window owns media-entry. An empty
+            # details file means the CDROM was ejected; do not fall through
+            # to leftover wizard /pool- paths.
+            if details_val is not None and shown and customize != "1":
+                return details_val
+            if details_val is not None and not details_val.strip():
+                return details_val
             for alt in (
                 "/tmp/vmm-a11y-disk-source-path.txt",
                 "/tmp/vmm-a11y-media-browse.txt",

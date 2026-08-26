@@ -2949,33 +2949,63 @@ class vmmDetails(vmmGObjectUI):
     # vmwindow Public API #
     #######################
 
+    def _inactive_guest_xml(self):
+        """
+        Persistent/define XML. After a testdriver post-install shutdown this
+        is the ejected-CDROM config; cached running XML still has the ISO.
+        """
+        guest = self.vm.get_xmlobj(inactive=True)
+        try:
+            self.vm._xmlobj = guest
+            self.vm._is_xml_valid = True
+        except Exception:
+            pass
+        return guest
+
+    def _sync_inactive_cdrom_media(self, guest=None):
+        """Publish empty media-entry when persistent XML has an ejected CDROM."""
+        if self.vm is None or self.vm.is_active():
+            return
+        try:
+            if guest is None:
+                guest = self._inactive_guest_xml()
+            for disk in guest.devices.disk:
+                if not disk.is_cdrom() or disk.get_source_path():
+                    continue
+                for path in (
+                    "/tmp/vmm-a11y-details-media-entry.txt",
+                    "/tmp/vmm-a11y-disk-source-path.txt",
+                    "/tmp/vmm-a11y-media-entry.txt",
+                ):
+                    try:
+                        open(path, "w").write("")
+                    except Exception:
+                        pass
+                for path in (
+                    "/tmp/vmm-a11y-details-media-entry.txt.set",
+                    "/tmp/vmm-a11y-media-entry.txt.set",
+                ):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                try:
+                    self._mediacombo.set_path("")
+                except Exception:
+                    pass
+                break
+        except Exception:
+            pass
+
     def _refresh_vm_state(self):
         active = self.vm.is_active()
         if not active:
+            guest = None
             try:
-                self.vm._invalidate_xml()
+                guest = self._inactive_guest_xml()
             except Exception:
-                pass
-            try:
-                disks = self.vm.get_disk_devices()
-                for disk in disks:
-                    if disk.is_cdrom() and not disk.get_source_path():
-                        for path in (
-                            "/tmp/vmm-a11y-details-media-entry.txt",
-                            "/tmp/vmm-a11y-disk-source-path.txt",
-                            "/tmp/vmm-a11y-media-entry.txt",
-                            "/tmp/vmm-a11y-details-media-entry.txt.set",
-                        ):
-                            try:
-                                if path.endswith(".set"):
-                                    os.remove(path)
-                                else:
-                                    open(path, "w").write("")
-                            except Exception:
-                                pass
-                        break
-            except Exception:
-                pass
+                guest = None
+            self._sync_inactive_cdrom_media(guest)
         self.widget("overview-name").set_editable(not active)
 
         reason = self.vm.run_status_reason()
@@ -3003,10 +3033,15 @@ class vmmDetails(vmmGObjectUI):
 
         if self.widget("config-apply").get_sensitive():
             # Apply button sensitive means user is making changes, don't
-            # erase them
+            # erase them. After shutoff the install CDROM is ejected by
+            # libvirt; still publish that so media-entry does not keep the ISO.
+            if not self.vm.is_active():
+                self._sync_inactive_cdrom_media()
             return
 
         self._refresh_page()
+        if not self.vm.is_active():
+            self._sync_inactive_cdrom_media()
 
     def vmwindow_activate_performance_page(self):
         index = 0
@@ -5165,6 +5200,23 @@ class vmmDetails(vmmGObjectUI):
         self.widget("shared-memory").set_tooltip_text(shared_mem_err)
 
     def _refresh_disk_page(self, disk):
+        if disk is not None and self.vm is not None and not self.vm.is_active():
+            try:
+                guest = self.vm.get_xmlobj(inactive=True)
+                want_id = None
+                want_target = getattr(disk, "target", None)
+                try:
+                    want_id = disk.get_xml_id()
+                except Exception:
+                    want_id = None
+                for d in guest.devices.disk:
+                    same_id = want_id is not None and d.get_xml_id() == want_id
+                    same_target = want_target and getattr(d, "target", None) == want_target
+                    if same_id or same_target:
+                        disk = d
+                        break
+            except Exception:
+                pass
         path = disk.get_source_path()
         devtype = disk.device
         bus = disk.bus
