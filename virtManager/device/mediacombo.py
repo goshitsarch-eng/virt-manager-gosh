@@ -354,7 +354,7 @@ class vmmMediaCombo(vmmGObjectUI):
         uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
         self._entry.set_position(-1)
         displayed = self._pretty_label_for_path(path) if path else ""
-        if not displayed:
+        if path and not displayed:
             try:
                 displayed = self._entry.get_text() or ""
             except Exception:
@@ -364,12 +364,12 @@ class vmmMediaCombo(vmmGObjectUI):
                 self._entry.set_text(displayed)
             except Exception:
                 pass
-        elif path:
+        else:
             try:
-                self._entry.set_text(path)
+                self._entry.set_text("")
             except Exception:
                 pass
-            displayed = path
+            displayed = path or ""
         owner = getattr(self, "_vmm_media_owner", None)
         customize = False
         try:

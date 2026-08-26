@@ -5361,7 +5361,7 @@ class vmmDetails(vmmGObjectUI):
                     pretty = self._mediacombo._pretty_label_for_path(path or "")
                 except Exception:
                     pretty = ""
-                if not pretty:
+                if path and not pretty:
                     try:
                         pretty = self._mediacombo._entry.get_text() or ""
                     except Exception:
