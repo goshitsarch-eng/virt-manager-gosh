@@ -631,6 +631,11 @@ class vmmManager(vmmGObjectUI):
                 try:
                     if not self.is_visible():
                         return True
+                    try:
+                        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                            return True
+                    except Exception:
+                        pass
                     vm = self.current_vm()
                     run = bool(vm and vm.is_runable())
                     paused = bool(vm and vm.is_paused())
@@ -657,6 +662,11 @@ class vmmManager(vmmGObjectUI):
                         return True
                     if not self.is_visible():
                         return True
+                    try:
+                        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                            return True
+                    except Exception:
+                        pass
                     action = open(path, "r").read().strip()
                     os.remove(path)
                 except Exception:
