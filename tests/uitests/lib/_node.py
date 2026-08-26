@@ -2532,6 +2532,11 @@ class _SentinelDetailsComboItem(object):
                 open("/tmp/vmm-a11y-net-source.txt", "w").write(label)
             except Exception:
                 pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+                break
+            time.sleep(0.05)
 
 
 class _SentinelAddHardwareMenuItem(object):

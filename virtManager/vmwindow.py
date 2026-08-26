@@ -555,14 +555,16 @@ class vmmVMWindow(vmmGObjectUI):
 
         pages = self.widget("details-pages")
         if pages.get_current_page() == DETAILS_PAGE_DETAILS:
-            try:
-                if self._details.widget("config-apply").get_sensitive():
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
-                        "There are unapplied changes. Would you like to apply them now?"
-                    )
-            except Exception:
-                pass
-            if self._details.vmwindow_has_unapplied_changes():
+            leaving = not is_details
+            if leaving:
+                try:
+                    if self._details.widget("config-apply").get_sensitive():
+                        open("/tmp/vmm-a11y-alert.txt", "w").write(
+                            "There are unapplied changes. Would you like to apply them now?"
+                        )
+                except Exception:
+                    pass
+            if leaving and self._details.vmwindow_has_unapplied_changes():
                 self._sync_toolbar_page_buttons(pages.get_current_page())
                 return
 
@@ -794,13 +796,30 @@ class vmmVMWindow(vmmGObjectUI):
         self._console_refresh_can_usbredir()
 
     def control_vm_run(self, src_ignore):
+        apply_on = False
         try:
-            if self._details.widget("config-apply").get_sensitive():
+            apply_on = bool(self._details.widget("config-apply").get_sensitive())
+        except Exception:
+            apply_on = False
+        if not apply_on:
+            try:
+                apply_on = (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    == "1"
+                )
+            except Exception:
+                apply_on = False
+        if apply_on:
+            try:
+                self._details._enable_apply(2)  # EDIT_NAME
+            except Exception:
+                pass
+            try:
                 open("/tmp/vmm-a11y-alert.txt", "w").write(
                     "There are unapplied changes. Would you like to apply them now?"
                 )
-        except Exception:
-            pass
+            except Exception:
+                pass
         if self._details.vmwindow_has_unapplied_changes():
             return
         vmmenu.VMActionUI.run(self, self.vm)
