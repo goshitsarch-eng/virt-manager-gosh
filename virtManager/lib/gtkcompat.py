@@ -3387,6 +3387,36 @@ def _start_config_apply_poll(details):
         except Exception:
             pass
         try:
+            mem_changed = False
+            for fpath, wid, edit in (
+                ("/tmp/vmm-a11y-mem-current.txt.set", "mem-memory", 11),
+                ("/tmp/vmm-a11y-mem-max.txt.set", "mem-maxmem", 11),
+                ("/tmp/vmm-a11y-cpu-vcpus.txt.set", "cpu-vcpus", 8),
+            ):
+                if not os.path.exists(fpath):
+                    continue
+                text = open(fpath, "r").read().strip()
+                os.remove(fpath)
+                w = d.widget(wid)
+                if w is not None:
+                    w.set_value(float(text or 0))
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(edit)
+                mem_changed = True
+            cpath = "/tmp/vmm-a11y-mem-shared.txt.click"
+            if os.path.exists(cpath):
+                os.remove(cpath)
+                w = d.widget("shared-memory")
+                if w is not None:
+                    w.set_active(not w.get_active())
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(12)
+                mem_changed = True
+            if mem_changed and hasattr(d, "_publish_mem_spins"):
+                d._publish_mem_spins()
+        except Exception:
+            pass
+        try:
             btn = d.widget("config-apply")
             if btn is None or not btn.get_sensitive():
                 return True
@@ -4069,21 +4099,33 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         except Exception:
             pass
         selected_idx = -1
-        selected_path = None
         try:
             sel = treeview.get_selection()
             model, treeiter = sel.get_selected()
             if model is not None and treeiter is not None:
-                selected_path = model.get_path(treeiter).to_string()
+                count = [0]
+                found = []
+                want = model.get_path(treeiter).to_string()
+
+                def _idx(parent):
+                    _iter = (
+                        model.iter_children(parent) if parent else model.get_iter_first()
+                    )
+                    while _iter is not None:
+                        if model.get_path(_iter).to_string() == want:
+                            found.append(count[0])
+                            return True
+                        count[0] += 1
+                        if _idx(_iter):
+                            return True
+                        _iter = model.iter_next(_iter)
+                    return False
+
+                _idx(None)
+                if found:
+                    selected_idx = found[0]
         except Exception:
-            selected_path = None
-        idx = 0
-        child = box.get_first_child()
-        while child is not None:
-            if selected_path and getattr(child, "_vmm_row_path", None) == selected_path:
-                selected_idx = idx
-            idx += 1
-            child = child.get_next_sibling()
+            selected_idx = -1
         try:
             open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
                 str(selected_idx) if selected_idx >= 0 else ""

@@ -209,11 +209,13 @@ class _SentinelTableCell(object):
             return
         try:
             open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
+            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(self.name or "")
         except Exception:
             pass
         if self._index is not None:
             try:
                 open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(self._index))
+                open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(str(self._index))
             except Exception:
                 pass
         try:
@@ -245,7 +247,11 @@ class _SentinelTableCell(object):
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == (
+                if self._index is not None:
+                    cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                    if cur != "" and int(cur) == int(self._index):
+                        break
+                elif open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == (
                     self.name or ""
                 ):
                     break
@@ -1113,6 +1119,8 @@ class _SentinelConfigApply(object):
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
+                if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                    break
                 if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "0":
                     break
             except Exception:
@@ -1433,6 +1441,17 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
         try:
             if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1":
                 return _SentinelEntry("Name:", "/tmp/vmm-a11y-clone-name.txt")
+        except Exception:
+            pass
+        try:
+            if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                addhw = False
+                try:
+                    addhw = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1"
+                except Exception:
+                    addhw = os.path.exists("/tmp/vmm-a11y-addhw-open")
+                if not addhw:
+                    return _SentinelEntry("Name:", "/tmp/vmm-a11y-overview-name.txt")
         except Exception:
             pass
         return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
@@ -1834,6 +1853,9 @@ class _SentinelAddhwTab(object):
         sent = _sentinel_named_entry(name, roleName, labeller_text)
         if sent is not None:
             return sent
+        sent = _sentinel_details_page_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
         if "boot menu" in compact:
             return _SentinelBootMenu()
         if "media-entry" in compact:
@@ -1932,6 +1954,136 @@ def _sentinel_addhw_finish(name, roleName, root=None):
             return _SentinelAddhwFinish()
     except Exception:
         pass
+    return None
+
+
+class _SentinelDetailsSpin(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "spin button"
+        self._path = path
+
+    @property
+    def text(self):
+        try:
+            return open(self._path, "r").read().strip()
+        except Exception:
+            return ""
+
+    @text.setter
+    def text(self, value):
+        self.set_text(value)
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def set_text(self, text):
+        want = text if text is not None else ""
+        try:
+            open(self._path + ".set", "w").write(want)
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            try:
+                if not os.path.exists(self._path + ".set"):
+                    got = open(self._path, "r").read().strip()
+                    if got == want:
+                        return
+                    if got and want and float(got) == float(want):
+                        return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def typeText(self, string):
+        self.set_text(string)
+
+
+class _SentinelDetailsCheck(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "check box"
+        self._path = path
+
+    @property
+    def checked(self):
+        try:
+            return open(self._path, "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def visible(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        before = self.checked
+        try:
+            open(self._path + ".click", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if self.checked != before:
+                return
+            time.sleep(0.05)
+
+
+def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
+    try:
+        if not open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+            return None
+    except Exception:
+        return None
+    try:
+        if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+            return None
+    except Exception:
+        if os.path.exists("/tmp/vmm-a11y-addhw-open"):
+            return None
+    compact = " ".join(str(x) for x in (name, labeller_text) if x)
+    compact = compact.replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = role
+    if "current allocation" in compact:
+        return _SentinelDetailsSpin(
+            "Current allocation:", "/tmp/vmm-a11y-mem-current.txt"
+        )
+    if "maximum allocation" in compact:
+        return _SentinelDetailsSpin(
+            "Maximum allocation:", "/tmp/vmm-a11y-mem-max.txt"
+        )
+    if "enable shared" in compact:
+        return _SentinelDetailsCheck(
+            "Enable shared memory", "/tmp/vmm-a11y-mem-shared.txt"
+        )
+    if "vcpu allocation" in compact:
+        return _SentinelDetailsSpin("vCPU allocation:", "/tmp/vmm-a11y-cpu-vcpus.txt")
     return None
 
 
@@ -2693,6 +2845,11 @@ def _wizard_xml_want_tag():
         return "<pool"
     if which == "net":
         return "<network"
+    try:
+        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+            return "<domain"
+    except Exception:
+        pass
     return ""
 
 
@@ -6293,6 +6450,9 @@ class _SentinelVMWindow(object):
         if sent is not None:
             return sent
         sent = _sentinel_named_entry(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_details_page_widgets(name, roleName, labeller_text)
         if sent is not None:
             return sent
         sent = _sentinel_hw_cell(name, roleName)

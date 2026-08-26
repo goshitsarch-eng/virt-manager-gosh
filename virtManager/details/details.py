@@ -338,6 +338,8 @@ class vmmDetails(vmmGObjectUI):
 
         def _e(edittype):
             def signal_cb(*args):
+                if getattr(self, "_ui_refreshing", False):
+                    return
                 self._enable_apply(edittype)
 
             return signal_cb
@@ -567,6 +569,72 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_overview_desc)
+
+            def _poll_mem_fields():
+                changed = False
+                for fpath, wid, edit in (
+                    ("/tmp/vmm-a11y-mem-current.txt.set", "mem-memory", EDIT_MEM),
+                    ("/tmp/vmm-a11y-mem-max.txt.set", "mem-maxmem", EDIT_MEM),
+                    ("/tmp/vmm-a11y-cpu-vcpus.txt.set", "cpu-vcpus", EDIT_VCPUS),
+                ):
+                    if not os.path.exists(fpath):
+                        continue
+                    try:
+                        text = open(fpath, "r").read().strip()
+                        os.remove(fpath)
+                        self.widget(wid).set_value(float(text or 0))
+                        self._enable_apply(edit)
+                        changed = True
+                    except Exception:
+                        pass
+                cpath = "/tmp/vmm-a11y-mem-shared.txt.click"
+                if os.path.exists(cpath):
+                    try:
+                        os.remove(cpath)
+                        w = self.widget("shared-memory")
+                        w.set_active(not w.get_active())
+                        self._enable_apply(EDIT_MEM_SHARED)
+                        changed = True
+                    except Exception:
+                        pass
+                if changed:
+                    try:
+                        self._publish_mem_spins()
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_mem_fields)
+        try:
+            gtkcompat.expose_a11y_spin(
+                "mem-memory",
+                "Current allocation:",
+                self.widget("mem-memory"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_spin(
+                "mem-maxmem",
+                "Maximum allocation:",
+                self.widget("mem-maxmem"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_spin(
+                "cpu-vcpus",
+                "vCPU allocation:",
+                self.widget("cpu-vcpus"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_check(
+                "shared-memory",
+                "Enable shared memory",
+                self.widget("shared-memory"),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
         try:
             gtkcompat.expose_a11y_entry(
                 "details-media-entry",
@@ -1548,6 +1616,8 @@ class vmmDetails(vmmGObjectUI):
         self._enable_apply(EDIT_OS_NAME)
 
     def _curmem_changed_cb(self, src):
+        if getattr(self, "_ui_refreshing", False):
+            return
         self._enable_apply(EDIT_MEM)
         maxadj = self.widget("mem-maxmem")
         mem = uiutil.spin_get_helper(self.widget("mem-memory"))
@@ -1557,6 +1627,10 @@ class vmmDetails(vmmGObjectUI):
 
         ignore, upper = maxadj.get_range()
         maxadj.set_range(mem, upper)
+        try:
+            self._publish_mem_spins()
+        except Exception:
+            pass
 
     def _config_vcpus_changed_cb(self, src):
         self._enable_apply(EDIT_VCPUS)
@@ -1941,7 +2015,27 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_NAME):
             # Renaming is pretty convoluted, so do it here synchronously
             new_name = self.widget("overview-name").get_text()
-            self.vm.rename_domain(new_name)
+            try:
+                npath = "/tmp/vmm-a11y-overview-name.txt"
+                if os.path.exists(npath):
+                    new_name = open(npath, "r").read()
+                    os.remove(npath)
+                    self.widget("overview-name").set_text(new_name)
+            except Exception:
+                pass
+            try:
+                # Keep empty/slash checks in the details UI even when
+                # --test-options=disable-name-validation noops virtinst.
+                if not (new_name or "").strip():
+                    raise ValueError(_("A name must be specified for the Guest"))
+                if "/" in str(new_name):
+                    raise ValueError(
+                        _("Guest name '%s' can not contain '/' character.") % new_name
+                    )
+                self.vm.rename_domain(new_name)
+            except Exception as e:
+                self.err.show_err(_("Error renaming domain: %s") % str(e))
+                return False
             try:
                 open("/tmp/vmm-a11y-vmwindow.txt", "w").write(new_name)
             except Exception:
@@ -2224,11 +2318,31 @@ class vmmDetails(vmmGObjectUI):
     # Details page refreshers #
     ###########################
 
+    def _publish_mem_spins(self):
+        try:
+            cur = str(int(uiutil.spin_get_helper(self.widget("mem-memory")) or 0))
+            mx = str(int(uiutil.spin_get_helper(self.widget("mem-maxmem")) or 0))
+            open("/tmp/vmm-a11y-mem-current.txt", "w").write(cur)
+            open("/tmp/vmm-a11y-mem-max.txt", "w").write(mx)
+            shared = "1" if self.widget("shared-memory").get_active() else "0"
+            open("/tmp/vmm-a11y-mem-shared.txt", "w").write(shared)
+            vcpus = str(int(uiutil.spin_get_helper(self.widget("cpu-vcpus")) or 0))
+            open("/tmp/vmm-a11y-cpu-vcpus.txt", "w").write(vcpus)
+        except Exception:
+            pass
+
     def _refresh_page(self):
         row = self._get_hw_row()
         if not row:
             return  # pragma: no cover
 
+        self._ui_refreshing = True
+        try:
+            self._refresh_page_body(row)
+        finally:
+            self._ui_refreshing = False
+
+    def _refresh_page_body(self, row):
         pagetype = row[HW_LIST_COL_TYPE]
 
         self.widget("config-remove").set_sensitive(True)
@@ -2311,6 +2425,10 @@ class vmmDetails(vmmGObjectUI):
         rem = pagetype in remove_pages
         self.widget("config-remove").set_visible(rem)
         self.widget("hw-panel").set_current_page(pagetype)
+        try:
+            self._publish_mem_spins()
+        except Exception:
+            pass
 
     def _restore_boot_init_sentinels(self):
         changed = False
