@@ -313,12 +313,20 @@ class VMMDogtailApp:
                 except Exception:
                     vm_open = False
                 if vm_open and hw_names:
-                    cur = ""
+                    idx = 0
                     try:
-                        cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+                        idx = int(
+                            open("/tmp/vmm-a11y-hw-selected-index.txt", "r")
+                            .read()
+                            .strip()
+                        )
                     except Exception:
                         cur = ""
-                    idx = hw_names.index(cur) if cur in hw_names else 0
+                        try:
+                            cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+                        except Exception:
+                            cur = ""
+                        idx = hw_names.index(cur) if cur in hw_names else 0
                     if key_l == "down":
                         idx = min(idx + 1, len(hw_names) - 1)
                     else:
@@ -326,6 +334,9 @@ class VMMDogtailApp:
                     nxt = hw_names[idx]
                     try:
                         open("/tmp/vmm-a11y-hw-select.txt", "w").write(nxt)
+                        open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(idx))
+                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(nxt)
+                        open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(str(idx))
                     except Exception:
                         pass
                     return

@@ -3844,6 +3844,38 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             _sync_row_selected()
         return bool(found)
 
+    def _select_index(want_idx):
+        model = treeview.get_model()
+        sel = treeview.get_selection()
+        if model is None or sel is None:
+            return False
+        try:
+            want_idx = int(want_idx)
+        except Exception:
+            return False
+        count = [0]
+
+        def _find(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                if count[0] == want_idx:
+                    sel.select_iter(_iter)
+                    return True
+                count[0] += 1
+                if _find(_iter):
+                    return True
+                _iter = model.iter_next(_iter)
+            return False
+
+        found = _find(None)
+        if found:
+            try:
+                treeview.grab_focus()
+            except Exception:
+                pass
+            _sync_row_selected()
+        return bool(found)
+
     def _sync_row_selected(*_a):
         sel = treeview.get_selection()
         selected = set()
@@ -4000,6 +4032,28 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
         except Exception:
             pass
+        selected_idx = -1
+        selected_path = None
+        try:
+            sel = treeview.get_selection()
+            model, treeiter = sel.get_selected()
+            if model is not None and treeiter is not None:
+                selected_path = model.get_path(treeiter).to_string()
+        except Exception:
+            selected_path = None
+        idx = 0
+        child = box.get_first_child()
+        while child is not None:
+            if selected_path and getattr(child, "_vmm_row_path", None) == selected_path:
+                selected_idx = idx
+            idx += 1
+            child = child.get_next_sibling()
+        try:
+            open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+                str(selected_idx) if selected_idx >= 0 else ""
+            )
+        except Exception:
+            pass
 
     pending = {"src": 0}
 
@@ -4053,6 +4107,27 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         _on_model()
 
     def _poll_hw_select():
+        ipath = "/tmp/vmm-a11y-hw-select-index.txt"
+        try:
+            itext = open(ipath, "r").read().strip()
+        except Exception:
+            itext = ""
+        if itext != "":
+            matched = False
+            try:
+                matched = bool(_select_index(itext))
+            except Exception:
+                matched = False
+            if matched:
+                try:
+                    os.remove(ipath)
+                except Exception:
+                    pass
+                try:
+                    os.remove("/tmp/vmm-a11y-hw-select.txt")
+                except Exception:
+                    pass
+                return True
         path = "/tmp/vmm-a11y-hw-select.txt"
         try:
             text = open(path, "r").read().strip()

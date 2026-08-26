@@ -78,13 +78,21 @@ def _virt_manager_app():
 class _SentinelTableCell(object):
     """hw-list row when AT-SPI walks hang after GetItems."""
 
-    def __init__(self, name, selected=False):
+    def __init__(self, name, selected=False, index=None):
         self.name = name
         self.roleName = "table cell"
         self._selected = selected
+        self._index = index
 
     @property
     def state_selected(self):
+        if self._index is not None:
+            try:
+                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                if cur != "":
+                    return int(cur) == int(self._index)
+            except Exception:
+                pass
         try:
             cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
             if cur == self.name:
@@ -203,6 +211,11 @@ class _SentinelTableCell(object):
             open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
         except Exception:
             pass
+        if self._index is not None:
+            try:
+                open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(self._index))
+            except Exception:
+                pass
         try:
             label = self.name or ""
             tab = None
@@ -5993,7 +6006,7 @@ class _SentinelHWList(object):
             if names:
                 break
             time.sleep(0.05)
-        return [_SentinelTableCell(n) for n in names]
+        return [_SentinelTableCell(n, index=i) for i, n in enumerate(names)]
 
     @property
     def showing(self):
