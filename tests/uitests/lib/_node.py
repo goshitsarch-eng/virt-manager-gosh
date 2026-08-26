@@ -4709,9 +4709,7 @@ class _SentinelCreatePoolWindow(object):
             except Exception:
                 got = ""
             want = (itemlabel or "").replace(".*", "")
-            if got and (want.lower() in got.lower() or got.lower() in want.lower()):
-                break
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+            if got and got.lower().startswith(want.lower()):
                 break
             time.sleep(0.05)
 
@@ -7949,9 +7947,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 except Exception:
                     got = ""
                 want = (itemlabel or "").replace(".*", "")
-                if got and (want.lower() in got.lower() or got.lower() in want.lower()):
-                    break
-                if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+                if got and (
+                    got.lower().startswith(want.lower())
+                    or (
+                        combolabel not in ("Type:", "Format:")
+                        and (want.lower() in got.lower() or got.lower() in want.lower())
+                    )
+                ):
                     break
                 time.sleep(0.05)
             return

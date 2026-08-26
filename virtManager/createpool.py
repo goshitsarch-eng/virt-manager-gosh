@@ -487,6 +487,8 @@ class vmmCreatePool(vmmGObjectUI):
                 score = -1
                 if ll == want:
                     score = 1000 + len(ll)
+                elif want and ll.startswith(want):
+                    score = 800 + len(want)
                 elif want and want in ll:
                     score = 500 + len(want)
                 elif ll and ll in want:
