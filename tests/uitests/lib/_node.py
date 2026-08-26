@@ -1879,16 +1879,20 @@ class _SentinelXmlPageTab(object):
             open("/tmp/vmm-a11y-xml-tab.txt", "w").write(self.name)
         except Exception:
             pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-xml-tab.txt"):
+                break
+            time.sleep(0.05)
         if self.name == "XML":
-            try:
-                open("/tmp/vmm-a11y-xml-page.txt", "w").write("1")
-            except Exception:
-                pass
-        elif self.name == "Details":
-            try:
-                open("/tmp/vmm-a11y-xml-page.txt", "w").write("0")
-            except Exception:
-                pass
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-xml-contents.txt", "r").read().strip():
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
 
 
 class _SentinelXmlEditor(object):
