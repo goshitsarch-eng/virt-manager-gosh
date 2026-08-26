@@ -1026,6 +1026,12 @@ class vmmCreateVM(vmmGObjectUI):
             _("Error: %s") % error,
             window=self.topwin,
         )
+        try:
+            open("/tmp/vmm-a11y-createvm-startup-error.txt", "w").write(
+                _("Error: %s") % error
+            )
+        except Exception:
+            pass
         return False
 
     def _show_startup_warning(self, error):
@@ -1038,6 +1044,12 @@ class vmmCreateVM(vmmGObjectUI):
             _("Warning: %s") % error,
             window=self.topwin,
         )
+        try:
+            open("/tmp/vmm-a11y-createvm-startup-error.txt", "w").write(
+                _("Warning: %s") % error
+            )
+        except Exception:
+            pass
 
     def _show_arch_warning(self, error):
         self.widget("arch-warning-box").show()
@@ -1718,6 +1730,10 @@ class vmmCreateVM(vmmGObjectUI):
     def _set_conn(self, newconn):
         self.widget("startup-error-box").hide()
         self.widget("arch-warning-box").hide()
+        try:
+            os.remove("/tmp/vmm-a11y-createvm-startup-error.txt")
+        except Exception:
+            pass
 
         oldconn = self.conn
         self.conn = newconn

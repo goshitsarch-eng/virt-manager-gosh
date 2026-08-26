@@ -9421,6 +9421,13 @@ class _SentinelNewVMWindow(object):
         compact = str(name or "").replace(".*", "").lower()
         if "install-iso-browse" in compact:
             return _SentinelClickButton("install-iso-browse")
+        try:
+            err = open("/tmp/vmm-a11y-createvm-startup-error.txt", "r").read()
+        except Exception:
+            err = ""
+        want = str(name or "").replace(".*", "")
+        if want and err and want.lower() in err.lower():
+            return _SentinelStaticLabel(err)
         raise dogtail.tree.SearchError(
             "Didn't find widget with name='%s' "
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
