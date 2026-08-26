@@ -292,7 +292,11 @@ class vmmCreateVM(vmmGObjectUI):
                     want = open(path, "r").read()
                 except Exception:
                     return True
-                if "New VM" not in want and "new vm" not in want.lower():
+                if (
+                    "New VM" not in want
+                    and "new vm" not in want.lower()
+                    and want.strip() != "create-cancel"
+                ):
                     return True
                 try:
                     os.remove(path)
@@ -2131,6 +2135,10 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("summary-storage").set_markup(storagesize)
         self.widget("summary-storage").set_visible(bool(storagesize))
         self.widget("summary-storage-path").set_markup(storagepath)
+        try:
+            open("/tmp/vmm-a11y-create-storage-path.txt", "w").write(path or "")
+        except Exception:
+            pass
 
     def _populate_summary(self):
         guest = self._gdata.build_guest()

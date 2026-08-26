@@ -1217,6 +1217,19 @@ class _SentinelClickButton(object):
                 except Exception:
                     pass
                 time.sleep(0.05)
+        if self.name == "create-cancel":
+            try:
+                open("/tmp/vmm-a11y-window-close.txt", "w").write("New VM")
+            except Exception:
+                pass
+            deadline = time.time() + 4.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() != "1":
+                        return
+                except Exception:
+                    return
+                time.sleep(0.05)
         if self.name == "New":
             deadline = time.time() + 8.0
             while time.time() < deadline:
@@ -9589,6 +9602,23 @@ class _SentinelNewVMWindow(object):
             return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
         if "storage-browse" in compact:
             return _SentinelClickButton("storage-browse")
+        if "qcow2" in compact or "storage-path" in compact or (
+            compact.startswith("/") or "/pool-" in compact or "test/bad" in compact
+        ):
+            try:
+                path = open("/tmp/vmm-a11y-create-storage-path.txt", "r").read()
+            except Exception:
+                path = ""
+            if path and (
+                not compact
+                or compact.replace(".*", "") in path.lower()
+                or path.lower() in compact
+            ):
+                return _SentinelStaticLabel(path)
+            if path:
+                return _SentinelStaticLabel(path)
+        if compact in ("cancel",) and (not role or "button" in role):
+            return _SentinelClickButton("create-cancel")
         if "architecture options" in compact:
             return _SentinelDetailsExpander(
                 "Architecture options", "/tmp/vmm-a11y-create-arch-expand"
