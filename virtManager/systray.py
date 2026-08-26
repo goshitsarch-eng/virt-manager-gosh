@@ -844,16 +844,20 @@ class vmmSystray(vmmGObject):
             raw = _a11y_read(_A11Y_ACTION)
             if not raw:
                 return True
-            try:
-                os.remove(_A11Y_ACTION)
-            except Exception:
-                pass
-            parts = [p for p in raw.split("\t") if p or p == ""]
+            parts = raw.split("\t")
             if not parts:
+                try:
+                    os.remove(_A11Y_ACTION)
+                except Exception:
+                    pass
                 return True
             kind = parts[0].strip().lower()
             try:
                 if kind == "quit":
+                    try:
+                        os.remove(_A11Y_ACTION)
+                    except Exception:
+                        pass
                     from .engine import vmmEngine
 
                     vmmEngine.get_instance().exit_app()
@@ -861,6 +865,10 @@ class vmmSystray(vmmGObject):
                     conn = self._match_conn(parts[1])
                     if conn is None:
                         return True
+                    try:
+                        os.remove(_A11Y_ACTION)
+                    except Exception:
+                        pass
                     if kind == "connect":
                         if conn.is_disconnected():
                             conn.open()
@@ -871,12 +879,29 @@ class vmmSystray(vmmGObject):
                     vm = self._match_vm(conn, parts[2])
                     if vm is None:
                         return True
+                    try:
+                        os.remove(_A11Y_ACTION)
+                    except Exception:
+                        pass
                     if kind == "pause":
                         vm.suspend()
                     else:
                         vm.resume()
+                    try:
+                        vm.recache_from_event_loop()
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        os.remove(_A11Y_ACTION)
+                    except Exception:
+                        pass
             except Exception:
                 log.debug("systray a11y action failed: %s", raw, exc_info=True)
+                try:
+                    os.remove(_A11Y_ACTION)
+                except Exception:
+                    pass
             _a11y_write(_A11Y_MENU, "0")
             self._publish_a11y_menu()
             return True

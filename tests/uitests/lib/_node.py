@@ -10179,8 +10179,6 @@ class _SentinelSystrayItem(object):
 
     @property
     def showing(self):
-        if not _systray_menu_shown():
-            return False
         parts = (self._action or "").split("\t")
         kind = parts[0] if parts else ""
         if kind in ("connect", "disconnect") and len(parts) >= 2:
