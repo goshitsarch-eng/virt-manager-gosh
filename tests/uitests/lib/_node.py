@@ -638,11 +638,20 @@ def _sentinel_arch_combo_item(name, roleName):
             items = open(path, "r").read().splitlines()
         except Exception:
             items = []
+        aliases = {
+            "qemu": "QEMU TCG",
+            "kvm": "KVM",
+        }
         for item in items:
             if not item:
                 continue
-            if item == raw or (pat is not None and pat.search(item)):
-                return _SentinelNetMenuItem(combo, item, selected)
+            shown = aliases.get(item.lower(), item)
+            if (
+                item == raw
+                or shown == raw
+                or (pat is not None and (pat.search(item) or pat.search(shown)))
+            ):
+                return _SentinelNetMenuItem(combo, shown, selected)
     return None
 
 
