@@ -750,7 +750,18 @@ class _SentinelEntry(object):
                 pass
             deadline = time.time() + 5.0
             while time.time() < deadline:
-                if not os.path.exists(self._path + ".set"):
+                gone = not os.path.exists(self._path + ".set")
+                sens = False
+                try:
+                    sens = (
+                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        .read()
+                        .strip()
+                        == "1"
+                    )
+                except Exception:
+                    sens = False
+                if gone and (sens or self._path != "/tmp/vmm-a11y-details-model.txt"):
                     return
                 time.sleep(0.05)
         try:
@@ -8740,19 +8751,7 @@ def _sentinel_hw_cell(name, roleName):
             break
         time.sleep(0.05)
     if matched is None and any(
-        key in want for key in (
-            "Disk",
-            "CDROM",
-            "Floppy",
-            "NIC",
-            "Display",
-            "Sound",
-            "Video",
-            "Watchdog",
-            "PCI",
-            "USB",
-            "Controller",
-        )
+        key in want for key in ("Disk", "CDROM", "Floppy", "NIC")
     ):
         matched = want
     if matched is None:

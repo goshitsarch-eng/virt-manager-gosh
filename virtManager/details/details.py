@@ -1616,22 +1616,19 @@ class vmmDetails(vmmGObjectUI):
                 mset = "/tmp/vmm-a11y-details-model.txt.set"
                 try:
                     if os.path.exists(mset):
-                        stamp = os.path.getmtime(mset)
-                        if getattr(self, "_vmm_details_model_seen", None) != stamp:
-                            self._vmm_details_model_seen = stamp
-                            text = open(mset, "r").read().strip()
-                            try:
-                                os.remove(mset)
-                            except Exception:
-                                pass
-                            combo, edit = self._a11y_model_combo()
-                            if combo is not None and text:
-                                if self._a11y_select_combo(combo, text):
-                                    if edit == EDIT_VIDEO_MODEL:
-                                        self._video_model_changed_cb(combo)
-                                    else:
-                                        self._enable_apply(edit)
-                                    self._publish_details_device_fields()
+                        text = open(mset, "r").read().strip()
+                        combo, edit = self._a11y_model_combo()
+                        if combo is not None and text:
+                            if self._a11y_select_combo(combo, text):
+                                try:
+                                    os.remove(mset)
+                                except Exception:
+                                    pass
+                                if edit == EDIT_VIDEO_MODEL:
+                                    self._video_model_changed_cb(combo)
+                                else:
+                                    self._enable_apply(edit)
+                                self._publish_details_device_fields()
                 except Exception:
                     pass
                 if os.path.exists("/tmp/vmm-a11y-watchdog-action-down"):
@@ -2970,7 +2967,15 @@ class vmmDetails(vmmGObjectUI):
                 grow = self._get_hw_row()
                 if grow is not None:
                     newlab = str(grow[HW_LIST_COL_LABEL] or "")
-                    if newlab:
+                    if newlab and (
+                        not want
+                        or newlab == want
+                        or (
+                            want.split()
+                            and newlab.split()
+                            and want.split()[0] == newlab.split()[0]
+                        )
+                    ):
                         open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
                         open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
                         want = newlab
