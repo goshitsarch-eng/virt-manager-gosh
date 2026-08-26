@@ -292,6 +292,11 @@ class _SentinelTableCell(object):
             # Publisher overwrites hw-selected with the GTK row (often
             # Overview). Remove/apply must use this click-only label.
             open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(self.name or "")
+            if any(
+                key in (self.name or "")
+                for key in ("USB", "PCI", "Sound", "Video", "Watchdog", "Display")
+            ):
+                open("/tmp/vmm-a11y-last-hw.txt", "w").write(self.name or "")
         except Exception:
             pass
         if self._index is not None:

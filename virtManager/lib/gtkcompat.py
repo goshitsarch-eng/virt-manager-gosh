@@ -3949,6 +3949,18 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 try:
                     open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(want)
                     open("/tmp/vmm-a11y-hw-selected.txt", "w").write(want)
+                    if any(
+                        key in want
+                        for key in (
+                            "USB",
+                            "PCI",
+                            "Sound",
+                            "Video",
+                            "Watchdog",
+                            "Display",
+                        )
+                    ):
+                        open("/tmp/vmm-a11y-last-hw.txt", "w").write(want)
                 except Exception:
                     pass
             _sync_row_selected()

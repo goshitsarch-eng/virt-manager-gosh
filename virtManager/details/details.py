@@ -2868,6 +2868,12 @@ class vmmDetails(vmmGObjectUI):
             if want:
                 break
         try:
+            last_hw = open("/tmp/vmm-a11y-last-hw.txt", "r").read().strip()
+        except Exception:
+            last_hw = ""
+        if last_hw:
+            want = last_hw
+        try:
             tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
         except Exception:
             tab = ""
