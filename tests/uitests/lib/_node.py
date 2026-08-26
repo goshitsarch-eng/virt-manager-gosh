@@ -2649,6 +2649,18 @@ class _SentinelCloneButton(object):
             open(self._path, "w").write("1")
         except Exception:
             pass
+        if self.name == "Details":
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                if _clone_stg_open():
+                    return
+                time.sleep(0.05)
+        if self.name == "Cancel" and self._path.endswith("clone-stg-cancel"):
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                if not _clone_stg_open():
+                    return
+                time.sleep(0.05)
 
 
 class _SentinelCloneCreateNew(object):

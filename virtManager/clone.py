@@ -800,25 +800,16 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-clone-details"):
-                    os.remove("/tmp/vmm-a11y-clone-details")
-                    already = False
-                    try:
-                        already = (
-                            open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip()
-                            == "1"
-                        )
-                    except Exception:
-                        already = False
-                    if not already:
-                        self._show_storage_window()
-            except Exception:
-                pass
-            try:
                 if os.path.exists("/tmp/vmm-a11y-clone-cancel"):
                     os.remove("/tmp/vmm-a11y-clone-cancel")
                     self.close()
                     return True
+                if os.path.exists("/tmp/vmm-a11y-clone-stg-cancel"):
+                    os.remove("/tmp/vmm-a11y-clone-stg-cancel")
+                    self._storage_dialog_close()
+                if os.path.exists("/tmp/vmm-a11y-clone-details"):
+                    os.remove("/tmp/vmm-a11y-clone-details")
+                    self._show_storage_window()
             except Exception:
                 pass
             try:
