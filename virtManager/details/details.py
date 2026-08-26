@@ -4328,19 +4328,26 @@ class vmmDetails(vmmGObjectUI):
 
         if self._edited(EDIT_DISK_PATH):
             path = self._mediacombo.get_path()
+            is_removable = False
+            try:
+                is_removable = bool(devobj.is_cdrom() or devobj.is_floppy())
+            except Exception:
+                is_removable = False
+            # Hard disks require a path. An empty media-combo after a
+            # lifecycle refresh is leftover noise, not a user eject.
+            if path or is_removable:
+                names = virtinst.DeviceDisk.path_in_use_by(devobj.conn, path)
+                if names:
+                    msg = _("Disk '%(path)s' is already in use by other guests %(names)s") % {
+                        "path": path,
+                        "names": names,
+                    }
+                    res = self.err.yes_no(msg, _("Do you really want to use the disk?"))
+                    if not res:
+                        return False
 
-            names = virtinst.DeviceDisk.path_in_use_by(devobj.conn, path)
-            if names:
-                msg = _("Disk '%(path)s' is already in use by other guests %(names)s") % {
-                    "path": path,
-                    "names": names,
-                }
-                res = self.err.yes_no(msg, _("Do you really want to use the disk?"))
-                if not res:
-                    return False
-
-            vmmAddStorage.check_path_search(self, self.conn, path)
-            kwargs["path"] = path or None
+                vmmAddStorage.check_path_search(self, self.conn, path)
+                kwargs["path"] = path or None
 
         if self._edited(EDIT_DISK):
             vals = self._addstorage.get_values()
