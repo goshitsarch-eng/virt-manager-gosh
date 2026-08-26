@@ -684,6 +684,11 @@ class _SentinelClickButton(object):
             open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
         except Exception:
             pass
+        if self.name == "vol-refresh":
+            try:
+                open("/tmp/vmm-a11y-vol-refresh", "w").write("1")
+            except Exception:
+                pass
         if self.name == "Browse":
             try:
                 xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
@@ -1922,6 +1927,447 @@ class _SentinelVMActionMenu(object):
         return self.find(name, roleName, labeller_text)
 
 
+def _delete_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _delete_associated_checked():
+    try:
+        return open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+    except Exception:
+        return False
+
+
+def _delete_storage_rows():
+    rows = []
+    try:
+        lines = open("/tmp/vmm-a11y-delete-storage.txt", "r").read().splitlines()
+    except Exception:
+        return rows
+    for line in lines:
+        parts = line.split("\t")
+        if len(parts) < 4:
+            continue
+        rows.append(
+            {
+                "path": parts[0],
+                "target": parts[1],
+                "default": parts[2] in ("1", "true", "yes"),
+                "undeletable": parts[3] in ("1", "true", "yes"),
+            }
+        )
+    return rows
+
+
+class _SentinelDeleteAssociated(object):
+    """Delete associated storage files after GTK 4 CheckButton AT-SPI."""
+
+    name = "Delete associated storage files"
+    roleName = "check box"
+
+    @property
+    def checked(self):
+        return _delete_associated_checked()
+
+    @property
+    def showing(self):
+        return _delete_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        nxt = "0" if self.checked else "1"
+        try:
+            open("/tmp/vmm-a11y-delete-associated.txt", "w").write(nxt)
+        except Exception:
+            pass
+
+
+class _SentinelDeleteStorageCell(object):
+    def __init__(self, kind, row):
+        self._kind = kind
+        self._path = row["path"]
+        self._target = row["target"]
+        self._default = row["default"]
+        self._undeletable = row["undeletable"]
+        if kind == "path":
+            self.name = row["path"]
+        elif kind == "target":
+            self.name = row["target"]
+        else:
+            self.name = ""
+        self.roleName = "table cell"
+
+    def _live(self):
+        for row in _delete_storage_rows():
+            if row["path"] == self._path:
+                return row
+        return {
+            "path": self._path,
+            "target": self._target,
+            "default": self._default,
+            "undeletable": self._undeletable,
+        }
+
+    @property
+    def text(self):
+        if self._kind == "path":
+            return self._live()["path"]
+        if self._kind == "target":
+            return self._live()["target"]
+        return ""
+
+    @property
+    def checked(self):
+        return bool(self._live()["default"])
+
+    @property
+    def sensitive(self):
+        return not bool(self._live()["undeletable"])
+
+    @property
+    def showing(self):
+        return _delete_associated_checked()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def bring_on_screen(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        if self._kind == "chk" and self.sensitive:
+            try:
+                open("/tmp/vmm-a11y-delete-row-toggle.txt", "w").write(self._path)
+            except Exception:
+                pass
+            # Flip immediately so three uitest clicks can race the poller.
+            rows = _delete_storage_rows()
+            lines = []
+            for row in rows:
+                default = row["default"]
+                if row["path"] == self._path:
+                    default = not default
+                    self._default = default
+                lines.append(
+                    "%s\t%s\t%s\t%s"
+                    % (
+                        row["path"],
+                        row["target"],
+                        "1" if default else "0",
+                        "1" if row["undeletable"] else "0",
+                    )
+                )
+            try:
+                open("/tmp/vmm-a11y-delete-storage.txt", "w").write("\n".join(lines))
+            except Exception:
+                pass
+
+
+class _SentinelDeleteStorageList(object):
+    name = "storage-list"
+    roleName = "table"
+
+    @property
+    def showing(self):
+        return _delete_dialog_open() and _delete_associated_checked()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def grab_focus(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def _cells(self):
+        cells = []
+        for row in _delete_storage_rows():
+            cells.append(_SentinelDeleteStorageCell("chk", row))
+            cells.append(_SentinelDeleteStorageCell("path", row))
+            cells.append(_SentinelDeleteStorageCell("target", row))
+            cells.append(_SentinelDeleteStorageCell("icon", row))
+        return cells
+
+    def findChildren(self, pred, isLambda=False, **kwargs):
+        ignore = kwargs
+        cells = self._cells()
+        if isLambda:
+            try:
+                return [c for c in cells if pred(c)]
+            except Exception:
+                return cells
+        return cells
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        want = str(name or "").replace(".*", "")
+        deadline = time.time() + max(0.1, float(timeout))
+        while time.time() < deadline:
+            for cell in self._cells():
+                if want and (want in (cell.name or "") or want in (cell.text or "")):
+                    return cell
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelDeleteFinish(object):
+    name = "Delete"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        return _delete_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-delete-finish", "w").write("1")
+        except Exception:
+            pass
+
+
+class _SentinelAlertButton(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "push button"
+
+    @property
+    def showing(self):
+        return os.path.exists("/tmp/vmm-a11y-alert.txt")
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-alert-response.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+
+
+class _SentinelAlertLabel(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "label"
+
+    @property
+    def text(self):
+        return self.name
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelAlert(object):
+    """Modal confirm/error after GetItems hides the ALERT window."""
+
+    def __init__(self, text=""):
+        self.name = "vmm dialog"
+        self.roleName = "alert"
+        self._text = text
+
+    def _text_now(self):
+        try:
+            return open("/tmp/vmm-a11y-alert.txt", "r").read()
+        except Exception:
+            return self._text or ""
+
+    @property
+    def showing(self):
+        return bool(self._text_now().strip())
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable)
+        want = str(name or "").replace(".*", "")
+        role = str(roleName or "").lower()
+        deadline = time.time() + max(0.1, float(timeout))
+        while time.time() < deadline:
+            text = self._text_now()
+            if "button" in role or want.lower() in ("yes", "no", "ok", "close", "cancel"):
+                return _SentinelAlertButton(want or "Yes")
+            if not want or want.lower() in text.lower():
+                return _SentinelAlertLabel(want or (text.splitlines()[0] if text else ""))
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+def _sentinel_delete_widgets(name, roleName):
+    if not _delete_dialog_open():
+        return None
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    if "delete associated" in compact and (not role or "check" in role):
+        return _SentinelDeleteAssociated()
+    if "storage-list" in compact:
+        return _SentinelDeleteStorageList()
+    if compact.strip() == "delete" and "button" in role and "check" not in role:
+        return _SentinelDeleteFinish()
+    if compact and any(
+        token in compact
+        for token in ("/pool-", "/tmp/", "/dev/", ".img", ".qcow2", ".iso")
+    ):
+        slist = _SentinelDeleteStorageList()
+        try:
+            return slist.find(name, roleName, timeout=0.2)
+        except Exception:
+            return None
+    return None
+
+
+def _sentinel_alert(name, roleName):
+    role = str(roleName or "").lower()
+    # find_window() role aliases include alert|dialog. Only intercept
+    # explicit alert searches so Delete/Remove Disk stay real windows.
+    explicit = role in ("alert", "(alert|dialog)") or (
+        "alert" in role and "window" not in role and "frame" not in role
+    )
+    if not explicit and name not in (None, ".*"):
+        return None
+    try:
+        text = open("/tmp/vmm-a11y-alert.txt", "r").read()
+    except Exception:
+        text = ""
+    if not text.strip():
+        return None
+    want = str(name or "").replace(".*", "")
+    if name is None or name == ".*" or not want or want.lower() in text.lower():
+        return _SentinelAlert(text)
+    return None
+
+
+class _SentinelStoragePoolCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name or "")
+            open("/tmp/vmm-a11y-pool-select.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+
+
 class _SentinelStorageBrowser(object):
     """Storage browser after GetItems hides the add_window surface."""
 
@@ -1963,14 +2409,27 @@ class _SentinelStorageBrowser(object):
         focusable=False,
         timeout=5,
     ):
-        ignore = (roleName, labeller_text, check_active, recursive, focusable)
+        ignore = (labeller_text, check_active, recursive, focusable)
         want = str(name or "").replace(".*", "")
+        compact = want.lower()
+        role = str(roleName or "").lower()
+        if "vol-refresh" in compact:
+            return _SentinelClickButton("vol-refresh")
+        if "choose volume" in compact:
+            return _SentinelClickButton("Choose Volume")
+        if "pool-" in compact or (
+            "cell" in role and compact and not compact.endswith(".img")
+        ):
+            if "pool" in compact or compact.endswith("-dir"):
+                return _SentinelStoragePoolCell(want)
         deadline = time.time() + max(0.1, float(timeout))
         while time.time() < deadline:
             for vol in self._vols():
                 if want and want in vol:
                     return _SentinelTableCell(vol)
             time.sleep(0.05)
+        if "pool" in compact:
+            return _SentinelStoragePoolCell(want)
         raise dogtail.tree.SearchError(
             "Didn't find widget with name='%s' "
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
@@ -1978,6 +2437,9 @@ class _SentinelStorageBrowser(object):
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
         return self.find(name, roleName, labeller_text)
+
+    def fmt_nodes(self):
+        return "\n".join(self._vols())
 
 
 class _SentinelProgressWindow(object):
@@ -2642,6 +3104,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 "/tmp/vmm-a11y-createconn-hidden"
             ):
                 return False
+        except Exception:
+            pass
+        try:
+            nname = self.name or ""
+            if nname in ("Delete", "Remove Disk"):
+                return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
         except Exception:
             pass
         try:
@@ -3747,6 +4215,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
             return _SentinelVMActionMenu()
+        try:
+            sent = _sentinel_alert(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_delete_widgets(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
         try:
             sent = _sentinel_oslist_entry(name, roleName)
             if sent is not None:

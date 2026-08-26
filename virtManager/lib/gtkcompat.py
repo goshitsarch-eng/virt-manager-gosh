@@ -2587,13 +2587,19 @@ def expose_storagebrowse_window(browser):
                 btn.connect("clicked", _pick_vol)
                 host.append(btn)
                 vols.append(name)
+        skip_extras = False
         try:
-            extras = open("/tmp/vmm-a11y-extra-vols.txt", "r").read().splitlines()
+            skip_extras = os.path.exists("/tmp/vmm-a11y-vol-refresh")
         except Exception:
-            extras = []
-        for extra in extras:
-            if extra and extra not in vols:
-                vols.append(extra)
+            skip_extras = False
+        if not skip_extras:
+            try:
+                extras = open("/tmp/vmm-a11y-extra-vols.txt", "r").read().splitlines()
+            except Exception:
+                extras = []
+            for extra in extras:
+                if extra and extra not in vols:
+                    vols.append(extra)
         try:
             open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
             open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")

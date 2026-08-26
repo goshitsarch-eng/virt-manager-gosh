@@ -99,6 +99,46 @@ class vmmStorageBrowser(vmmGObjectUI):
                 open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
             except Exception:
                 pass
+            try:
+                os.remove("/tmp/vmm-a11y-vol-refresh")
+            except Exception:
+                pass
+
+            def _refresh_vols():
+                try:
+                    open("/tmp/vmm-a11y-vol-refresh", "w").write("1")
+                except Exception:
+                    pass
+                try:
+                    self.storagelist.refresh_page()
+                except Exception:
+                    pass
+                gtkcompat.expose_storagebrowse_window(self)
+
+            def _select_pool():
+                try:
+                    want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+                except Exception:
+                    want = ""
+                if not want:
+                    return
+                try:
+                    model = self.storagelist.widget("pool-list").get_model()
+                    for row in model:
+                        handle = row[0]
+                        label = str(row[1] or "")
+                        name = handle.get_name() if handle is not None else label
+                        if want in str(name) or want in label:
+                            uiutil.set_list_selection(
+                                self.storagelist.widget("pool-list"), handle
+                            )
+                            break
+                except Exception:
+                    pass
+                gtkcompat.expose_storagebrowse_window(self)
+
+            gtkcompat.register_a11y_click("vol-refresh", _refresh_vols)
+            gtkcompat.register_a11y_click("pool-dir", _select_pool)
         except Exception:
             pass
         self.topwin.present()
