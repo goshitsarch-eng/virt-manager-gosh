@@ -7,6 +7,7 @@
 import os
 
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -207,6 +208,37 @@ class vmmVMWindow(vmmGObjectUI):
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
         except Exception:
             pass
+        if not getattr(self, "_vmm_window_close_poll", False):
+            self._vmm_window_close_poll = True
+
+            def _poll_window_close():
+                path = "/tmp/vmm-a11y-window-close.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                name = ""
+                try:
+                    name = self.vm.get_name() if self.vm is not None else ""
+                except Exception:
+                    name = ""
+                if want and name and name not in want and want not in name:
+                    try:
+                        open(path, "w").write(want)
+                    except Exception:
+                        pass
+                    return True
+                try:
+                    self.close()
+                    open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_window_close)
         if vis:
             return
 

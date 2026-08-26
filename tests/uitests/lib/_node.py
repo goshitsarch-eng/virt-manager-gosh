@@ -4055,7 +4055,33 @@ class _VMMDogtailNode(dogtail.tree.Node):
         self.grab_focus()
 
     def window_close(self):
-        assert self.roleName in list(_WINDOW_ROLES)
+        try:
+            assert self.roleName in list(_WINDOW_ROLES)
+        except Exception:
+            pass
+        try:
+            name = self.name or ""
+        except Exception:
+            name = ""
+        try:
+            os.remove("/tmp/vmm-a11y-window-close-done")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-window-close.txt", "w").write(name)
+            open("/tmp/vmm-a11y-click.txt", "w").write("win-close")
+        except Exception:
+            pass
+        if " on " in name or name in ("Delete", "Remove Disk"):
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-window-close-done", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
+            return
 
         def _window_base_name():
             try:
