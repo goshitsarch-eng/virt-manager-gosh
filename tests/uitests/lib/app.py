@@ -2,6 +2,7 @@
 # See the COPYING file in the top-level directory.
 
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -229,8 +230,13 @@ class VMMDogtailApp:
 
         def _alert_matches():
             text = _alert_text()
-            if text and label_text and label_text.lower() in text.lower():
-                return True
+            if text and label_text:
+                try:
+                    if re.search(label_text, text, re.I | re.DOTALL):
+                        return True
+                except re.error:
+                    if label_text.lower() in text.lower():
+                        return True
             return _missing_iso_installer_error()
 
         try:

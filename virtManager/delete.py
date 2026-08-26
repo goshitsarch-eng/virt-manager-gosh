@@ -558,6 +558,12 @@ class vmmDeleteStorage(_vmmDeleteBase):
             msg += " "
             msg += _("Storage will not be deleted.")
 
+        try:
+            open("/tmp/vmm-a11y-alert.txt", "w").write(
+                "%s\n%s" % (_("Device could not be removed from the running machine"), msg)
+            )
+        except Exception:
+            pass
         err.show_err(
             _("Device could not be removed from the running machine"),
             details=(detach_err[0] + "\n\n" + detach_err[1]),
