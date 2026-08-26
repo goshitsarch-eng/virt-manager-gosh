@@ -9557,6 +9557,12 @@ class _SentinelManagerWindow(object):
     @property
     def position(self):
         try:
+            if os.path.exists("/tmp/vmm-a11y-manager-restore-lock"):
+                parts = open("/tmp/vmm-a11y-manager-position.txt", "r").read().split()
+                return int(parts[0]), int(parts[1])
+        except Exception:
+            pass
+        try:
             import subprocess
 
             xid = ""

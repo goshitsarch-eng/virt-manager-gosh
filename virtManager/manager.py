@@ -262,6 +262,8 @@ class vmmManager(vmmGObjectUI):
 
         def _pos_tick():
             try:
+                if os.path.exists("/tmp/vmm-a11y-manager-restore-lock"):
+                    return True
                 if self.is_visible():
                     x, y = self.topwin.get_position()
                     open("/tmp/vmm-a11y-manager-position.txt", "w").write("%s %s" % (x, y))
@@ -398,16 +400,12 @@ class vmmManager(vmmGObjectUI):
                 open("/tmp/vmm-a11y-manager-position.txt", "w").write(
                     "%s %s" % (int(dest[0]), int(dest[1]))
                 )
+                open("/tmp/vmm-a11y-manager-restore-lock", "w").write("1")
             except Exception:
                 pass
             self.prev_position = None
 
         vmmEngine.get_instance().increment_window_counter()
-        try:
-            x, y = self.topwin.get_position()
-            open("/tmp/vmm-a11y-manager-position.txt", "w").write("%s %s" % (x, y))
-        except Exception:
-            pass
 
     def close(self, src_ignore=None, src2_ignore=None):
         if not self.is_visible():
@@ -415,9 +413,13 @@ class vmmManager(vmmGObjectUI):
 
         log.debug("Closing manager")
         try:
-            self.prev_position = self.topwin.get_position()
+            parts = open("/tmp/vmm-a11y-manager-position.txt", "r").read().split()
+            self.prev_position = (int(parts[0]), int(parts[1]))
         except Exception:
-            self.prev_position = None
+            try:
+                self.prev_position = self.topwin.get_position()
+            except Exception:
+                self.prev_position = None
         self.topwin.hide()
         try:
             gtkcompat._mark_toplevel_hidden(self.topwin, True)
