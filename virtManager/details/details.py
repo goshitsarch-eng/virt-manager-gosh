@@ -1586,6 +1586,20 @@ class vmmDetails(vmmGObjectUI):
             self._vmm_device_fields_poll = True
 
             def _poll_device_fields():
+                try:
+                    _tab, hw = self._details_hw_context()
+                    if hw and hw != getattr(self, "_vmm_last_refreshed_hw", None):
+                        row = self._hw_row_for_label(hw)
+                        if row is not None:
+                            self._vmm_last_refreshed_hw = hw
+                            self._ui_refreshing = True
+                            try:
+                                self._refresh_page_body(row)
+                            finally:
+                                self._ui_refreshing = False
+                            self._publish_details_device_fields()
+                except Exception:
+                    pass
                 checks = (
                     (
                         "/tmp/vmm-a11y-gfx-opengl.txt.click",

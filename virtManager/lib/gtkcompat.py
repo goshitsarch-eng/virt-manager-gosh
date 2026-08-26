@@ -4274,7 +4274,12 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                     have = ""
                     if model is not None and treeiter is not None:
                         have = _mnemonic_label(str(model[treeiter][name_column] or ""))
-                    if have != want_name and want_name not in have and have not in want_name:
+                    same = have and (
+                        have == want_name
+                        or want_name in have
+                        or have in want_name
+                    )
+                    if not same:
                         matched = bool(_select_name(want_name))
                 except Exception:
                     matched = bool(_select_name(want_name))
