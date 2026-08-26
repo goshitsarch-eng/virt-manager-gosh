@@ -1203,10 +1203,14 @@ class _SentinelClickButton(object):
                     pass
                 time.sleep(0.05)
         if self.name == "New":
-            try:
-                open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
-            except Exception:
-                pass
+            deadline = time.time() + 8.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
         if self.name == "Choose Volume":
             try:
                 open("/tmp/vmm-a11y-choose-volume", "w").write("1")

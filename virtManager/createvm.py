@@ -323,6 +323,33 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_os_select)
 
+        if not getattr(self, "_vmm_iso_browse_poll", False):
+            self._vmm_iso_browse_poll = True
+
+            def _poll_iso_browse():
+                for name in (
+                    "install-iso-browse",
+                    "install-import-browse",
+                    "install-app-browse",
+                    "install-oscontainer-browse",
+                ):
+                    path = "/tmp/vmm-a11y-%s" % name
+                    try:
+                        if not os.path.exists(path):
+                            continue
+                        os.remove(path)
+                    except Exception:
+                        continue
+                    try:
+                        widget = self.widget(name)
+                        if widget is not None:
+                            widget.emit("clicked")
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_iso_browse)
+
         if not getattr(self, "_vmm_create_name_poll", False):
             self._vmm_create_name_poll = True
 
