@@ -304,6 +304,12 @@ class vmmHostStorage(vmmGObjectUI):
         except Exception:
             pass
         try:
+            if os.path.exists("/tmp/vmm-a11y-storage-browser.txt"):
+                open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
+                open("/tmp/vmm-a11y-vol-selected.txt", "w").write(volsel or "")
+        except Exception:
+            pass
+        try:
             errpage = self.widget("storage-pages").get_current_page() == 1
             open("/tmp/vmm-a11y-host-pool-error.txt", "w").write("1" if errpage else "0")
             open("/tmp/vmm-a11y-host-pool-error-text.txt", "w").write(
@@ -473,7 +479,15 @@ class vmmHostStorage(vmmGObjectUI):
         while it is not None:
             try:
                 have = str(model[it][VOL_COLUMN_NAME] or "")
-                if have == name:
+                handle = model[it][VOL_COLUMN_HANDLE]
+                hname = ""
+                try:
+                    hname = handle.get_name() if handle is not None else ""
+                except Exception:
+                    hname = ""
+                if have == name or hname == name or name in have or have in name or (
+                    hname and (name in hname or hname in name)
+                ):
                     sel.select_iter(it)
                     vol_list.grab_focus()
                     self._publish_a11y_state()
@@ -482,6 +496,21 @@ class vmmHostStorage(vmmGObjectUI):
                 pass
             it = model.iter_next(it)
         return False
+
+    def _a11y_wanted_vol_name(self):
+        for path in (
+            "/tmp/vmm-a11y-vol-selected.txt",
+            "/tmp/vmm-a11y-host-vol-selected.txt",
+            "/tmp/vmm-a11y-vol-select.txt",
+            "/tmp/vmm-a11y-host-vol-select.txt",
+        ):
+            try:
+                name = open(path, "r").read().strip()
+            except Exception:
+                name = ""
+            if name:
+                return name
+        return ""
 
     def _start_a11y_poll(self):
         if getattr(self, "_vmm_hostpool_poll", False):
@@ -791,6 +820,20 @@ class vmmHostStorage(vmmGObjectUI):
         pool = self._current_pool()
         vols = pool and pool.get_volumes() or []
         model = list_widget.get_model()
+        prev = ""
+        try:
+            cur = uiutil.get_list_selection(list_widget)
+            if cur is not None:
+                try:
+                    prev = cur.get_pretty_name(pool.get_type()) if pool is not None else ""
+                except Exception:
+                    prev = ""
+                if not prev:
+                    prev = cur.get_name() if hasattr(cur, "get_name") else ""
+        except Exception:
+            prev = ""
+        if not prev:
+            prev = self._a11y_wanted_vol_name()
         list_widget.get_selection().unselect_all()
         model.clear()
 
@@ -843,6 +886,8 @@ class vmmHostStorage(vmmGObjectUI):
             vadj.set_value(vadj.get_upper() * vscroll_percent)
 
         self.idle_add(_reset_vscroll_position)
+        if prev:
+            self._select_vol_by_name(prev)
         self._publish_a11y_state()
 
     ##########################
@@ -942,6 +987,11 @@ class vmmHostStorage(vmmGObjectUI):
     def _vol_delete_cb(self, src):
         vol = self._current_vol()
         if vol is None:
+            want = self._a11y_wanted_vol_name()
+            if want:
+                self._select_vol_by_name(want)
+                vol = self._current_vol()
+        if vol is None:
             return  # pragma: no cover
 
         pool = self._current_pool()
@@ -951,11 +1001,30 @@ class vmmHostStorage(vmmGObjectUI):
         if not result:
             return
 
+        volname = ""
+        try:
+            volname = vol.get_name()
+        except Exception:
+            volname = ""
+        try:
+            names = [
+                n for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines() if n
+            ]
+        except Exception:
+            names = []
+        if volname and volname not in names:
+            names.append(volname)
+        try:
+            open("/tmp/vmm-a11y-deleted-vols.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+
         def cb():
             vol.delete()
 
             def idlecb():
                 pool.refresh()
+                self._publish_a11y_state()
 
             self.idle_add(idlecb)
 

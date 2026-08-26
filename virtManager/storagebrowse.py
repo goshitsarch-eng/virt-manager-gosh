@@ -202,6 +202,10 @@ class vmmStorageBrowser(vmmGObjectUI):
                 self._finish(path)
 
             gtkcompat.register_a11y_click("vol-refresh", _refresh_vols)
+            gtkcompat.register_a11y_click("vol-new", lambda: self.storagelist._vol_add_cb(None))
+            gtkcompat.register_a11y_click(
+                "vol-delete", lambda: self.storagelist._vol_delete_cb(None)
+            )
             gtkcompat.register_a11y_click("pool-dir", _select_pool)
             gtkcompat.register_a11y_click("Choose Volume", _choose_volume)
             gtkcompat.register_a11y_click("browse-cancel", self.close)
@@ -224,6 +228,10 @@ class vmmStorageBrowser(vmmGObjectUI):
             if not getattr(self, "_vmm_pool_select_poll", False):
                 self._vmm_pool_select_poll = True
                 GLib.timeout_add(50, _poll_pool_select)
+            try:
+                self.storagelist._start_a11y_poll()
+            except Exception:
+                pass
         except Exception:
             pass
         self.topwin.present()

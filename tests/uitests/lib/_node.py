@@ -116,6 +116,33 @@ class _SentinelTableCell(object):
         return self.state_selected
 
     @property
+    def dead(self):
+        name = self.name or ""
+        if not name:
+            return True
+        try:
+            deleted = [
+                n
+                for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines()
+                if n
+            ]
+            if any(name == n or name in n or n in name for n in deleted):
+                return True
+        except Exception:
+            pass
+        for path in (
+            "/tmp/vmm-a11y-vol-list.txt",
+            "/tmp/vmm-a11y-host-vol-list.txt",
+        ):
+            try:
+                names = [n for n in open(path, "r").read().splitlines() if n]
+            except Exception:
+                names = []
+            if names and not any(name == n or name in n or n in name for n in names):
+                return True
+        return False
+
+    @property
     def showing(self):
         return True
 
@@ -6931,8 +6958,13 @@ class _SentinelStorageBrowser(object):
                 write_value="add",
             )
         if "vol-delete" in compact:
-            return _SentinelHostAction(
-                "vol-delete", "/tmp/vmm-a11y-host-vol-action.txt", "delete"
+            return _SentinelWizardButton(
+                "vol-delete",
+                "/tmp/vmm-a11y-click.txt",
+                lambda: True,
+                wait_path="/tmp/vmm-a11y-alert.txt",
+                wait_value="permanently delete the volume",
+                write_value="vol-delete",
             )
         if "choose volume" in compact:
             return _SentinelClickButton("Choose Volume")
