@@ -471,6 +471,7 @@ class VMMDogtailApp:
                         open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(idx))
                         open("/tmp/vmm-a11y-hw-selected.txt", "w").write(nxt)
                         open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(str(idx))
+                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(nxt)
                     except Exception:
                         pass
                     return

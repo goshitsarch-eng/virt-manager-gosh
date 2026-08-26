@@ -115,6 +115,15 @@ class _SentinelTableCell(object):
 
     @property
     def state_selected(self):
+        # test-many-devices has duplicate NIC/Controller/Disk labels.
+        # When an index is published, only that row is selected.
+        if self._index is not None:
+            try:
+                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                if cur != "":
+                    return int(cur) == int(self._index)
+            except Exception:
+                pass
         for path in (
             "/tmp/vmm-a11y-hw-clicked.txt",
             "/tmp/vmm-a11y-hw-selected.txt",
@@ -147,13 +156,6 @@ class _SentinelTableCell(object):
                 return True
         except Exception:
             pass
-        if self._index is not None:
-            try:
-                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
-                if cur != "":
-                    return int(cur) == int(self._index)
-            except Exception:
-                pass
         try:
             cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
             if cur == self.name:
