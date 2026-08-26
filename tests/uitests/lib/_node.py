@@ -2388,16 +2388,15 @@ def _clone_stg_open():
 
 def _clone_storage_rows():
     rows = []
+    current = None
     try:
         lines = open("/tmp/vmm-a11y-clone-storage.txt", "r").read().splitlines()
     except Exception:
         return rows
     for line in lines:
         parts = line.split("\t")
-        if len(parts) < 6:
-            continue
-        rows.append(
-            {
+        if len(parts) >= 6:
+            current = {
                 "target": parts[0],
                 "orig": parts[1],
                 "new": parts[2],
@@ -2405,7 +2404,9 @@ def _clone_storage_rows():
                 "clone": parts[4] in ("1", "true", "yes"),
                 "text": parts[5],
             }
-        )
+            rows.append(current)
+        elif current is not None and line.strip():
+            current["text"] = ("%s %s" % (current["text"], line.strip())).strip()
     return rows
 
 
@@ -2454,14 +2455,15 @@ class _SentinelCloneChkCell(object):
             text = row["text"]
             if row["target"] == self._target and row["cloneable"]:
                 clone = not clone
+                text = text.replace("\n", " | ")
                 if clone:
                     text = text.replace("Share disk with", "Clone this disk")
                     if "Clone this disk" not in text:
-                        text = (text + "\nClone this disk").strip()
+                        text = (text + " | Clone this disk").strip(" |")
                 else:
                     text = text.replace("Clone this disk", "Share disk with")
                     if "Share disk with" not in text:
-                        text = (text + "\nShare disk with").strip()
+                        text = (text + " | Share disk with").strip(" |")
             lines.append(
                 "%s\t%s\t%s\t%s\t%s\t%s"
                 % (

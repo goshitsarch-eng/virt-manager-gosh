@@ -702,7 +702,10 @@ class vmmCloneVM(vmmGObjectUI):
                         sinfo.get_new_disk_path() or "",
                         "1" if sinfo.is_cloneable() else "0",
                         "1" if sinfo.is_clone_requested() else "0",
-                        (self._plain_storage_text(sinfo) or "").replace("\t", " "),
+                        (self._plain_storage_text(sinfo) or "")
+                        .replace("\t", " ")
+                        .replace("\r", " ")
+                        .replace("\n", " | "),
                     )
                 )
             open("/tmp/vmm-a11y-clone-storage.txt", "w").write("\n".join(lines))
