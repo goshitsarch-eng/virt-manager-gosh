@@ -174,13 +174,18 @@ class vmmHostNets(vmmGObjectUI):
     def _nav_list(self, direction):
         names = []
         try:
-            names = [
-                n
-                for n in open("/tmp/vmm-a11y-host-net-list.txt", "r").read().splitlines()
-                if n
-            ]
+            names = [n.get_name() for n in self.conn.list_nets() if n.get_name()]
         except Exception:
             names = []
+        if not names:
+            try:
+                names = [
+                    n
+                    for n in open("/tmp/vmm-a11y-host-net-list.txt", "r").read().splitlines()
+                    if n
+                ]
+            except Exception:
+                names = []
         cur = ""
         try:
             cur = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
@@ -208,7 +213,7 @@ class vmmHostNets(vmmGObjectUI):
             try:
                 net = model[it][0]
                 have = net.get_name() if net is not None else ""
-                if have == name or name in have or have in name:
+                if have == name or name == have:
                     sel.select_iter(it)
                     net_list.grab_focus()
                     self._publish_a11y_state()
@@ -242,12 +247,6 @@ class vmmHostNets(vmmGObjectUI):
                 if os.path.exists(nav) and which in ("net", ""):
                     direction = open(nav, "r").read().strip().lower()
                     os.remove(nav)
-                    try:
-                        open("/tmp/vmm-a11y-host-nav-debug.txt", "a").write(
-                            "net nav %s which=%s\n" % (direction, which)
-                        )
-                    except Exception:
-                        pass
                     self._nav_list(direction)
             except Exception:
                 pass

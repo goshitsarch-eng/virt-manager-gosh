@@ -218,13 +218,32 @@ class VMMDogtailApp:
                 except Exception:
                     host_list = os.path.exists("/tmp/vmm-a11y-host-active-list.txt")
                 if host_list:
+                    which = ""
+                    try:
+                        which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                    except Exception:
+                        which = "net"
+                    selected_path = (
+                        "/tmp/vmm-a11y-host-pool-selected.txt"
+                        if which == "pool"
+                        else "/tmp/vmm-a11y-host-net-selected.txt"
+                    )
+                    before = ""
+                    try:
+                        before = open(selected_path, "r").read().strip()
+                    except Exception:
+                        before = ""
                     try:
                         open("/tmp/vmm-a11y-host-nav.txt", "w").write(key_l)
                     except Exception:
                         pass
-                    deadline = time.time() + 2.0
+                    deadline = time.time() + 3.0
                     while time.time() < deadline:
-                        if not os.path.exists("/tmp/vmm-a11y-host-nav.txt"):
+                        try:
+                            now = open(selected_path, "r").read().strip()
+                        except Exception:
+                            now = ""
+                        if now and now != before:
                             return
                         time.sleep(0.05)
                     return

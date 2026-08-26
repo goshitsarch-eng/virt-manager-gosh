@@ -264,6 +264,11 @@ class vmmHostStorage(vmmGObjectUI):
             pool = self._current_pool()
             if pool is not None:
                 selected = pool.get_name() or ""
+            if not pools:
+                for pool in self.conn.list_pools():
+                    n = pool.get_name()
+                    if n:
+                        pools.append(n)
         except Exception:
             pass
         try:
@@ -305,13 +310,18 @@ class vmmHostStorage(vmmGObjectUI):
     def _nav_list(self, direction):
         names = []
         try:
-            names = [
-                n
-                for n in open("/tmp/vmm-a11y-host-pool-list.txt", "r").read().splitlines()
-                if n
-            ]
+            names = [p.get_name() for p in self.conn.list_pools() if p.get_name()]
         except Exception:
             names = []
+        if not names:
+            try:
+                names = [
+                    n
+                    for n in open("/tmp/vmm-a11y-host-pool-list.txt", "r").read().splitlines()
+                    if n
+                ]
+            except Exception:
+                names = []
         cur = ""
         try:
             cur = open("/tmp/vmm-a11y-host-pool-selected.txt", "r").read().strip()
@@ -339,7 +349,7 @@ class vmmHostStorage(vmmGObjectUI):
             try:
                 pool = model[it][POOL_COLUMN_HANDLE]
                 have = pool.get_name() if pool is not None else ""
-                if have == name or name in have or have in name:
+                if have == name or name == have:
                     sel.select_iter(it)
                     pool_list.grab_focus()
                     self._publish_a11y_state()
