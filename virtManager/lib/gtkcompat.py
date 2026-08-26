@@ -476,16 +476,23 @@ def _accel_group_disable(window, group):
 def _activate_builder_item(item):
     if item is None:
         return False
-    for meth in ("activate", "emit"):
+    # GTK 4 Button.activate() is a no-op until the widget can receive
+    # events. File->Close lives in an unmapped menu, so emit the GTK 3
+    # activate/clicked signals directly.
+    emitted = False
+    for sig in ("activate", "clicked"):
         try:
-            if meth == "emit":
-                item.emit("clicked")
-            else:
-                item.activate()
-            return True
+            item.emit(sig)
+            emitted = True
         except Exception:
-            continue
-    return False
+            pass
+    if emitted:
+        return True
+    try:
+        item.activate()
+        return True
+    except Exception:
+        return False
 
 
 def _menubar_accel_active():
@@ -7037,12 +7044,11 @@ def _patch_widget_methods():
 
         Gtk.Window.move = move
 
-    if not hasattr(Gtk.Window, "get_size"):
+    # GTK 4 Widget.get_size(orientation) is not the GTK 3 2-tuple API.
+    def get_size(self):
+        return _window_get_size(self)
 
-        def get_size(self):
-            return _window_get_size(self)
-
-        Gtk.Window.get_size = get_size
+    Gtk.Window.get_size = get_size
 
     def set_border_width(self, width):
         self.set_margin_top(width)
