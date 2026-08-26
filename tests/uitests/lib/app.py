@@ -250,6 +250,10 @@ class VMMDogtailApp:
             except Exception:
                 pass
             try:
+                open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+            except Exception:
+                pass
+            try:
                 utils.check(lambda: _alert_text() != stored, timeout=3)
             except Exception:
                 try:

@@ -1823,7 +1823,21 @@ class vmmDetails(vmmGObjectUI):
                     except Exception:
                         pass
             try:
+                self._repopulate_hw_list()
+            except Exception:
+                pass
+            try:
                 self._refresh_page()
+            except Exception:
+                pass
+            try:
+                row = self._get_hw_row()
+                if row and row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
+                    dev = row[HW_LIST_COL_DEVICE]
+                    path = ""
+                    if dev is not None and hasattr(dev, "get_source_path"):
+                        path = dev.get_source_path() or ""
+                    open("/tmp/vmm-a11y-disk-source-path.txt", "w").write(path)
             except Exception:
                 pass
         return success
