@@ -11313,11 +11313,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return _SentinelConnMenu()
             return _SentinelConnMenuItem(compact_name)
         if name and "authentication required" in str(name).replace(".*", "").lower():
-            try:
-                if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
-                    return _SentinelConnectAuthWindow()
-            except Exception:
-                pass
+            deadline = time.time() + max(1.0, float(timeout or 5))
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                        return _SentinelConnectAuthWindow()
+                except Exception:
+                    pass
+                time.sleep(0.05)
+            raise dogtail.tree.SearchError(
+                "Didn't find widget with name='%s' "
+                "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+            )
         if name and str(name).replace(".*", "").lower() in ("remove disk", "delete"):
             role = str(raw_role or "").lower()
             if _delete_dialog_open() and (

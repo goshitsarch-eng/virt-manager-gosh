@@ -913,7 +913,12 @@ class vmmManager(vmmGObjectUI):
                 try:
                     if model[_iter][ROW_IS_CONN]:
                         key = str(model[_iter][ROW_SORT_KEY] or "")
-                        connected = bool(model[_iter][ROW_IS_CONN_CONNECTED])
+                        handle = model[_iter][ROW_HANDLE]
+                        connected = False
+                        try:
+                            connected = bool(handle is not None and handle.is_active())
+                        except Exception:
+                            connected = bool(model[_iter][ROW_IS_CONN_CONNECTED])
                         if key:
                             conns.append("%s\t%s" % (key, "1" if connected else "0"))
                 except Exception:
