@@ -3277,6 +3277,19 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     if compact in ("cpu-model",) or "cpu-model" in compact:
         return _SentinelDetailsCombo("cpu-model")
     if "copy host" in compact:
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if "host-" in open("/tmp/vmm-a11y-copy-host.txt", "r").read():
+                    break
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-cpu-copy-host.txt", "r").read().strip() == "1":
+                    break
+            except Exception:
+                pass
+            time.sleep(0.05)
         return _SentinelDetailsCheck("Copy host", "/tmp/vmm-a11y-cpu-copy-host.txt")
     if "cpu security" in compact:
         return _SentinelDetailsCheck("CPU security", "/tmp/vmm-a11y-cpu-secure.txt")
