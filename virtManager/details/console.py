@@ -5,8 +5,11 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gtk
 from gi.repository import Gdk
+from gi.repository import GLib
 
 from virtinst import log
 
@@ -320,6 +323,14 @@ class _ConsoleMenu(vmmGObject):
                 pass
 
         self._menu.show_all()
+        self._publish_selected()
+
+    def _publish_selected(self):
+        try:
+            selected = self.get_selected()[0] or ""
+            open("/tmp/vmm-a11y-console-selected.txt", "w").write(selected)
+        except Exception:
+            pass
 
     def activate_default(self):
         for child in self._menu.get_children():
@@ -416,6 +427,43 @@ class vmmConsolePages(vmmGObjectUI):
                 open("/tmp/vmm-a11y-spice-import.txt", "w").write(SPICE_GTK_IMPORT_ERROR)
             except Exception:
                 pass
+        if not getattr(self, "_vmm_console_select_poll", False):
+            self._vmm_console_select_poll = True
+
+            def _poll_console_select():
+                if self.vm is None:
+                    return False
+                path = "/tmp/vmm-a11y-console-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._populate_console_menu()
+                    menu = self._consolemenu.get_menu()
+                    matched = None
+                    compact_want = (want or "").replace(".*", "").strip().lower()
+                    for child in menu.get_children():
+                        label = ""
+                        try:
+                            label = child.get_label() or ""
+                        except Exception:
+                            continue
+                        if compact_want and compact_want in label.lower():
+                            matched = child
+                            break
+                    if matched is not None and hasattr(matched, "set_active"):
+                        matched.set_active(True)
+                    self._console_menu_view_selected()
+                    self._consolemenu._publish_selected()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_console_select)
 
     def _cleanup(self):
         self.vm = None

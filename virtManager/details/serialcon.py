@@ -293,6 +293,10 @@ class vmmSerialConsole(vmmGObject):
     def _show_error(self, msg):
         self._error_label.set_markup("<b>%s</b>" % msg)
         self._box.set_current_page(1)
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+        except Exception:
+            pass
 
     def _lookup_dev(self):
         devs = vmmSerialConsole.get_serialcon_devices(self.vm)

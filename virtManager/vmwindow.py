@@ -208,6 +208,11 @@ class vmmVMWindow(vmmGObjectUI):
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
         except Exception:
             pass
+        if not vis:
+            try:
+                os.remove("/tmp/vmm-a11y-console-error.txt")
+            except Exception:
+                pass
         if not getattr(self, "_vmm_window_close_poll", False):
             self._vmm_window_close_poll = True
 

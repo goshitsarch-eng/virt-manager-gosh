@@ -6,8 +6,10 @@
 # See the COPYING file in the top-level directory.
 
 import os
+import socket
 
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import GObject
 
 import gi
@@ -55,11 +57,26 @@ if SPICE_GTK_IMPORT_ERROR:
         pass
 
 from . import gtk4display
+from .sshtunnels import SSHTunnels
+from ..baseclass import vmmGObject
 
 from virtinst import log
 
-from .sshtunnels import SSHTunnels
-from ..baseclass import vmmGObject
+
+def _unresolvable_host_error(host):
+    """
+    GTK-VNC / spice-gtk report getaddrinfo failures as
+    ``Error resolving "HOST": ...``. Reproduce that text when the
+    GTK 4 fallback opens a host that cannot be resolved (testdriver
+    console checks use 256.256.256.256 / 257.0.0.1).
+    """
+    if not host:
+        return None
+    try:
+        socket.getaddrinfo(str(host), None)
+    except socket.gaierror as exc:
+        return "Error resolving '%s': %s" % (host, exc)
+    return None
 
 
 ##################################
@@ -221,6 +238,14 @@ class Viewer(vmmGObject):
 
     def _emit_disconnected(self, errdetails=None):
         ssherr = self._tunnels.get_err_output()
+        if not ssherr and self._ginfo.need_tunnel():
+            # ssh is forked from the tunnel scheduler; give it a moment
+            # to write stderr before we publish the disconnect page.
+            for _ignore in range(8):
+                GLib.usleep(25000)
+                ssherr = self._tunnels.get_err_output()
+                if ssherr:
+                    break
         self.emit("disconnected", errdetails, ssherr)
 
     def _set_desktop_resolution(self, w, h):
@@ -509,6 +534,9 @@ class VNCViewer(Viewer):
 
     def _open_host(self):
         host, port, ignore = self._ginfo.get_conn_host()
+        resolve_err = _unresolvable_host_error(host)
+        if resolve_err:
+            raise RuntimeError(resolve_err)
         log.debug("VNC connecting to host=%s port=%s", host, port)
         self._display.open_host(host, port)
 
@@ -765,6 +793,9 @@ class SpiceViewer(Viewer):
 
     def _open_host(self):
         host, port, tlsport = self._ginfo.get_conn_host()
+        resolve_err = _unresolvable_host_error(host)
+        if resolve_err:
+            raise RuntimeError(resolve_err)
         self._create_spice_session()
 
         log.debug("Spice connecting to host=%s port=%s tlsport=%s", host, port, tlsport)

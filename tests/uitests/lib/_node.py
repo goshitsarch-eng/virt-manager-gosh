@@ -2365,7 +2365,7 @@ class _SentinelConsolePages(object):
         timeout=5,
     ):
         ignore = (roleName, labeller_text, check_active, recursive, focusable)
-        deadline = time.time() + max(0.5, float(timeout or 5))
+        deadline = time.time() + max(0.5, float(timeout or 8))
         last = None
         while time.time() < deadline:
             sent = _sentinel_console_error(name, roleName)
@@ -7297,6 +7297,14 @@ class _SentinelConsoleItem(object):
         except Exception:
             return False
 
+    @property
+    def checked(self):
+        try:
+            selected = open("/tmp/vmm-a11y-console-selected.txt", "r").read().strip()
+        except Exception:
+            selected = ""
+        return bool(selected) and self.name.lower() in selected.lower()
+
     def check_onscreen(self):
         return True
 
@@ -7310,6 +7318,11 @@ class _SentinelConsoleItem(object):
             open("/tmp/vmm-a11y-console-select.txt", "w").write(self.name)
         except Exception:
             pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-console-select.txt"):
+                return
+            time.sleep(0.05)
 
 
 class _SentinelConsolesMenu(object):

@@ -5896,6 +5896,12 @@ class CheckMenuItem(Gtk.CheckButton):
     def get_child(self):
         return self
 
+    def toggled(self):
+        # GTK3 gtk_check_menu_item_toggled() emits the signal without
+        # changing the active state. Console activate_default() relies
+        # on that so a previously selected Serial item stays selected.
+        self.emit("toggled")
+
 
 class RadioMenuItem(CheckMenuItem):
     __gtype_name__ = "GtkRadioMenuItem"
