@@ -3476,8 +3476,6 @@ class _SentinelHostListCell(object):
                 os.remove("/tmp/vmm-a11y-host-vol-menu-hidden")
             except Exception:
                 pass
-        except Exception:
-            pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if self.state_selected:
