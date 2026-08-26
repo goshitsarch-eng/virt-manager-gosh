@@ -761,6 +761,15 @@ class vmmManager(vmmGObjectUI):
                     if os.path.exists("/tmp/vmm-a11y-prefs-open"):
                         os.remove("/tmp/vmm-a11y-prefs-open")
                         self.show_preferences(None)
+                    if os.path.exists("/tmp/vmm-a11y-about-open"):
+                        os.remove("/tmp/vmm-a11y-about-open")
+                        self.show_about(None)
+                    if os.path.exists("/tmp/vmm-a11y-about-close"):
+                        os.remove("/tmp/vmm-a11y-about-close")
+                        from .about import vmmAbout
+
+                        if vmmAbout._instance:
+                            vmmAbout._instance.close()
                 except Exception:
                     pass
                 try:

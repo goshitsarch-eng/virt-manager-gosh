@@ -107,6 +107,10 @@ class vmmAbout(vmmGObject):
         dialog.set_child(box)
 
         def _hide(*_a):
+            try:
+                open("/tmp/vmm-a11y-about-shown.txt", "w").write("0")
+            except Exception:
+                pass
             dialog.hide()
             dialog.set_visible(False)
             dialog.destroy()
@@ -130,6 +134,10 @@ class vmmAbout(vmmGObject):
         dialog.add_controller(sctl)
         dialog.connect("close-request", lambda *_a: _hide())
         self._dialog = dialog
+        try:
+            open("/tmp/vmm-a11y-about-shown.txt", "w").write("1")
+        except Exception:
+            pass
         dialog.present()
         try:
             dialog.grab_focus()
@@ -139,6 +147,10 @@ class vmmAbout(vmmGObject):
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing about")
         if self._dialog:
+            try:
+                open("/tmp/vmm-a11y-about-shown.txt", "w").write("0")
+            except Exception:
+                pass
             self._dialog.hide()
             self._dialog.destroy()
             self._dialog = None

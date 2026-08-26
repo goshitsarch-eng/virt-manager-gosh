@@ -4253,6 +4253,67 @@ class _SentinelShutdownSubmenu(object):
         return self.find(name, roleName, labeller_text)
 
 
+class _SentinelAboutWindow(object):
+    name = "About"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-about-shown.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout, labeller_text, roleName)
+        compact = str(name or "").replace(".*", "").lower().strip()
+        if "copyright" in compact:
+            return _SentinelStaticLabel("Copyright (C) 2006-2026 Red Hat Inc.")
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(
+            (".*%s.*" % name) if name else None,
+            (".*%s.*" % roleName) if roleName else None,
+            labeller_text,
+        )
+
+    def keyCombo(self, combo, *args, **kwargs):
+        ignore = (args, kwargs)
+        if "esc" in str(combo or "").lower():
+            try:
+                open("/tmp/vmm-a11y-about-close", "w").write("1")
+            except Exception:
+                pass
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                if not self.visible:
+                    return
+                time.sleep(0.05)
+
+
 class _SentinelAppBarItem(object):
     def __init__(self, name, roleName="menu item"):
         self.name = name
@@ -4278,6 +4339,8 @@ class _SentinelAppBarItem(object):
         try:
             if key == "Preferences":
                 open("/tmp/vmm-a11y-prefs-open", "w").write("1")
+            elif key == "About":
+                open("/tmp/vmm-a11y-about-open", "w").write("1")
             elif key.lower() in (
                 "guest cpu",
                 "host cpu",
@@ -4331,6 +4394,8 @@ class _SentinelAppBarMenu(object):
             return _SentinelAppBarMenu("Graph")
         if compact == "preferences":
             return _SentinelAppBarItem("Preferences")
+        if compact == "about":
+            return _SentinelAppBarItem("About")
         aliases = {
             "guest cpu": "Guest CPU",
             "host cpu": "Host CPU",
@@ -12600,10 +12665,24 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelShutdownSubmenu()
         compact_bar = str(name or "").replace(".*", "").lower().strip()
         role_bar = str(raw_role or "").lower()
-        if compact_bar in ("edit", "view", "file") and (
+        if compact_bar in ("edit", "view", "file", "help") and (
             not role_bar or ("menu" in role_bar and "item" not in role_bar)
         ):
             return _SentinelAppBarMenu(compact_bar)
+        if compact_bar == "about":
+            if "item" in role_bar or (
+                "menu" in role_bar and "dialog" not in role_bar and "window" not in role_bar
+            ):
+                return _SentinelAppBarItem("About")
+            deadline = time.time() + max(0.5, float(timeout or 5))
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-about-shown.txt", "r").read().strip() == "1":
+                        return _SentinelAboutWindow()
+                except Exception:
+                    pass
+                time.sleep(0.05)
+            return _SentinelAboutWindow()
         if "preferences" in compact_bar and (not role_bar or "item" in role_bar):
             return _SentinelAppBarItem("Preferences")
         if compact_bar in ("delete", "quit", "clone...") and (
