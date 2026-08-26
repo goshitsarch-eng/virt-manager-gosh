@@ -4656,6 +4656,15 @@ def _run_modal(window, response_signal="response"):
     for _ in range(20):
         if not ctx.iteration(False):
             break
+    # Discard leftover OK/Close files from file-only validation alerts.
+    try:
+        resp = "/tmp/vmm-a11y-alert-response.txt"
+        alert = "/tmp/vmm-a11y-alert.txt"
+        if os.path.exists(resp):
+            if not os.path.exists(alert) or os.path.getmtime(resp) < os.path.getmtime(alert):
+                os.remove(resp)
+    except Exception:
+        pass
 
     def _poll_alert_response():
         path = "/tmp/vmm-a11y-alert-response.txt"

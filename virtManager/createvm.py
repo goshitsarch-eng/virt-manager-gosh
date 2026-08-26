@@ -565,10 +565,33 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _write_a11y_alert(self, msg):
         try:
+            os.remove("/tmp/vmm-a11y-alert-response.txt")
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-alert.txt", "w").write(msg or "")
         except Exception:
             pass
         log.debug("Validation Error: %s", msg)
+
+        def _consume_file_alert():
+            path = "/tmp/vmm-a11y-alert-response.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                os.remove(path)
+            except Exception:
+                return True
+            try:
+                os.remove("/tmp/vmm-a11y-alert.txt")
+            except Exception:
+                pass
+            return False
+
+        try:
+            GLib.timeout_add(50, _consume_file_alert)
+        except Exception:
+            pass
         return False
 
     def _publish_method_a11y(self):
