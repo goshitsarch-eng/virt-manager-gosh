@@ -598,6 +598,11 @@ class VMMDogtailApp:
     #################################
 
     def get_manager(self, check_active=True):
+        # find_window("Virtual Machine Manager") is a sentinel and does
+        # not launch the process. Cell clicks that write vm-select must
+        # happen after open(), or the next root.find wipes those files.
+        if self._root is None:
+            self.open()
         if not self._manager:
             self._manager = self.find_window("Virtual Machine Manager", check_active=check_active)
         return self._manager
@@ -964,6 +969,18 @@ class VMMDogtailApp:
     ):
         manager = self.get_manager()
         vmcell = manager.find(vmname + "\n", "table cell")
+        try:
+            real = vmname.split("\n")[0].strip()
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(real)
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real)
+            if clone:
+                open("/tmp/vmm-a11y-clone-open.txt", "w").write(real)
+            if delete:
+                open("/tmp/vmm-a11y-delete-open.txt", "w").write(real)
+            if migrate:
+                open("/tmp/vmm-a11y-migrate-open.txt", "w").write(real)
+        except Exception:
+            pass
 
         if run:
             action = "Run"

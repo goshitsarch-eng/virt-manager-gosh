@@ -567,11 +567,25 @@ class vmmManager(vmmGObjectUI):
         if vm is None:
             vm = self._a11y_resolve_vm() if name else None
         if vm is None:
+            try:
+                open("/tmp/vmm-a11y-dialog-open-err.txt", "w").write(
+                    "no-vm path=%s name=%s" % (path, name)
+                )
+            except Exception:
+                pass
             gtkcompat.restore_a11y_request(path, name)
             return False
         try:
             opener(self, vm)
         except Exception:
+            try:
+                import traceback
+
+                open("/tmp/vmm-a11y-dialog-open-err.txt", "w").write(
+                    "opener %s %s\n%s" % (path, name, traceback.format_exc())
+                )
+            except Exception:
+                pass
             gtkcompat.restore_a11y_request(path, name)
             return False
         gtkcompat.finish_a11y_request(path)
