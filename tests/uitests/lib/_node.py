@@ -4321,6 +4321,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelStorageBrowser()
         if name and "config-remove" in str(name).replace(".*", "").lower():
             return _SentinelClickButton("config-remove")
+        if (
+            name
+            and str(name).replace(".*", "").lower().strip() == "new"
+            and (not roleName or "button" in str(roleName).lower())
+        ):
+            return _SentinelClickButton("New")
         if name and "vm-action-menu" in str(name).lower():
             try:
                 os.remove("/tmp/vmm-a11y-vm-menu-hidden")
