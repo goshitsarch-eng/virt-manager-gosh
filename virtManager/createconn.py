@@ -8,6 +8,7 @@ import glob
 import os
 import urllib.parse
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -88,6 +89,10 @@ class vmmCreateConn(vmmGObjectUI):
             self.topwin.set_title("Add Connection (hidden)")
         except Exception:
             pass
+        try:
+            open("/tmp/vmm-a11y-createconn-shown.txt", "w").write("0")
+        except Exception:
+            pass
         gtkcompat.hide_createconn_window(self)
 
     def show(self, parent):
@@ -98,6 +103,8 @@ class vmmCreateConn(vmmGObjectUI):
             self.topwin.present()
             gtkcompat.expose_createconn_window(self)
             gtkcompat._start_combo_select_poll(self)
+            self._start_a11y_poll()
+            self._publish_a11y_state()
             return
 
         self.reset_state()
@@ -116,6 +123,115 @@ class vmmCreateConn(vmmGObjectUI):
             pass
         gtkcompat.expose_createconn_window(self)
         gtkcompat._start_combo_select_poll(self)
+        self._start_a11y_poll()
+        self._publish_a11y_state()
+
+    def _publish_a11y_state(self):
+        try:
+            open("/tmp/vmm-a11y-createconn-shown.txt", "w").write(
+                "1" if self.topwin.get_visible() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createconn-remote.txt", "w").write(
+                "1" if self.widget("connect-remote").get_active() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createconn-user.txt", "w").write(
+                self.widget("username-entry").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createconn-host.txt", "w").write(
+                self.widget("hostname").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createconn-uri-label.txt", "w").write(
+                self.widget("uri-label").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            remote_vis = bool(self.widget("connect-remote").get_visible())
+            user_vis = bool(self.widget("username-entry").get_visible())
+            host_vis = bool(self.widget("hostname").get_visible())
+            open("/tmp/vmm-a11y-createconn-fields.txt", "w").write(
+                "%s\t%s\t%s" % (int(remote_vis), int(user_vis), int(host_vis))
+            )
+        except Exception:
+            pass
+        try:
+            hv = self.widget("hypervisor")
+            row = uiutil.get_list_selected_row(hv) if hv is not None else None
+            open("/tmp/vmm-a11y-createconn-hv.txt", "w").write(
+                str(row[1] if row else "")
+            )
+        except Exception:
+            pass
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_createconn_poll", False):
+            return
+        self._vmm_createconn_poll = True
+
+        def _tick():
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
+                    os.remove("/tmp/vmm-a11y-createconn-remote-click")
+                    chk = self.widget("connect-remote")
+                    chk.set_active(not chk.get_active())
+                    self.connect_remote_toggled(chk)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-createconn-user.txt"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                    if getattr(self, "_vmm_cc_user_seen", None) != stamp:
+                        self._vmm_cc_user_seen = stamp
+                        if self.widget("username-entry").get_text() != text:
+                            self.widget("username-entry").set_text(text)
+                            self.populate_uri()
+                            self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-createconn-host.txt"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                    if getattr(self, "_vmm_cc_host_seen", None) != stamp:
+                        self._vmm_cc_host_seen = stamp
+                        if self.widget("hostname").get_text() != text:
+                            self.widget("hostname").set_text(text)
+                            self.populate_uri()
+                            self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
+                    os.remove("/tmp/vmm-a11y-createconn-connect")
+                    self.open_conn(None)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createconn-cancel"):
+                    os.remove("/tmp/vmm-a11y-createconn-cancel")
+                    self.cancel()
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     def _cleanup(self):
         pass
@@ -191,6 +307,7 @@ class vmmCreateConn(vmmGObjectUI):
 
         uiutil.set_grid_row_visible(self.widget("uri-label"), not is_custom)
         uiutil.set_grid_row_visible(self.widget("uri-entry"), is_custom)
+        self._publish_a11y_state()
         if is_custom:
             label = self.widget("uri-label").get_text()
             self.widget("uri-entry").set_text(label)
@@ -213,6 +330,7 @@ class vmmCreateConn(vmmGObjectUI):
     def populate_uri(self):
         uri = self.generate_uri()
         self.widget("uri-label").set_text(uri)
+        self._publish_a11y_state()
 
     def generate_uri(self):
         hv = uiutil.get_list_selection(self.widget("hypervisor"))

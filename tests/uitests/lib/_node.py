@@ -3136,6 +3136,199 @@ def _sentinel_migrate_widgets(name, roleName, labeller_text=None):
     return None
 
 
+def _createconn_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-createconn-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+class _SentinelCreateConnWindow(object):
+    name = "Add Connection"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _createconn_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def combo_select(self, combolabel, itemlabel):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (combolabel or "", itemlabel or "")
+            )
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+                break
+            try:
+                got = open("/tmp/vmm-a11y-createconn-hv.txt", "r").read()
+            except Exception:
+                got = ""
+            want = (itemlabel or "").replace(".*", "").replace("^", "").replace("$", "")
+            if got and want and want.lower() in got.lower():
+                break
+            time.sleep(0.05)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_createconn_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+class _SentinelCreateConnRemote(object):
+    name = "Connect to remote host over SSH"
+    roleName = "check box"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-createconn-fields.txt", "r").read().split("\t")[0] == "1"
+        except Exception:
+            return _createconn_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def checked(self):
+        try:
+            return open("/tmp/vmm-a11y-createconn-remote.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-createconn-remote-click", "w").write("1")
+        except Exception:
+            pass
+
+
+class _SentinelCreateConnUriLabel(object):
+    name = "uri-label"
+    roleName = "label"
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-createconn-uri-label.txt", "r").read()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return _createconn_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelCreateConnField(object):
+    def __init__(self, name, path, field_idx):
+        self.name = name
+        self.roleName = "text"
+        self._path = path
+        self._field_idx = field_idx
+
+    @property
+    def text(self):
+        try:
+            return open(self._path, "r").read()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        try:
+            parts = open("/tmp/vmm-a11y-createconn-fields.txt", "r").read().split("\t")
+            return parts[self._field_idx].strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def set_text(self, text):
+        try:
+            open(self._path, "w").write(text if text is not None else "")
+        except Exception:
+            pass
+
+
+def _sentinel_createconn_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    if "add connection" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        if _createconn_dialog_open():
+            return _SentinelCreateConnWindow()
+        return None
+    if not _createconn_dialog_open():
+        return None
+    if "connect to remote" in compact:
+        return _SentinelCreateConnRemote()
+    if "username" in compact:
+        return _SentinelCreateConnField("Username", "/tmp/vmm-a11y-createconn-user.txt", 1)
+    if "hostname" in compact:
+        return _SentinelCreateConnField("Hostname", "/tmp/vmm-a11y-createconn-host.txt", 2)
+    if "uri-label" in compact:
+        return _SentinelCreateConnUriLabel()
+    if compact.strip() in ("connect",) and "button" in role:
+        return _SentinelCloneButton("Connect", "/tmp/vmm-a11y-createconn-connect")
+    if "cancel" in compact and "button" in role:
+        return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-createconn-cancel")
+    if "hypervisor" in compact:
+        return _SentinelCreateConnWindow()
+    return None
+
+
 class _SentinelMigrateExpander(object):
     name = "Advanced"
     roleName = "toggle button"
@@ -5546,6 +5739,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return sent
         except Exception:
             pass
+        try:
+            sent = _sentinel_createconn_widgets(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
         if name and "new vm" in str(name).replace(".*", "").lower():
             role = str(roleName or "").lower()
             if not role or any(
@@ -5810,6 +6009,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "net-source",
             "Bus type:",
             "Mode:",
+            "Hypervisor",
         )
         if combolabel in known:
             # AT-SPI combo walks hang after GetItems; the app polls this file.
@@ -5827,6 +6027,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
                 "net-source": "/tmp/vmm-a11y-net-source.txt",
                 "Mode:": "/tmp/vmm-a11y-migrate-mode.txt",
+                "Hypervisor": "/tmp/vmm-a11y-createconn-hv.txt",
             }.get(combolabel)
             deadline = time.time() + 2.0
             while time.time() < deadline:

@@ -56,6 +56,16 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Add Connection" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createconn-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreateConnWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Migrate the virtual machine" in name:
             while time.time() < deadline:
                 try:
@@ -368,17 +378,12 @@ class VMMDogtailApp:
             os.remove("/tmp/vmm-a11y-createconn-hidden")
         except Exception:
             pass
-        manager = self.get_manager()
+        self.get_manager()
         try:
-            manager.find("File", "menu").click()
-            manager.find("Add Connection...", "menu item").click()
+            open("/tmp/vmm-a11y-createconn-open", "w").write("1")
         except Exception:
             pass
-        try:
-            return self.root.find("Add Connection", "dialog")
-        except Exception:
-            manager.find("Add Connection...", "menu item").click()
-            return self.find_window("Add Connection")
+        return self.find_window("Add Connection")
 
     def manager_createconn(self, uri):
         """

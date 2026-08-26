@@ -225,6 +225,24 @@ class vmmManager(vmmGObjectUI):
             self._vmm_maximize_poll = True
             GLib.timeout_add(50, _maximize_tick)
 
+        def _createconn_open_tick():
+            path = "/tmp/vmm-a11y-createconn-open"
+            try:
+                if not os.path.exists(path):
+                    return True
+                os.remove(path)
+            except Exception:
+                return True
+            try:
+                self.open_newconn(None)
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_createconn_open_poll", False):
+            self._vmm_createconn_open_poll = True
+            GLib.timeout_add(50, _createconn_open_tick)
+
         def _vm_list_tick():
             try:
                 self._publish_vm_list()
