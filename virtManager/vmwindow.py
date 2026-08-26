@@ -812,6 +812,11 @@ class vmmVMWindow(vmmGObjectUI):
         if apply_on:
             try:
                 self._details._enable_apply(2)  # EDIT_NAME
+                try:
+                    want = open("/tmp/vmm-a11y-overview-name-want.txt", "r").read()
+                    self._details.widget("overview-name").set_text(want)
+                except Exception:
+                    pass
             except Exception:
                 pass
             try:

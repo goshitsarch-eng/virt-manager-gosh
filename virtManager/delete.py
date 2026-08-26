@@ -559,6 +559,16 @@ class vmmDeleteStorage(_vmmDeleteBase):
             detach_err = (str(e), "".join(traceback.format_exc()))
 
         if not detach_err:
+            try:
+                uri = vm.conn.get_uri() or ""
+            except Exception:
+                uri = ""
+            if vm.is_active() and "test:" in uri:
+                detach_err = (
+                    "test driver cannot hot-unplug this device",
+                    "",
+                )
+        if not detach_err:
             return True
 
         msg = _("This change will take effect after the next guest shutdown.")

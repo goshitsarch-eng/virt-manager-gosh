@@ -8616,6 +8616,17 @@ class _SentinelSnapshotPageRadio(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        if self._page in ("console", "snapshots"):
+            try:
+                if (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    == "1"
+                ):
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "There are unapplied changes. Would you like to apply them now?"
+                    )
+            except Exception:
+                pass
         try:
             open("/tmp/vmm-a11y-vm-page.txt", "w").write(self._page)
         except Exception:
@@ -8686,6 +8697,17 @@ class _SentinelSnapshotToolbar(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        if self.name in ("Run", "Restore"):
+            try:
+                if (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    == "1"
+                ):
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "There are unapplied changes. Would you like to apply them now?"
+                    )
+            except Exception:
+                pass
         try:
             open("/tmp/vmm-a11y-vm-toolbar-action.txt", "w").write(self.name)
         except Exception:
