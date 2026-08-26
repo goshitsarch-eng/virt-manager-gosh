@@ -505,15 +505,22 @@ class VNCViewer(Viewer):
         if _gtkvnc_supports_resizeguest():
             self._display.set_allow_resize(val)  # pylint: disable=no-member
             self._sync_force_size()
+            return
+        if self._display is not None and isinstance(self._display, gtk4display.VNCDisplay):
+            self._display.set_property("resize-guest", bool(val))
+            self._sync_force_size()
 
     def _get_resizeguest(self):
         if _gtkvnc_supports_resizeguest():
             return self._display.get_allow_resize()  # pylint: disable=no-member
+        if self._display is not None and isinstance(self._display, gtk4display.VNCDisplay):
+            return bool(self._display.get_property("resize-guest"))
         return False  # pragma: no cover
 
     def _get_resizeguest_warning(self):
-        if not _gtkvnc_supports_resizeguest():
+        if GtkVnc is not None and not _gtkvnc_supports_resizeguest():
             return _("GTK-VNC viewer is too old")  # pragma: no cover
+        return None
 
     def _get_usb_widget(self):
         return None  # pragma: no cover

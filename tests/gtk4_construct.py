@@ -748,15 +748,123 @@ def main():
         disp._fill_rect(4, 0, 0, 2, 2, pixel)
         disp._blit_raw(4, 2, 2, 1, 1, pixel)
         disp._copy_rect(4, 4, 0, 2, 1, 1, 0, 0)
+        disp._publish_fb(4, 4)
+        _pump(GLib, 0.05)
+        pix = disp.get_pixbuf()
+        assert pix is not None, "get_pixbuf() did not return a GdkPixbuf"
+        assert pix.get_width() == 4 and pix.get_height() == 4
+        saved = pix.save_to_bufferv("png", [], [])
+        if isinstance(saved, tuple):
+            saved = saved[1]
+        if hasattr(saved, "buffer"):
+            saved = saved.buffer
+        assert saved and len(saved) > 8 and saved[:4] == b"\x89PNG"
         disp.set_scaling(True)
-        disp.set_pointer_grab(False)
+        disp.set_pointer_grab(True)
+        disp.set_grab_keys(gtk4display.GrabSequence.new([37, 64]))
+        grabbed = []
+        ungrabbed = []
+        disp.connect("mouse-grab", lambda _s, val: grabbed.append(val) if val else ungrabbed.append(val))
+        disp.connect("vnc-pointer-ungrab", lambda *_a: ungrabbed.append("ptr"))
+        disp._on_pressed(type("G", (), {"get_current_button": lambda self: 1})(), 1, 1, 1)
+        assert disp._buttons & 1
+        disp._on_pressed(type("G", (), {"get_current_button": lambda self: 3})(), 1, 1, 1)
+        assert disp._buttons & 4
+        disp._on_released(type("G", (), {"get_current_button": lambda self: 1})(), 1, 1, 1)
+        assert not (disp._buttons & 1)
+        assert disp._buttons & 4
+        disp._on_scroll(None, 0, 1)
+        assert grabbed
+        # Grab sequence Control_L+Alt_L (keycodes 37,64) must ungrab
+        disp._on_key_pressed(None, 0, 37, 0)
+        disp._on_key_pressed(None, 0, 64, 0)
+        assert ungrabbed, "grab-sequence did not ungrab pointer"
         disp.send_keys([97])
+        disp.set_property("resize-guest", True)
+        disp._apply_resize_guest(True)
+
+        class FakeSock:
+            def __init__(self, data):
+                self.buf = data
+
+            def recv(self, n):
+                out, self.buf = self.buf[:n], self.buf[n:]
+                return out
+
+        import struct as st
+
+        # ExtendedDesktopSize: consume 16-byte screen entries without desync
+        payload = b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 0, 0, 16, 12, -308)
+        payload += b"\x01\x00\x00\x00" + (b"\x00" * 16)
+        nw, nh = disp._read_fb_update(FakeSock(payload), 4, 4)
+        assert (nw, nh) == (16, 12)
         disp.close()
         spice = gtk4display.SpiceDisplay(None)
         spice.set_scaling(True)
+        spice.set_property("resize-guest", True)
+        spice._apply_resize_guest(True)
+        spice._push_monitor_config(800, 600)
+        spice._on_file_drop(None, [], 0, 0)
+        spice._spice_clip_notify(None, 0, 1, b"hi")
         spice.close()
         usb = gtk4display.UsbDeviceWidget.new(None)
         assert usb is not None
+        names = []
+        child = usb._list.get_first_child()
+        while child:
+            names.append(getattr(child, "get_name", lambda: "")())
+            label = getattr(child, "get_label", lambda: None)()
+            if label:
+                names.append(label)
+            sub = child.get_first_child() if hasattr(child, "get_first_child") else None
+            while sub:
+                names.append(getattr(sub, "get_name", lambda: "")() or "")
+                sl = getattr(sub, "get_label", lambda: None)()
+                if sl:
+                    names.append(sl)
+                sub = sub.get_next_sibling() if hasattr(sub, "get_next_sibling") else None
+            child = child.get_next_sibling()
+        assert any("SPICE CD" in str(n) for n in names if n), names
+
+        class _FakeDev:
+            def get_description(self, _fmt=None):
+                return "Test USB Mouse"
+
+        class _FakeMgr:
+            def __init__(self):
+                self.connected = set()
+                self.devices = [_FakeDev()]
+                self.shared = []
+
+            def get_devices(self):
+                return list(self.devices)
+
+            def is_device_connected(self, dev):
+                return dev in self.connected
+
+            def is_device_shared_cd(self, _dev):
+                return False
+
+            def connect_device_async(self, dev, _c, cb):
+                self.connected.add(dev)
+                cb(self, None)
+
+            def connect_device_finish(self, _res):
+                return True
+
+            def disconnect_device(self, dev):
+                self.connected.discard(dev)
+
+            def create_shared_cd_device(self, path):
+                self.shared.append(path)
+                return True
+
+        usb._manager = _FakeMgr()
+        usb._refresh()
+        usb._on_toggle(type("B", (), {"get_active": lambda self: True})(), usb._manager.devices[0])
+        assert usb._manager.devices[0] in usb._manager.connected
+        usb._on_toggle(type("B", (), {"get_active": lambda self: False})(), usb._manager.devices[0])
+        assert usb._manager.devices[0] not in usb._manager.connected
 
     def vnc_live_handshake():
         import socket
@@ -822,9 +930,18 @@ def main():
         display.connect("vnc-desktop-resize", lambda *_a: resized.append(True))
         display.open_host("127.0.0.1", port[0])
         _pump(GLib, 2.0)
-        display.close()
         assert initialized, "VNC client did not complete RFB handshake"
         assert resized, "VNC client did not receive a framebuffer"
+        pix = display.get_pixbuf()
+        assert pix is not None, "live VNC framebuffer did not convert to a screenshot pixbuf"
+        assert pix.get_width() == 8 and pix.get_height() == 8
+        saved = pix.save_to_bufferv("png", ["tEXt::Generator App"], ["virt-manager"])
+        if isinstance(saved, tuple):
+            saved = saved[1]
+        if hasattr(saved, "buffer"):
+            saved = saved.buffer
+        assert saved and saved[:4] == b"\x89PNG"
+        display.close()
 
     def createvm_wizard_nav():
         from virtManager.createvm import PAGE_FINISH

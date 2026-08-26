@@ -10,6 +10,7 @@ a DrawingArea. VNC uses a built-in RFB client against the same widget API
 the rest of virt-manager already talks to.
 """
 
+import io
 import socket
 import struct
 import threading
@@ -20,7 +21,23 @@ from gi.repository import GLib
 from gi.repository import GObject
 from gi.repository import Gtk
 
+try:
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import GdkPixbuf
+except (ValueError, ImportError):  # pragma: no cover
+    GdkPixbuf = None
+
 from virtinst import log
+
+# RFB / SPICE button bits: 1=left, 2=middle, 3=right, 4/5=wheel, 6/7=horiz
+_BUTTON_BITS = {1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32, 7: 64}
+# spice-protocol VD_AGENT_CLIPBOARD_UTF8_TEXT
+_SPICE_CLIP_UTF8 = 1
+_SPICE_CLIP_SELECTION = 0
+# QEMU RFB client message + encoding for guest resize
+_VNC_SET_DESKTOP_SIZE = 251
+_VNC_ENC_DESKTOPSIZE = -223
+_VNC_ENC_EXTENDED_DESKTOPSIZE = -308
 
 try:
     gi.require_foreign("cairo")
@@ -45,6 +62,9 @@ class GrabSequence:
 
     def as_string(self):
         return ",".join(str(k) for k in self._keys)
+
+    def get_keys(self):
+        return list(self._keys)
 
 
 class _DisplayBase(Gtk.DrawingArea):
@@ -84,6 +104,10 @@ class _DisplayBase(Gtk.DrawingArea):
         self._grabbed_keyboard = False
         self._grab_keys = GrabSequence()
         self._force_size = False
+        self._buttons = 0
+        self._last_x = 0
+        self._last_y = 0
+        self._pressed_hwkeys = set()
         self.set_draw_func(self._on_draw)
         motion = Gtk.EventControllerMotion()
         motion.connect("motion", self._on_motion)
@@ -97,6 +121,19 @@ class _DisplayBase(Gtk.DrawingArea):
         keys.connect("key-pressed", self._on_key_pressed)
         keys.connect("key-released", self._on_key_released)
         self.add_controller(keys)
+        try:
+            scroll = Gtk.EventControllerScroll()
+            scroll.set_flags(
+                Gtk.EventControllerScrollFlags.VERTICAL | Gtk.EventControllerScrollFlags.HORIZONTAL
+            )
+            scroll.connect("scroll", self._on_scroll)
+            self.add_controller(scroll)
+        except Exception:
+            pass
+        try:
+            self.connect("resize", self._on_widget_resize)
+        except TypeError:
+            pass
         self.connect("notify::scaling", self._on_scaling_prop)
         self.connect("notify::resize-guest", self._on_resize_prop)
 
@@ -107,8 +144,48 @@ class _DisplayBase(Gtk.DrawingArea):
     def _on_resize_prop(self, *_args):
         self._apply_resize_guest(bool(self.resize_guest))
 
+    def _on_widget_resize(self, *args):
+        self.emit("size-allocate", None)
+        if self.resize_guest:
+            self._apply_resize_guest(True)
+        ignore = args
+
     def _apply_resize_guest(self, _val):
         return None
+
+    def _update_buttons(self, button, pressed):
+        bit = _BUTTON_BITS.get(int(button or 0), 0)
+        if not bit:
+            return
+        if pressed:
+            self._buttons |= bit
+        else:
+            self._buttons &= ~bit
+
+    def _scale_pointer(self, x, y):
+        fw, fh = self._fb_size
+        if self._scaling and fw and fh:
+            x = int(x * fw / max(self.get_width(), 1))
+            y = int(y * fh / max(self.get_height(), 1))
+        return max(0, int(x)), max(0, int(y))
+
+    def _matches_grab_sequence(self):
+        keys = []
+        if self._grab_keys is not None:
+            keys = list(getattr(self._grab_keys, "_keys", []) or [])
+        if not keys:
+            return False
+        return all(int(k) in self._pressed_hwkeys for k in keys)
+
+    def _ungrab_input(self):
+        if self._grabbed_pointer:
+            self._grabbed_pointer = False
+            self.emit("vnc-pointer-ungrab")
+            self.emit("mouse-grab", False)
+        if self._grabbed_keyboard:
+            self._grabbed_keyboard = False
+            self.emit("vnc-keyboard-ungrab")
+            self.emit("keyboard-grab", False)
 
     def _on_draw(self, _area, cr, width, height, _data=None):
         if cairo is None or self._fb is None:
@@ -136,10 +213,12 @@ class _DisplayBase(Gtk.DrawingArea):
         self.emit("vnc-desktop-resize", width, height)
 
     def _on_motion(self, _c, x, y):
-        self._send_pointer(x, y, 0)
+        self._last_x, self._last_y = x, y
+        self._send_pointer(x, y, 0, False)
 
     def _on_pressed(self, gest, _n, x, y):
-        self._send_pointer(x, y, gest.get_current_button())
+        self._last_x, self._last_y = x, y
+        self._send_pointer(x, y, gest.get_current_button(), True)
         self.grab_focus()
         if self._pointer_grab and not self._grabbed_pointer:
             self._grabbed_pointer = True
@@ -147,11 +226,30 @@ class _DisplayBase(Gtk.DrawingArea):
             self.emit("mouse-grab", True)
 
     def _on_released(self, gest, _n, x, y):
-        self._send_pointer(x, y, 0)
-        ignore = gest
+        self._last_x, self._last_y = x, y
+        self._send_pointer(x, y, gest.get_current_button(), False)
+
+    def _on_scroll(self, _c, dx, dy):
+        if dy < 0:
+            button = 4
+        elif dy > 0:
+            button = 5
+        elif dx < 0:
+            button = 6
+        elif dx > 0:
+            button = 7
+        else:
+            return False
+        self._send_pointer(self._last_x, self._last_y, button, True)
+        self._send_pointer(self._last_x, self._last_y, button, False)
+        return True
 
     def _on_key_pressed(self, _c, keyval, keycode, state):
         ignore = state
+        self._pressed_hwkeys.add(int(keycode or keyval))
+        if self._matches_grab_sequence() and (self._grabbed_pointer or self._grabbed_keyboard):
+            self._ungrab_input()
+            return True
         self._send_key(keyval, keycode, True)
         if not self._grabbed_keyboard:
             self._grabbed_keyboard = True
@@ -161,10 +259,11 @@ class _DisplayBase(Gtk.DrawingArea):
 
     def _on_key_released(self, _c, keyval, keycode, state):
         ignore = state
+        self._pressed_hwkeys.discard(int(keycode or keyval))
         self._send_key(keyval, keycode, False)
         return True
 
-    def _send_pointer(self, x, y, button):
+    def _send_pointer(self, x, y, button, pressed=False):
         raise NotImplementedError
 
     def _send_key(self, keyval, keycode, pressed):
@@ -200,10 +299,37 @@ class _DisplayBase(Gtk.DrawingArea):
             self._send_key(keyval, 0, False)
 
     def get_pixbuf(self):
-        if self._fb is None:
+        """
+        Return a GdkPixbuf.Pixbuf of the current framebuffer so
+        Virtual Machine -> Take Screenshot can call save_to_bufferv("png").
+        """
+        if GdkPixbuf is None:
             return None
+        surface = self._fb
         w, h = self._fb_size
-        return Gdk.Texture.new_for_pixbuf if False else self._fb
+        if surface is None and cairo is not None:
+            pixels = getattr(self, "_pixels", None)
+            if pixels and w > 0 and h > 0:
+                try:
+                    surface = cairo.ImageSurface.create_for_data(
+                        memoryview(pixels), cairo.FORMAT_ARGB32, w, h, w * 4
+                    )
+                except Exception:
+                    surface = None
+        if surface is None or w <= 0 or h <= 0:
+            return None
+        try:
+            if hasattr(surface, "flush"):
+                surface.flush()
+            buf = io.BytesIO()
+            surface.write_to_png(buf)
+            loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+            loader.write(buf.getvalue())
+            loader.close()
+            return loader.get_pixbuf()
+        except Exception as exc:
+            log.debug("get_pixbuf failed: %s", exc)
+            return None
 
     def get_preferred_width(self):
         return self._fb_size[0], self._fb_size[0]
@@ -238,6 +364,7 @@ class VNCDisplay(_DisplayBase):
         self._auth_event = threading.Event()
         self._pixels = bytearray()
         self._zdec = None
+        self._buttons = 0
 
     def set_credential(self, cred, value):
         if cred == 0 or str(cred).endswith("PASSWORD"):
@@ -263,25 +390,34 @@ class VNCDisplay(_DisplayBase):
                 pass
         self._sock = None
 
-    def _send_pointer(self, x, y, button):
+    def _apply_resize_guest(self, val):
+        if val:
+            self._send_desktop_size()
+
+    def _send_desktop_size(self, width=None, height=None):
+        sock = self._sock
+        if not sock or not self._open or not self.resize_guest:
+            return
+        w = int(width if width is not None else max(self.get_width(), 1))
+        h = int(height if height is not None else max(self.get_height(), 1))
+        if w < 16 or h < 16:
+            return
+        try:
+            # QEMU / TigerVNC SetDesktopSize (client msg 251)
+            sock.sendall(struct.pack("!BBHH", _VNC_SET_DESKTOP_SIZE, 1, w, h))
+            sock.sendall(struct.pack("!IHHHHI", 0, 0, 0, w, h, 0))
+        except Exception:
+            pass
+
+    def _send_pointer(self, x, y, button, pressed=False):
+        if button:
+            self._update_buttons(button, pressed)
         sock = self._sock
         if not sock or not self._open:
             return
-        fw, fh = self._fb_size
-        if self._scaling and fw and fh:
-            alloc_w = max(self.get_width(), 1)
-            alloc_h = max(self.get_height(), 1)
-            x = int(x * fw / alloc_w)
-            y = int(y * fh / alloc_h)
-        mask = 0
-        if button == 1:
-            mask = 1
-        elif button == 2:
-            mask = 2
-        elif button == 3:
-            mask = 4
+        x, y = self._scale_pointer(x, y)
         try:
-            sock.sendall(struct.pack("!BBHH", 5, mask, max(0, int(x)), max(0, int(y))))
+            sock.sendall(struct.pack("!BBHH", 5, self._buttons, x, y))
         except Exception:
             pass
 
@@ -382,7 +518,8 @@ class VNCDisplay(_DisplayBase):
             2,  # RRE
             1,  # CopyRect
             0,  # raw
-            -223,  # DesktopSize
+            _VNC_ENC_DESKTOPSIZE,
+            _VNC_ENC_EXTENDED_DESKTOPSIZE,
         )
         sock.sendall(struct.pack("!BBH", 2, 0, len(encodings)))
         for enc in encodings:
@@ -505,10 +642,19 @@ class VNCDisplay(_DisplayBase):
         nrects = struct.unpack("!H", self._recv_n(sock, 2))[0]
         for _ in range(nrects):
             x, y, w, h, enc = struct.unpack("!HHHHi", self._recv_n(sock, 12))
-            if enc == -223:
+            if enc == _VNC_ENC_DESKTOPSIZE:
                 width, height = w, h
                 self._alloc_pixels(width, height)
                 GLib.idle_add(self.emit, "vnc-desktop-resize", width, height)
+                continue
+            if enc == _VNC_ENC_EXTENDED_DESKTOPSIZE:
+                nscreens = self._recv_n(sock, 1)[0]
+                self._recv_n(sock, 3)
+                self._recv_n(sock, nscreens * 16)
+                if w and h:
+                    width, height = w, h
+                    self._alloc_pixels(width, height)
+                    GLib.idle_add(self.emit, "vnc-desktop-resize", width, height)
                 continue
             if enc == 0:
                 self._blit_raw(width, x, y, w, h, self._recv_n(sock, w * h * 4))
@@ -557,22 +703,86 @@ class SpiceDisplay(_DisplayBase):
         self._channel_id = channel_id
         self._channel = None
         self._inputs = None
+        self._main = None
         self._buttons = 0
         self._open = True
+        self._clip_from_guest = False
+        self._bind_session_channels()
+        try:
+            drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
+            drop.connect("drop", self._on_file_drop)
+            self.add_controller(drop)
+        except Exception:
+            pass
 
     def attach_channels(self, display_channel, inputs_channel):
         self._channel = display_channel
         self._inputs = inputs_channel
-        display_channel.connect("notify::width", self._on_primary)
+        if display_channel is not None:
+            display_channel.connect("notify::width", self._on_primary)
+            try:
+                display_channel.connect("display-primary-create", self._on_primary_create)
+            except TypeError:
+                pass
+            try:
+                display_channel.connect("display-invalidate", self._on_invalidate)
+            except TypeError:
+                pass
+            self._refresh_primary()
+        self._bind_session_channels()
+
+    def _bind_session_channels(self):
+        if self._session is None or SpiceClientGLib is None:
+            return
         try:
-            display_channel.connect("display-primary-create", self._on_primary_create)
-        except TypeError:
+            self._session.connect("channel-new", self._on_session_channel)
+        except Exception:
             pass
+        self._bind_main(self._find_main_channel())
+
+    def _on_session_channel(self, _session, channel):
+        if SpiceClientGLib is not None and isinstance(channel, SpiceClientGLib.MainChannel):
+            self._bind_main(channel)
+        if (
+            SpiceClientGLib is not None
+            and isinstance(channel, SpiceClientGLib.InputsChannel)
+            and self._inputs is None
+        ):
+            self._inputs = channel
+
+    def _find_main_channel(self):
+        if self._main is not None:
+            return self._main
+        if not self._session or SpiceClientGLib is None:
+            return None
         try:
-            display_channel.connect("display-invalidate", self._on_invalidate)
-        except TypeError:
-            pass
-        self._refresh_primary()
+            for ch in self._session.get_channels() or []:
+                if isinstance(ch, SpiceClientGLib.MainChannel):
+                    return ch
+        except Exception:
+            return None
+        return None
+
+    def _bind_main(self, channel):
+        if not channel or self._main is channel:
+            return
+        self._main = channel
+        for sig, handler in (
+            ("clipboard-selection", self._on_spice_clip_data),
+            ("clipboard-selection-grab", self._on_spice_clip_grab),
+            ("clipboard-selection-request", self._on_spice_clip_request),
+            ("clipboard-selection-release", self._on_spice_clip_release),
+            ("clipboard-grab", self._on_spice_clip_grab_old),
+            ("clipboard-request", self._on_spice_clip_request_old),
+            ("clipboard-release", self._on_spice_clip_release),
+        ):
+            try:
+                channel.connect(sig, handler)
+            except (TypeError, RuntimeError):
+                pass
+        self._bind_gdk_clipboard()
+        if self.resize_guest:
+            self._push_monitor_config()
 
     def _on_primary_create(self, *_args):
         self._refresh_primary()
@@ -603,31 +813,186 @@ class SpiceDisplay(_DisplayBase):
                 self._session.set_property("enable-audio", True)
             except Exception:
                 pass
-        ignore = val
+        if val:
+            self._push_monitor_config()
 
-    def _send_pointer(self, x, y, button):
+    def _push_monitor_config(self, width=None, height=None):
+        main = self._find_main_channel()
+        if not main or SpiceClientGLib is None:
+            return
+        w = int(width if width is not None else max(self.get_width(), 1))
+        h = int(height if height is not None else max(self.get_height(), 1))
+        if w < 16 or h < 16:
+            return
+        try:
+            SpiceClientGLib.main_update_display_enabled(main, 0, True, False)
+            SpiceClientGLib.main_update_display(main, 0, 0, 0, w, h, True)
+            SpiceClientGLib.main_send_monitor_config(main)
+        except Exception as exc:
+            log.debug("spice resize-guest failed: %s", exc)
+
+    def _send_pointer(self, x, y, button, pressed=False):
+        if button:
+            self._update_buttons(button, pressed)
         if not self._inputs or SpiceClientGLib is None:
             return
-        fw, fh = self._fb_size
-        if self._scaling and fw and fh:
-            x = int(x * fw / max(self.get_width(), 1))
-            y = int(y * fh / max(self.get_height(), 1))
-        if button == 1:
-            self._buttons |= 1
-        elif button == 2:
-            self._buttons |= 2
-        elif button == 3:
-            self._buttons |= 4
-        elif button == 0:
-            self._buttons = 0
+        x, y = self._scale_pointer(x, y)
         try:
-            if button:
-                SpiceClientGLib.inputs_button_press(self._inputs, button, self._buttons)
+            if button and pressed:
+                SpiceClientGLib.inputs_button_press(self._inputs, int(button), self._buttons)
             SpiceClientGLib.inputs_position(self._inputs, int(x), int(y), 0, self._buttons)
-            if button == 0:
-                SpiceClientGLib.inputs_button_release(self._inputs, 1, 0)
+            if button and not pressed:
+                SpiceClientGLib.inputs_button_release(self._inputs, int(button), self._buttons)
         except Exception:
             pass
+
+    def _gdk_clipboard(self):
+        display = Gdk.Display.get_default()
+        return display.get_clipboard() if display is not None else None
+
+    def _bind_gdk_clipboard(self):
+        clip = self._gdk_clipboard()
+        if clip is None:
+            return
+        try:
+            clip.connect("changed", self._on_gdk_clip_changed)
+        except Exception:
+            pass
+
+    def _clear_clip_from_guest(self):
+        self._clip_from_guest = False
+        return False
+
+    def _spice_clip_notify(self, channel, selection, typ, data):
+        if channel is None or SpiceClientGLib is None:
+            return
+        payload = list(data or b"")
+        try:
+            SpiceClientGLib.main_clipboard_selection_notify(channel, selection, typ, payload)
+            return
+        except Exception:
+            pass
+        try:
+            SpiceClientGLib.main_clipboard_notify(channel, typ, payload)
+        except Exception as exc:
+            log.debug("spice clipboard notify failed: %s", exc)
+
+    def _spice_clip_grab(self, channel, selection, types):
+        if channel is None or SpiceClientGLib is None:
+            return
+        try:
+            SpiceClientGLib.main_clipboard_selection_grab(channel, selection, list(types or [_SPICE_CLIP_UTF8]))
+            return
+        except Exception:
+            pass
+        try:
+            SpiceClientGLib.main_clipboard_grab(channel, list(types or [_SPICE_CLIP_UTF8]))
+        except Exception as exc:
+            log.debug("spice clipboard grab failed: %s", exc)
+
+    def _on_gdk_clip_changed(self, clip):
+        if self._clip_from_guest or self._main is None:
+            return
+
+        def _got(_src, result):
+            try:
+                text = clip.read_text_finish(result)
+            except Exception:
+                return
+            if text is None:
+                return
+            data = text.encode("utf-8")
+            self._spice_clip_grab(self._main, _SPICE_CLIP_SELECTION, [_SPICE_CLIP_UTF8])
+            self._spice_clip_notify(self._main, _SPICE_CLIP_SELECTION, _SPICE_CLIP_UTF8, data)
+
+        try:
+            clip.read_text_async(None, _got)
+        except Exception:
+            pass
+
+    def _on_spice_clip_grab(self, channel, selection, types, *_args):
+        ignore = types
+        try:
+            SpiceClientGLib.main_clipboard_selection_request(channel, selection, _SPICE_CLIP_UTF8)
+        except Exception:
+            try:
+                SpiceClientGLib.main_clipboard_request(channel, _SPICE_CLIP_UTF8)
+            except Exception:
+                pass
+
+    def _on_spice_clip_grab_old(self, channel, types, *_args):
+        self._on_spice_clip_grab(channel, _SPICE_CLIP_SELECTION, types)
+
+    def _on_spice_clip_request(self, channel, selection, typ, *_args):
+        clip = self._gdk_clipboard()
+        if clip is None:
+            return
+
+        def _got(_src, result):
+            try:
+                text = clip.read_text_finish(result)
+            except Exception:
+                text = ""
+            self._spice_clip_notify(channel, selection, typ, (text or "").encode("utf-8"))
+
+        try:
+            clip.read_text_async(None, _got)
+        except Exception:
+            pass
+
+    def _on_spice_clip_request_old(self, channel, typ, *_args):
+        self._on_spice_clip_request(channel, _SPICE_CLIP_SELECTION, typ)
+
+    def _on_spice_clip_release(self, *_args):
+        return None
+
+    def _on_spice_clip_data(self, _channel, _selection, typ, data, *_args):
+        if typ not in (_SPICE_CLIP_UTF8, None) and typ != 1:
+            return
+        try:
+            if isinstance(data, (bytes, bytearray, memoryview)):
+                text = bytes(data).decode("utf-8", "replace")
+            elif isinstance(data, str):
+                text = data
+            elif isinstance(data, (list, tuple)):
+                text = bytes(data).decode("utf-8", "replace")
+            else:
+                return
+        except Exception:
+            return
+        clip = self._gdk_clipboard()
+        if clip is None:
+            return
+        self._clip_from_guest = True
+        try:
+            try:
+                clip.set(text)
+            except Exception:
+                clip.set_content(Gdk.ContentProvider.new_for_value(text))
+        except Exception as exc:
+            log.debug("host clipboard set failed: %s", exc)
+        GLib.idle_add(self._clear_clip_from_guest)
+
+    def _on_file_drop(self, _target, value, _x, _y):
+        main = self._find_main_channel()
+        if not main or SpiceClientGLib is None:
+            return False
+        files = []
+        try:
+            if hasattr(value, "get_files"):
+                files = list(value.get_files() or [])
+            elif isinstance(value, (list, tuple)):
+                files = list(value)
+        except Exception:
+            return False
+        if not files:
+            return False
+        try:
+            SpiceClientGLib.main_file_copy_async(main, files, 0)
+            return True
+        except Exception as exc:
+            log.debug("spice file transfer failed: %s", exc)
+            return False
 
     def _send_key(self, keyval, keycode, pressed):
         if not self._inputs or SpiceClientGLib is None:
@@ -645,6 +1010,7 @@ class SpiceDisplay(_DisplayBase):
         self._open = False
         self._channel = None
         self._inputs = None
+        self._main = None
 
 
 def _cairo_from_spice_primary(primary):
@@ -696,13 +1062,31 @@ class UsbDeviceWidget(Gtk.Box):
             except Exception:
                 self._manager = None
         self._list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        self._spice_cd = None
+        self._toggling = False
         self.append(Gtk.Label(label=_("USB devices"), xalign=0))
         self.append(self._list)
+        if self._manager is not None:
+            for sig in ("device-added", "device-removed"):
+                try:
+                    self._manager.connect(sig, lambda *_a: GLib.idle_add(self._refresh))
+                except Exception:
+                    pass
         self._refresh()
 
     @classmethod
     def new(cls, session, _unused=None):
         return cls(session)
+
+    def _dev_label(self, dev):
+        try:
+            if hasattr(dev, "get_description"):
+                desc = dev.get_description(None)
+                if desc:
+                    return str(desc)
+        except Exception:
+            pass
+        return str(dev)
 
     def _refresh(self):
         child = self._list.get_first_child()
@@ -710,36 +1094,182 @@ class UsbDeviceWidget(Gtk.Box):
             nxt = child.get_next_sibling()
             self._list.remove(child)
             child = nxt
+        self._spice_cd = None
         if not self._manager:
             self._list.append(Gtk.Label(label=_("USB redirection is not available"), xalign=0))
+            self._append_spice_cd(sensitive=False)
             return
         try:
-            devices = self._manager.get_devices()
+            devices = list(self._manager.get_devices() or [])
         except Exception:
             devices = []
+        self._append_spice_cd(sensitive=True)
         if not devices:
             self._list.append(Gtk.Label(label=_("No USB devices"), xalign=0))
             return
         for dev in devices:
+            shared = False
+            try:
+                shared = bool(self._manager.is_device_shared_cd(dev))
+            except Exception:
+                shared = False
+            if shared:
+                if self._spice_cd is not None:
+                    self._toggling = True
+                    self._spice_cd.set_active(True)
+                    self._toggling = False
+                continue
+            connected = False
+            try:
+                connected = bool(self._manager.is_device_connected(dev))
+            except Exception:
+                connected = False
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-            label = Gtk.Label(label=str(dev), xalign=0, hexpand=True)
-            btn = Gtk.Button(label=_("Redirect"))
-            btn.connect("clicked", self._on_redirect, dev)
+            label = Gtk.Label(label=self._dev_label(dev), xalign=0, hexpand=True)
+            btn = Gtk.CheckButton(label=_("Redirect"))
+            btn.set_active(connected)
+            btn.connect("toggled", self._on_toggle, dev)
             row.append(label)
             row.append(btn)
             self._list.append(row)
 
-    def _on_redirect(self, _btn, dev):
-        if not self._manager:
-            return
+    def _append_spice_cd(self, sensitive=True):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        label = Gtk.Label(label=_("SPICE CD"), xalign=0, hexpand=True)
+        btn = Gtk.CheckButton(label=_("SPICE CD"))
+        btn.set_name("SPICE CD")
+        try:
+            btn.update_property([Gtk.AccessibleProperty.LABEL], ["SPICE CD"])
+        except Exception:
+            pass
+        btn.set_sensitive(sensitive)
+        btn.connect("toggled", self._on_spice_cd_toggled)
+        row.append(label)
+        row.append(btn)
+        self._list.append(row)
+        self._spice_cd = btn
 
-        def _done(src, result):
+    def _on_toggle(self, btn, dev):
+        if self._toggling or not self._manager:
+            return
+        if btn.get_active():
+            self._connect_dev(dev, btn)
+        else:
+            self._disconnect_dev(dev, btn)
+
+    def _connect_dev(self, dev, btn=None):
+        def _done(_src, result):
             try:
                 self._manager.connect_device_finish(result)
             except Exception as exc:
+                if btn is not None:
+                    self._toggling = True
+                    btn.set_active(False)
+                    self._toggling = False
                 self.emit("connect-failed", dev, str(exc))
 
         try:
             self._manager.connect_device_async(dev, None, _done)
         except Exception as exc:
+            if btn is not None:
+                self._toggling = True
+                btn.set_active(False)
+                self._toggling = False
             self.emit("connect-failed", dev, str(exc))
+
+    def _disconnect_dev(self, dev, btn=None):
+        def _fail(exc):
+            if btn is not None:
+                self._toggling = True
+                btn.set_active(True)
+                self._toggling = False
+            self.emit("connect-failed", dev, str(exc))
+
+        try:
+            if hasattr(self._manager, "disconnect_device_async"):
+
+                def _done(_src, result):
+                    try:
+                        self._manager.disconnect_device_finish(result)
+                    except Exception as exc:
+                        _fail(exc)
+
+                self._manager.disconnect_device_async(dev, None, _done)
+            else:
+                self._manager.disconnect_device(dev)
+        except Exception as exc:
+            _fail(exc)
+
+    def _on_spice_cd_toggled(self, btn):
+        if self._toggling:
+            return
+        if not btn.get_active():
+            self._disconnect_shared_cds()
+            return
+        if not self._manager:
+            self._toggling = True
+            btn.set_active(False)
+            self._toggling = False
+            return
+        self._choose_iso()
+
+    def _choose_iso(self):
+        dialog = Gtk.FileDialog()
+        try:
+            dialog.set_title(_("Select CDROM / ISO image"))
+        except Exception:
+            pass
+        parent = self.get_root()
+
+        def _done(dlg, result):
+            path = None
+            try:
+                fobj = dlg.open_finish(result)
+                path = fobj.get_path() if fobj is not None else None
+            except Exception:
+                path = None
+            if not path:
+                self._toggling = True
+                if self._spice_cd is not None:
+                    self._spice_cd.set_active(False)
+                self._toggling = False
+                return
+            try:
+                ok = self._manager.create_shared_cd_device(path)
+            except Exception as exc:
+                self.emit("connect-failed", None, str(exc))
+                ok = False
+            if not ok:
+                self._toggling = True
+                if self._spice_cd is not None:
+                    self._spice_cd.set_active(False)
+                self._toggling = False
+            else:
+                GLib.idle_add(self._refresh)
+
+        try:
+            dialog.open(parent, None, _done)
+        except Exception as exc:
+            self.emit("connect-failed", None, str(exc))
+            self._toggling = True
+            if self._spice_cd is not None:
+                self._spice_cd.set_active(False)
+            self._toggling = False
+
+    def _disconnect_shared_cds(self):
+        if not self._manager:
+            return
+        try:
+            devices = list(self._manager.get_devices() or [])
+        except Exception:
+            devices = []
+        for dev in devices:
+            try:
+                if self._manager.is_device_shared_cd(dev):
+                    self._disconnect_dev(dev)
+            except Exception:
+                pass
+
+    def _on_redirect(self, _btn, dev):
+        # Kept for callers/tests that click the older Redirect action.
+        self._connect_dev(dev)
