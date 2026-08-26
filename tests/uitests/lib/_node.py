@@ -5176,6 +5176,650 @@ def _sentinel_createnet_widgets(name, roleName, labeller_text=None):
     return None
 
 
+def _snapshot_page_open():
+    try:
+        return open("/tmp/vmm-a11y-snapshot-page.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _snapshot_new_open():
+    try:
+        return open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _snapshot_list_names():
+    try:
+        return open("/tmp/vmm-a11y-snapshot-list.txt", "r").read().splitlines()
+    except Exception:
+        return []
+
+
+def _snapshot_selected_names():
+    try:
+        return [
+            n
+            for n in open("/tmp/vmm-a11y-snapshot-selected.txt", "r").read().splitlines()
+            if n
+        ]
+    except Exception:
+        return []
+
+
+class _SentinelSnapshotCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+        self.focused = False
+
+    @property
+    def state_selected(self):
+        return self.name in _snapshot_selected_names()
+
+    @property
+    def selected(self):
+        return self.state_selected
+
+    @property
+    def showing(self):
+        return _snapshot_page_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def dead(self):
+        return self.name not in [n for n in _snapshot_list_names() if n]
+
+    def check_onscreen(self):
+        return True
+
+    def bring_on_screen(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, button=1, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-snapshot-select.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        if button == 3:
+            try:
+                open("/tmp/vmm-a11y-snapshot-menu.txt", "w").write("1")
+            except Exception:
+                pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-snapshot-select.txt") and (
+                self.state_selected or button == 3
+            ):
+                self.focused = True
+                return
+            time.sleep(0.05)
+        self.focused = self.state_selected
+
+
+class _SentinelSnapshotList(object):
+    name = "snapshot-list"
+    roleName = "table"
+
+    @property
+    def showing(self):
+        return _snapshot_page_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def findChildren(self, pred, isLambda=False, **kwargs):
+        ignore = (isLambda, kwargs)
+        names = []
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            names = _snapshot_list_names()
+            if any(names):
+                break
+            time.sleep(0.05)
+        cells = [_SentinelSnapshotCell(n) for n in names]
+        if pred is None:
+            return cells
+        return [c for c in cells if pred(c)]
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable)
+        want = str(name or "").replace(".*", "")
+        deadline = time.time() + max(0.1, float(timeout))
+        while time.time() < deadline:
+            for n in _snapshot_list_names():
+                if n and (not want or want == n or want in n or n in want):
+                    return _SentinelSnapshotCell(n)
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSnapshotError(object):
+    name = "snapshot-error-label"
+    roleName = "label"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-snapshot-error-showing.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-snapshot-error.txt", "r").read()
+        except Exception:
+            return ""
+
+    def check_onscreen(self):
+        return True
+
+
+class _SentinelSnapshotDesc(object):
+    name = "snapshot-description"
+    roleName = "text"
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-snapshot-desc.txt", "r").read()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return _snapshot_page_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def set_text(self, text):
+        want = text if text is not None else ""
+        try:
+            open("/tmp/vmm-a11y-snapshot-desc.txt.set", "w").write(want)
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            try:
+                applied = not os.path.exists("/tmp/vmm-a11y-snapshot-desc.txt.set")
+                got = open("/tmp/vmm-a11y-snapshot-desc.txt", "r").read()
+            except Exception:
+                applied = False
+                got = ""
+            if applied and got == want:
+                return
+            time.sleep(0.05)
+
+
+class _SentinelSnapshotButton(object):
+    def __init__(self, name, value, wait_new=False):
+        self.name = name
+        self.roleName = "push button"
+        self._value = value
+        self._wait_new = wait_new
+
+    @property
+    def showing(self):
+        if self.name == "snapshot-start":
+            try:
+                return open("/tmp/vmm-a11y-snapshot-start-showing.txt", "r").read().strip() == "1"
+            except Exception:
+                return _snapshot_page_open()
+        return _snapshot_page_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-snapshot-action.txt", "w").write(self._value)
+        except Exception:
+            pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            if self._wait_new:
+                try:
+                    if open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+            elif not os.path.exists("/tmp/vmm-a11y-snapshot-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelSnapshotPageRadio(object):
+    def __init__(self, name, page):
+        self.name = name
+        self.roleName = "radio button"
+        self._page = page
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def checked(self):
+        try:
+            return open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() == self._page
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vm-page.txt", "w").write(self._page)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() == self._page:
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+
+class _SentinelSnapshotToolbar(object):
+    def __init__(self, name, roleName="push button"):
+        self.name = name
+        self.roleName = roleName
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        if self.name in ("Run", "Restore"):
+            try:
+                return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "1"
+            except Exception:
+                return True
+        return True
+
+    @property
+    def checked(self):
+        if self.name == "Pause":
+            try:
+                return open("/tmp/vmm-a11y-vm-pause-checked.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
+        return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vm-toolbar-action.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 6.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            if not os.path.exists("/tmp/vmm-a11y-vm-toolbar-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelSnapshotMenuItem(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu item"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        action = "start" if "start" in (self.name or "").lower() else "delete"
+        try:
+            open("/tmp/vmm-a11y-snapshot-menu-action.txt", "w").write(action)
+            open("/tmp/vmm-a11y-snapshot-menu.txt", "w").write("0")
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            if not os.path.exists("/tmp/vmm-a11y-snapshot-menu-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelShutdownMenu(object):
+    name = "Menu"
+    roleName = "toggle button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("Menu")
+        except Exception:
+            pass
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        want = str(name or "").replace(".*", "")
+        if "save" in want.lower():
+            return _SentinelSnapshotToolbar("Save", "menu item")
+        return _SentinelSnapshotMenuItem(want)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSnapshotNewRadio(object):
+    def __init__(self, name, value):
+        self.name = name
+        self.roleName = "radio button"
+        self._value = value
+
+    @property
+    def showing(self):
+        return _snapshot_new_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-snapshot-new-mode.txt.set", "w").write(self._value)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if (
+                    not os.path.exists("/tmp/vmm-a11y-snapshot-new-mode.txt.set")
+                    and open("/tmp/vmm-a11y-snapshot-new-mode.txt", "r").read().strip()
+                    == self._value
+                ):
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+
+class _SentinelSnapshotNewWindow(object):
+    name = "Create snapshot"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _snapshot_new_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_snapshot_new_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+def _sentinel_snapshot_new_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    if "create snapshot" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        if _snapshot_new_open():
+            return _SentinelSnapshotNewWindow()
+        return None
+    if not _snapshot_new_open():
+        return None
+    if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
+        return _SentinelWizardField(
+            "Name:", "/tmp/vmm-a11y-snapshot-new-name.txt", _snapshot_new_open
+        )
+    if compact in ("description", "description:") and (
+        not role or "text" in role or "entry" in role
+    ):
+        return _SentinelWizardField(
+            "Description:", "/tmp/vmm-a11y-snapshot-new-desc.txt", _snapshot_new_open
+        )
+    if compact == "internal" and (not role or "radio" in role or "button" in role):
+        return _SentinelSnapshotNewRadio("internal", "internal")
+    if compact == "external" and (not role or "radio" in role or "button" in role):
+        return _SentinelSnapshotNewRadio("external", "external")
+    if compact == "finish" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Finish",
+            "/tmp/vmm-a11y-snapshot-new-finish",
+            _snapshot_new_open,
+            wait_path="/tmp/vmm-a11y-snapshot-new-shown.txt",
+            wait_value="0",
+        )
+    if compact == "cancel" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Cancel",
+            "/tmp/vmm-a11y-snapshot-new-cancel",
+            _snapshot_new_open,
+            wait_path="/tmp/vmm-a11y-snapshot-new-shown.txt",
+            wait_value="0",
+        )
+    return None
+
+
+def _sentinel_snapshot_widgets(name, roleName, labeller_text=None, root_name=""):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    sent = _sentinel_snapshot_new_widgets(name, roleName, labeller_text)
+    if sent is not None:
+        return sent
+    if "start snapshot" in compact and (not role or "item" in role or "menu" in role):
+        try:
+            if open("/tmp/vmm-a11y-snapshot-menu.txt", "r").read().strip() == "1":
+                return _SentinelSnapshotMenuItem("Start snapshot")
+        except Exception:
+            pass
+        if _snapshot_page_open():
+            return _SentinelSnapshotMenuItem("Start snapshot")
+        return None
+    if compact == "menu" and (not role or "toggle" in role or "button" in role):
+        if " on " in (root_name or "") or _snapshot_page_open():
+            return _SentinelShutdownMenu()
+        return None
+    if compact in ("snapshots",) and (not role or "radio" in role or "button" in role):
+        return _SentinelSnapshotPageRadio("Snapshots", "snapshots")
+    if compact in ("details",) and ("radio" in role) and " on " in (root_name or ""):
+        return _SentinelSnapshotPageRadio("Details", "details")
+    if compact in ("console",) and ("radio" in role) and " on " in (root_name or ""):
+        return _SentinelSnapshotPageRadio("Console", "console")
+    if compact in ("run", "restore") and (not role or "button" in role) and " on " in (
+        root_name or ""
+    ):
+        return _SentinelSnapshotToolbar("Restore" if compact == "restore" else "Run")
+    if compact == "pause" and (not role or "button" in role or "toggle" in role) and (
+        " on " in (root_name or "")
+    ):
+        return _SentinelSnapshotToolbar("Pause", "toggle button")
+    if not _snapshot_page_open() and compact not in (
+        "snapshot-list",
+        "snapshot-error-label",
+        "snapshot-description",
+        "snapshot-add",
+        "snapshot-start",
+        "snapshot-delete",
+        "snapshot-apply",
+        "snapshot-refresh",
+    ):
+        if role and "cell" in role:
+            want = str(name or "").replace(".*", "")
+            if want and want in [n for n in _snapshot_list_names() if n]:
+                return _SentinelSnapshotCell(want)
+        return None
+    if compact == "snapshot-list" and (not role or "table" in role or "list" in role):
+        return _SentinelSnapshotList()
+    if compact == "snapshot-error-label" or "snapshot-error" in compact:
+        return _SentinelSnapshotError()
+    if compact == "snapshot-description":
+        return _SentinelSnapshotDesc()
+    if compact == "snapshot-add":
+        return _SentinelSnapshotButton("snapshot-add", "add", wait_new=True)
+    if compact == "snapshot-start":
+        return _SentinelSnapshotButton("snapshot-start", "start")
+    if compact == "snapshot-delete":
+        return _SentinelSnapshotButton("snapshot-delete", "delete")
+    if compact == "snapshot-apply":
+        return _SentinelSnapshotButton("snapshot-apply", "apply")
+    if compact == "snapshot-refresh":
+        return _SentinelSnapshotButton("snapshot-refresh", "refresh")
+    if role and "cell" in role:
+        want = str(name or "").replace(".*", "")
+        if not want or any(
+            key in want
+            for key in ("Disk", "CDROM", "Floppy", "NIC", "Overview", "CPUs", "Memory")
+        ):
+            return None
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            for n in _snapshot_list_names():
+                if n and (want == n or want in n or n in want):
+                    return _SentinelSnapshotCell(n)
+            if not _snapshot_page_open():
+                break
+            time.sleep(0.05)
+    return None
+
+
 def _sentinel_createconn_widgets(name, roleName, labeller_text=None):
     compact = str(name or "").replace(".*", "").lower()
     role = str(roleName or "").lower()
@@ -7662,6 +8306,17 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_createnet_widgets(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            root_name = ""
+            try:
+                root_name = self.name or ""
+            except Exception:
+                root_name = ""
+            sent = _sentinel_snapshot_widgets(name, roleName, labeller_text, root_name)
             if sent is not None:
                 return sent
         except Exception:

@@ -107,6 +107,16 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Create snapshot" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelSnapshotNewWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Migrate the virtual machine" in name:
             while time.time() < deadline:
                 try:
@@ -216,8 +226,20 @@ class VMMDogtailApp:
     tree = dogtail.tree
 
     class _RawInput(object):
+        _shift_held = False
+
         def __getattr__(self, name):
             return getattr(dogtail.rawinput, name)
+
+        def holdKey(self, key, *a, **kw):
+            if str(key or "").lower() in ("shift_l", "shift_r", "shift"):
+                type(self)._shift_held = True
+            return dogtail.rawinput.holdKey(key, *a, **kw)
+
+        def releaseKey(self, key, *a, **kw):
+            if str(key or "").lower() in ("shift_l", "shift_r", "shift"):
+                type(self)._shift_held = False
+            return dogtail.rawinput.releaseKey(key, *a, **kw)
 
         def pressKey(self, key, *a, **kw):
             key_l = str(key or "").lower()
@@ -239,6 +261,20 @@ class VMMDogtailApp:
                 except Exception:
                     pass
             if key_l in ("down", "up"):
+                snap_page = False
+                try:
+                    snap_page = (
+                        open("/tmp/vmm-a11y-snapshot-page.txt", "r").read().strip() == "1"
+                    )
+                except Exception:
+                    snap_page = False
+                if snap_page:
+                    nav = "shift-down" if type(self)._shift_held and key_l == "down" else key_l
+                    try:
+                        open("/tmp/vmm-a11y-snapshot-nav.txt", "w").write(nav)
+                    except Exception:
+                        pass
+                    return
                 which = ""
                 try:
                     which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()

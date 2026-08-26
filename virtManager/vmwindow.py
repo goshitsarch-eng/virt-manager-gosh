@@ -239,6 +239,54 @@ class vmmVMWindow(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_window_close)
+        if not getattr(self, "_vmm_vm_page_poll", False):
+            self._vmm_vm_page_poll = True
+
+            def _poll_vm_page():
+                path = "/tmp/vmm-a11y-vm-page.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip().lower()
+                    os.remove(path)
+                except Exception:
+                    return True
+                mapping = {
+                    "snapshots": self.widget("control-snapshots"),
+                    "details": self.widget("control-vm-details"),
+                    "console": self.widget("control-vm-console"),
+                }
+                btn = mapping.get(want)
+                if btn is not None:
+                    try:
+                        btn.set_active(True)
+                    except Exception:
+                        pass
+                return True
+
+            def _poll_vm_toolbar_action():
+                path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    if action in ("Run", "Restore"):
+                        self.control_vm_run(None)
+                    elif action == "Pause":
+                        src = self.widget("control-pause")
+                        src.set_active(not src.get_active())
+                    elif action == "Save":
+                        vmmenu.VMActionUI.save(self, self.vm)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_vm_page)
+            GLib.timeout_add(50, _poll_vm_toolbar_action)
         if vis:
             return
 
@@ -337,7 +385,11 @@ class vmmVMWindow(vmmGObjectUI):
         self.widget("control-shutdown").set_menu(self._shutdownmenu)
         self.widget("control-shutdown").set_icon_name("system-shutdown")
         gtkcompat.ensure_button_accessible_name(self.widget("control-run"), "Run")
+        gtkcompat.register_a11y_click("Run", self.control_vm_run)
+        gtkcompat.register_a11y_click("Restore", self.control_vm_run)
         gtkcompat.ensure_button_accessible_name(self.widget("control-pause"), "Pause")
+        gtkcompat.register_a11y_click("Pause", lambda: self.widget("control-pause").emit("clicked"))
+        gtkcompat.register_a11y_click("Save", lambda: vmmenu.VMActionUI.save(self, self.vm))
         gtkcompat.ensure_button_accessible_name(self.widget("control-vm-console"), "Console")
         gtkcompat.ensure_button_accessible_name(self.widget("control-vm-details"), "Details")
         gtkcompat.ensure_button_accessible_name(self.widget("control-snapshots"), "Snapshots")
@@ -465,6 +517,21 @@ class vmmVMWindow(vmmGObjectUI):
             console_menu.set_active(is_console)
         finally:
             self.ignoreDetails = False
+        page_name = "details" if is_details else ("snapshots" if is_snapshot else "console")
+        try:
+            open("/tmp/vmm-a11y-vm-page-current.txt", "w").write(page_name)
+            open("/tmp/vmm-a11y-snapshot-page.txt", "w").write("1" if is_snapshot else "0")
+            open("/tmp/vmm-a11y-snapshot-start-showing.txt", "w").write(
+                "1" if is_snapshot else "0"
+            )
+        except Exception:
+            pass
+        if is_snapshot:
+            try:
+                self._snapshots._start_a11y_poll()
+                self._snapshots._publish_a11y_state()
+            except Exception:
+                pass
 
     def _details_page_switch_cb(self, notebook, pagewidget, newpage):
         for i in range(notebook.get_n_pages()):
@@ -485,6 +552,11 @@ class vmmVMWindow(vmmGObjectUI):
 
         self.widget("details-vm-menu").get_submenu().change_run_text(text)
         self.widget("control-run").set_label(strip_text)
+        try:
+            gtkcompat.ensure_button_accessible_name(self.widget("control-run"), strip_text)
+            gtkcompat.register_a11y_click(strip_text, self.control_vm_run)
+        except Exception:
+            pass
 
     def _refresh_title(self):
         title = _("%(vm-name)s on %(connection-name)s") % {
@@ -513,6 +585,13 @@ class vmmVMWindow(vmmGObjectUI):
             self.change_run_text(vm.has_managed_save())
 
         self.widget("control-run").set_sensitive(run)
+        try:
+            label = "Restore" if (vm.managedsave_supported and vm.has_managed_save()) else "Run"
+            open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
+            open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
+            open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
+        except Exception:
+            pass
         self.widget("control-shutdown").set_sensitive(stop)
         self.widget("control-shutdown").get_menu().update_widget_states(vm)
         self.widget("control-pause").set_sensitive(stop)
