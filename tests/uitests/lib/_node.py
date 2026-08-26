@@ -525,13 +525,125 @@ class _ArchOptionsSentinel(object):
         self.click()
 
 
+class _SentinelKernelInfo(object):
+    name = "Kernel/initrd settings can be configured"
+    roleName = "label"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+
+def _sentinel_kernel_info(name, roleName):
+    if not name:
+        return None
+    compact = str(name).replace(".*", "").lower()
+    if "kernel/initrd settings" in compact:
+        return _SentinelKernelInfo()
+    return None
+
+
 def _sentinel_arch_options(name, roleName):
     if not name:
         return None
     compact = str(name).replace(".*", "").lower()
     if "architecture options" not in compact:
-        return None
+        return _sentinel_arch_combo(name, roleName)
     return _ArchOptionsSentinel()
+
+
+class _SentinelArchCombo(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "combo box"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        try:
+            open("/tmp/vmm-a11y-combo-open.txt", "w").write(self.name)
+        except Exception:
+            pass
+
+    def click_combo_entry(self):
+        self.click()
+
+    def find(self, name, roleName=None, *args, **kwargs):
+        ignore = (args, kwargs)
+        return _sentinel_arch_combo_item(name, roleName or "menu item")
+
+
+def _sentinel_arch_combo(name, roleName):
+    if not name:
+        return None
+    raw = str(name).replace(".*", "").strip()
+    compact = raw.lower()
+    role = str(roleName or "").lower()
+    pretty = {
+        "virt type": "Virt Type",
+        "machine type": "Machine Type",
+        "architecture": "Architecture",
+    }.get(compact)
+    if pretty and (not role or "combo" in role):
+        return _SentinelArchCombo(pretty)
+    return _sentinel_arch_combo_item(name, roleName)
+
+
+def _sentinel_arch_combo_item(name, roleName):
+    if not name:
+        return None
+    role = str(roleName or "").lower()
+    if role and "menu" not in role and "button" not in role and "item" not in role:
+        return None
+    raw = str(name).replace(".*", "")
+    files = (
+        ("Virt Type", "/tmp/vmm-a11y-combo-Virt Type.txt", "/tmp/vmm-a11y-virt-type.txt"),
+        (
+            "Machine Type",
+            "/tmp/vmm-a11y-combo-Machine Type.txt",
+            "/tmp/vmm-a11y-machine-type.txt",
+        ),
+        (
+            "Architecture",
+            "/tmp/vmm-a11y-combo-Architecture.txt",
+            "/tmp/vmm-a11y-arch.txt",
+        ),
+    )
+    try:
+        pat = re.compile(raw, re.I | re.DOTALL)
+    except Exception:
+        pat = None
+    for combo, path, selected in files:
+        try:
+            items = open(path, "r").read().splitlines()
+        except Exception:
+            items = []
+        for item in items:
+            if not item:
+                continue
+            if item == raw or (pat is not None and pat.search(item)):
+                return _SentinelNetMenuItem(combo, item, selected)
+    return None
 
 
 def _sentinel_named_entry(name, roleName):
@@ -2595,6 +2707,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         open("/tmp/vmm-a11y-import-entry.txt", "w").write(text)
                     except Exception:
                         pass
+                if "media-entry" in (self.name or ""):
+                    try:
+                        open("/tmp/vmm-a11y-media-entry.txt", "w").write(text)
+                    except Exception:
+                        pass
                 with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
                     fh.write(text)
                 if "oslist-entry" in (self.name or ""):
@@ -2950,6 +3067,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_arch_options(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_kernel_info(name, roleName)
             if sent is not None:
                 return sent
         except Exception:

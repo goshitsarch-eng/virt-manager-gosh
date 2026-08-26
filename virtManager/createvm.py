@@ -547,6 +547,11 @@ class vmmCreateVM(vmmGObjectUI):
             ("machine", "/tmp/vmm-a11y-machine-type.txt"),
             ("virt-type", "/tmp/vmm-a11y-virt-type.txt"),
         )
+        lists = (
+            ("arch", "/tmp/vmm-a11y-combo-Architecture.txt"),
+            ("machine", "/tmp/vmm-a11y-combo-Machine Type.txt"),
+            ("virt-type", "/tmp/vmm-a11y-combo-Virt Type.txt"),
+        )
         for wid, path in mapping:
             try:
                 combo = self.widget(wid)
@@ -556,6 +561,19 @@ class vmmCreateVM(vmmGObjectUI):
                 if model is not None and idx >= 0:
                     label = str(model[idx][0] or "")
                 open(path, "w").write(label)
+            except Exception:
+                pass
+        for wid, path in lists:
+            try:
+                combo = self.widget(wid)
+                model = combo.get_model() if combo is not None else None
+                labels = []
+                if model is not None:
+                    it = model.get_iter_first()
+                    while it is not None:
+                        labels.append(str(model[it][0] or ""))
+                        it = model.iter_next(it)
+                open(path, "w").write("\n".join(labels))
             except Exception:
                 pass
 
@@ -1399,6 +1417,10 @@ class vmmCreateVM(vmmGObjectUI):
         show = bool(len(model) > 1)
         uiutil.set_grid_row_visible(self.widget("virt-type"), show)
         self.widget("virt-type").set_active(default)
+        try:
+            self._publish_arch_a11y()
+        except Exception:
+            pass
 
     def _populate_machine(self):
         model = self.widget("machine").get_model()
