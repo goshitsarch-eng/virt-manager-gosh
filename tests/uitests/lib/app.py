@@ -450,10 +450,19 @@ class VMMDogtailApp:
                 open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
             except Exception:
                 pass
-            try:
-                open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
-            except Exception:
-                pass
+            # Generic labels must not go through click.txt: "Close" is
+            # registered by prefs/error sidecars and can hide the VM window.
+            if (button_text or "").strip().lower() not in {
+                "close",
+                "ok",
+                "yes",
+                "no",
+                "cancel",
+            }:
+                try:
+                    open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+                except Exception:
+                    pass
             try:
                 utils.check(lambda: _alert_text() != stored, timeout=3)
             except Exception:
@@ -481,10 +490,17 @@ class VMMDogtailApp:
                     open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
                 except Exception:
                     pass
-                try:
-                    open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
-                except Exception:
-                    pass
+                if (button_text or "").strip().lower() not in {
+                    "close",
+                    "ok",
+                    "yes",
+                    "no",
+                    "cancel",
+                }:
+                    try:
+                        open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+                    except Exception:
+                        pass
                 try:
                     utils.check(lambda: _alert_text() != stored, timeout=3)
                 except Exception:

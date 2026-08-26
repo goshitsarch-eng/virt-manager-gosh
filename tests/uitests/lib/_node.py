@@ -5091,6 +5091,12 @@ class _SentinelWizardField(object):
                 got = ""
             if applied and got == want:
                 return
+            if applied:
+                try:
+                    if float(got) == float(want):
+                        return
+                except Exception:
+                    pass
             time.sleep(0.05)
 
     def typeText(self, string):

@@ -247,6 +247,12 @@ class vmmAddHardware(vmmGObjectUI):
                 parent.present()
             except Exception:
                 pass
+            try:
+                name = self.vm.get_name() if self.vm is not None else ""
+                if name:
+                    open("/tmp/vmm-a11y-vmwindow.txt", "w").write(name)
+            except Exception:
+                pass
         if self._storagebrowser:
             self._storagebrowser.close()
 
@@ -1976,22 +1982,40 @@ class vmmAddHardware(vmmGObjectUI):
         widget = self._a11y_widget(widget_name)
         if widget is None:
             return False
+        if spin:
+            try:
+                val = float(str(text).strip())
+            except Exception:
+                return False
+            try:
+                adj = widget.get_adjustment()
+                if adj is not None:
+                    if val < adj.get_lower():
+                        adj.set_lower(val)
+                    if val > adj.get_upper():
+                        adj.set_upper(val)
+            except Exception:
+                pass
+            try:
+                widget.set_value(val)
+            except Exception:
+                pass
+            try:
+                shown = str(int(val)) if float(val).is_integer() else str(text)
+                widget.set_text(shown)
+            except Exception:
+                pass
+            for sig in ("changed", "value-changed"):
+                try:
+                    widget.emit(sig)
+                except Exception:
+                    pass
+            return True
         try:
             child = widget.get_child() if hasattr(widget, "get_child") else None
         except Exception:
             child = None
         target = child or widget
-        if spin:
-            try:
-                target.set_text(str(text))
-                return True
-            except Exception:
-                pass
-            try:
-                target.set_value(float(text))
-                return True
-            except Exception:
-                return False
         try:
             if (target.get_text() or "") != (text or ""):
                 target.set_text(text or "")
@@ -2003,14 +2027,17 @@ class vmmAddHardware(vmmGObjectUI):
         widget = self._a11y_widget(widget_name)
         if widget is None:
             return ""
+        if spin:
+            try:
+                return str(uiutil.spin_get_helper(widget))
+            except Exception:
+                return ""
         try:
             child = widget.get_child() if hasattr(widget, "get_child") else None
         except Exception:
             child = None
         target = child or widget
         try:
-            if spin:
-                return str(uiutil.spin_get_helper(target))
             return target.get_text() or ""
         except Exception:
             return ""
