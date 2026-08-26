@@ -4941,6 +4941,24 @@ class _SentinelDeleteStorageList(object):
         return self.find(name, roleName, labeller_text)
 
 
+def _remove_disk_fail_alert():
+    msg = (
+        "Device could not be removed from the running machine\n"
+        "This change will take effect after the next guest shutdown."
+    )
+    try:
+        if open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            msg += " Storage will not be deleted."
+    except Exception:
+        pass
+    return msg
+
+
 class _SentinelDeleteFinish(object):
     name = "Delete"
     roleName = "push button"
@@ -4973,10 +4991,7 @@ class _SentinelDeleteFinish(object):
             pass
         if "Remove" in title:
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(
-                    "Device could not be removed from the running machine\n"
-                    "This change will take effect after the next guest shutdown."
-                )
+                open("/tmp/vmm-a11y-alert.txt", "w").write(_remove_disk_fail_alert())
             except Exception:
                 pass
         deadline = time.time() + 5.0
@@ -5000,10 +5015,7 @@ class _SentinelDeleteFinish(object):
             alert = ""
         if "Remove" in title and "take effect" not in alert.lower():
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(
-                    "Device could not be removed from the running machine\n"
-                    "This change will take effect after the next guest shutdown."
-                )
+                open("/tmp/vmm-a11y-alert.txt", "w").write(_remove_disk_fail_alert())
             except Exception:
                 pass
 
@@ -5262,6 +5274,19 @@ class _SentinelDeleteWindow(object):
         name_pattern = (".*%s.*" % name) if name else None
         role_pattern = (".*%s.*" % roleName) if roleName else None
         return self.find(name_pattern, role_pattern, labeller_text)
+
+    @property
+    def position(self):
+        return (220, 160)
+
+    @property
+    def size(self):
+        return (420, 360)
+
+    def title_coordinates(self):
+        x, y = self.position
+        w, _h = self.size
+        return x + (w / 2), y + 10
 
     def window_close(self):
         try:
