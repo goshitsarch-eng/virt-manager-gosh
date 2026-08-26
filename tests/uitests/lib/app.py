@@ -404,6 +404,14 @@ class VMMDogtailApp:
         return self._manager
 
     def find_details_window(self, vmname, click_details=False, shutdown=False):
+        def _norm(value):
+            return (
+                str(value or "")
+                .lower()
+                .replace("-", " ")
+                .replace("_", " ")
+            )
+
         deadline = time.time() + 12
         win = None
         while time.time() < deadline:
@@ -411,7 +419,16 @@ class VMMDogtailApp:
                 shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
             except Exception:
                 shown = ""
-            if shown and (not vmname or vmname in shown or shown in str(vmname)):
+            want = str(vmname or "")
+            nshown = _norm(shown)
+            nwant = _norm(want)
+            if shown and (
+                not want
+                or want in shown
+                or shown in want
+                or nwant in nshown
+                or nshown in nwant
+            ):
                 from . import _node
 
                 win = _node._SentinelVMWindow(shown)
