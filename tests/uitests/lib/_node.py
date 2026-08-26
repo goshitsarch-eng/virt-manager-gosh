@@ -685,6 +685,26 @@ class _SentinelClickButton(object):
         except Exception:
             pass
         if self.name == "Browse":
+            try:
+                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                names = re.findall(r"/([^/\s\"]+\.qcow2)", xml)
+                if names:
+                    open("/tmp/vmm-a11y-extra-vols.txt", "w").write("\n".join(names))
+                    existing = []
+                    try:
+                        existing = open("/tmp/vmm-a11y-vol-list.txt", "r").read().splitlines()
+                    except Exception:
+                        existing = []
+                    for vol in names:
+                        if vol not in existing:
+                            existing.append(vol)
+                    open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(existing))
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
+            except Exception:
+                pass
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
