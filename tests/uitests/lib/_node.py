@@ -1203,6 +1203,7 @@ class _SentinelClickButton(object):
             "install-import-browse",
             "install-app-browse",
             "install-oscontainer-browse",
+            "storage-browse",
         ):
             try:
                 open("/tmp/vmm-a11y-%s" % self.name, "w").write("1")
@@ -9555,6 +9556,29 @@ class _SentinelNewVMWindow(object):
         except Exception:
             pass
         compact = str(name or "").replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        lab = str(labeller_text or "").replace(".*", "").lower()
+        if (not compact or compact == "none") and (
+            "spin" in role or "gib" in lab
+        ) and (not lab or "gib" in lab):
+            return _SentinelDetailsSpin("GiB", "/tmp/vmm-a11y-spin-storage-size.txt")
+        if "gib" in compact or (compact.endswith("gib") and "spin" in role):
+            return _SentinelDetailsSpin("GiB", "/tmp/vmm-a11y-spin-storage-size.txt")
+        if compact in ("cpus",) or (lab == "cpus" and "spin" in role):
+            return _SentinelDetailsSpin("cpus", "/tmp/vmm-a11y-spin-cpus.txt")
+        if compact in ("mem", "memory") or "memory:" in lab or (
+            "memory" in lab and "spin" in role
+        ):
+            return _SentinelDetailsSpin("Memory:", "/tmp/vmm-a11y-spin-mem.txt")
+        if "storage-entry" in compact:
+            return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
+        if "storage-browse" in compact:
+            return _SentinelClickButton("storage-browse")
+        if "customize" in compact:
+            return _SentinelDetailsCheck(
+                "Customize configuration before install",
+                "/tmp/vmm-a11y-create-customize.txt",
+            )
         if "install-iso-browse" in compact:
             return _SentinelClickButton("install-iso-browse")
         if "media-combo" in compact:

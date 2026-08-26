@@ -339,6 +339,7 @@ class vmmCreateVM(vmmGObjectUI):
                     "install-import-browse",
                     "install-app-browse",
                     "install-oscontainer-browse",
+                    "storage-browse",
                 ):
                     path = "/tmp/vmm-a11y-%s" % name
                     try:
@@ -348,7 +349,10 @@ class vmmCreateVM(vmmGObjectUI):
                     except Exception:
                         continue
                     try:
-                        widget = self.widget(name)
+                        if name == "storage-browse":
+                            widget = self._addstorage.widget("storage-browse")
+                        else:
+                            widget = self.widget(name)
                         if widget is not None:
                             widget.emit("clicked")
                     except Exception:
@@ -399,6 +403,53 @@ class vmmCreateVM(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_storage_radio)
+
+        if not getattr(self, "_vmm_create_spin_poll", False):
+            self._vmm_create_spin_poll = True
+
+            def _poll_create_spins():
+                mapping = (
+                    (
+                        "/tmp/vmm-a11y-spin-storage-size.txt",
+                        lambda val: self._addstorage.widget("storage-size").set_value(val),
+                        lambda: self._addstorage.widget("storage-size").get_value(),
+                    ),
+                    (
+                        "/tmp/vmm-a11y-spin-cpus.txt",
+                        lambda val: self.widget("cpus").set_value(val),
+                        lambda: self.widget("cpus").get_value(),
+                    ),
+                    (
+                        "/tmp/vmm-a11y-spin-mem.txt",
+                        lambda val: self.widget("mem").set_value(val),
+                        lambda: self.widget("mem").get_value(),
+                    ),
+                )
+                for path, setter, getter in mapping:
+                    try:
+                        if os.path.exists(path + ".set"):
+                            text = open(path + ".set", "r").read().strip()
+                            os.remove(path + ".set")
+                            setter(float(text or 0))
+                            try:
+                                open(path, "w").write(str(int(getter())))
+                            except Exception:
+                                open(path, "w").write(text)
+                    except Exception:
+                        pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-create-customize.txt.click"):
+                        os.remove("/tmp/vmm-a11y-create-customize.txt.click")
+                        src = self.widget("summary-customize")
+                        src.set_active(not bool(src.get_active()))
+                        open("/tmp/vmm-a11y-create-customize.txt", "w").write(
+                            "1" if src.get_active() else "0"
+                        )
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_create_spins)
 
         if not getattr(self, "_vmm_storage_entry_poll", False):
             self._vmm_storage_entry_poll = True
