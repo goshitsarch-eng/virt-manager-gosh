@@ -204,6 +204,9 @@ class _ConsoleMenu(vmmGObject):
         self._menu = Gtk.Menu()
         self._menu.connect("show", show_cb)
         self._toggled_cb = toggled_cb
+        # GTK4 CheckButton radios are not exclusive; remember the user's
+        # console choice instead of trusting get_active() order.
+        self._selected_label = None
 
     def _cleanup(self):
         self._menu.destroy()
@@ -261,9 +264,32 @@ class _ConsoleMenu(vmmGObject):
         return ret
 
     def _get_selected_menu_item(self):
+        if self._selected_label:
+            for child in self._menu.get_children():
+                try:
+                    if child.get_label() == self._selected_label:
+                        return child
+                except Exception:
+                    continue
         for child in self._menu.get_children():
             if hasattr(child, "get_active") and child.get_active():
                 return child
+        return None
+
+    def select_item(self, item):
+        if item is None:
+            return
+        try:
+            self._selected_label = item.get_label()
+        except Exception:
+            self._selected_label = None
+        for child in self._menu.get_children():
+            if not hasattr(child, "set_active"):
+                continue
+            try:
+                child.set_active(child is item)
+            except Exception:
+                pass
 
     ##############
     # Public API #
@@ -271,7 +297,7 @@ class _ConsoleMenu(vmmGObject):
 
     def rebuild_menu(self, vm):
         olditem = self._get_selected_menu_item()
-        oldlabel = olditem and olditem.get_label() or None
+        oldlabel = self._selected_label or (olditem and olditem.get_label()) or None
 
         # Clear menu
         for child in self._menu.get_children():
@@ -307,13 +333,15 @@ class _ConsoleMenu(vmmGObject):
                 item.join_group(last_item)
 
             item.set_label(label)
-            item.set_active(active and sensitive)
+            item.set_active(False)
             item.set_sensitive(sensitive)
             item.set_tooltip_text(tooltip or None)
             item.vmm_data = dev
             if sensitive:
                 item.connect("toggled", self._toggled_cb)
             self._menu.add(item)
+            if active and sensitive:
+                self.select_item(item)
             try:
                 key = str(label or "").lower().replace(" ", "-")
                 open("/tmp/vmm-a11y-console-item-%s.txt" % key, "w").write(
@@ -486,8 +514,8 @@ class vmmConsolePages(vmmGObjectUI):
                         if compact_want and compact_want in label.lower():
                             matched = child
                             break
-                    if matched is not None and hasattr(matched, "set_active"):
-                        matched.set_active(True)
+                    if matched is not None:
+                        self._consolemenu.select_item(matched)
                     self._console_menu_view_selected()
                     self._consolemenu._publish_selected()
                 except Exception:
@@ -995,8 +1023,12 @@ class vmmConsolePages(vmmGObjectUI):
     def _activate_default_console_page(self):
         try:
             open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
-                "activate-default runable=%s viewer=%s\n"
-                % (self.vm.is_runable(), bool(self._viewer))
+                "activate-default runable=%s viewer=%s selected=%s\n"
+                % (
+                    self.vm.is_runable(),
+                    bool(self._viewer),
+                    getattr(self._consolemenu, "_selected_label", None),
+                )
             )
         except Exception:
             pass
@@ -1032,6 +1064,15 @@ class vmmConsolePages(vmmGObjectUI):
         self._toggle_first_console_menu_item()
 
     def _on_console_menu_toggled_cb(self, src):
+        try:
+            if hasattr(src, "get_active") and not src.get_active():
+                return
+        except Exception:
+            pass
+        try:
+            self._consolemenu.select_item(src)
+        except Exception:
+            pass
         self._console_menu_view_selected()
 
     def _on_console_menu_show_cb(self, src):
