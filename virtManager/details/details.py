@@ -1159,12 +1159,14 @@ class vmmDetails(vmmGObjectUI):
                     except Exception:
                         pass
                 npath = "/tmp/vmm-a11y-net-device.txt"
+                nset = npath + ".set"
                 try:
-                    if os.path.exists(npath):
-                        stamp = os.path.getmtime(npath)
+                    use = nset if os.path.exists(nset) else npath
+                    if os.path.exists(use):
+                        stamp = os.path.getmtime(use)
                         if getattr(self, "_vmm_net_device_seen", None) != stamp:
                             self._vmm_net_device_seen = stamp
-                            text = open(npath, "r").read()
+                            text = open(use, "r").read()
                             w = self.netlist.widget("net-manual-source")
                             if w is not None and (w.get_text() or "") != text:
                                 w.set_text(text)
@@ -2920,12 +2922,17 @@ class vmmDetails(vmmGObjectUI):
                 kwargs["mode"],
                 kwargs["portgroup"],
             ) = self.netlist.get_network_selection()
-            if os.path.exists("/tmp/vmm-a11y-net-device.txt"):
-                try:
-                    src = open("/tmp/vmm-a11y-net-device.txt", "r").read().strip() or None
-                    kwargs["source"] = src
-                except Exception:
-                    pass
+            for dpath in (
+                "/tmp/vmm-a11y-net-device.txt.set",
+                "/tmp/vmm-a11y-net-device.txt",
+            ):
+                if os.path.exists(dpath):
+                    try:
+                        src = open(dpath, "r").read().strip() or None
+                        kwargs["source"] = src
+                    except Exception:
+                        pass
+                    break
             if not kwargs["ntype"]:
                 try:
                     label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
@@ -2954,6 +2961,10 @@ class vmmDetails(vmmGObjectUI):
                 except Exception:
                     pass
                 return self.err.show_err(msg)
+            try:
+                os.remove("/tmp/vmm-a11y-net-device.txt.set")
+            except Exception:
+                pass
 
         if self._edited(EDIT_NET_MAC):
             kwargs["macaddr"] = self.widget("network-mac-entry").get_text()

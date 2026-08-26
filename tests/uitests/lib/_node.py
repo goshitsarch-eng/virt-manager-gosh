@@ -681,6 +681,13 @@ class _SentinelEntry(object):
                 )
             except Exception:
                 pass
+        if str(self.name).startswith("Device name"):
+            try:
+                open("/tmp/vmm-a11y-net-device.txt.set", "w").write(
+                    text if text is not None else ""
+                )
+            except Exception:
+                pass
         if str(self.name).startswith("Name"):
             try:
                 open("/tmp/vmm-a11y-create-name.txt", "w").write(

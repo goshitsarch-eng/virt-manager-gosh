@@ -400,7 +400,8 @@ class vmmNetworkList(vmmGObjectUI):
                 dev = self.widget("net-manual-source").get_text() or ""
             except Exception:
                 dev = ""
-            open("/tmp/vmm-a11y-net-device.txt", "w").write(dev)
+            if not os.path.exists("/tmp/vmm-a11y-net-device.txt.set"):
+                open("/tmp/vmm-a11y-net-device.txt", "w").write(dev)
             try:
                 warn = bool(self.widget("net-default-warn-box").get_visible())
             except Exception:
