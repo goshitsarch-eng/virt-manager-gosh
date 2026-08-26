@@ -693,11 +693,85 @@ class VNCDisplay(_DisplayBase):
         r, g, b = rgb[0], rgb[1], rgb[2]
         return bytes((b, g, r, 0))
 
+    def _tight_read_data(self, sock, stream_id, expect):
+        if expect < 12:
+            return self._recv_n(sock, expect)
+        n = self._tight_compact_len(sock)
+        rawz = self._recv_n(sock, n)
+        import zlib
+
+        if self._tight_z[stream_id] is None:
+            self._tight_z[stream_id] = zlib.decompressobj()
+        return self._tight_z[stream_id].decompress(rawz)
+
+    def _blit_rgb24(self, width, x, y, w, h, data):
+        need = w * h * 3
+        if len(data) < need:
+            return
+        row = bytearray()
+        for i in range(0, need, 3):
+            row.extend(self._cpixel_to_bgra(data[i : i + 3]))
+        self._blit_raw(width, x, y, w, h, bytes(row))
+
+    def _read_tight_palette(self, sock, width, x, y, w, h, stream_id):
+        # Tight palette is 1 bit/pixel when there are two colors, else
+        # 8 bits/pixel. This is not the ZRLE 1/2/4/8 packing.
+        ncolors = self._recv_n(sock, 1)[0] + 1
+        palette = [self._cpixel_to_bgra(self._recv_n(sock, 3)) for _ in range(ncolors)]
+        if ncolors <= 2:
+            rowsize = (w + 7) // 8
+            data = self._tight_read_data(sock, stream_id, rowsize * h)
+            for row in range(h):
+                packed = data[row * rowsize : (row + 1) * rowsize]
+                for col in range(w):
+                    if col // 8 >= len(packed):
+                        break
+                    idx = (packed[col // 8] >> (7 - (col % 8))) & 1
+                    pix = palette[idx] if idx < len(palette) else palette[0]
+                    self._fill_rect(width, x + col, y + row, 1, 1, pix)
+            return
+        data = self._tight_read_data(sock, stream_id, w * h)
+        for i, idx in enumerate(data[: w * h]):
+            pix = palette[idx] if idx < len(palette) else palette[0]
+            self._fill_rect(width, x + (i % w), y + (i // w), 1, 1, pix)
+
+    def _read_tight_gradient(self, sock, width, x, y, w, h, stream_id):
+        # Tight gradient: each RGB sample is a delta from
+        # left + above - above-left, matching TigerVNC FilterGradient24.
+        expect = w * h * 3
+        data = self._tight_read_data(sock, stream_id, expect)
+        if len(data) < expect:
+            return
+        prev = [0] * (w * 3)
+        out = bytearray()
+        for row in range(h):
+            this = [0] * (w * 3)
+            for col in range(w):
+                src = (row * w + col) * 3
+                for c in range(3):
+                    if col == 0:
+                        val = (prev[c] + data[src + c]) & 0xFF
+                    else:
+                        est = (
+                            int(prev[col * 3 + c])
+                            + int(this[(col - 1) * 3 + c])
+                            - int(prev[(col - 1) * 3 + c])
+                        )
+                        est = 0 if est < 0 else 255 if est > 255 else est
+                        val = (est + data[src + c]) & 0xFF
+                    this[col * 3 + c] = val
+                out.extend(self._cpixel_to_bgra(bytes(this[col * 3 : col * 3 + 3])))
+            prev = this
+        self._blit_raw(width, x, y, w, h, bytes(out))
+
     def _read_tight(self, sock, width, x, y, w, h):
         ctrl = self._recv_n(sock, 1)[0]
         for stream in range(4):
             if ctrl & (1 << stream):
                 self._tight_z[stream] = None
+        # After the four reset bits, bits 4-5 are the zlib stream and
+        # bit 6 means a filter-id byte follows. JPEG/PNG/fill use the
+        # remaining high values 0x08-0x0A.
         kind = ctrl >> 4
         if kind == 0x08:
             pix = self._cpixel_to_bgra(self._recv_n(sock, 3))
@@ -728,35 +802,19 @@ class VNCDisplay(_DisplayBase):
             except Exception:
                 pass
             return
+        stream_id = kind & 0x03
         filt = 0
-        if ctrl & 0x40:
+        if kind & 0x04:
             filt = self._recv_n(sock, 1)[0]
-        stream_id = ctrl & 0x03
-        expect = w * h * 4
         if filt == 1:
-            ncolors = self._recv_n(sock, 1)[0] + 1
-            self._recv_n(sock, ncolors * 3)
-            bits = 8 if ncolors > 16 else 4 if ncolors > 4 else 2 if ncolors > 2 else 1
-            expect = ((w + (8 // bits) - 1) // (8 // bits)) * h
-        elif filt == 2:
-            expect = w * h * 3
-        else:
-            expect = w * h * 3
-        if expect < 12:
-            data = self._recv_n(sock, expect)
-        else:
-            n = self._tight_compact_len(sock)
-            rawz = self._recv_n(sock, n)
-            import zlib
-
-            if self._tight_z[stream_id] is None:
-                self._tight_z[stream_id] = zlib.decompressobj()
-            data = self._tight_z[stream_id].decompress(rawz)
-        if filt == 0 and len(data) >= w * h * 3:
-            row = bytearray()
-            for i in range(0, w * h * 3, 3):
-                row.extend(self._cpixel_to_bgra(data[i : i + 3]))
-            self._blit_raw(width, x, y, w, h, bytes(row))
+            self._read_tight_palette(sock, width, x, y, w, h, stream_id)
+            return
+        if filt == 2:
+            self._read_tight_gradient(sock, width, x, y, w, h, stream_id)
+            return
+        data = self._tight_read_data(sock, stream_id, w * h * 3)
+        if len(data) >= w * h * 3:
+            self._blit_rgb24(width, x, y, w, h, data)
 
     def _read_zrle(self, sock, width, x, y, w, h):
         import zlib

@@ -468,6 +468,20 @@ def main():
         win._console.vmwindow_get_viewer_is_visible()
         win._console.vmwindow_get_resizeguest_tooltip()
         win._console.vmwindow_sync_scaling_with_display()
+        from virtManager.details.console import build_keycombo_menu
+        from virtManager.details.console import vmmOverlayToolbar
+
+        sent = []
+        keymenu = build_keycombo_menu(lambda _src, keys: sent.append(list(keys)))
+        assert keymenu is not None
+        kids = list(keymenu.get_children())
+        assert kids, "Send Key menu is empty"
+        toolbar = vmmOverlayToolbar(lambda *_a: None, lambda _src, keys: sent.append(list(keys)))
+        overlay = toolbar.timed_revealer.get_overlay_widget()
+        assert overlay is not None
+        toolbar.timed_revealer.force_reveal(True)
+        toolbar._on_send_key_button_clicked_cb(toolbar._send_key_button)
+        toolbar.cleanup()
 
     def preferences_grabkeys_widgets():
         from virtManager.preferences import vmmPreferences
@@ -818,10 +832,63 @@ def main():
         payload += b"\x01\x00\x00\x00" + (b"\x00" * 16)
         nw, nh = disp._read_fb_update(FakeSock(payload), 4, 4)
         assert (nw, nh) == (16, 12)
-        # Tight fill rectangle (control 0x80 + RGB)
+        def _pixel(dx, dy):
+            i = (dy * 4 + dx) * 4
+            return bytes(disp._pixels[i : i + 4])
+
+        def _compact(n):
+            if n < 128:
+                return bytes([n])
+            return bytes([0x80 | (n & 0x7F), (n >> 7) & 0x7F])
+
+        # Tight fill rectangle (control 0x80 + RGB) → BGRA
         disp._alloc_pixels(4, 4)
         tight = b"\x80\xaa\xbb\xcc"
         disp._read_tight(FakeSock(tight), 4, 0, 0, 2, 2)
+        assert _pixel(0, 0) == b"\xcc\xbb\xaa\x00"
+        assert _pixel(1, 1) == b"\xcc\xbb\xaa\x00"
+
+        # Tight 2-color palette (1 bit/pixel, rows padded)
+        disp._alloc_pixels(4, 4)
+        pal = b"\x40\x01\x01\xff\x00\x00\x00\x00\xff\x40\x80"
+        disp._read_tight(FakeSock(pal), 4, 0, 0, 2, 2)
+        assert _pixel(0, 0) == b"\x00\x00\xff\x00"
+        assert _pixel(1, 0) == b"\xff\x00\x00\x00"
+        assert _pixel(0, 1) == b"\xff\x00\x00\x00"
+        assert _pixel(1, 1) == b"\x00\x00\xff\x00"
+
+        # Tight 3-color palette (8 bit/pixel)
+        disp._alloc_pixels(4, 4)
+        pal8 = b"\x40\x01\x02" + b"\x11\x00\x00\x00\x22\x00\x00\x00\x33" + b"\x00\x01\x02\x00"
+        disp._read_tight(FakeSock(pal8), 4, 0, 0, 2, 2)
+        assert _pixel(0, 0) == b"\x00\x00\x11\x00"
+        assert _pixel(1, 0) == b"\x00\x22\x00\x00"
+        assert _pixel(0, 1) == b"\x33\x00\x00\x00"
+
+        # Tight gradient 2x1: first pixel is the sample, second is
+        # predicted-from-left plus the residual.
+        disp._alloc_pixels(4, 4)
+        grad = b"\x40\x02" + b"\x0a\x14\x1e\x05\x06\x07"
+        disp._read_tight(FakeSock(grad), 4, 0, 0, 2, 1)
+        assert _pixel(0, 0) == b"\x1e\x14\x0a\x00"
+        assert _pixel(1, 0) == b"\x25\x1a\x0f\x00"
+
+        # Tight copy must use bits 4-5 as the zlib stream, not the reset bits.
+        import zlib as _zlib
+
+        z0 = _zlib.compressobj()
+        c1 = z0.compress(b"\x11" * 12) + z0.flush(_zlib.Z_SYNC_FLUSH)
+        z1 = _zlib.compressobj()
+        c2 = z1.compress(b"\x22" * 12) + z1.flush(_zlib.Z_SYNC_FLUSH)
+        c3 = z0.compress(b"\x33" * 12) + z0.flush(_zlib.Z_SYNC_FLUSH)
+        disp._tight_z = [None, None, None, None]
+        disp._alloc_pixels(4, 4)
+        disp._read_tight(FakeSock(b"\x00" + _compact(len(c1)) + c1), 4, 0, 0, 2, 2)
+        assert _pixel(0, 0) == b"\x11\x11\x11\x00"
+        disp._read_tight(FakeSock(b"\x10" + _compact(len(c2)) + c2), 4, 2, 0, 2, 2)
+        assert _pixel(2, 0) == b"\x22\x22\x22\x00"
+        disp._read_tight(FakeSock(b"\x00" + _compact(len(c3)) + c3), 4, 0, 2, 2, 2)
+        assert _pixel(0, 2) == b"\x33\x33\x33\x00"
         # ZRLE solid 4x4 tile
         import zlib as _zlib
 
@@ -1250,6 +1317,34 @@ def main():
         elif hasattr(tray._systray, "_window"):
             menu.popup_at_widget(tray._systray._window)
         assert menu is not None
+
+        from virtManager import systray as systraymod
+
+        sni = systraymod._SystrayStatusNotifier()
+        popup = Gtk.Menu()
+        clicked = []
+        quit_item = Gtk.MenuItem.new_with_label("Quit")
+        quit_item.connect("activate", lambda *_a: clicked.append("quit"))
+        popup.add(quit_item)
+        popup.add(Gtk.SeparatorMenuItem())
+        sni.set_menu(popup)
+        sni.show()
+        sni._rebuild_items()
+        labels = [systraymod._menu_item_label(item) for item in sni._items.values() if item is not None]
+        assert any("Quit" in lab for lab in labels), labels
+        assert any("Show Virtual Machine Manager" in lab for lab in labels), labels
+        layout = sni._layout_node(0, -1, [])
+        assert layout is not None
+        quit_id = next(
+            i
+            for i, item in sni._items.items()
+            if item is not None and "Quit" in systraymod._menu_item_label(item)
+        )
+        sni._activate_item(sni._items[quit_id])
+        _pump(GLib, 0.05)
+        assert clicked == ["quit"]
+        sni.hide()
+        assert sni._status == "Passive"
 
     def addhardware_finish_sound():
         from virtManager.addhardware import PAGE_SOUND

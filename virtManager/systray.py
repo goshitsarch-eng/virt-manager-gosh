@@ -136,6 +136,42 @@ class _Systray:
         raise NotImplementedError()
 
 
+def _ensure_show_manager_item(menu):
+    """
+    GTK 3 AppIndicator inserted this item next to Quit. Keep it on every
+    production backend so left-click and the menu both match StatusIcon.
+    """
+    if menu is None or getattr(menu, "_vmm_show_manager_item", None):
+        return getattr(menu, "_vmm_show_manager_item", None)
+    hide_item = Gtk.MenuItem.new_with_mnemonic(_("_Show Virtual Machine Manager"))
+    hide_item.connect("activate", _toggle_manager)
+    hide_item.show()
+    kids = list(menu.get_children())
+    menu.insert(hide_item, max(0, len(kids) - 1))
+    menu._vmm_show_manager_item = hide_item
+    return hide_item
+
+
+def _menu_item_label(item):
+    if item is None:
+        return ""
+    for attr in ("get_label",):
+        if hasattr(item, attr):
+            try:
+                text = item.get_label() or ""
+                if text:
+                    return text.replace("_", "")
+            except Exception:
+                pass
+    child = getattr(item, "get_child", lambda: None)()
+    if child is not None and hasattr(child, "get_text"):
+        try:
+            return (child.get_text() or "").replace("_", "")
+        except Exception:
+            return ""
+    return ""
+
+
 class _SystrayIndicator(_Systray):  # pragma: no cover
     """
     UI backend for appindicator
@@ -147,13 +183,10 @@ class _SystrayIndicator(_Systray):  # pragma: no cover
         )
 
     def set_menu(self, menu):
-        hide_item = Gtk.MenuItem.new_with_mnemonic(_("_Show Virtual Machine Manager"))
-        hide_item.connect("activate", _toggle_manager)
-        hide_item.show()
-        menu.insert(hide_item, len(menu.get_children()) - 1)
-
+        hide_item = _ensure_show_manager_item(menu)
         self._icon.set_menu(menu)
-        self._icon.set_secondary_activate_target(hide_item)
+        if hide_item is not None:
+            self._icon.set_secondary_activate_target(hide_item)
 
     def is_embedded(self):
         if not self._icon.get_property("connected"):
@@ -170,7 +203,8 @@ class _SystrayIndicator(_Systray):  # pragma: no cover
 class _SystrayStatusIcon(_Systray):  # pragma: no cover
     """
     GTK 4 no longer has Gtk.StatusIcon. Show a compact tray window that
-    still exposes the full connection/VM action menu.
+    still exposes the full connection/VM action menu. Left-click toggles
+    the manager (GTK 3 StatusIcon activate); right-click opens the menu.
     """
 
     def __init__(self):
@@ -194,6 +228,7 @@ class _SystrayStatusIcon(_Systray):  # pragma: no cover
         return self._visible
 
     def set_menu(self, menu):
+        _ensure_show_manager_item(menu)
         self._menu = menu
 
     def _popup_menu(self, *_args):
@@ -236,6 +271,72 @@ _SNI_XML = """
       <arg type="i" name="delta" direction="in"/>
       <arg type="s" name="orientation" direction="in"/>
     </method>
+    <signal name="NewStatus">
+      <arg type="s" name="status"/>
+    </signal>
+    <signal name="NewIcon"/>
+    <signal name="NewTitle"/>
+    <signal name="NewMenu"/>
+    <signal name="NewToolTip"/>
+  </interface>
+</node>
+"""
+
+_DBUSMENU_XML = """
+<node>
+  <interface name="com.canonical.dbusmenu">
+    <property name="Version" type="u" access="read"/>
+    <property name="TextDirection" type="s" access="read"/>
+    <property name="Status" type="s" access="read"/>
+    <property name="IconThemePath" type="as" access="read"/>
+    <method name="GetLayout">
+      <arg type="i" name="parentId" direction="in"/>
+      <arg type="i" name="recursionDepth" direction="in"/>
+      <arg type="as" name="propertyNames" direction="in"/>
+      <arg type="u" name="revision" direction="out"/>
+      <arg type="(ia{sv}av)" name="layout" direction="out"/>
+    </method>
+    <method name="GetGroupProperties">
+      <arg type="ai" name="ids" direction="in"/>
+      <arg type="as" name="propertyNames" direction="in"/>
+      <arg type="a(ia{sv})" name="properties" direction="out"/>
+    </method>
+    <method name="GetProperty">
+      <arg type="i" name="id" direction="in"/>
+      <arg type="s" name="name" direction="in"/>
+      <arg type="v" name="value" direction="out"/>
+    </method>
+    <method name="Event">
+      <arg type="i" name="id" direction="in"/>
+      <arg type="s" name="eventId" direction="in"/>
+      <arg type="v" name="data" direction="in"/>
+      <arg type="u" name="timestamp" direction="in"/>
+    </method>
+    <method name="EventGroup">
+      <arg type="a(isvu)" name="events" direction="in"/>
+      <arg type="ai" name="idErrors" direction="out"/>
+    </method>
+    <method name="AboutToShow">
+      <arg type="i" name="id" direction="in"/>
+      <arg type="b" name="needUpdate" direction="out"/>
+    </method>
+    <method name="AboutToShowGroup">
+      <arg type="ai" name="ids" direction="in"/>
+      <arg type="ai" name="updatesNeeded" direction="out"/>
+      <arg type="ai" name="idErrors" direction="out"/>
+    </method>
+    <signal name="ItemsPropertiesUpdated">
+      <arg type="a(ia{sv})" name="updatedProps"/>
+      <arg type="a(ias)" name="removedProps"/>
+    </signal>
+    <signal name="LayoutUpdated">
+      <arg type="u" name="revision"/>
+      <arg type="i" name="parent"/>
+    </signal>
+    <signal name="ItemActivationRequested">
+      <arg type="i" name="id"/>
+      <arg type="u" name="timestamp"/>
+    </signal>
   </interface>
 </node>
 """
@@ -244,7 +345,8 @@ _SNI_XML = """
 class _SystrayStatusNotifier(_Systray):  # pragma: no cover
     """
     Freedesktop/KDE StatusNotifierItem tray icon. This is the GTK 4
-    replacement for Gtk.StatusIcon and AppIndicator3 menus.
+    replacement for Gtk.StatusIcon: Activate toggles the manager,
+    ContextMenu / dbusmenu expose the connection and VM actions.
     """
 
     def __init__(self):
@@ -253,10 +355,15 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         self._bus = None
         self._owner_id = 0
         self._reg_id = 0
+        self._menu_reg_id = 0
+        self._revision = 1
+        self._items = {0: None}
+        self._children = {0: []}
         self._window = Gtk.Window()
         self._window.set_title(_("Virtual Machine Manager"))
         self._window.set_default_size(1, 1)
         self._window.set_decorated(False)
+        self._window.set_visible(False)
         try:
             self._bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
             node = Gio.DBusNodeInfo.new_for_xml(_SNI_XML)
@@ -265,6 +372,14 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
                 node.interfaces[0],
                 self._on_method,
                 self._on_get_property,
+                None,
+            )
+            menunode = Gio.DBusNodeInfo.new_for_xml(_DBUSMENU_XML)
+            self._menu_reg_id = self._bus.register_object(
+                "/MenuBar",
+                menunode.interfaces[0],
+                self._on_menu_method,
+                self._on_menu_get_property,
                 None,
             )
             self._owner_id = Gio.bus_own_name_on_connection(
@@ -276,6 +391,31 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
             )
         except Exception:
             log.debug("StatusNotifierItem setup failed", exc_info=True)
+
+    def _emit(self, path, iface, name, variant=None):
+        if not self._bus:
+            return
+        try:
+            self._bus.emit_signal(None, path, iface, name, variant)
+        except Exception:
+            log.debug("SNI signal %s failed", name, exc_info=True)
+
+    def _emit_status(self):
+        self._emit(
+            "/StatusNotifierItem",
+            "org.kde.StatusNotifierItem",
+            "NewStatus",
+            GLib.Variant("(s)", (self._status,)),
+        )
+
+    def _emit_layout(self):
+        self._emit(
+            "/MenuBar",
+            "com.canonical.dbusmenu",
+            "LayoutUpdated",
+            GLib.Variant("(ui)", (self._revision, 0)),
+        )
+        self._emit("/StatusNotifierItem", "org.kde.StatusNotifierItem", "NewMenu", None)
 
     def _on_name_acquired(self, connection, name):
         ignore = connection
@@ -310,9 +450,13 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         if method == "Activate":
             _toggle_manager()
         elif method in ("ContextMenu", "SecondaryActivate"):
-            if self._menu:
-                self._menu.popup_at_widget(self._window)
+            self._popup_menu()
         invocation.return_value(None)
+
+    def _popup_menu(self):
+        if self._menu:
+            # Keep the 1x1 helper unmapped so it cannot poison AT-SPI.
+            self._menu.popup_at_widget(self._window)
 
     def _on_get_property(self, _conn, _sender, _path, _iface, name):
         values = {
@@ -327,19 +471,168 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         }
         return values.get(name)
 
+    def _rebuild_items(self):
+        self._items = {0: None}
+        self._children = {0: []}
+        if self._menu is None:
+            return
+
+        def walk(menu, parent_id):
+            kids = []
+            try:
+                kids = list(menu.get_children())
+            except Exception:
+                kids = []
+            for child in kids:
+                nid = len(self._items)
+                self._items[nid] = child
+                self._children.setdefault(parent_id, []).append(nid)
+                self._children[nid] = []
+                sub = None
+                if hasattr(child, "get_submenu"):
+                    try:
+                        sub = child.get_submenu()
+                    except Exception:
+                        sub = None
+                if sub is not None:
+                    walk(sub, nid)
+
+        walk(self._menu, 0)
+
+    def _item_props(self, item_id):
+        props = {
+            "enabled": GLib.Variant("b", True),
+            "visible": GLib.Variant("b", True),
+        }
+        if item_id == 0:
+            props["children-display"] = GLib.Variant("s", "submenu")
+            return props
+        item = self._items.get(item_id)
+        if item is None:
+            return props
+        gtype = type(item).__name__
+        if "Separator" in gtype:
+            props["type"] = GLib.Variant("s", "separator")
+            return props
+        label = _menu_item_label(item)
+        if label:
+            props["label"] = GLib.Variant("s", label)
+        try:
+            props["enabled"] = GLib.Variant("b", bool(item.get_sensitive()))
+        except Exception:
+            pass
+        try:
+            props["visible"] = GLib.Variant("b", bool(item.get_visible()))
+        except Exception:
+            pass
+        if self._children.get(item_id):
+            props["children-display"] = GLib.Variant("s", "submenu")
+        if hasattr(item, "get_active"):
+            try:
+                props["toggle-type"] = GLib.Variant("s", "checkmark")
+                props["toggle-state"] = GLib.Variant("i", 1 if item.get_active() else 0)
+            except Exception:
+                pass
+        return props
+
+    def _layout_node(self, item_id, depth, names):
+        props = self._item_props(item_id)
+        if names:
+            props = {k: v for k, v in props.items() if k in names}
+        children = []
+        if depth != 0:
+            next_depth = -1 if depth < 0 else depth - 1
+            for cid in self._children.get(item_id, []):
+                children.append(self._layout_node(cid, next_depth, names))
+        return GLib.Variant("(ia{sv}av)", (item_id, props, children))
+
+    def _activate_item(self, item):
+        if item is None:
+            return
+        if hasattr(item, "emit"):
+            try:
+                item.emit("activate")
+                return
+            except Exception:
+                pass
+        if hasattr(item, "clicked"):
+            try:
+                item.clicked()
+            except Exception:
+                pass
+
+    def _on_menu_method(self, _conn, _sender, _path, _iface, method, params, invocation):
+        self._rebuild_items()
+        if method == "GetLayout":
+            parent, depth, names = params.unpack()
+            layout = self._layout_node(int(parent), int(depth), list(names or []))
+            invocation.return_value(GLib.Variant.new_tuple(GLib.Variant("u", self._revision), layout))
+            return
+        if method == "GetGroupProperties":
+            ids, names = params.unpack()
+            rows = []
+            for item_id in ids:
+                props = self._item_props(item_id)
+                if names:
+                    props = {k: v for k, v in props.items() if k in names}
+                rows.append((item_id, props))
+            invocation.return_value(GLib.Variant("(a(ia{sv}))", (rows,)))
+            return
+        if method == "GetProperty":
+            item_id, name = params.unpack()
+            props = self._item_props(item_id)
+            invocation.return_value(GLib.Variant("(v)", (props.get(name, GLib.Variant("s", "")),)))
+            return
+        if method == "Event":
+            item_id, event_id, _data, _ts = params.unpack()
+            if event_id in ("clicked", "open"):
+                self._activate_item(self._items.get(item_id))
+            invocation.return_value(None)
+            return
+        if method == "EventGroup":
+            (events,) = params.unpack()
+            errors = []
+            for item_id, event_id, _data, _ts in events:
+                if item_id not in self._items:
+                    errors.append(item_id)
+                elif event_id in ("clicked", "open"):
+                    self._activate_item(self._items.get(item_id))
+            invocation.return_value(GLib.Variant("(ai)", (errors,)))
+            return
+        if method == "AboutToShow":
+            invocation.return_value(GLib.Variant("(b)", (False,)))
+            return
+        if method == "AboutToShowGroup":
+            invocation.return_value(GLib.Variant("(aiai)", ([], [])))
+            return
+        invocation.return_value(None)
+
+    def _on_menu_get_property(self, _conn, _sender, _path, _iface, name):
+        values = {
+            "Version": GLib.Variant("u", 3),
+            "TextDirection": GLib.Variant("s", "ltr"),
+            "Status": GLib.Variant("s", "normal"),
+            "IconThemePath": GLib.Variant("as", []),
+        }
+        return values.get(name)
+
     def is_embedded(self):
         return self._status == "Active" and self._bus is not None
 
     def set_menu(self, menu):
+        _ensure_show_manager_item(menu)
         self._menu = menu
+        self._revision += 1
+        self._rebuild_items()
+        self._emit_layout()
 
     def show(self):
         self._status = "Active"
-        self._window.set_visible(True)
+        self._emit_status()
 
     def hide(self):
         self._status = "Passive"
-        self._window.set_visible(False)
+        self._emit_status()
 
 
 class _SystrayWindow(_Systray):
