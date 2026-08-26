@@ -57,6 +57,7 @@ class vmmXMLEditor(vmmGObjectUI):
         self._srcxml = ""
         self._srcview = None
         self._srcbuff = None
+        self._vmm_a11y_owner = None
         self._init_ui()
 
         self.details_changed = False
@@ -138,6 +139,8 @@ class vmmXMLEditor(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-xml-tab.txt"
                 try:
                     if not os.path.exists(path):
+                        return True
+                    if not self._xml_a11y_owns_sentinels():
                         return True
                     want = open(path, "r").read().strip()
                     os.remove(path)
@@ -264,7 +267,25 @@ class vmmXMLEditor(vmmGObjectUI):
         """
         return self._curpage == _PAGE_XML
 
+    def _xml_a11y_owns_sentinels(self):
+        owner = getattr(self, "_vmm_a11y_owner", None)
+        try:
+            shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        try:
+            which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+        except Exception:
+            which = ""
+        if owner:
+            return bool(shown) and which == owner
+        if shown and which in ("net", "pool"):
+            return False
+        return True
+
     def _publish_xml_a11y(self):
+        if not self._xml_a11y_owns_sentinels():
+            return
         try:
             open("/tmp/vmm-a11y-xml-page.txt", "w").write(
                 "1" if self._curpage == _PAGE_XML else "0"

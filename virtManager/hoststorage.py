@@ -162,6 +162,7 @@ class vmmHostStorage(vmmGObjectUI):
             self.widget("pool-details-align"),
             self.widget("pool-details"),
         )
+        self._xmleditor._vmm_a11y_owner = "pool"
         self._xmleditor.connect("changed", lambda s: self._enable_pool_apply(EDIT_POOL_XML))
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
         self._xmleditor.connect("xml-reset", self._xmleditor_xml_reset_cb)

@@ -95,6 +95,7 @@ class vmmHostNets(vmmGObjectUI):
         self._xmleditor = vmmXMLEditor(
             self.builder, self.topwin, self.widget("net-details-align"), self.widget("net-details")
         )
+        self._xmleditor._vmm_a11y_owner = "net"
         self._xmleditor.connect("changed", lambda s: self._enable_net_apply(EDIT_NET_XML))
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
         self._xmleditor.connect("xml-reset", self._xmleditor_xml_reset_cb)
