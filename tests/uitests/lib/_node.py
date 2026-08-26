@@ -2803,10 +2803,17 @@ class _SentinelInspectionApps(object):
             pass
 
     def fmt_nodes(self):
-        try:
-            return open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
-        except Exception:
-            return ""
+        deadline = time.time() + 8
+        text = ""
+        while time.time() < deadline:
+            try:
+                text = open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
+            except Exception:
+                text = ""
+            if text.strip():
+                return text
+            time.sleep(0.1)
+        return text
 
 
 class _SentinelInspectionRefresh(object):
