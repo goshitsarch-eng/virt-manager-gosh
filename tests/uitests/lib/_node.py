@@ -474,14 +474,6 @@ class _SentinelEntry(object):
         except Exception:
             pass
         try:
-            if "oscontainer-uri" in str(self._path) or "source-uri" in str(self.name):
-                open("/tmp/vmm-bootstrap-debug.log", "a").write(
-                    "set_text uri name=%r path=%r text=%r\n"
-                    % (self.name, self._path, text)
-                )
-        except Exception:
-            pass
-        try:
             open("/tmp/vmm-a11y-entry.txt", "w").write(text if text is not None else "")
         except Exception:
             pass
