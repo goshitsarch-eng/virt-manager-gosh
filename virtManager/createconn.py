@@ -149,18 +149,6 @@ class vmmCreateConn(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createconn-user.txt", "w").write(
-                self.widget("username-entry").get_text() or ""
-            )
-        except Exception:
-            pass
-        try:
-            open("/tmp/vmm-a11y-createconn-host.txt", "w").write(
-                self.widget("hostname").get_text() or ""
-            )
-        except Exception:
-            pass
-        try:
             open("/tmp/vmm-a11y-createconn-uri-label.txt", "w").write(
                 self.widget("uri-label").get_text() or ""
             )
