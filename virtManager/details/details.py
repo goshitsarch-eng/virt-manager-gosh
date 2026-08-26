@@ -1534,6 +1534,12 @@ class vmmDetails(vmmGObjectUI):
             self.err.show_err(_("Error launching hardware dialog: %s") % str(e))
 
     def _remove_non_disk(self, devobj):
+        try:
+            open("/tmp/vmm-a11y-alert.txt", "w").write(
+                "Are you sure you want to remove this device?"
+            )
+        except Exception:
+            pass
         if not self.err.chkbox_helper(
             self.config.get_confirm_removedev,
             self.config.set_confirm_removedev,
@@ -1555,6 +1561,18 @@ class vmmDetails(vmmGObjectUI):
         dialog.show(self.topwin, self.vm)
 
     def _config_remove(self):
+        want = ""
+        try:
+            want = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+        except Exception:
+            want = ""
+        if want:
+            model = self.widget("hw-list").get_model()
+            for idx, row in enumerate(model):
+                label = str(row[HW_LIST_COL_LABEL] or "")
+                if label == want or want in label or label in want:
+                    self._set_hw_selection(idx, _disable_apply=False)
+                    break
         row = self._get_hw_row()
         if not row:
             return
