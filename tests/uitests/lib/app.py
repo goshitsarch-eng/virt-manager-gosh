@@ -1027,16 +1027,19 @@ class VMMDogtailApp:
         return self._topwin
 
     def has_dbus(self):
-        dbus = Gio.DBusProxy.new_sync(
-            Gio.bus_get_sync(Gio.BusType.SESSION, None),
-            0,
-            None,
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-            None,
-        )
-        return "org.virt-manager.virt-manager" in dbus.ListNames()
+        try:
+            dbus = Gio.DBusProxy.new_sync(
+                Gio.bus_get_sync(Gio.BusType.SESSION, None),
+                0,
+                None,
+                "org.freedesktop.DBus",
+                "/org/freedesktop/DBus",
+                "org.freedesktop.DBus",
+                None,
+            )
+            return "org.virt-manager.virt-manager" in dbus.ListNames()
+        except Exception:
+            return False
 
     def error_if_already_running(self):
         # Ensure virt-manager isn't already running
