@@ -9853,7 +9853,11 @@ def _systray_match(want, have):
     b = str(have or "").strip().lower()
     if not a or not b:
         return False
-    return a == b or a in b or b in a
+    # Search string may be a prefix of the published name
+    # ("test testdriver" → "test testdriver.xml"). Never let a
+    # shorter published name match a longer search ("test" must
+    # not match "test-arm-kernel").
+    return a == b or a in b
 
 
 class _SentinelPrefsCheck(object):

@@ -805,35 +805,34 @@ class vmmSystray(vmmGObject):
         want = (want or "").strip().lower()
         if not want:
             return None
-        best = None
-        best_score = -1
+        fuzzy = None
         try:
             connmanager = vmmConnectionManager.get_instance()
             for conn in connmanager.conns.values():
                 desc = (conn.get_pretty_desc() or "").lower()
                 if want == desc:
                     return conn
-                if want in desc or desc in want:
-                    score = min(len(want), len(desc))
-                    if score > best_score:
-                        best = conn
-                        best_score = score
+                if want in desc:
+                    fuzzy = conn
         except Exception:
             return None
-        return best
+        return fuzzy
 
     def _match_vm(self, conn, want):
         want = (want or "").strip().lower()
         if not conn or not want:
             return None
+        fuzzy = None
         try:
             for vm in conn.list_vms():
                 name = (vm.get_name_or_title() or "").lower()
-                if want == name or want in name or name in want:
+                if want == name:
                     return vm
+                if want in name:
+                    fuzzy = vm
         except Exception:
             return None
-        return None
+        return fuzzy
 
     def _start_a11y_pollers(self):
         if getattr(self, "_vmm_systray_poll", False):
