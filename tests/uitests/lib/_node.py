@@ -4101,6 +4101,8 @@ def _sentinel_xml_widgets(name, roleName):
     role = str(roleName or "").lower()
     if "xml editor" in compact:
         return _SentinelXmlEditor()
+    if "xml editing is disabled" in compact:
+        return _SentinelPrefsXMLDisabled()
     if compact in ("xml", "details") and "tab" in role:
         pretty = "XML" if compact == "xml" else "Details"
         return _SentinelXmlPageTab(pretty)
@@ -10092,9 +10094,9 @@ class _SentinelPrefsXMLDisabled(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() == "1"
+            return open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() != "0"
         except Exception:
-            return False
+            return True
 
     @property
     def onscreen(self):
