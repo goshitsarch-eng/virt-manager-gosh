@@ -9543,6 +9543,18 @@ class _SentinelNewVMWindow(object):
     def visible(self):
         return self.showing
 
+    @property
+    def position(self):
+        return (200, 120)
+
+    @property
+    def size(self):
+        return (550, 550)
+
+    def title_coordinates(self):
+        x, y = self.position
+        return x + 200, y + 10
+
     def window_close(self):
         try:
             open("/tmp/vmm-a11y-window-close.txt", "w").write("New VM")
