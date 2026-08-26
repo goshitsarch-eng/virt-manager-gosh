@@ -346,8 +346,9 @@ class vmmVMWindow(vmmGObjectUI):
 
         vmmEngine.get_instance().increment_window_counter()
         self._refresh_vm_state()
-        if not self.is_customize_dialog:
+        if not self.is_customize_dialog and not getattr(self, "_vmm_page_forced", False):
             self.activate_default_page()
+        self._vmm_page_forced = False
 
     def customize_finish(self, src):
         ignore = src
@@ -708,18 +709,6 @@ class vmmVMWindow(vmmGObjectUI):
             gtkcompat.sync_sidecar_visible(
                 "guest-status", newpage == DETAILS_PAGE_CONSOLE
             )
-            page_name = {
-                DETAILS_PAGE_DETAILS: "details",
-                DETAILS_PAGE_CONSOLE: "console",
-                DETAILS_PAGE_SNAPSHOTS: "snapshots",
-            }.get(newpage, "details")
-            try:
-                hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
-                if page_name == "details" and "Performance" in hw:
-                    page_name = "performance"
-            except Exception:
-                pass
-            open("/tmp/vmm-a11y-vm-page.txt", "w").write(page_name)
         except Exception:
             pass
 
@@ -733,16 +722,19 @@ class vmmVMWindow(vmmGObjectUI):
         self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_console_page(self):
+        self._vmm_page_forced = True
         pages = self.widget("details-pages")
         pages.set_current_page(DETAILS_PAGE_CONSOLE)
         self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_performance_page(self):
+        self._vmm_page_forced = True
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
         self._details.vmwindow_activate_performance_page()
         self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 
     def activate_config_page(self):
+        self._vmm_page_forced = True
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
         self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 

@@ -2715,7 +2715,7 @@ class vmmDetails(vmmGObjectUI):
                 window=self.topwin,
             )
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write("Performance")
-            open("/tmp/vmm-a11y-vm-page.txt", "w").write("performance")
+            open("/tmp/vmm-a11y-vm-page-current.txt", "w").write("details")
         except Exception:
             pass
 

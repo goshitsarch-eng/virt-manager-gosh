@@ -1305,7 +1305,7 @@ class _SentinelCredentials(object):
 
 def _vm_page():
     try:
-        return open("/tmp/vmm-a11y-vm-page.txt", "r").read().strip() or "details"
+        return open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() or "details"
     except Exception:
         return "details"
 
