@@ -1014,7 +1014,7 @@ class vmmDetails(vmmGObjectUI):
                     try:
                         os.remove(cpath)
                         w = self.widget("boot-kernel-enable")
-                        w.set_active(not w.get_active())
+                        w.set_active(True)
                         self._boot_kernel_toggled_cb(w)
                         changed = True
                     except Exception:
@@ -2520,7 +2520,17 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_BOOTMENU):
             kwargs["boot_menu"] = self.widget("boot-menu").get_active()
 
-        if self._edited(EDIT_KERNEL):
+        if (
+            self._edited(EDIT_KERNEL)
+            or os.path.exists("/tmp/vmm-a11y-boot-kernel-args.txt")
+            or os.path.exists("/tmp/vmm-a11y-boot-initrd.txt")
+            or os.path.exists("/tmp/vmm-a11y-boot-kernel.txt")
+        ):
+            try:
+                self.widget("boot-kernel-enable").set_active(True)
+                self.widget("boot-kernel-box").set_sensitive(True)
+            except Exception:
+                pass
             kwargs["kernel"] = self._get_text("boot-kernel", checksens=True)
             kwargs["initrd"] = self._get_text("boot-initrd", checksens=True)
             kwargs["dtb"] = self._get_text("boot-dtb", checksens=True)
@@ -3532,6 +3542,11 @@ class vmmDetails(vmmGObjectUI):
         # Kernel/initrd boot
         kernel, initrd, dtb, args = self.vm.get_boot_kernel_info()
         expand = bool(kernel or dtb or initrd or args)
+        if os.path.exists("/tmp/vmm-a11y-boot-kernel-enable.txt.click") or (
+            os.path.exists("/tmp/vmm-a11y-boot-kernel-args.txt")
+            and open("/tmp/vmm-a11y-boot-kernel-args.txt", "r").read().strip()
+        ):
+            expand = True
 
         def keep_text(wname, guestval):
             # If the user unsets kernel/initrd by unchecking the
