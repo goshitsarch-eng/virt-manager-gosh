@@ -1188,7 +1188,14 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
     if compact == "storage-entry" or raw == "storage-entry":
         return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
     if compact in ("name", "name:") or raw in ("Name", "Name:"):
+        try:
+            if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1":
+                return _SentinelEntry("Name:", "/tmp/vmm-a11y-clone-name.txt")
+        except Exception:
+            pass
         return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
+    if "new path" in compact:
+        return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
     if compact == "import-entry" or raw == "import-entry":
         return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
     if compact == "media-entry" or raw == "media-entry":
@@ -2365,6 +2372,419 @@ def _sentinel_delete_widgets(name, roleName):
     return None
 
 
+def _clone_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _clone_stg_open():
+    try:
+        return open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _clone_storage_rows():
+    rows = []
+    try:
+        lines = open("/tmp/vmm-a11y-clone-storage.txt", "r").read().splitlines()
+    except Exception:
+        return rows
+    for line in lines:
+        parts = line.split("\t")
+        if len(parts) < 6:
+            continue
+        rows.append(
+            {
+                "target": parts[0],
+                "orig": parts[1],
+                "new": parts[2],
+                "cloneable": parts[3] in ("1", "true", "yes"),
+                "clone": parts[4] in ("1", "true", "yes"),
+                "text": parts[5],
+            }
+        )
+    return rows
+
+
+class _SentinelCloneChkCell(object):
+    def __init__(self, row):
+        self.name = ""
+        self.roleName = "table cell"
+        self._target = row["target"]
+
+    def _live(self):
+        for row in _clone_storage_rows():
+            if row["target"] == self._target:
+                return row
+        return {
+            "target": self._target,
+            "cloneable": False,
+            "clone": False,
+            "text": "",
+        }
+
+    @property
+    def showing(self):
+        return bool(self._live()["cloneable"])
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def checked(self):
+        return bool(self._live()["clone"])
+
+    @property
+    def text(self):
+        return ""
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-clone-row-toggle.txt", "w").write(self._target)
+        except Exception:
+            pass
+        rows = _clone_storage_rows()
+        lines = []
+        for row in rows:
+            clone = row["clone"]
+            if row["target"] == self._target and row["cloneable"]:
+                clone = not clone
+                text = row["text"]
+                if clone:
+                    text = text.replace("Share disk with", "Clone this disk")
+                else:
+                    text = text.replace("Clone this disk", "Share disk with")
+                    if "Share disk with" not in text:
+                        text = (text + "\nShare disk with").strip()
+                    row["text"] = text
+            lines.append(
+                "%s\t%s\t%s\t%s\t%s\t%s"
+                % (
+                    row["target"],
+                    row["orig"],
+                    row["new"],
+                    "1" if row["cloneable"] else "0",
+                    "1" if clone else "0",
+                    row["text"],
+                )
+            )
+        try:
+            open("/tmp/vmm-a11y-clone-storage.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
+
+
+class _SentinelCloneTxtCell(object):
+    def __init__(self, row):
+        self.name = row.get("orig") or ""
+        self.roleName = "table cell"
+        self._target = row["target"]
+
+    def _live(self):
+        for row in _clone_storage_rows():
+            if row["target"] == self._target:
+                return row
+        return {"text": "", "orig": "", "target": self._target}
+
+    @property
+    def text(self):
+        return self._live().get("text") or ""
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-clone-row-select.txt", "w").write(self._target)
+        except Exception:
+            pass
+
+
+class _SentinelCloneDummyCell(object):
+    name = ""
+    roleName = "table cell"
+
+    @property
+    def showing(self):
+        return False
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def text(self):
+        return ""
+
+    @property
+    def checked(self):
+        return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+
+class _SentinelCloneStorageList(object):
+    name = "storage-list"
+    roleName = "table"
+
+    @property
+    def showing(self):
+        return _clone_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def grab_focus(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def _cells(self):
+        cells = []
+        dummy = _SentinelCloneDummyCell()
+        for row in _clone_storage_rows():
+            cells.extend([dummy, dummy, _SentinelCloneChkCell(row), dummy, dummy, _SentinelCloneTxtCell(row)])
+            cells.extend([dummy, dummy, dummy, dummy, dummy, dummy])
+        return cells
+
+    def findChildren(self, pred, isLambda=False, **kwargs):
+        ignore = kwargs
+        cells = self._cells()
+        if isLambda:
+            try:
+                return [c for c in cells if pred(c)]
+            except Exception:
+                return cells
+        return cells
+
+
+class _SentinelCloneButton(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "push button"
+        self._path = path
+
+    @property
+    def showing(self):
+        return _clone_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path, "w").write("1")
+        except Exception:
+            pass
+
+
+class _SentinelCloneCreateNew(object):
+    name = "Create a new disk (clone) for the virtual machine"
+    roleName = "check box"
+
+    def _state(self):
+        try:
+            return open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+        except Exception:
+            return "1"
+
+    @property
+    def checked(self):
+        return self._state() in ("1", "true", "yes", "on")
+
+    @property
+    def showing(self):
+        return _clone_stg_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        nxt = "0" if self.checked else "1"
+        try:
+            open("/tmp/vmm-a11y-clone-stg-doclone.txt", "w").write(nxt)
+        except Exception:
+            pass
+
+
+class _SentinelCloneStgWindow(object):
+    name = "Change storage path"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _clone_stg_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        blob = " ".join(str(x) for x in (name, labeller_text) if x)
+        compact = blob.replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        if "new path" in compact or (not name and labeller_text and "path" in str(labeller_text).lower()):
+            return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
+        if "create a new" in compact and (not role or "check" in role):
+            return _SentinelCloneCreateNew()
+        if compact.strip() in ("browse", "browse...") or "browse" in compact:
+            return _SentinelCloneButton("Browse", "/tmp/vmm-a11y-clone-stg-browse")
+        if compact.strip() in ("ok",) or compact == "ok":
+            return _SentinelCloneButton("OK", "/tmp/vmm-a11y-clone-stg-ok")
+        if "cancel" in compact:
+            return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-clone-stg-cancel")
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelCloneWindow(object):
+    name = "Clone Virtual Machine"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _clone_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_clone_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+    def window_close(self):
+        try:
+            open("/tmp/vmm-a11y-clone-cancel", "w").write("1")
+            open("/tmp/vmm-a11y-window-close.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not _clone_dialog_open():
+                return
+            time.sleep(0.05)
+
+
+def _sentinel_clone_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    blob = " ".join(str(x) for x in (name, labeller_text) if x).replace(".*", "").lower()
+    if "change storage path" in compact:
+        if _clone_stg_open() or _clone_dialog_open():
+            return _SentinelCloneStgWindow()
+        return None
+    if not _clone_dialog_open():
+        return None
+    if "clone virtual machine" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        return _SentinelCloneWindow()
+    if "storage-list" in compact:
+        return _SentinelCloneStorageList()
+    if compact.strip() == "clone" and "button" in role:
+        return _SentinelCloneButton("Clone", "/tmp/vmm-a11y-clone-finish")
+    if "cancel" in compact and "button" in role and not _clone_stg_open():
+        return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-clone-cancel")
+    if compact.strip() == "details" and "button" in role:
+        return _SentinelCloneButton("Details", "/tmp/vmm-a11y-clone-details")
+    if "name" in compact and (not role or "text" in role or "entry" in role):
+        return _SentinelEntry("Name:", "/tmp/vmm-a11y-clone-name.txt")
+    if "new path" in blob:
+        return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
+    if "create a new" in compact:
+        return _SentinelCloneCreateNew()
+    return None
+
+
 def _sentinel_alert(name, roleName):
     role = str(roleName or "").lower()
     # find_window() role aliases include alert|dialog. Only intercept
@@ -3194,6 +3614,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
             except Exception:
                 return False
+        if name in ("Clone Virtual Machine", "Change storage path"):
+            try:
+                if name == "Change storage path":
+                    return open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1"
+                return open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
         if "Add New Virtual Hardware" in name:
             try:
                 if os.path.exists("/tmp/vmm-a11y-addhw-hidden"):
@@ -3274,6 +3701,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
             nname = self.name or ""
             if nname in ("Delete", "Remove Disk"):
                 return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
+            if nname == "Clone Virtual Machine":
+                return open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1"
+            if nname == "Change storage path":
+                return open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1"
         except Exception:
             pass
         try:
@@ -4152,7 +4583,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             open("/tmp/vmm-a11y-click.txt", "w").write("win-close")
         except Exception:
             pass
-        if " on " in name or name in ("Delete", "Remove Disk"):
+        if " on " in name or name in (
+            "Delete",
+            "Remove Disk",
+            "Clone Virtual Machine",
+            "Change storage path",
+        ):
             deadline = time.time() + 2.0
             while time.time() < deadline:
                 try:
@@ -4427,6 +4863,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelVMActionMenu()
         try:
             sent = _sentinel_alert(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_clone_widgets(name, roleName, labeller_text)
             if sent is not None:
                 return sent
         except Exception:

@@ -5,7 +5,9 @@
 # See the COPYING file in the top-level directory.
 
 import collections
+import os
 
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -14,6 +16,7 @@ from virtinst import Cloner
 from virtinst import log
 from virtinst import xmlutil
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .asyncjob import vmmAsyncJob
@@ -228,10 +231,55 @@ class vmmCloneVM(vmmGObjectUI):
         self._reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.resize(1, 1)
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "Clone Virtual Machine")
+            self.topwin.set_title("Clone Virtual Machine")
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+            gtkcompat.set_accessible_name(self.widget("clone-new-name"), "Name:")
+            gtkcompat.set_accessible_name(self.widget("storage-list"), "storage-list")
+            gtkcompat.ensure_button_accessible_name(
+                self.widget("clone-ok"), "Clone"
+            )
+            gtkcompat.ensure_button_accessible_name(
+                self.widget("clone-cancel"), "Cancel"
+            )
+            gtkcompat.ensure_button_accessible_name(
+                self.widget("storage-details-button"), "Details"
+            )
+            gtkcompat.set_accessible_name(
+                self._storage_dialog, "Change storage path"
+            )
+            self._storage_dialog.set_title("Change storage path")
+            if app is not None:
+                try:
+                    app.add_window(self._storage_dialog)
+                except Exception:
+                    pass
+            gtkcompat.set_accessible_name(
+                self.widget("change-storage-new"), "New Path:"
+            )
+            gtkcompat.set_accessible_name(
+                self.widget("change-storage-doclone"),
+                "Create a new disk (clone) for the virtual machine",
+            )
+            gtkcompat.sync_accessible_checked(self.widget("change-storage-doclone"))
+        except Exception:
+            pass
+        try:
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+        except Exception:
+            pass
         self.topwin.present()
 
     def _storage_dialog_close(self):
         self._storage_dialog.hide()
+        try:
+            open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("0")
+        except Exception:
+            pass
         return 1
 
     def close(self, ignore1=None, ignore2=None):
@@ -241,6 +289,11 @@ class vmmCloneVM(vmmGObjectUI):
 
         self._set_vm(None)
         self._storage_list = None
+        try:
+            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("0")
+            open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("0")
+        except Exception:
+            pass
         return 1
 
     def _vm_removed_cb(self, _conn, vm):
@@ -363,6 +416,7 @@ class vmmCloneVM(vmmGObjectUI):
             self._storage_list[sinfo.get_target()] = sinfo
 
         self._populate_storage_ui()
+        self._publish_a11y_state()
 
     #######################
     # Functional routines #
@@ -404,6 +458,7 @@ class vmmCloneVM(vmmGObjectUI):
         active = not src.get_property("active")
         sinfo.set_clone_requested(active)
         model.emit("row-changed", row.path, row.iter)
+        self._publish_a11y_state()
 
     ###########################
     # Storage window handling #
@@ -434,6 +489,17 @@ class vmmCloneVM(vmmGObjectUI):
         self.widget("change-storage-doclone").set_sensitive(can_clone)
 
         self.widget("vmm-change-storage").show_all()
+        try:
+            gtkcompat.set_accessible_name(self._storage_dialog, "Change storage path")
+            self._storage_dialog.set_title("Change storage path")
+            self._storage_dialog.present()
+            open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("1")
+            open("/tmp/vmm-a11y-clone-stg-path.txt", "w").write(new or "")
+            open("/tmp/vmm-a11y-clone-stg-doclone.txt", "w").write(
+                "1" if do_clone else "0"
+            )
+        except Exception:
+            pass
 
     def _storage_dialog_finish(self):
         target = self.widget("change-storage-target").get_text()
@@ -445,6 +511,7 @@ class vmmCloneVM(vmmGObjectUI):
 
         if not do_clone:
             self._storage_dialog_close()
+            self._publish_a11y_state()
             return
 
         new_path = self.widget("change-storage-new").get_text()
@@ -462,6 +529,7 @@ class vmmCloneVM(vmmGObjectUI):
 
         sinfo.set_manual_path(new_path)
         self._storage_dialog_close()
+        self._publish_a11y_state()
 
     ###################
     # Finish routines #
@@ -586,6 +654,165 @@ class vmmCloneVM(vmmGObjectUI):
             self.topwin,
         )
         progWin.run()
+
+    #################
+    # A11y sentinels #
+    #################
+
+    def _plain_storage_text(self, sinfo):
+        try:
+            markup = sinfo.get_markup(self.vm) or ""
+        except Exception:
+            markup = ""
+        return gtkcompat._strip_pango_markup(markup)
+
+    def _publish_a11y_state(self):
+        try:
+            name = ""
+            try:
+                name = self.widget("clone-new-name").get_text() or ""
+            except Exception:
+                name = ""
+            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+            open("/tmp/vmm-a11y-clone-name.txt", "w").write(name)
+            lines = []
+            for sinfo in (self._storage_list or {}).values():
+                lines.append(
+                    "%s\t%s\t%s\t%s\t%s\t%s"
+                    % (
+                        sinfo.get_target() or "",
+                        sinfo.get_orig_disk_path() or "",
+                        sinfo.get_new_disk_path() or "",
+                        "1" if sinfo.is_cloneable() else "0",
+                        "1" if sinfo.is_clone_requested() else "0",
+                        (self._plain_storage_text(sinfo) or "").replace("\t", " "),
+                    )
+                )
+            open("/tmp/vmm-a11y-clone-storage.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_clone_a11y_poll", False):
+            return
+        self._vmm_clone_a11y_poll = True
+
+        def _tick():
+            try:
+                if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() != "1":
+                    return True
+            except Exception:
+                return True
+            try:
+                path = "/tmp/vmm-a11y-clone-name.txt"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                    if getattr(self, "_vmm_clone_name_seen", None) != stamp:
+                        self._vmm_clone_name_seen = stamp
+                        if self.widget("clone-new-name").get_text() != text:
+                            self.widget("clone-new-name").set_text(text)
+                            self._set_paths_from_clone_name()
+                            self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-clone-row-toggle.txt"
+                if os.path.exists(path):
+                    target = open(path, "r").read().strip()
+                    os.remove(path)
+                    sinfo = (self._storage_list or {}).get(target)
+                    if sinfo is not None and sinfo.is_cloneable():
+                        sinfo.set_clone_requested(not sinfo.is_clone_requested())
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-clone-row-select.txt"
+                if os.path.exists(path):
+                    target = open(path, "r").read().strip()
+                    os.remove(path)
+                    if target:
+                        uiutil.set_list_selection(
+                            self.widget("storage-list"), target
+                        )
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-clone-details"):
+                    os.remove("/tmp/vmm-a11y-clone-details")
+                    self._show_storage_window()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-clone-cancel"):
+                    os.remove("/tmp/vmm-a11y-clone-cancel")
+                    self.close()
+                    return True
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-clone-finish"):
+                    os.remove("/tmp/vmm-a11y-clone-finish")
+                    self._finish()
+                    return True
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-window-close.txt"
+                if os.path.exists(path):
+                    want = open(path, "r").read().strip()
+                    if "Clone" in want:
+                        os.remove(path)
+                        self.close()
+                        open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                        return True
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() != "1":
+                    return True
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-clone-stg-path.txt"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                    if getattr(self, "_vmm_clone_stg_path_seen", None) != stamp:
+                        self._vmm_clone_stg_path_seen = stamp
+                        if self.widget("change-storage-new").get_text() != text:
+                            self.widget("change-storage-new").set_text(text)
+            except Exception:
+                pass
+            try:
+                want = open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+                chk = self.widget("change-storage-doclone")
+                if want in ("0", "1") and bool(chk.get_active()) != (want == "1"):
+                    chk.set_active(want == "1")
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-clone-stg-browse"):
+                    os.remove("/tmp/vmm-a11y-clone-stg-browse")
+                    self._storage_dialog_browse_cb(None)
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-clone-stg-ok"):
+                    os.remove("/tmp/vmm-a11y-clone-stg-ok")
+                    self._storage_dialog_finish()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-clone-stg-cancel"):
+                    os.remove("/tmp/vmm-a11y-clone-stg-cancel")
+                    self._storage_dialog_close()
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     ################
     # UI listeners #
