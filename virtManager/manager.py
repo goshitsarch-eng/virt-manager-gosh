@@ -551,59 +551,7 @@ class vmmManager(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_vm_action)
 
-            def _poll_conn_action():
-                path = "/tmp/vmm-a11y-conn-action.txt"
-                try:
-                    if not os.path.exists(path):
-                        return True
-                    raw = open(path, "r").read().strip()
-                    os.remove(path)
-                except Exception:
-                    return True
-                parts = raw.split("\t", 1)
-                action = parts[0].strip()
-                name = parts[1].strip() if len(parts) > 1 else ""
-                if not name:
-                    try:
-                        name = open("/tmp/vmm-a11y-selected-conn.txt", "r").read().strip()
-                    except Exception:
-                        name = ""
-                if name:
-                    try:
-                        self.select_row_for_name(name)
-                    except Exception:
-                        pass
-                conn = self._conn_by_label(name) if name else None
-                try:
-                    if action == "disconnect":
-                        target = conn or self.current_conn() or self._last_conn
-                        if target is not None and not target.is_disconnected():
-                            target.close()
-                    elif action == "connect":
-                        target = conn or self.current_conn() or self._last_conn
-                        if target is not None and target.is_disconnected():
-                            target.connect_once(
-                                "open-completed", self._conn_open_completed_cb
-                            )
-                            target.open()
-                    elif action == "delete":
-                        target = conn or self.current_conn() or self._last_conn
-                        if target is not None:
-                            self._last_conn = target
-                            self._do_delete_conn(target)
-                    elif action == "details":
-                        self.show_host(None)
-                    elif action == "create":
-                        self.new_vm(None)
-                except Exception:
-                    pass
-                try:
-                    self._publish_vm_list()
-                except Exception:
-                    pass
-                return True
-
-            GLib.timeout_add(50, _poll_conn_action)
+        gtkcompat.start_conn_action_poll()
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
         for idx, item in self.connmenu_items.items():
@@ -804,6 +752,53 @@ class vmmManager(vmmGObjectUI):
             if name in pretty or pretty in name or name in uri:
                 matches.append(conn)
         return matches[0] if matches else None
+
+    def handle_a11y_conn_action(self, action, name=""):
+        """File-sentinel Connect/Disconnect/Delete for GTK4 uitests."""
+        try:
+            action = (action or "").strip()
+            name = (name or "").strip()
+            if not name:
+                try:
+                    name = open("/tmp/vmm-a11y-selected-conn.txt", "r").read().strip()
+                except Exception:
+                    name = ""
+            if name:
+                try:
+                    self.select_row_for_name(name)
+                except Exception:
+                    pass
+            conn = None
+            try:
+                conn = self._conn_by_label(name) if name else None
+            except Exception:
+                conn = None
+            target = conn or self.current_conn() or self._last_conn
+            if target is not None:
+                self._last_conn = target
+            if action == "disconnect":
+                if target is not None and not target.is_disconnected():
+                    target.close()
+            elif action == "connect":
+                if target is not None and target.is_disconnected():
+                    target.connect_once(
+                        "open-completed", self._conn_open_completed_cb
+                    )
+                    target.open()
+            elif action == "delete":
+                if target is not None:
+                    self._do_delete_conn(target)
+            elif action == "details":
+                self.show_host(None)
+            elif action == "create":
+                self.new_vm(None)
+        except Exception:
+            pass
+        try:
+            self._publish_vm_list()
+        except Exception:
+            pass
+        return True
 
     def get_row(self, conn_or_vm):
         def _walk(model, rowiter, obj):

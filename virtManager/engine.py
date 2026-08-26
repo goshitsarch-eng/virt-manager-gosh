@@ -100,6 +100,7 @@ class vmmEngine(vmmGObject):
         from .lib import gtkcompat
 
         gtkcompat.start_add_conn_poll()
+        gtkcompat.start_conn_action_poll()
 
         self.add_gsettings_handle(
             self.config.on_stats_update_interval_changed(self._timer_changed_cb)

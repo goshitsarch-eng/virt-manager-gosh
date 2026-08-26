@@ -771,7 +771,16 @@ class VMMDogtailApp:
         c = self.manager_get_conn_cell(conn_label)
         c.click(button=3)
         self.root.find("conn-connect", "menu item").click()
-        utils.check(lambda: "Not Connected" not in c.text)
+
+        def _opened():
+            if "Not Connected" not in c.text:
+                return True
+            try:
+                return open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
+
+        utils.check(_opened)
         return c
 
     def manager_conn_disconnect(self, conn_label):

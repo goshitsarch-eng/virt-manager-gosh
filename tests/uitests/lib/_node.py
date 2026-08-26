@@ -9424,6 +9424,13 @@ class _SentinelConnMenuItem(object):
             open("/tmp/vmm-a11y-conn-menu-hidden", "w").write("1")
         except Exception:
             pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-conn-action.txt") and not os.path.exists(
+                "/tmp/vmm-a11y-conn-action.txt.taking"
+            ):
+                break
+            time.sleep(0.05)
 
 
 class _SentinelConnMenu(object):

@@ -689,9 +689,59 @@ def _start_a11y_click_poll():
 
     GLib.timeout_add(50, _tick)
     start_add_conn_poll()
+    start_conn_action_poll()
 
 
 _ADD_CONN_POLL = {"on": False}
+_CONN_ACTION_POLL = {"on": False}
+
+
+def _take_conn_action_file():
+    path = "/tmp/vmm-a11y-conn-action.txt"
+    taking = path + ".taking"
+    try:
+        os.rename(path, taking)
+    except OSError:
+        return None
+    try:
+        raw = open(taking, "r").read().strip()
+    except Exception:
+        raw = ""
+    try:
+        os.remove(taking)
+    except OSError:
+        pass
+    return raw
+
+
+def start_conn_action_poll():
+    """Consume /tmp/vmm-a11y-conn-action.txt for the life of the process.
+
+    Manager window timeouts can die after a modal auth dialog or a
+    disconnect exception; this backup must keep Connect working.
+    """
+    if _CONN_ACTION_POLL["on"]:
+        return
+    _CONN_ACTION_POLL["on"] = True
+
+    def _tick():
+        raw = _take_conn_action_file()
+        if not raw:
+            return True
+        parts = raw.split("\t", 1)
+        action = parts[0].strip()
+        name = parts[1].strip() if len(parts) > 1 else ""
+        try:
+            from virtManager.engine import vmmEngine
+
+            manager = vmmEngine.get_instance()._get_manager()
+            if manager is not None:
+                manager.handle_a11y_conn_action(action, name)
+        except Exception:
+            pass
+        return True
+
+    GLib.timeout_add(50, _tick)
 
 
 def start_add_conn_poll():

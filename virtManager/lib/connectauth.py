@@ -89,10 +89,12 @@ class _vmmConnectAuth(vmmGObjectUI):
             entry.get_accessible().set_name(prompt + " entry")
 
     def run(self):
+        self._closed = False
         self._publish_a11y()
         self._start_a11y_poll()
         self.topwin.show()
         res = self.topwin.run()
+        self._closed = True
         self.topwin.hide()
         try:
             open("/tmp/vmm-a11y-connectauth-shown.txt", "w").write("0")
@@ -107,6 +109,18 @@ class _vmmConnectAuth(vmmGObjectUI):
             self.creds[1][4] = self.entry2.get_text()
         return 0
 
+    def _clear_a11y_inputs(self):
+        for path in (
+            "/tmp/vmm-a11y-connectauth-action.txt",
+            "/tmp/vmm-a11y-connectauth-activate",
+            "/tmp/vmm-a11y-connectauth-user.txt.set",
+            "/tmp/vmm-a11y-connectauth-pass.txt.set",
+        ):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
     def _publish_a11y(self):
         try:
             from . import gtkcompat
@@ -114,6 +128,9 @@ class _vmmConnectAuth(vmmGObjectUI):
             gtkcompat.set_accessible_name(self.topwin, "Authentication required")
             gtkcompat.set_accessible_name(self.entry1, "Username: entry")
             gtkcompat.set_accessible_name(self.entry2, "Password: entry")
+            self._clear_a11y_inputs()
+            open("/tmp/vmm-a11y-connectauth-user.txt", "w").write("")
+            open("/tmp/vmm-a11y-connectauth-pass.txt", "w").write("")
             open("/tmp/vmm-a11y-connectauth-shown.txt", "w").write("1")
             open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("user")
         except Exception:
@@ -125,17 +142,20 @@ class _vmmConnectAuth(vmmGObjectUI):
         self._vmm_auth_poll = True
 
         def _tick():
+            if getattr(self, "_closed", False):
+                return False
             try:
                 if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() != "1":
-                    return True
+                    return not getattr(self, "_closed", False)
             except Exception:
-                return True
+                return not getattr(self, "_closed", False)
             try:
                 path = "/tmp/vmm-a11y-connectauth-user.txt.set"
                 if os.path.exists(path):
                     text = open(path, "r").read()
                     os.remove(path)
                     self.entry1.set_text(text)
+                    open("/tmp/vmm-a11y-connectauth-user.txt", "w").write(text)
             except Exception:
                 pass
             try:
@@ -144,6 +164,7 @@ class _vmmConnectAuth(vmmGObjectUI):
                     text = open(path, "r").read()
                     os.remove(path)
                     self.entry2.set_text(text)
+                    open("/tmp/vmm-a11y-connectauth-pass.txt", "w").write(text)
             except Exception:
                 pass
             try:
@@ -167,13 +188,14 @@ class _vmmConnectAuth(vmmGObjectUI):
                 os.remove("/tmp/vmm-a11y-connectauth-action.txt")
             except Exception:
                 action = ""
-            if action == "ok":
-                self._ok_cb(None)
-                return True
-            if action == "cancel":
-                self._cancel_cb(None)
-                return True
-            return True
+            try:
+                if action == "ok":
+                    self._ok_cb(None)
+                elif action == "cancel":
+                    self._cancel_cb(None)
+            except Exception:
+                pass
+            return not getattr(self, "_closed", False)
 
         GLib.timeout_add(50, _tick)
 
