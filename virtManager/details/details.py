@@ -2967,6 +2967,16 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
             try:
+                grow = self._get_hw_row()
+                if grow is not None:
+                    newlab = str(grow[HW_LIST_COL_LABEL] or "")
+                    if newlab:
+                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
+                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
+                        want = newlab
+            except Exception:
+                pass
+            try:
                 labeled = self._hw_row_for_label(want) if want else None
                 if labeled is not None:
                     self._ui_refreshing = True

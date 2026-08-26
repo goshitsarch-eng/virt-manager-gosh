@@ -98,6 +98,23 @@ class _SentinelTableCell(object):
 
     @property
     def state_selected(self):
+        try:
+            cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+            if cur == self.name:
+                return True
+            if cur and self.name:
+                a = cur.split()[0]
+                b = self.name.split()[0]
+                if a == b and a in (
+                    "Sound",
+                    "Video",
+                    "Display",
+                    "NIC",
+                    "Controller",
+                ):
+                    return True
+        except Exception:
+            pass
         if self._index is not None:
             try:
                 cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
