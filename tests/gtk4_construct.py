@@ -896,12 +896,18 @@ def main():
         payload = st.pack("!I", len(zrle)) + zrle
         disp._zrle_z = None
         disp._read_zrle(FakeSock(payload), 4, 0, 0, 4, 4)
-        # Cursor pseudo-encoding is skipped without touching the FB
+        # Cursor pseudo-encoding paints a local overlay; hotspot is x,y
+        pixels = (b"\x11\x22\x33\x00" * 4)
+        mask = b"\x80\x40"  # (0,0) and (1,1) visible
         disp._read_fb_update(
-            FakeSock(b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 0, 0, 2, 2, -239) + (b"\x00" * 18)),
+            FakeSock(b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 1, 2, 2, 2, -239) + pixels + mask),
             4,
             4,
         )
+        assert disp._cursor_hot == (1, 2)
+        assert disp._cursor_surface is not None
+        assert disp._cursor_pixels[3] == 255
+        assert disp._cursor_pixels[7] == 0
         disp.close()
         spice = gtk4display.SpiceDisplay(None)
         spice.set_scaling(True)

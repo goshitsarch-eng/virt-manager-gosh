@@ -115,6 +115,9 @@ class _DisplayBase(Gtk.DrawingArea):
         self._last_x = 0
         self._last_y = 0
         self._pressed_hwkeys = set()
+        self._cursor_surface = None
+        self._cursor_hot = (0, 0)
+        self._cursor_pixels = None
         self.set_draw_func(self._on_draw)
         motion = Gtk.EventControllerMotion()
         motion.connect("motion", self._on_motion)
@@ -209,6 +212,11 @@ class _DisplayBase(Gtk.DrawingArea):
             cr.scale(sx, sy)
         cr.set_source_surface(self._fb, 0, 0)
         cr.paint()
+        if self._cursor_surface is not None:
+            fb_x, fb_y = self._scale_pointer(self._last_x, self._last_y)
+            hx, hy = self._cursor_hot
+            cr.set_source_surface(self._cursor_surface, fb_x - hx, fb_y - hy)
+            cr.paint()
 
     def _set_framebuffer(self, surface, width, height):
         changed = self._fb_size != (width, height)
@@ -224,6 +232,8 @@ class _DisplayBase(Gtk.DrawingArea):
     def _on_motion(self, _c, x, y):
         self._last_x, self._last_y = x, y
         self._send_pointer(x, y, 0, False)
+        if self._cursor_surface is not None:
+            self.queue_draw()
 
     def _on_pressed(self, gest, _n, x, y):
         self._last_x, self._last_y = x, y
@@ -901,6 +911,38 @@ class VNCDisplay(_DisplayBase):
                             if count >= tw * th:
                                 break
 
+    def _read_cursor(self, sock, hotx, hoty, w, h):
+        raw = self._recv_n(sock, max(w, 0) * max(h, 0) * 4)
+        mask = self._recv_n(sock, ((max(w, 0) + 7) // 8) * max(h, 0))
+        if w <= 0 or h <= 0 or cairo is None:
+            self._cursor_surface = None
+            self._cursor_pixels = None
+            return
+        pixels = bytearray(w * h * 4)
+        rowmask = (w + 7) // 8
+        for row in range(h):
+            for col in range(w):
+                src = (row * w + col) * 4
+                visible = False
+                if row * rowmask + (col // 8) < len(mask):
+                    visible = bool((mask[row * rowmask + col // 8] >> (7 - (col % 8))) & 1)
+                if visible and src + 4 <= len(raw):
+                    pixels[src : src + 4] = raw[src : src + 4]
+                    pixels[src + 3] = 255
+        self._cursor_pixels = pixels
+        self._cursor_hot = (int(hotx), int(hoty))
+        try:
+            self._cursor_surface = cairo.ImageSurface.create_for_data(
+                memoryview(pixels), cairo.FORMAT_ARGB32, w, h, w * 4
+            )
+        except Exception:
+            self._cursor_surface = None
+        try:
+            self.set_cursor(Gdk.Cursor.new_from_name("none"))
+        except Exception:
+            pass
+        GLib.idle_add(self.queue_draw)
+
     def _publish_fb(self, width, height):
         if cairo is None:
             return
@@ -944,8 +986,7 @@ class VNCDisplay(_DisplayBase):
             elif enc == _VNC_ENC_ZRLE:
                 self._read_zrle(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_CURSOR:
-                self._recv_n(sock, max(w, 0) * max(h, 0) * 4)
-                self._recv_n(sock, ((max(w, 0) + 7) // 8) * max(h, 0))
+                self._read_cursor(sock, x, y, w, h)
             else:
                 raise RuntimeError("Unsupported VNC encoding %s" % enc)
         self._publish_fb(width, height)
