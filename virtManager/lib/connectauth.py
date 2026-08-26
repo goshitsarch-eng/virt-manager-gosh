@@ -104,10 +104,44 @@ class _vmmConnectAuth(vmmGObjectUI):
         if res != Gtk.ResponseType.OK:
             return -1
 
-        self.creds[0][4] = self.entry1.get_text()
-        if self.entry2.get_visible():
-            self.creds[1][4] = self.entry2.get_text()
+        self._apply_pending_a11y_text()
+        self.creds[0][4] = self.entry1.get_text() or self._a11y_text("user")
+        if self.entry2.get_visible() or len(self.creds) > 1:
+            self.creds[1][4] = self.entry2.get_text() or self._a11y_text("pass")
         return 0
+
+    def _a11y_text(self, key):
+        path = "/tmp/vmm-a11y-connectauth-%s.txt" % key
+        try:
+            return open(path, "r").read()
+        except Exception:
+            return ""
+
+    def _apply_pending_a11y_text(self):
+        try:
+            path = "/tmp/vmm-a11y-connectauth-user.txt.set"
+            if os.path.exists(path):
+                text = open(path, "r").read()
+                os.remove(path)
+                self.entry1.set_text(text)
+                open("/tmp/vmm-a11y-connectauth-user.txt", "w").write(text)
+        except Exception:
+            pass
+        try:
+            path = "/tmp/vmm-a11y-connectauth-pass.txt.set"
+            if os.path.exists(path):
+                text = open(path, "r").read()
+                os.remove(path)
+                self.entry2.set_text(text)
+                open("/tmp/vmm-a11y-connectauth-pass.txt", "w").write(text)
+        except Exception:
+            pass
+        user = self.entry1.get_text() or self._a11y_text("user")
+        if user and user != self.entry1.get_text():
+            self.entry1.set_text(user)
+        passwd = self.entry2.get_text() or self._a11y_text("pass")
+        if passwd and passwd != self.entry2.get_text():
+            self.entry2.set_text(passwd)
 
     def _clear_a11y_inputs(self):
         for path in (
@@ -149,24 +183,7 @@ class _vmmConnectAuth(vmmGObjectUI):
                     return not getattr(self, "_closed", False)
             except Exception:
                 return not getattr(self, "_closed", False)
-            try:
-                path = "/tmp/vmm-a11y-connectauth-user.txt.set"
-                if os.path.exists(path):
-                    text = open(path, "r").read()
-                    os.remove(path)
-                    self.entry1.set_text(text)
-                    open("/tmp/vmm-a11y-connectauth-user.txt", "w").write(text)
-            except Exception:
-                pass
-            try:
-                path = "/tmp/vmm-a11y-connectauth-pass.txt.set"
-                if os.path.exists(path):
-                    text = open(path, "r").read()
-                    os.remove(path)
-                    self.entry2.set_text(text)
-                    open("/tmp/vmm-a11y-connectauth-pass.txt", "w").write(text)
-            except Exception:
-                pass
+            self._apply_pending_a11y_text()
             try:
                 if os.path.exists("/tmp/vmm-a11y-connectauth-activate"):
                     os.remove("/tmp/vmm-a11y-connectauth-activate")
@@ -179,8 +196,6 @@ class _vmmConnectAuth(vmmGObjectUI):
                     self._entry_cb(src)
                     if src == self.entry1 and self.entry2.get_visible():
                         open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("pass")
-                    else:
-                        open("/tmp/vmm-a11y-connectauth-shown.txt", "w").write("0")
             except Exception:
                 pass
             try:
@@ -200,6 +215,7 @@ class _vmmConnectAuth(vmmGObjectUI):
         GLib.timeout_add(50, _tick)
 
     def _ok_cb(self, src):
+        self._apply_pending_a11y_text()
         self.topwin.response(Gtk.ResponseType.OK)
 
     def _cancel_cb(self, src):
@@ -210,9 +226,20 @@ class _vmmConnectAuth(vmmGObjectUI):
         If entry 1 activated and entry2 visible, jump to entry 2.
         Otherwise, click OK
         """
-        if src == self.entry1 and self.entry2.is_visible():
+        # GTK4 is_visible() is false when an ancestor box is unmapped.
+        entry2_up = False
+        try:
+            entry2_up = bool(self.entry2.get_visible())
+        except Exception:
+            entry2_up = False
+        if src == self.entry1 and entry2_up:
             self.entry2.grab_focus()
+            try:
+                open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("pass")
+            except Exception:
+                pass
             return
+        self._apply_pending_a11y_text()
         self.topwin.response(Gtk.ResponseType.OK)
 
 
