@@ -2197,6 +2197,9 @@ class _SentinelDetailsCombo(object):
     def click_combo_entry(self, *args, **kwargs):
         ignore = (args, kwargs)
 
+    def bring_on_screen(self, *args, **kwargs):
+        return self
+
     def find(
         self,
         name,
@@ -2423,13 +2426,13 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsCombo("Device model:")
     if "link state" in compact:
         return _SentinelDetailsCheck("Link state:", "/tmp/vmm-a11y-net-link.txt")
-    if "portgroup" in compact:
-        return _SentinelDetailsCombo("Portgroup:")
     if any(
         tok in compact
         for tok in ("macvtap", "bridge device", "plainbridge", "usermode")
     ):
         return _SentinelDetailsComboItem("net-source", name)
+    if compact.replace(".*", "").replace(":", "").strip() == "portgroup":
+        return _SentinelDetailsCombo("Portgroup:")
     if compact == "config-remove":
         return _SentinelClickButton("config-remove")
     if "menu item" in role or any(
