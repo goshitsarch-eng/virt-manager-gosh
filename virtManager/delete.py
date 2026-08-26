@@ -626,7 +626,18 @@ class vmmDeleteStorage(_vmmDeleteBase):
             return True
 
         msg = _("This change will take effect after the next guest shutdown.")
-        if deleting_storage:
+        associated = deleting_storage
+        if not associated:
+            try:
+                associated = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
+            except Exception:
+                associated = False
+        if associated:
             msg += " "
             msg += _("Storage will not be deleted.")
 

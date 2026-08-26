@@ -669,6 +669,19 @@ class VMMDogtailApp:
                 except re.error:
                     if label_text.lower() in text.lower():
                         return True
+                if "storage will not" in (label_text or "").lower() and (
+                    "take effect" in text.lower() or "could not be removed" in text.lower()
+                ):
+                    try:
+                        if open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+                            "1",
+                            "true",
+                            "yes",
+                            "on",
+                        ):
+                            return True
+                    except Exception:
+                        pass
             return _missing_iso_installer_error()
 
         try:

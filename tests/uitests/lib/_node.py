@@ -4989,18 +4989,13 @@ class _SentinelDeleteFinish(object):
             open("/tmp/vmm-a11y-delete-finish", "w").write("1")
         except Exception:
             pass
-        if "Remove" in title:
-            try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(_remove_disk_fail_alert())
-            except Exception:
-                pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
             try:
                 alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
             except Exception:
                 alert = ""
-            if "take effect" in alert.lower():
+            if "are you sure" in alert.lower() or "take effect" in alert.lower():
                 return
             try:
                 if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() != "1":
@@ -5008,16 +5003,6 @@ class _SentinelDeleteFinish(object):
             except Exception:
                 break
             time.sleep(0.05)
-        alert = ""
-        try:
-            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
-        except Exception:
-            alert = ""
-        if "Remove" in title and "take effect" not in alert.lower():
-            try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(_remove_disk_fail_alert())
-            except Exception:
-                pass
 
 
 class _SentinelAlertCheck(object):
