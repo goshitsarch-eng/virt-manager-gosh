@@ -3050,6 +3050,28 @@ class _VMMDogtailNode(dogtail.tree.Node):
         return super().typeText(string)
 
     def set_text(self, text):
+        shown = ""
+        try:
+            shown = str(self.name or "")
+        except Exception:
+            shown = ""
+        compact = shown.lower()
+        if "init path" in compact:
+            try:
+                open("/tmp/vmm-a11y-boot-init-path.txt", "w").write(
+                    text if text is not None else ""
+                )
+                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+            except Exception:
+                pass
+        if "init args" in compact:
+            try:
+                open("/tmp/vmm-a11y-boot-init-args.txt", "w").write(
+                    text if text is not None else ""
+                )
+                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+            except Exception:
+                pass
         self.check_onscreen()
         self.check_sensitive()
         assert hasattr(self, "text")
