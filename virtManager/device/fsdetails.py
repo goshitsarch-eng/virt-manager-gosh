@@ -251,6 +251,10 @@ class vmmFSDetails(vmmGObjectUI):
         def set_storage_cb(src, path):
             if path:
                 textent.set_text(path)
+                try:
+                    open("/tmp/vmm-a11y-addhw-fs-source.txt", "w").write(path)
+                except Exception:
+                    pass
 
         reason = isdir and vmmStorageBrowser.REASON_FS or vmmStorageBrowser.REASON_IMAGE
 

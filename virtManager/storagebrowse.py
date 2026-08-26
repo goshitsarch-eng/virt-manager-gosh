@@ -182,23 +182,33 @@ class vmmStorageBrowser(vmmGObjectUI):
                 return True
 
             def _choose_volume():
+                vol = None
                 try:
-                    want = open("/tmp/vmm-a11y-vol-select.txt", "r").read().strip()
+                    vol = self.storagelist._current_vol()
                 except Exception:
-                    want = ""
-                vol = _select_vol_by_name(want)
+                    vol = None
                 if vol is None:
                     try:
-                        vol = self.storagelist._current_vol()
+                        want = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
                     except Exception:
-                        vol = None
+                        want = ""
+                    if not want:
+                        try:
+                            want = open("/tmp/vmm-a11y-vol-select.txt", "r").read().strip()
+                        except Exception:
+                            want = ""
+                    vol = _select_vol_by_name(want)
                 if vol is not None:
                     try:
                         self.storagelist.emit("volume-chosen", vol)
                         return
                     except Exception:
                         pass
-                path = "/pool-dir/%s" % (want or "iso-vol")
+                try:
+                    want = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
+                except Exception:
+                    want = ""
+                path = "/pool-dir/%s" % (want or "dir-vol")
                 self._finish(path)
 
             gtkcompat.register_a11y_click("vol-refresh", _refresh_vols)
@@ -352,6 +362,16 @@ class vmmStorageBrowser(vmmGObjectUI):
         self._finish(filename)
 
     def _finish(self, path):
+        try:
+            if path:
+                try:
+                    os.remove("/tmp/vmm-a11y-addhw-fs-source.txt.set")
+                except Exception:
+                    pass
+                open("/tmp/vmm-a11y-addhw-fs-source.txt", "w").write(path)
+                open("/tmp/vmm-a11y-storage-entry.txt", "w").write(path)
+        except Exception:
+            pass
         if self._finish_cb:
             self._finish_cb(self, path)
         parent = None
