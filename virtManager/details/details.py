@@ -1056,9 +1056,13 @@ class vmmDetails(vmmGObjectUI):
                             continue
                         text = open(fpath, "r").read()
                         setattr(self, seen, stamp)
-                        self.widget(wid).set_text(text)
-                        self._enable_apply(EDIT_KERNEL)
-                        changed = True
+                        widget = self.widget(wid)
+                        current = widget.get_text() if widget is not None else ""
+                        if text != (current or ""):
+                            widget.set_text(text)
+                            if not getattr(self, "_ui_refreshing", False):
+                                self._enable_apply(EDIT_KERNEL)
+                                changed = True
                     except Exception:
                         pass
                 try:

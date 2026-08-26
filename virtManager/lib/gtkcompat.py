@@ -3449,16 +3449,21 @@ def _start_config_apply_poll(details):
         except Exception:
             pass
         try:
-            btn = d.widget("config-apply")
-            if btn is None or not btn.get_sensitive():
+            if not os.path.exists(path):
                 return True
             os.remove(path)
+            btn = d.widget("config-apply")
+            if btn is None:
+                return True
             if hasattr(d, "_restore_boot_init_sentinels"):
                 try:
                     d._restore_boot_init_sentinels()
                 except Exception:
                     pass
-            btn.emit("clicked")
+            if hasattr(d, "_config_apply"):
+                d._config_apply()
+            else:
+                btn.emit("clicked")
         except Exception:
             pass
         return True

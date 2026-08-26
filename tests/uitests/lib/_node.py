@@ -1138,7 +1138,7 @@ class _SentinelConfigApply(object):
     @property
     def sensitive(self):
         try:
-            if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+            if open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip():
                 return True
         except Exception:
             pass
