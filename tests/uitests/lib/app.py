@@ -46,6 +46,16 @@ class VMMDogtailApp:
             return self._find_best_window(roleName, check_active)
         last_err = None
         deadline = time.time() + 12
+        if name == "Clone Virtual Machine":
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCloneWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         while time.time() < deadline:
             try:
                 return self.root.find(

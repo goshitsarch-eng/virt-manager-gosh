@@ -253,6 +253,10 @@ class vmmCloneVM(vmmGObjectUI):
             already = bool(self.topwin.get_visible())
         except Exception:
             already = False
+        try:
+            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+        except Exception:
+            pass
         if already and self.vm is vm:
             try:
                 self.topwin.present()
