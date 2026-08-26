@@ -1308,6 +1308,8 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-oslist-confirmed",
             "/tmp/vmm-a11y-os-select.txt",
             "/tmp/vmm-a11y-detect-state.txt",
+            "/tmp/vmm-a11y-disk-inuse-allow",
+            "/tmp/vmm-a11y-import-entry.txt",
         ):
             try:
                 os.unlink(path)
@@ -2140,18 +2142,9 @@ class vmmCreateVM(vmmGObjectUI):
         return (media, extra)
 
     def _get_config_import_path(self):
-        path = self.widget("install-import-entry").get_text()
-        if not (path or "").strip():
-            try:
-                path = open("/tmp/vmm-a11y-import-entry.txt", "r").read().strip()
-            except Exception:
-                path = ""
-            if path:
-                try:
-                    self.widget("install-import-entry").set_text(path)
-                except Exception:
-                    pass
-        return path
+        return self._get_widget_or_file(
+            "install-import-entry", "/tmp/vmm-a11y-import-entry.txt"
+        )
 
     def _should_prepublish_install_forward(self):
         """True when install-page Forward will succeed and validate may exceed 2s."""
@@ -2743,6 +2736,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._apply_method_active_file()
         pairs = (
             ("/tmp/vmm-a11y-app-entry.txt", "install-app-entry"),
+            ("/tmp/vmm-a11y-import-entry.txt", "install-import-entry"),
             ("/tmp/vmm-a11y-oscontainer-fs.txt", "install-oscontainer-fs"),
             ("/tmp/vmm-a11y-container-template.txt", "install-container-template"),
             ("/tmp/vmm-a11y-oscontainer-uri.txt", "install-oscontainer-source-url-entry"),
