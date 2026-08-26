@@ -1648,7 +1648,9 @@ def _sentinel_boot_widgets(name, roleName, labeller_text=None):
     compact = compact.replace(".*", "").lower()
     role = str(roleName or "").lower()
     ignore = role
-    if "start virtual machine on host" in compact:
+    if "start virtual machine" in compact and (
+        not role or "check" in role or "box" in role
+    ):
         return _SentinelDetailsCheck(
             "Start virtual machine on host boot",
             "/tmp/vmm-a11y-boot-autostart.txt",

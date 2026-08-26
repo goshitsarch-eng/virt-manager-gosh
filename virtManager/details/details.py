@@ -4546,6 +4546,20 @@ class vmmDetails(vmmGObjectUI):
         finally:
             self._ui_refreshing = False
 
+            def _clear_refresh_apply():
+                # Combo/entry "changed" can fire after refresh and dirty Apply
+                # even when the user did not edit anything.
+                if getattr(self, "_ui_refreshing", False):
+                    return False
+                if self._active_edits == [EDIT_DISK_PATH]:
+                    self._disable_apply()
+                return False
+
+            try:
+                GLib.idle_add(_clear_refresh_apply)
+            except Exception:
+                pass
+
     def _refresh_page_body(self, row):
         pagetype = row[HW_LIST_COL_TYPE]
 
