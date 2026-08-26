@@ -673,9 +673,7 @@ class vmmCreateVM(vmmGObjectUI):
                 return True
             setattr(c, sattr, stamp)
             try:
-                w = c.widget(wid)
-                if w is not None:
-                    w.set_text(text)
+                c._entry_set_text(wid, text)
             except Exception:
                 pass
             return True
@@ -1938,21 +1936,55 @@ class vmmCreateVM(vmmGObjectUI):
     # UI state getters and helpers #
     ################################
 
+    def _entry_get_text(self, widget_id):
+        widgets = [self.widget(widget_id)]
+        combo_id = widget_id.replace("-entry", "-combo")
+        if combo_id != widget_id:
+            widgets.append(self.widget(combo_id))
+        for w in widgets:
+            if w is None:
+                continue
+            for cand in (w, getattr(w, "get_child", lambda: None)()):
+                if cand is None:
+                    continue
+                try:
+                    return cand.get_text() or ""
+                except Exception:
+                    pass
+        return ""
+
+    def _entry_set_text(self, widget_id, text):
+        widgets = [self.widget(widget_id)]
+        combo_id = widget_id.replace("-entry", "-combo")
+        if combo_id != widget_id:
+            widgets.append(self.widget(combo_id))
+        for w in widgets:
+            if w is None:
+                continue
+            for cand in (w, getattr(w, "get_child", lambda: None)()):
+                if cand is None:
+                    continue
+                try:
+                    cand.set_text(text)
+                    return True
+                except Exception:
+                    pass
+        return False
+
     def _get_widget_or_file(self, widget_id, path):
+        file_text = None
         if os.path.exists(path):
             try:
-                text = open(path, "r").read()
+                file_text = open(path, "r").read()
             except Exception:
-                text = ""
-            try:
-                self.widget(widget_id).set_text(text)
-            except Exception:
-                pass
-            return text
-        try:
-            return self.widget(widget_id).get_text()
-        except Exception:
-            return ""
+                file_text = None
+        widget_text = self._entry_get_text(widget_id)
+        if file_text:
+            self._entry_set_text(widget_id, file_text)
+            return file_text
+        if widget_text:
+            return widget_text
+        return file_text if file_text is not None else ""
 
     def _get_config_name(self):
         return self.widget("create-vm-name").get_text()
@@ -2716,7 +2748,7 @@ class vmmCreateVM(vmmGObjectUI):
                 if not os.path.exists(path):
                     continue
                 text = open(path, "r").read()
-                self.widget(wid).set_text(text)
+                self._entry_set_text(wid, text)
             except Exception:
                 pass
         try:
