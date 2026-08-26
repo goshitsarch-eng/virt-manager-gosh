@@ -472,20 +472,29 @@ class vmmManager(vmmGObjectUI):
                     return True
                 if not action:
                     return True
-                vm = self.current_vm()
-                if vm is None:
+                vm = None
+                want = ""
+                for src in (
+                    "/tmp/vmm-a11y-vm-selected.txt",
+                    "/tmp/vmm-a11y-vm-select.txt",
+                    "/tmp/vmm-a11y-hw-select.txt",
+                ):
                     try:
-                        want = open("/tmp/vmm-a11y-hw-select.txt", "r").read().split("\n")[0].strip()
+                        want = open(src, "r").read().split("\n")[0].strip()
                     except Exception:
                         want = ""
                     if want:
-                        for conn in vmmConnectionManager.get_instance().conns.values():
-                            try:
-                                vm = conn.get_vm_by_name(want)
-                            except Exception:
-                                vm = None
-                            if vm is not None:
-                                break
+                        break
+                if want:
+                    for conn in vmmConnectionManager.get_instance().conns.values():
+                        try:
+                            vm = conn.get_vm_by_name(want)
+                        except Exception:
+                            vm = None
+                        if vm is not None:
+                            break
+                if vm is None:
+                    vm = self.current_vm()
                 mapping = {
                     "Delete": vmmenu.VMActionUI.delete,
                     "Clone": vmmenu.VMActionUI.clone,
