@@ -3351,10 +3351,15 @@ def _start_config_apply_poll(details):
         except Exception:
             pass
         try:
+            text = None
+            nwant = "/tmp/vmm-a11y-overview-name-want.txt"
             npath = "/tmp/vmm-a11y-overview-name.txt"
-            if os.path.exists(npath):
+            if os.path.exists(nwant):
+                text = open(nwant, "r").read()
+            elif os.path.exists(npath):
                 text = open(npath, "r").read()
                 os.remove(npath)
+            if text is not None:
                 w = d.widget("overview-name")
                 if w is not None:
                     w.set_text(text)

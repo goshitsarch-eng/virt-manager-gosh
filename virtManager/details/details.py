@@ -1827,7 +1827,7 @@ class vmmDetails(vmmGObjectUI):
 
     def _load_a11y_xml_editor(self):
         """Prefer the XML-editor sentinel so Apply sees set_text() edits."""
-        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+        for path in ("/tmp/vmm-a11y-xml.txt",):
             try:
                 if not os.path.exists(path):
                     continue
@@ -1875,7 +1875,9 @@ class vmmDetails(vmmGObjectUI):
 
         success = False
         try:
-            if self._edited(EDIT_XML):
+            if self._edited(EDIT_XML) and not os.path.exists(
+                "/tmp/vmm-a11y-overview-name-want.txt"
+            ):
                 if dev:
                     success = self._apply_xmleditor_device(dev)
                 else:
@@ -2011,16 +2013,28 @@ class vmmDetails(vmmGObjectUI):
             kwargs["description"] = desc_widget.get_buffer().get_property("text") or ""
             hotplug_args["description"] = kwargs["description"]
 
+        try:
+            self._restore_overview_sentinels()
+        except Exception:
+            pass
         # This needs to be last
-        if self._edited(EDIT_NAME):
+        if self._edited(EDIT_NAME) or os.path.exists(
+            "/tmp/vmm-a11y-overview-name-want.txt"
+        ):
             # Renaming is pretty convoluted, so do it here synchronously
             new_name = self.widget("overview-name").get_text()
             try:
-                npath = "/tmp/vmm-a11y-overview-name.txt"
-                if os.path.exists(npath):
+                for npath in (
+                    "/tmp/vmm-a11y-overview-name-want.txt",
+                    "/tmp/vmm-a11y-overview-name.txt",
+                ):
+                    if not os.path.exists(npath):
+                        continue
                     new_name = open(npath, "r").read()
-                    os.remove(npath)
+                    if npath.endswith(".txt") and not npath.endswith("-want.txt"):
+                        os.remove(npath)
                     self.widget("overview-name").set_text(new_name)
+                    break
             except Exception:
                 pass
             try:
@@ -2036,6 +2050,10 @@ class vmmDetails(vmmGObjectUI):
             except Exception as e:
                 self.err.show_err(_("Error renaming domain: %s") % str(e))
                 return False
+            try:
+                os.remove("/tmp/vmm-a11y-overview-name-want.txt")
+            except Exception:
+                pass
             try:
                 open("/tmp/vmm-a11y-vmwindow.txt", "w").write(new_name)
             except Exception:
@@ -2422,6 +2440,10 @@ class vmmDetails(vmmGObjectUI):
 
         self._disable_apply()
         self._restore_boot_init_sentinels()
+        try:
+            self._restore_overview_sentinels()
+        except Exception:
+            pass
         rem = pagetype in remove_pages
         self.widget("config-remove").set_visible(rem)
         self.widget("hw-panel").set_current_page(pagetype)
@@ -2451,6 +2473,32 @@ class vmmDetails(vmmGObjectUI):
                 self._enable_apply(EDIT_INIT)
             except Exception:
                 pass
+
+    def _restore_overview_sentinels(self):
+        try:
+            path = "/tmp/vmm-a11y-overview-name-want.txt"
+            if os.path.exists(path):
+                text = open(path, "r").read()
+                self.widget("overview-name").set_text(text)
+                self._enable_apply(EDIT_NAME)
+        except Exception:
+            pass
+        try:
+            path = "/tmp/vmm-a11y-overview-title.txt"
+            if os.path.exists(path):
+                text = open(path, "r").read()
+                self.widget("overview-title").set_text(text)
+                self._enable_apply(EDIT_TITLE)
+        except Exception:
+            pass
+        try:
+            path = "/tmp/vmm-a11y-overview-desc.txt"
+            if os.path.exists(path):
+                text = open(path, "r").read()
+                self.widget("overview-description").get_buffer().set_text(text)
+                self._enable_apply(EDIT_DESC)
+        except Exception:
+            pass
 
     def _refresh_overview_page(self):
         # Basic details

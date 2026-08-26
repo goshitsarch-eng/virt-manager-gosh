@@ -650,6 +650,9 @@ class _SentinelEntry(object):
                 open("/tmp/vmm-a11y-overview-name.txt", "w").write(
                     text if text is not None else ""
                 )
+                open("/tmp/vmm-a11y-overview-name-want.txt", "w").write(
+                    text if text is not None else ""
+                )
             except Exception:
                 pass
             deadline = time.time() + 2.0
@@ -8019,6 +8022,9 @@ def _sentinel_hw_cell(name, roleName):
 def _write_overview_name(text):
     try:
         open("/tmp/vmm-a11y-overview-name.txt", "w").write(text if text is not None else "")
+        open("/tmp/vmm-a11y-overview-name-want.txt", "w").write(
+            text if text is not None else ""
+        )
     except Exception:
         pass
     try:
