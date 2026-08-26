@@ -1630,6 +1630,8 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-xml.txt",
             "/tmp/vmm-a11y-xml-contents.txt",
             "/tmp/vmm-a11y-details-media-entry.txt",
+            "/tmp/vmm-a11y-details-media-entry.txt.set",
+            "/tmp/vmm-a11y-details-media-path.txt",
         ):
             try:
                 os.unlink(path)

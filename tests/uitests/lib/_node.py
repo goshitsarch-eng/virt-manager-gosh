@@ -1072,24 +1072,51 @@ class _SentinelEntry(object):
                     open(path, "w").write(value)
                 except Exception:
                     pass
+            customize = "0"
+            newvm = False
+            vm_open = False
             try:
-                open("/tmp/vmm-a11y-details-media-entry.txt.set", "w").write(value)
+                customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip()
             except Exception:
-                pass
-            deadline = time.time() + 3.0
-            while time.time() < deadline:
+                customize = "0"
+            try:
+                newvm = open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
+            except Exception:
+                newvm = False
+            try:
+                vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
+            except Exception:
+                vm_open = False
+            # Wizard ISO/media typing must not leave a details .set file.
+            # Customize/details consume that sentinel as an unapplied disk edit
+            # and then block hardware-list navigation.
+            details_owns = customize == "1" or (vm_open and not newvm)
+            if details_owns:
                 try:
-                    if (
-                        not os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set")
-                        and open("/tmp/vmm-a11y-config-apply-sensitive", "r")
-                        .read()
-                        .strip()
-                        == "1"
-                    ):
-                        break
+                    open("/tmp/vmm-a11y-details-media-entry.txt.set", "w").write(value)
                 except Exception:
                     pass
-                time.sleep(0.05)
+                deadline = time.time() + 3.0
+                while time.time() < deadline:
+                    try:
+                        if (
+                            not os.path.exists(
+                                "/tmp/vmm-a11y-details-media-entry.txt.set"
+                            )
+                            and open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                            .read()
+                            .strip()
+                            == "1"
+                        ):
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(0.05)
+            else:
+                try:
+                    os.remove("/tmp/vmm-a11y-details-media-entry.txt.set")
+                except Exception:
+                    pass
             path = value
             vm_open = False
             try:
@@ -4352,6 +4379,12 @@ def _wizard_xml_want_tag():
     if which == "net":
         return "<network"
     try:
+        hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip().lower()
+    except Exception:
+        hw = ""
+    if any(token in hw for token in ("disk", "cdrom", "floppy")):
+        return "<disk"
+    try:
         if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
             return "<domain"
     except Exception:
@@ -4389,14 +4422,22 @@ class _SentinelXmlPageTab(object):
         while time.time() < deadline:
             if not os.path.exists("/tmp/vmm-a11y-xml-tab.txt"):
                 break
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            try:
+                alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+            except Exception:
+                alert = ""
+            if "leave this tab" in alert:
                 return
             time.sleep(0.05)
         if self.name == "XML":
             want = _wizard_xml_want_tag() or "<network"
             deadline = time.time() + 3.0
             while time.time() < deadline:
-                if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                try:
+                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+                except Exception:
+                    alert = ""
+                if "leave this tab" in alert:
                     return
                 try:
                     page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()

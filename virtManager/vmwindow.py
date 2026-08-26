@@ -231,6 +231,16 @@ class vmmVMWindow(vmmGObjectUI):
             )
         except Exception:
             pass
+        if self.is_customize_dialog:
+            for path in (
+                "/tmp/vmm-a11y-details-media-entry.txt.set",
+                "/tmp/vmm-a11y-details-media-path.txt",
+                "/tmp/vmm-a11y-alert.txt",
+            ):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
         try:
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
         except Exception:

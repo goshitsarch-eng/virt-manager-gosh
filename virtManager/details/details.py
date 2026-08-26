@@ -778,6 +778,22 @@ class vmmDetails(vmmGObjectUI):
                 try:
                     if not os.path.exists(path):
                         return True
+                    hw = ""
+                    for hwpath in (
+                        "/tmp/vmm-a11y-hw-clicked.txt",
+                        "/tmp/vmm-a11y-hw-selected.txt",
+                        "/tmp/vmm-a11y-last-hw.txt",
+                    ):
+                        try:
+                            hw = open(hwpath, "r").read().strip().lower()
+                        except Exception:
+                            hw = ""
+                        if hw:
+                            break
+                    if not any(token in hw for token in ("disk", "cdrom", "floppy")):
+                        # Wizard ISO leftovers must not dirty Overview Apply.
+                        os.remove(path)
+                        return True
                     text = open(path, "r").read()
                     os.remove(path)
                 except Exception:
@@ -1098,6 +1114,14 @@ class vmmDetails(vmmGObjectUI):
                 os.remove("/tmp/vmm-a11y-xml-contents.txt")
             except Exception:
                 pass
+            for path in (
+                "/tmp/vmm-a11y-details-media-entry.txt.set",
+                "/tmp/vmm-a11y-details-media-path.txt",
+            ):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
         except Exception:
             pass
         if not getattr(self, "_vmm_boot_init_poll", False):
@@ -4857,15 +4881,15 @@ class vmmDetails(vmmGObjectUI):
             xml_for_a11y = ""
             if dev:
                 xml_for_a11y = virtinst.xmlutil.unindent_device_xml(dev.get_xml())
-                self._xmleditor.set_xml(xml_for_a11y)
             else:
-                self._xmleditor.set_xml_from_libvirtobject(self.vm)
                 try:
                     xml_for_a11y = self.vm.get_xml_to_define() or ""
                 except Exception:
                     xml_for_a11y = ""
-            # Keep the XML-editor sentinel current even when the XML tab
-            # is not selected (set_xml_from_libvirtobject no-ops then).
+            # Always populate the editor buffer. set_xml_from_libvirtobject
+            # no-ops when the XML tab is hidden, which left the a11y
+            # publisher able to wipe xml-contents with an empty buffer.
+            self._xmleditor.set_xml(xml_for_a11y)
             if xml_for_a11y:
                 try:
                     open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml_for_a11y)

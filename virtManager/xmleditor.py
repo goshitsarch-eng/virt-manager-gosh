@@ -398,6 +398,13 @@ class vmmXMLEditor(vmmGObjectUI):
             pass
         try:
             xml = self.get_xml() or self._srcxml or ""
+            if not (xml or "").strip():
+                try:
+                    existing = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                except Exception:
+                    existing = ""
+                if existing.strip():
+                    return
             open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml)
         except Exception:
             pass
