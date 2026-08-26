@@ -882,13 +882,16 @@ class vmmDetails(vmmGObjectUI):
                 lambda: self._config_boot_move(True),
                 window=self.topwin,
             )
-            gtkcompat.register_a11y_click("initrd-browse", self._browse_initrd_clicked_cb)
-            gtkcompat.register_a11y_click("kernel-browse", self._browse_kernel_clicked_cb)
-            gtkcompat.register_a11y_click("dtb-browse", self._browse_dtb_clicked_cb)
+            gtkcompat.register_a11y_click(
+                "initrd-browse", lambda: self._browse_initrd_clicked_cb(None))
+            gtkcompat.register_a11y_click(
+                "kernel-browse", lambda: self._browse_kernel_clicked_cb(None))
+            gtkcompat.register_a11y_click(
+                "dtb-browse", lambda: self._browse_dtb_clicked_cb(None))
             gtkcompat.register_a11y_click("boot-movedown", lambda: self._config_boot_move(False))
             gtkcompat.register_a11y_click("boot-moveup", lambda: self._config_boot_move(True))
             gtkcompat.register_a11y_click(
-                "Browse", self._disk_source_browse_clicked_cb
+                "Browse", lambda: self._disk_source_browse_clicked_cb(None)
             )
             gtkcompat.expose_a11y_button(
                 "config-remove",
@@ -1914,6 +1917,12 @@ class vmmDetails(vmmGObjectUI):
 
         self.storage_browser.set_finish_cb(callback)
         self.storage_browser.set_browse_reason(reason)
+        try:
+            self.storage_browser._vmm_boot_browse_target = getattr(
+                self, "_vmm_boot_browse_target", None
+            )
+        except Exception:
+            pass
         self.storage_browser.show(self.topwin)
 
     def _inspection_refresh_clicked_cb(self, src):
@@ -2795,6 +2804,17 @@ class vmmDetails(vmmGObjectUI):
                 open(path + ".sensitive", "w").write("1" if enable else "0")
             vcpus = str(int(uiutil.spin_get_helper(self.widget("cpu-vcpus")) or 0))
             open("/tmp/vmm-a11y-cpu-vcpus.txt", "w").write(vcpus)
+        except Exception:
+            pass
+
+    def _write_boot_path_sentinel(self, key, path):
+        if not key or not path:
+            return
+        try:
+            fpath = "/tmp/vmm-a11y-boot-%s.txt" % key
+            with open(fpath, "w") as fh:
+                fh.write(str(path))
+            setattr(self, "_vmm_boot_seen_boot-%s" % key, os.path.getmtime(fpath))
         except Exception:
             pass
 
@@ -3852,33 +3872,39 @@ class vmmDetails(vmmGObjectUI):
         def cb(ignore, path):
             self.widget("boot-kernel").set_text(path)
             self._enable_apply(EDIT_KERNEL)
+            self._write_boot_path_sentinel("kernel", path)
             try:
                 self._publish_boot_fields()
             except Exception:
                 pass
 
+        self._vmm_boot_browse_target = "kernel"
         self._browse_file(cb)
 
     def _browse_initrd_clicked_cb(self, src):
         def cb(ignore, path):
             self.widget("boot-initrd").set_text(path)
             self._enable_apply(EDIT_KERNEL)
+            self._write_boot_path_sentinel("initrd", path)
             try:
                 self._publish_boot_fields()
             except Exception:
                 pass
 
+        self._vmm_boot_browse_target = "initrd"
         self._browse_file(cb)
 
     def _browse_dtb_clicked_cb(self, src):
         def cb(ignore, path):
             self.widget("boot-dtb").set_text(path)
             self._enable_apply(EDIT_KERNEL)
+            self._write_boot_path_sentinel("dtb", path)
             try:
                 self._publish_boot_fields()
             except Exception:
                 pass
 
+        self._vmm_boot_browse_target = "dtb"
         self._browse_file(cb)
 
     def _xmleditor_xml_requested_cb(self, src):

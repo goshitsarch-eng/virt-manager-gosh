@@ -370,6 +370,9 @@ class vmmStorageBrowser(vmmGObjectUI):
                     pass
                 open("/tmp/vmm-a11y-addhw-fs-source.txt", "w").write(path)
                 open("/tmp/vmm-a11y-storage-entry.txt", "w").write(path)
+                target = getattr(self, "_vmm_boot_browse_target", None)
+                if target in ("initrd", "kernel", "dtb"):
+                    open("/tmp/vmm-a11y-boot-%s.txt" % target, "w").write(path)
         except Exception:
             pass
         if self._finish_cb:

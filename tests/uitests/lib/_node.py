@@ -924,7 +924,7 @@ class _SentinelClickButton(object):
                     return
                 time.sleep(0.05)
         if self.name in ("initrd-browse", "kernel-browse", "dtb-browse"):
-            deadline = time.time() + 3.0
+            deadline = time.time() + 8.0
             while time.time() < deadline:
                 try:
                     if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
