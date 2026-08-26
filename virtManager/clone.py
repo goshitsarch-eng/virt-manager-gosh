@@ -515,6 +515,14 @@ class vmmCloneVM(vmmGObjectUI):
 
         # Sync 'do clone' checkbox, and main dialog combo
         do_clone = self.widget("change-storage-doclone").get_active()
+        try:
+            want = open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+            if want in ("0", "1"):
+                do_clone = want == "1"
+                if bool(self.widget("change-storage-doclone").get_active()) != do_clone:
+                    self.widget("change-storage-doclone").set_active(do_clone)
+        except Exception:
+            pass
         sinfo.set_clone_requested(do_clone)
 
         if not do_clone:
@@ -835,6 +843,12 @@ class vmmCloneVM(vmmGObjectUI):
             try:
                 if os.path.exists("/tmp/vmm-a11y-clone-stg-ok"):
                     os.remove("/tmp/vmm-a11y-clone-stg-ok")
+                    try:
+                        want = open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+                        if want in ("0", "1"):
+                            self.widget("change-storage-doclone").set_active(want == "1")
+                    except Exception:
+                        pass
                     self._storage_dialog_finish()
             except Exception:
                 pass
