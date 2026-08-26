@@ -2117,9 +2117,32 @@ class vmmDetails(vmmGObjectUI):
             # Don't return, we want the rest of the bits to run regardless
 
         self._disable_apply()
+        self._restore_boot_init_sentinels()
         rem = pagetype in remove_pages
         self.widget("config-remove").set_visible(rem)
         self.widget("hw-panel").set_current_page(pagetype)
+
+    def _restore_boot_init_sentinels(self):
+        changed = False
+        for path, wid in (
+            ("/tmp/vmm-a11y-boot-init-path.txt", "boot-init-path"),
+            ("/tmp/vmm-a11y-boot-init-args.txt", "boot-init-args"),
+        ):
+            try:
+                if not os.path.exists(path):
+                    continue
+                text = open(path, "r").read()
+                w = self.widget(wid)
+                if w is not None:
+                    w.set_text(text)
+                changed = True
+            except Exception:
+                pass
+        if changed:
+            try:
+                self._enable_apply(EDIT_INIT)
+            except Exception:
+                pass
 
     def _refresh_overview_page(self):
         # Basic details
