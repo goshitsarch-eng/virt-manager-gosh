@@ -893,6 +893,9 @@ class vmmDetails(vmmGObjectUI):
             gtkcompat.register_a11y_click(
                 "Browse", lambda: self._disk_source_browse_clicked_cb(None)
             )
+            gtkcompat.register_a11y_click(
+                "IP address", lambda: self._refresh_ip_clicked_cb(None)
+            )
             gtkcompat.expose_a11y_button(
                 "config-remove",
                 "config-remove",
@@ -1143,6 +1146,31 @@ class vmmDetails(vmmGObjectUI):
                         self._enable_apply(edit)
                     except Exception:
                         pass
+                cpath = "/tmp/vmm-a11y-net-link.txt.click"
+                if os.path.exists(cpath):
+                    try:
+                        os.remove(cpath)
+                        w = self.widget("network-link-state-checkbox")
+                        w.set_active(not w.get_active())
+                        open("/tmp/vmm-a11y-net-link.txt", "w").write(
+                            "1" if w.get_active() else "0"
+                        )
+                        self._enable_apply(EDIT_NET_LINKSTATE)
+                    except Exception:
+                        pass
+                npath = "/tmp/vmm-a11y-net-device.txt"
+                try:
+                    if os.path.exists(npath):
+                        stamp = os.path.getmtime(npath)
+                        if getattr(self, "_vmm_net_device_seen", None) != stamp:
+                            self._vmm_net_device_seen = stamp
+                            text = open(npath, "r").read()
+                            w = self.netlist.widget("net-manual-source")
+                            if w is not None and (w.get_text() or "") != text:
+                                w.set_text(text)
+                                self._enable_apply(EDIT_NET_SOURCE)
+                except Exception:
+                    pass
                 spath = "/tmp/vmm-a11y-disk-serial.txt"
                 try:
                     if os.path.exists(spath):
@@ -1174,6 +1202,69 @@ class vmmDetails(vmmGObjectUI):
                         return True
                     key = key.strip()
                     item = item.strip()
+                    if key == "net-source":
+                        os.remove(sel)
+                        combo = self.netlist.widget("net-source")
+                        model = combo.get_model() if combo is not None else None
+                        if model is None:
+                            return True
+                        match = None
+                        it = model.get_iter_first()
+                        while it is not None:
+                            label = str(model[it][0] or "")
+                            if item.lower() in label.lower() or label.lower() in item.lower():
+                                match = it
+                                break
+                            it = model.iter_next(it)
+                        if match is not None:
+                            combo.set_active_iter(match)
+                            self._enable_apply(EDIT_NET_SOURCE)
+                        return True
+                    if key == "Device model:":
+                        os.remove(sel)
+                        combo = self.widget("network-model")
+                        model = combo.get_model() if combo is not None else None
+                        if model is None:
+                            return True
+                        match = None
+                        it = model.get_iter_first()
+                        while it is not None:
+                            label = str(model[it][0] or "")
+                            extra = ""
+                            try:
+                                extra = str(model[it][1] or "")
+                            except Exception:
+                                extra = ""
+                            if (
+                                item.lower() in label.lower()
+                                or item.lower() in extra.lower()
+                                or extra.lower() == item.lower()
+                            ):
+                                match = it
+                                break
+                            it = model.iter_next(it)
+                        if match is not None:
+                            combo.set_active_iter(match)
+                            self._enable_apply(EDIT_NET_MODEL)
+                        return True
+                    if key == "Portgroup:":
+                        os.remove(sel)
+                        combo = self.netlist.widget("net-portgroup")
+                        model = combo.get_model() if combo is not None else None
+                        if model is None:
+                            return True
+                        match = None
+                        it = model.get_iter_first()
+                        while it is not None:
+                            label = str(model[it][0] or "")
+                            if item.lower() in label.lower() or label.lower() == item.lower():
+                                match = it
+                                break
+                            it = model.iter_next(it)
+                        if match is not None:
+                            combo.set_active_iter(match)
+                            self._enable_apply(EDIT_NET_SOURCE)
+                        return True
                     addstorage_wids = {
                         "Cache mode:": "disk-cache",
                         "Discard mode:": "disk-discard",

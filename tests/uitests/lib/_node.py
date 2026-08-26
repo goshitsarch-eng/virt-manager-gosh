@@ -1732,6 +1732,10 @@ class _SentinelNetCombo(object):
     def check_sensitive(self):
         return True
 
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return True
+
     def click_combo_entry(self):
         return True
 
@@ -2398,6 +2402,21 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return _SentinelDetailsCombo("Cache mode:")
     if "discard mode" in compact:
         return _SentinelDetailsCombo("Discard mode:")
+    if "ip address" in compact:
+        return _SentinelClickButton("IP address")
+    if compact == "net-source" or "net-source" in compact:
+        return _SentinelNetCombo()
+    if "device model" in compact:
+        return _SentinelDetailsCombo("Device model:")
+    if "link state" in compact:
+        return _SentinelDetailsCheck("Link state:", "/tmp/vmm-a11y-net-link.txt")
+    if "portgroup" in compact:
+        return _SentinelDetailsCombo("Portgroup:")
+    if any(
+        tok in compact
+        for tok in ("macvtap", "bridge device", "plainbridge", "usermode")
+    ):
+        return _SentinelDetailsComboItem("net-source", name)
     if compact == "config-remove":
         return _SentinelClickButton("config-remove")
     if "menu item" in role or any(
