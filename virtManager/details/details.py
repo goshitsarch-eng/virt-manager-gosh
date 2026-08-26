@@ -3756,6 +3756,7 @@ class vmmDetails(vmmGObjectUI):
             elif not any(tok in (want or "") for tok in ("PCI", "USB", "Host")):
                 want = want or "PCI"
 
+        row_forced = row is not None
         if not row:
             row = self._get_hw_row()
             labeled = self._hw_row_for_label(want)
@@ -3764,30 +3765,33 @@ class vmmDetails(vmmGObjectUI):
         if row:
             pagetype = row[HW_LIST_COL_TYPE]
             dev = row[HW_LIST_COL_DEVICE]
-        if tab == "cpu-tab" or want in ("CPUs", "CPU"):
-            pagetype = HW_LIST_TYPE_CPU
-        if tab == "disk-tab" or any(
-            tok in (want or "") for tok in ("Disk", "CDROM", "Floppy")
-        ):
-            pagetype = HW_LIST_TYPE_DISK
-        if tab == "network-tab" or "NIC" in (want or ""):
-            pagetype = HW_LIST_TYPE_NIC
-        if tab == "boot-tab" or "Boot Options" in (want or ""):
-            pagetype = HW_LIST_TYPE_BOOT
-        boot_ctx = (
-            pagetype is HW_LIST_TYPE_BOOT
-            or tab == "boot-tab"
-            or "Boot" in (want or "")
-            or "Boot" in (last_hw or "")
-        )
-        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and boot_ctx:
-            pagetype = HW_LIST_TYPE_BOOT
-        if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt") and (
-            pagetype in (None, HW_LIST_TYPE_GENERAL)
-            or "Overview" in (want or "")
-            or "Overview" in (last_hw or "")
-        ) and tab not in ("boot-tab", "cpu-tab", "disk-tab", "network-tab"):
-            pagetype = HW_LIST_TYPE_GENERAL
+        # Tab/want files already track the destination hw-list click.
+        # Unapplied-changes apply must keep the previous page's row.
+        if not row_forced:
+            if tab == "cpu-tab" or want in ("CPUs", "CPU"):
+                pagetype = HW_LIST_TYPE_CPU
+            if tab == "disk-tab" or any(
+                tok in (want or "") for tok in ("Disk", "CDROM", "Floppy")
+            ):
+                pagetype = HW_LIST_TYPE_DISK
+            if tab == "network-tab" or "NIC" in (want or ""):
+                pagetype = HW_LIST_TYPE_NIC
+            if tab == "boot-tab" or "Boot Options" in (want or ""):
+                pagetype = HW_LIST_TYPE_BOOT
+            boot_ctx = (
+                pagetype is HW_LIST_TYPE_BOOT
+                or tab == "boot-tab"
+                or "Boot" in (want or "")
+                or "Boot" in (last_hw or "")
+            )
+            if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and boot_ctx:
+                pagetype = HW_LIST_TYPE_BOOT
+            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt") and (
+                pagetype in (None, HW_LIST_TYPE_GENERAL)
+                or "Overview" in (want or "")
+                or "Overview" in (last_hw or "")
+            ) and tab not in ("boot-tab", "cpu-tab", "disk-tab", "network-tab"):
+                pagetype = HW_LIST_TYPE_GENERAL
 
         success = False
         try:
