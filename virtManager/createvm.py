@@ -382,6 +382,30 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_import_entry)
 
+        if not getattr(self, "_vmm_media_entry_poll", False):
+            self._vmm_media_entry_poll = True
+
+            def _poll_media_entry():
+                path = "/tmp/vmm-a11y-media-entry.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                except Exception:
+                    return True
+                if getattr(self, "_vmm_media_entry_seen", None) == stamp:
+                    return True
+                self._vmm_media_entry_seen = stamp
+                try:
+                    if self._mediacombo is not None and (text or "").strip():
+                        self._mediacombo.set_path(text.strip())
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_media_entry)
+
         if not getattr(self, "_vmm_net_poll", False):
             self._vmm_net_poll = True
 
@@ -1591,7 +1615,22 @@ class vmmCreateVM(vmmGObjectUI):
         ]
 
     def _get_config_local_media(self, store_media=False):
-        return self._mediacombo.get_path(store_media=store_media)
+        path = ""
+        try:
+            path = self._mediacombo.get_path(store_media=store_media)
+        except Exception:
+            path = ""
+        if not (path or "").strip():
+            try:
+                path = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+            except Exception:
+                path = ""
+            if path and self._mediacombo is not None:
+                try:
+                    self._mediacombo.set_path(path)
+                except Exception:
+                    pass
+        return path
 
     def _get_config_detectable_media(self):
         instpage = self._get_config_install_page()

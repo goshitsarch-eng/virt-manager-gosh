@@ -552,6 +552,8 @@ def _sentinel_named_entry(name, roleName):
         return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
     if compact == "import-entry" or raw == "import-entry":
         return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
+    if compact == "media-entry" or raw == "media-entry":
+        return _SentinelEntry("media-entry", "/tmp/vmm-a11y-media-entry.txt")
     if compact == "install-url-entry" or raw == "install-url-entry":
         return _SentinelEntry("install-url-entry", "/tmp/vmm-a11y-url-entry.txt")
     if compact == "install-urlopts-entry" or raw == "install-urlopts-entry":
@@ -1418,7 +1420,6 @@ def _oslist_start_search():
     for marker in (
         "/tmp/vmm-a11y-oslist-escape",
         "/tmp/vmm-a11y-oslist-popover-hidden",
-        "/tmp/vmm-a11y-os-select.txt",
     ):
         try:
             os.remove(marker)
