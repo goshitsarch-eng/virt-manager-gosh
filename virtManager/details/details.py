@@ -3400,9 +3400,9 @@ class vmmDetails(vmmGObjectUI):
 
         success = False
         try:
-            if (
-                self._edited(EDIT_XML) or os.path.exists("/tmp/vmm-a11y-xml.txt")
-            ) and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+            if self._edited(EDIT_XML) and not os.path.exists(
+                "/tmp/vmm-a11y-overview-name-want.txt"
+            ):
                 if dev:
                     success = self._apply_xmleditor_device(dev)
                 else:
