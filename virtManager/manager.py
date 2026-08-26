@@ -475,8 +475,8 @@ class vmmManager(vmmGObjectUI):
                 vm = None
                 want = ""
                 for src in (
-                    "/tmp/vmm-a11y-vm-selected.txt",
                     "/tmp/vmm-a11y-vm-select.txt",
+                    "/tmp/vmm-a11y-vm-selected.txt",
                     "/tmp/vmm-a11y-hw-select.txt",
                 ):
                     try:

@@ -1984,6 +1984,11 @@ class _SentinelVMActionItem(object):
             open("/tmp/vmm-a11y-vm-menu-hidden", "w").write("1")
         except Exception:
             pass
+        if (self.name or "") == "Clone":
+            try:
+                open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+            except Exception:
+                pass
 
 
 class _SentinelVMActionMenu(object):
@@ -3300,6 +3305,7 @@ class _SentinelManagerVMCell(object):
         button = kwargs.get("button", 1)
         try:
             open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vm)
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vm)
         except Exception:
             pass
         if button == 3:
