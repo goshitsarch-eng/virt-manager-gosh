@@ -209,17 +209,25 @@ class VMMDogtailApp:
                 except Exception:
                     pass
             if key_l in ("down", "up"):
+                host_list = False
                 try:
-                    if open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip():
-                        open("/tmp/vmm-a11y-host-nav.txt", "w").write(key_l)
-                        deadline = time.time() + 2.0
-                        while time.time() < deadline:
-                            if not os.path.exists("/tmp/vmm-a11y-host-nav.txt"):
-                                return
-                            time.sleep(0.05)
-                        return
+                    host_list = bool(
+                        open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                        or open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                    )
                 except Exception:
-                    pass
+                    host_list = os.path.exists("/tmp/vmm-a11y-host-active-list.txt")
+                if host_list:
+                    try:
+                        open("/tmp/vmm-a11y-host-nav.txt", "w").write(key_l)
+                    except Exception:
+                        pass
+                    deadline = time.time() + 2.0
+                    while time.time() < deadline:
+                        if not os.path.exists("/tmp/vmm-a11y-host-nav.txt"):
+                            return
+                        time.sleep(0.05)
+                    return
             if key_l in ("enter", "return"):
                 try:
                     url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()

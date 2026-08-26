@@ -228,6 +228,19 @@ class vmmHostNets(vmmGObjectUI):
             except Exception:
                 pass
             try:
+                nav = "/tmp/vmm-a11y-host-nav.txt"
+                which = ""
+                try:
+                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                except Exception:
+                    which = "net"
+                if os.path.exists(nav) and which == "net":
+                    direction = open(nav, "r").read().strip().lower()
+                    os.remove(nav)
+                    self._nav_list(direction)
+            except Exception:
+                pass
+            try:
                 path = "/tmp/vmm-a11y-host-net-action.txt"
                 if os.path.exists(path):
                     action = open(path, "r").read().strip()
