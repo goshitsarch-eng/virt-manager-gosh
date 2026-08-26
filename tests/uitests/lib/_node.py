@@ -809,6 +809,10 @@ class _SentinelBootTab(object):
         timeout=5,
     ):
         ignore = (check_active, recursive, focusable, timeout)
+        if name and "init path" in str(name).replace(".*", "").lower():
+            return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
+        if name and "init args" in str(name).replace(".*", "").lower():
+            return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
         sent = _sentinel_named_entry(name, roleName, labeller_text)
         if sent is not None:
             return sent
@@ -3424,6 +3428,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
         roleName = _alias_role(roleName)
         pred = _FuzzyPredicate(name, roleName, labeller_text, focusable)
 
+        if name and "init path" in str(name).replace(".*", "").lower():
+            return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
+        if name and "init args" in str(name).replace(".*", "").lower():
+            return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
         if name and "pagenum" in str(name).lower():
             return _SentinelPagenum()
         try:
