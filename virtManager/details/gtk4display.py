@@ -38,6 +38,13 @@ _SPICE_CLIP_SELECTION = 0
 _VNC_SET_DESKTOP_SIZE = 251
 _VNC_ENC_DESKTOPSIZE = -223
 _VNC_ENC_EXTENDED_DESKTOPSIZE = -308
+_VNC_ENC_TIGHT = 7
+_VNC_ENC_ZRLE = 16
+_VNC_ENC_CURSOR = -239
+_VNC_SEC_NONE = 1
+_VNC_SEC_VNC = 2
+_VNC_SEC_VENCRYPT = 19
+_VNC_VENCRYPT_PLAIN = 256
 
 try:
     gi.require_foreign("cairo")
@@ -350,8 +357,9 @@ class VNCDisplay(_DisplayBase):
     """
     RFB/VNC client painted on a GTK 4 DrawingArea.
 
-    Supports None and VNC-auth, 32-bit pixels, and the encodings QEMU
-    commonly sends: raw, CopyRect, RRE, Hextile, and DesktopSize.
+    Supports None, VNC-auth, and VeNCrypt Plain; 32-bit pixels; and the
+    encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile, zlib,
+    Tight, ZRLE, DesktopSize, and cursor.
     """
 
     def __init__(self, **kwargs):
@@ -366,10 +374,13 @@ class VNCDisplay(_DisplayBase):
         self._auth_event = threading.Event()
         self._pixels = bytearray()
         self._zdec = None
+        self._tight_z = [None, None, None, None]
+        self._zrle_z = None
         self._buttons = 0
 
     def set_credential(self, cred, value):
-        if cred == 0 or str(cred).endswith("PASSWORD"):
+        name = str(cred).upper()
+        if cred == 1 or name.endswith("PASSWORD"):
             self._password = value or ""
         else:
             self._username = value or ""
@@ -470,22 +481,14 @@ class VNCDisplay(_DisplayBase):
         sock.sendall(b"RFB 003.008\n")
         ntypes = self._recv_n(sock, 1)[0]
         types = self._recv_n(sock, ntypes)
-        if 1 in types:
-            sock.sendall(b"\x01")
-        elif 2 in types:
-            sock.sendall(b"\x02")
-            challenge = self._recv_n(sock, 16)
-            if not self._password:
-                class _Creds:
-                    n_values = 1
-
-                    def get_nth(self, _idx):
-                        return 1
-
-                GLib.idle_add(self.emit, "vnc-auth-credential", _Creds())
-                self._auth_event.wait(30)
-            response = _vnc_auth_response(challenge, self._password)
-            sock.sendall(response)
+        if _VNC_SEC_NONE in types:
+            sock.sendall(bytes([_VNC_SEC_NONE]))
+        elif _VNC_SEC_VNC in types:
+            sock.sendall(bytes([_VNC_SEC_VNC]))
+            self._vnc_auth2(sock)
+        elif _VNC_SEC_VENCRYPT in types:
+            sock.sendall(bytes([_VNC_SEC_VENCRYPT]))
+            self._vencrypt_plain(sock)
         else:
             raise RuntimeError("Unsupported VNC security types: %s" % list(types))
         result = struct.unpack("!I", self._recv_n(sock, 4))[0]
@@ -515,6 +518,8 @@ class VNCDisplay(_DisplayBase):
         )
         # SetEncodings: nEncodings is U16. Advertise common QEMU encodings.
         encodings = (
+            _VNC_ENC_ZRLE,
+            _VNC_ENC_TIGHT,
             6,  # zlib
             5,  # hextile
             2,  # RRE
@@ -522,6 +527,7 @@ class VNCDisplay(_DisplayBase):
             0,  # raw
             _VNC_ENC_DESKTOPSIZE,
             _VNC_ENC_EXTENDED_DESKTOPSIZE,
+            _VNC_ENC_CURSOR,
         )
         sock.sendall(struct.pack("!BBH", 2, 0, len(encodings)))
         for enc in encodings:
@@ -552,6 +558,46 @@ class VNCDisplay(_DisplayBase):
                 self._recv_n(sock, slen)
         GLib.idle_add(self.emit, "vnc-disconnected")
         self._open = False
+
+    def _need_vnc_creds(self, username=False):
+        class _Creds:
+            def __init__(self, values):
+                self._values = values
+                self.n_values = len(values)
+
+            def get_nth(self, idx):
+                return self._values[idx]
+
+        values = [1]
+        if username:
+            values = [0, 1]
+        if (username and not self._username) or not self._password:
+            GLib.idle_add(self.emit, "vnc-auth-credential", _Creds(values))
+            self._auth_event.wait(30)
+
+    def _vnc_auth2(self, sock):
+        challenge = self._recv_n(sock, 16)
+        self._need_vnc_creds(False)
+        sock.sendall(_vnc_auth_response(challenge, self._password))
+
+    def _vencrypt_plain(self, sock):
+        # VeNCrypt 0.2 + Plain (256): username + password, no TLS.
+        _maj, _min = self._recv_n(sock, 2)
+        sock.sendall(b"\x00\x02")
+        ack = self._recv_n(sock, 1)[0]
+        if ack != 0:
+            raise RuntimeError("VeNCrypt version rejected")
+        nsub = self._recv_n(sock, 1)[0]
+        subtypes = []
+        for _ in range(nsub):
+            subtypes.append(struct.unpack("!I", self._recv_n(sock, 4))[0])
+        if _VNC_VENCRYPT_PLAIN not in subtypes:
+            raise RuntimeError("VeNCrypt subtypes unsupported: %s" % subtypes)
+        sock.sendall(struct.pack("!I", _VNC_VENCRYPT_PLAIN))
+        self._need_vnc_creds(True)
+        user = (self._username or "").encode("utf-8")
+        pw = (self._password or "").encode("utf-8")
+        sock.sendall(struct.pack("!II", len(user), len(pw)) + user + pw)
 
     def _alloc_pixels(self, width, height):
         self._pixels = bytearray(max(width, 1) * max(height, 1) * 4)
@@ -631,6 +677,172 @@ class VNCDisplay(_DisplayBase):
             sx, sy, sw, sh = struct.unpack("!HHHH", self._recv_n(sock, 8))
             self._fill_rect(width, x + sx, y + sy, sw, sh, pix)
 
+    def _tight_compact_len(self, sock):
+        b0 = self._recv_n(sock, 1)[0]
+        if b0 < 128:
+            return b0
+        b1 = self._recv_n(sock, 1)[0]
+        if b1 < 128:
+            return (b0 & 0x7F) | (b1 << 7)
+        b2 = self._recv_n(sock, 1)[0]
+        return (b0 & 0x7F) | ((b1 & 0x7F) << 7) | (b2 << 14)
+
+    def _cpixel_to_bgra(self, rgb):
+        if len(rgb) >= 4:
+            return rgb[:4]
+        r, g, b = rgb[0], rgb[1], rgb[2]
+        return bytes((b, g, r, 0))
+
+    def _read_tight(self, sock, width, x, y, w, h):
+        ctrl = self._recv_n(sock, 1)[0]
+        for stream in range(4):
+            if ctrl & (1 << stream):
+                self._tight_z[stream] = None
+        kind = ctrl >> 4
+        if kind == 0x08:
+            pix = self._cpixel_to_bgra(self._recv_n(sock, 3))
+            self._fill_rect(width, x, y, w, h, pix)
+            return
+        if kind in (0x09, 0x0A):
+            n = self._tight_compact_len(sock)
+            payload = self._recv_n(sock, n)
+            if GdkPixbuf is None:
+                return
+            try:
+                loader = GdkPixbuf.PixbufLoader.new_with_type("jpeg" if kind == 0x09 else "png")
+                loader.write(payload)
+                loader.close()
+                pixbuf = loader.get_pixbuf()
+                if pixbuf is None:
+                    return
+                raw = pixbuf.get_pixels()
+                rowstride = pixbuf.get_rowstride()
+                nch = pixbuf.get_n_channels()
+                for row in range(min(h, pixbuf.get_height())):
+                    src = row * rowstride
+                    dst = ((y + row) * width + x) * 4
+                    for col in range(min(w, pixbuf.get_width())):
+                        i = src + col * nch
+                        r, g, b = raw[i], raw[i + 1], raw[i + 2]
+                        self._pixels[dst + col * 4 : dst + col * 4 + 4] = bytes((b, g, r, 0))
+            except Exception:
+                pass
+            return
+        filt = 0
+        if ctrl & 0x40:
+            filt = self._recv_n(sock, 1)[0]
+        stream_id = ctrl & 0x03
+        expect = w * h * 4
+        if filt == 1:
+            ncolors = self._recv_n(sock, 1)[0] + 1
+            self._recv_n(sock, ncolors * 3)
+            bits = 8 if ncolors > 16 else 4 if ncolors > 4 else 2 if ncolors > 2 else 1
+            expect = ((w + (8 // bits) - 1) // (8 // bits)) * h
+        elif filt == 2:
+            expect = w * h * 3
+        else:
+            expect = w * h * 3
+        if expect < 12:
+            data = self._recv_n(sock, expect)
+        else:
+            n = self._tight_compact_len(sock)
+            rawz = self._recv_n(sock, n)
+            import zlib
+
+            if self._tight_z[stream_id] is None:
+                self._tight_z[stream_id] = zlib.decompressobj()
+            data = self._tight_z[stream_id].decompress(rawz)
+        if filt == 0 and len(data) >= w * h * 3:
+            row = bytearray()
+            for i in range(0, w * h * 3, 3):
+                row.extend(self._cpixel_to_bgra(data[i : i + 3]))
+            self._blit_raw(width, x, y, w, h, bytes(row))
+
+    def _read_zrle(self, sock, width, x, y, w, h):
+        import zlib
+
+        n = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        rawz = self._recv_n(sock, n)
+        if self._zrle_z is None:
+            self._zrle_z = zlib.decompressobj()
+        try:
+            data = self._zrle_z.decompress(rawz)
+        except Exception:
+            self._zrle_z = zlib.decompressobj()
+            data = self._zrle_z.decompress(rawz)
+        pos = 0
+
+        def _take(n):
+            nonlocal pos
+            out = data[pos : pos + n]
+            pos += n
+            return out
+
+        for ty in range(y, y + h, 64):
+            th = min(64, y + h - ty)
+            for tx in range(x, x + w, 64):
+                tw = min(64, x + w - tx)
+                if pos >= len(data):
+                    return
+                sub = _take(1)[0]
+                if sub == 0:
+                    self._blit_raw(width, tx, ty, tw, th, _take(tw * th * 4))
+                elif sub == 1:
+                    pix = _take(4)
+                    self._fill_rect(width, tx, ty, tw, th, pix)
+                elif 2 <= sub <= 16:
+                    palette = [_take(4) for _ in range(sub)]
+                    bits = 1 if sub <= 2 else 2 if sub <= 4 else 4
+                    for row in range(th):
+                        packed = _take((tw * bits + 7) // 8)
+                        bitpos = 0
+                        for col in range(tw):
+                            byte = packed[bitpos // 8]
+                            shift = 8 - bits - (bitpos % 8)
+                            idx = (byte >> shift) & ((1 << bits) - 1)
+                            bitpos += bits
+                            pix = palette[idx] if idx < len(palette) else palette[0]
+                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                elif sub == 128:
+                    count = 0
+                    while count < tw * th:
+                        pix = _take(4)
+                        run = 1
+                        while True:
+                            b = _take(1)[0]
+                            run += b
+                            if b != 255:
+                                break
+                        for _ in range(run):
+                            col = count % tw
+                            row = count // tw
+                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                            count += 1
+                            if count >= tw * th:
+                                break
+                elif 130 <= sub <= 255:
+                    ncolors = sub - 128
+                    palette = [_take(4) for _ in range(ncolors)]
+                    count = 0
+                    while count < tw * th:
+                        idx = _take(1)[0]
+                        run = 1
+                        if idx & 0x80:
+                            idx &= 0x7F
+                            while True:
+                                b = _take(1)[0]
+                                run += b
+                                if b != 255:
+                                    break
+                        pix = palette[idx] if idx < len(palette) else palette[0]
+                        for _ in range(run):
+                            col = count % tw
+                            row = count // tw
+                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                            count += 1
+                            if count >= tw * th:
+                                break
+
     def _publish_fb(self, width, height):
         if cairo is None:
             return
@@ -669,6 +881,13 @@ class VNCDisplay(_DisplayBase):
                 self._read_hextile(sock, width, x, y, w, h)
             elif enc == 6:
                 self._read_zlib(sock, width, x, y, w, h)
+            elif enc == _VNC_ENC_TIGHT:
+                self._read_tight(sock, width, x, y, w, h)
+            elif enc == _VNC_ENC_ZRLE:
+                self._read_zrle(sock, width, x, y, w, h)
+            elif enc == _VNC_ENC_CURSOR:
+                self._recv_n(sock, max(w, 0) * max(h, 0) * 4)
+                self._recv_n(sock, ((max(w, 0) + 7) // 8) * max(h, 0))
             else:
                 raise RuntimeError("Unsupported VNC encoding %s" % enc)
         self._publish_fb(width, height)

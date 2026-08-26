@@ -285,33 +285,45 @@ class vmmSerialConsole(vmmGObject):
         self._serial_popup.add(self._serial_paste)
 
     def _init_ui(self):
-        self._box = Gtk.Notebook()
-        self._box.set_show_tabs(False)
-        self._box.set_show_border(False)
+        self._box = Gtk.Stack()
+        self._box.set_hexpand(True)
+        self._box.set_vexpand(True)
 
-        align = Gtk.Box()
-        align.set_border_width(2)
-        evbox = Gtk.EventBox()
-        evbox.modify_bg(Gtk.StateType.NORMAL, Gdk.Color(0, 0, 0))
-        terminalbox = Gtk.HBox()
-        scrollbar = Gtk.VScrollbar()
+        terminalbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        terminalbox.set_hexpand(True)
+        terminalbox.set_vexpand(True)
+        align = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        align.set_margin_top(2)
+        align.set_margin_bottom(2)
+        align.set_margin_start(2)
+        align.set_margin_end(2)
+        align.set_hexpand(True)
+        align.set_vexpand(True)
+        try:
+            align.add_css_class("view")
+        except Exception:
+            pass
+        scrollbar = Gtk.Scrollbar(orientation=Gtk.Orientation.VERTICAL)
         self._error_label = Gtk.Label()
         self._error_label.set_width_chars(40)
-        self._error_label.set_line_wrap(True)
+        self._error_label.set_wrap(True)
+        self._error_label.set_hexpand(True)
+        self._error_label.set_vexpand(True)
 
         if self._vteterminal:
+            self._vteterminal.set_hexpand(True)
+            self._vteterminal.set_vexpand(True)
             scrollbar.set_adjustment(self._vteterminal.get_vadjustment())
-            align.pack_start(self._vteterminal, True, True, 0)
+            align.append(self._vteterminal)
 
-        evbox.add(align)
-        terminalbox.pack_start(evbox, True, True, 0)
-        terminalbox.pack_start(scrollbar, False, False, 0)
+        terminalbox.append(align)
+        terminalbox.append(scrollbar)
+        self._box.add_named(terminalbox, "term")
+        self._box.add_named(self._error_label, "error")
+        self._box.set_visible_child_name("term")
+        self._box.set_visible(True)
 
-        self._box.append_page(terminalbox, Gtk.Label(label=""))
-        self._box.append_page(self._error_label, Gtk.Label(label=""))
-        self._box.show_all()
-
-        scrollbar.hide()
+        scrollbar.set_visible(False)
         scrollbar.get_adjustment().connect("changed", self._scrollbar_adjustment_changed, scrollbar)
 
     ###################
@@ -320,7 +332,7 @@ class vmmSerialConsole(vmmGObject):
 
     def _show_error(self, msg):
         self._error_label.set_markup("<b>%s</b>" % msg)
-        self._box.set_current_page(1)
+        self._box.set_visible_child_name("error")
         try:
             open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
         except Exception:
@@ -361,12 +373,6 @@ class vmmSerialConsole(vmmGObject):
 
     def set_focus_callbacks(self, in_cb, out_cb):
         try:
-            self._vteterminal.connect("focus-in-event", in_cb)
-            self._vteterminal.connect("focus-out-event", out_cb)
-            return
-        except Exception:
-            pass
-        try:
             controller = Gtk.EventControllerFocus()
 
             def _enter(*_a):
@@ -378,6 +384,12 @@ class vmmSerialConsole(vmmGObject):
             controller.connect("enter", _enter)
             controller.connect("leave", _leave)
             self._vteterminal.add_controller(controller)
+            return
+        except Exception:
+            pass
+        try:
+            self._vteterminal.connect("focus-in-event", in_cb)
+            self._vteterminal.connect("focus-out-event", out_cb)
         except Exception:
             pass
 
@@ -385,7 +397,7 @@ class vmmSerialConsole(vmmGObject):
         try:
             dev = self._lookup_dev()
             self._datastream.open(dev, self._vteterminal)
-            self._box.set_current_page(0)
+            self._box.set_visible_child_name("term")
             return True
         except Exception as e:
             log.exception("Error opening serial console")
@@ -458,7 +470,18 @@ class vmmSerialConsole(vmmGObject):
         try:
             text = term.get_text_selected(Vte.Format.TEXT)
             if text:
-                Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+                try:
+                    Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+                except Exception:
+                    pass
+                try:
+                    Gdk.Display.get_default().get_clipboard().set(text)
+                except Exception:
+                    pass
+                try:
+                    open("/tmp/vmm-a11y-clipboard.txt", "w").write(text)
+                except Exception:
+                    pass
         except Exception:
             pass
 

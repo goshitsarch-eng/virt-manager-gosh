@@ -551,6 +551,9 @@ def main():
             name = cons[0].alias or name
         serial = vmmSerialConsole(vm, port, name)
         assert serial._box is not None
+        assert serial._box.get_visible_child_name() == "term"
+        serial._show_error("gtk4 serial error")
+        assert serial._box.get_visible_child_name() == "error"
         serial._serial_popup.show_all()
         from virtManager.details.console import _TimedRevealer
 
@@ -815,6 +818,23 @@ def main():
         payload += b"\x01\x00\x00\x00" + (b"\x00" * 16)
         nw, nh = disp._read_fb_update(FakeSock(payload), 4, 4)
         assert (nw, nh) == (16, 12)
+        # Tight fill rectangle (control 0x80 + RGB)
+        disp._alloc_pixels(4, 4)
+        tight = b"\x80\xaa\xbb\xcc"
+        disp._read_tight(FakeSock(tight), 4, 0, 0, 2, 2)
+        # ZRLE solid 4x4 tile
+        import zlib as _zlib
+
+        zrle = _zlib.compress(b"\x01" + b"\x11\x22\x33\x44", 6)
+        payload = st.pack("!I", len(zrle)) + zrle
+        disp._zrle_z = None
+        disp._read_zrle(FakeSock(payload), 4, 0, 0, 4, 4)
+        # Cursor pseudo-encoding is skipped without touching the FB
+        disp._read_fb_update(
+            FakeSock(b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 0, 0, 2, 2, -239) + (b"\x00" * 18)),
+            4,
+            4,
+        )
         disp.close()
         spice = gtk4display.SpiceDisplay(None)
         spice.set_scaling(True)
