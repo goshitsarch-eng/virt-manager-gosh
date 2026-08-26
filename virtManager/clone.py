@@ -227,6 +227,17 @@ class vmmCloneVM(vmmGObjectUI):
         return self.vm and self.vm.conn or None
 
     def show(self, parent, vm):
+        already = False
+        try:
+            already = bool(self.topwin.get_visible())
+        except Exception:
+            already = False
+        if already and self.vm is vm:
+            try:
+                self.topwin.present()
+            except Exception:
+                pass
+            return
         log.debug("Showing clone wizard")
         for path in (
             "/tmp/vmm-a11y-clone-cancel",
@@ -239,6 +250,7 @@ class vmmCloneVM(vmmGObjectUI):
             "/tmp/vmm-a11y-clone-flags.txt",
             "/tmp/vmm-a11y-alert.txt",
             "/tmp/vmm-a11y-alert-response.txt",
+            "/tmp/vmm-a11y-clone-name.txt",
         ):
             try:
                 os.remove(path)
@@ -248,21 +260,11 @@ class vmmCloneVM(vmmGObjectUI):
         self._reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.resize(1, 1)
-        already = False
-        try:
-            already = bool(self.topwin.get_visible())
-        except Exception:
-            already = False
         try:
             open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
         except Exception:
             pass
-        if already and self.vm is vm:
-            try:
-                self.topwin.present()
-            except Exception:
-                pass
-            return
+        self._vmm_clone_name_seen = None
         try:
             gtkcompat.set_accessible_name(self.topwin, "Clone Virtual Machine")
             self.topwin.set_title("Clone Virtual Machine")
