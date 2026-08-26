@@ -1075,3 +1075,12 @@ class VMMDogtailApp:
                 self._topwin = self.find_window(
                     self._infer_open_window_name(extra_opts, window_name)
                 )
+            if use_uri and not show_console:
+                deadline = time.time() + 20
+                while time.time() < deadline:
+                    try:
+                        if open("/tmp/vmm-a11y-vm-list.txt", "r").read().strip():
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(0.1)
