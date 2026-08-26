@@ -3780,6 +3780,10 @@ class _SentinelXmlEditor(object):
             time.sleep(0.05)
         return xml
 
+    @text.setter
+    def text(self, value):
+        self.set_text(value)
+
     def get_text_override(self):
         # XML-tab click only flips the page sentinel; contents are published
         # from details refresh / the 50ms xmleditor poller.
