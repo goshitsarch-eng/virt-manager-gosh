@@ -6775,6 +6775,16 @@ def _patch_widget_methods():
                 callback(self, Gtk.EntryIconPosition.SECONDARY, _FakeEvent(), *args)
 
             return orig_connect(self, "activate", _icon)
+        if signal in ("focus-in-event", "focus-out-event"):
+            controller = Gtk.EventControllerFocus()
+            evname = "enter" if signal == "focus-in-event" else "leave"
+
+            def _focus(*_a):
+                callback(self, _FakeEvent(), *args)
+
+            controller.connect(evname, _focus)
+            self.add_controller(controller)
+            return id(controller)
         if signal in ("enter-notify-event", "leave-notify-event"):
             controller = Gtk.EventControllerMotion()
             evname = "enter" if signal == "enter-notify-event" else "leave"

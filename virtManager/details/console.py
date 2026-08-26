@@ -333,6 +333,14 @@ class _ConsoleMenu(vmmGObject):
             pass
 
     def activate_default(self):
+        selected = self._get_selected_menu_item()
+        if (
+            selected is not None
+            and selected.get_sensitive()
+            and hasattr(selected, "toggled")
+        ):
+            selected.toggled()
+            return True
         for child in self._menu.get_children():
             if child.get_sensitive() and hasattr(child, "toggled"):
                 if hasattr(child, "set_active"):
@@ -947,12 +955,21 @@ class vmmConsolePages(vmmGObjectUI):
                 break
 
         if not serial:
-            serial = vmmSerialConsole(self.vm, target_port, name)
-            serial.set_focus_callbacks(self._serial_focus_changed_cb, self._serial_focus_changed_cb)
+            try:
+                serial = vmmSerialConsole(self.vm, target_port, name)
+                serial.set_focus_callbacks(
+                    self._serial_focus_changed_cb, self._serial_focus_changed_cb
+                )
 
-            title = Gtk.Label(label=name)
-            self.widget("serial-pages").append_page(serial.get_box(), title)
-            self._serial_consoles.append(serial)
+                title = Gtk.Label(label=name)
+                self.widget("serial-pages").append_page(serial.get_box(), title)
+                self._serial_consoles.append(serial)
+            except Exception as e:
+                log.exception("Error creating serial console")
+                self._activate_gfx_unavailable_page(
+                    _("Error connecting to text console: %s") % e
+                )
+                return
 
         if not self.vm.get_console_autoconnect() and not self._viewer_connect_clicked:
             self._activate_console_connect_page()
@@ -993,6 +1010,18 @@ class vmmConsolePages(vmmGObjectUI):
 
         cpage = self.widget("console-pages").get_current_page()
         if cpage == _CONSOLE_PAGE_SERIAL:
+            return
+
+        # Keep a user-selected serial console across VM start / Console
+        # radio reinit. Otherwise activate_default would steal back the
+        # first graphical item (SerialSwitch).
+        try:
+            _name, dev, _errmsg = self._consolemenu.get_selected()
+        except Exception:
+            dev = None
+        if dev is not None and not hasattr(dev, "gtype"):
+            self._viewer_connect_clicked = True
+            self._console_menu_view_selected()
             return
 
         # UNAVAILABLE, GRAPHICS error, or the manual Connect page: connect

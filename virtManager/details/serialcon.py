@@ -238,9 +238,15 @@ class vmmSerialConsole(vmmGObject):
         self._vteterminal = Vte.Terminal()
         self._vteterminal.set_scrollback_lines(1000)
         self._vteterminal.set_audible_bell(False)
-        self._vteterminal.get_accessible().set_name("Serial Terminal")
+        try:
+            self._vteterminal.get_accessible().set_name("Serial Terminal")
+        except Exception:
+            pass
 
-        self._vteterminal.connect("button-press-event", self._show_serial_rcpopup)
+        try:
+            self._vteterminal.connect("button-press-event", self._show_serial_rcpopup)
+        except Exception:
+            pass
         self._vteterminal.connect("commit", self._datastream.send_data, self._vteterminal)
         self._vteterminal.show()
 
@@ -332,8 +338,26 @@ class vmmSerialConsole(vmmGObject):
         return bool(self._vteterminal and self._vteterminal.get_property("has-focus"))
 
     def set_focus_callbacks(self, in_cb, out_cb):
-        self._vteterminal.connect("focus-in-event", in_cb)
-        self._vteterminal.connect("focus-out-event", out_cb)
+        try:
+            self._vteterminal.connect("focus-in-event", in_cb)
+            self._vteterminal.connect("focus-out-event", out_cb)
+            return
+        except Exception:
+            pass
+        try:
+            controller = Gtk.EventControllerFocus()
+
+            def _enter(*_a):
+                in_cb(self._vteterminal, None)
+
+            def _leave(*_a):
+                out_cb(self._vteterminal, None)
+
+            controller.connect("enter", _enter)
+            controller.connect("leave", _leave)
+            self._vteterminal.add_controller(controller)
+        except Exception:
+            pass
 
     def open_console(self):
         try:
