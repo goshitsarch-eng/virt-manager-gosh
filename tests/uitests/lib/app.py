@@ -382,6 +382,14 @@ class VMMDogtailApp:
             pass
         self.get_manager()
         try:
+            os.remove("/tmp/vmm-a11y-pagenum.txt")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-createconn-open", "w").write("1")
         except Exception:
             pass

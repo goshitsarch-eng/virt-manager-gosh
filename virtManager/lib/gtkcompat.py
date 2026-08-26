@@ -2596,15 +2596,6 @@ def _start_combo_select_poll(createconn):
                 c.widget("uri-entry").set_text(uri)
             except Exception:
                 pass
-        if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
-            try:
-                os.remove("/tmp/vmm-a11y-createconn-connect")
-            except Exception:
-                pass
-            try:
-                c.open_conn(None)
-            except Exception:
-                pass
         return True
 
     GLib.timeout_add(50, _tick)

@@ -107,6 +107,15 @@ class vmmCreateConn(vmmGObjectUI):
             self._publish_a11y_state()
             return
 
+        for path in (
+            "/tmp/vmm-a11y-createconn-connect",
+            "/tmp/vmm-a11y-createconn-cancel",
+            "/tmp/vmm-a11y-createconn-remote-click",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self.reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.present()
@@ -216,6 +225,10 @@ class vmmCreateConn(vmmGObjectUI):
             except Exception:
                 pass
             try:
+                # Wait until a pending remote toggle is applied so Connect
+                # cannot open a local URI and hang.
+                if os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
+                    return True
                 if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
                     os.remove("/tmp/vmm-a11y-createconn-connect")
                     try:

@@ -3235,8 +3235,48 @@ class _SentinelCreateConnRemote(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        before = self.checked
         try:
             open("/tmp/vmm-a11y-createconn-remote-click", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if self.checked != before and not os.path.exists(
+                "/tmp/vmm-a11y-createconn-remote-click"
+            ):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelCreateConnConnect(object):
+    name = "Connect"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        return _createconn_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
+                break
+            time.sleep(0.05)
+        try:
+            open("/tmp/vmm-a11y-createconn-connect", "w").write("1")
         except Exception:
             pass
 
@@ -3321,7 +3361,7 @@ def _sentinel_createconn_widgets(name, roleName, labeller_text=None):
     if "uri-label" in compact:
         return _SentinelCreateConnUriLabel()
     if compact.strip() in ("connect",) and "button" in role:
-        return _SentinelCloneButton("Connect", "/tmp/vmm-a11y-createconn-connect")
+        return _SentinelCreateConnConnect()
     if "cancel" in compact and "button" in role:
         return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-createconn-cancel")
     if "hypervisor" in compact:
