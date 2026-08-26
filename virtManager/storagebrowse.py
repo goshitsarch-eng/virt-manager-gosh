@@ -204,6 +204,8 @@ class vmmStorageBrowser(vmmGObjectUI):
             gtkcompat.register_a11y_click("vol-refresh", _refresh_vols)
             gtkcompat.register_a11y_click("pool-dir", _select_pool)
             gtkcompat.register_a11y_click("Choose Volume", _choose_volume)
+            gtkcompat.register_a11y_click("browse-cancel", self.close)
+            gtkcompat.register_a11y_click("Browse Local", self._browse_local)
             if not getattr(self, "_vmm_vol_select_poll", False):
                 self._vmm_vol_select_poll = True
                 GLib.timeout_add(50, _select_vol_tick)

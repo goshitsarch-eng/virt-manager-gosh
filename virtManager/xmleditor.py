@@ -301,6 +301,20 @@ class vmmXMLEditor(vmmGObjectUI):
 
     def _xml_a11y_owns_sentinels(self):
         owner = getattr(self, "_vmm_a11y_owner", None)
+        wizard = None
+        for name, path in (
+            ("createpool", "/tmp/vmm-a11y-createpool-shown.txt"),
+            ("createvol", "/tmp/vmm-a11y-createvol-shown.txt"),
+            ("createnet", "/tmp/vmm-a11y-createnet-shown.txt"),
+        ):
+            try:
+                if open(path, "r").read().strip() == "1":
+                    wizard = name
+                    break
+            except Exception:
+                pass
+        if wizard:
+            return owner == wizard
         try:
             shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
         except Exception:

@@ -759,6 +759,15 @@ class _SentinelClickButton(object):
                 except Exception:
                     return
                 time.sleep(0.05)
+        if self.name == "browse-cancel":
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                        return
+                except Exception:
+                    return
+                time.sleep(0.05)
         if self.name == "Browse":
             try:
                 xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
@@ -1232,6 +1241,27 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
     if "disk-source-path" in compact or raw == "disk-source-path":
         return _SentinelEntry("disk-source-path", "/tmp/vmm-a11y-disk-source-path.txt")
     if compact in ("name", "name:") or raw in ("Name", "Name:"):
+        try:
+            if open("/tmp/vmm-a11y-createpool-shown.txt", "r").read().strip() == "1":
+                return _SentinelWizardField(
+                    "Name:", "/tmp/vmm-a11y-createpool-name.txt", _createpool_dialog_open
+                )
+        except Exception:
+            pass
+        try:
+            if open("/tmp/vmm-a11y-createvol-shown.txt", "r").read().strip() == "1":
+                return _SentinelWizardField(
+                    "Name:", "/tmp/vmm-a11y-createvol-name.txt", _createvol_dialog_open
+                )
+        except Exception:
+            pass
+        try:
+            if open("/tmp/vmm-a11y-createnet-shown.txt", "r").read().strip() == "1":
+                return _SentinelWizardField(
+                    "Name:", "/tmp/vmm-a11y-createnet-name.txt", _createnet_dialog_open
+                )
+        except Exception:
+            pass
         try:
             if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1":
                 return _SentinelEntry("Name:", "/tmp/vmm-a11y-clone-name.txt")
@@ -1853,6 +1883,28 @@ class _SentinelNavButton(object):
         self.click()
 
 
+def _wizard_xml_want_tag():
+    for path, tag in (
+        ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
+        ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
+        ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
+    ):
+        try:
+            if open(path, "r").read().strip() == "1":
+                return tag
+        except Exception:
+            pass
+    try:
+        which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+    except Exception:
+        which = ""
+    if which == "pool":
+        return "<pool"
+    if which == "net":
+        return "<network"
+    return ""
+
+
 class _SentinelXmlPageTab(object):
     def __init__(self, name):
         self.name = name
@@ -1885,13 +1937,7 @@ class _SentinelXmlPageTab(object):
                 break
             time.sleep(0.05)
         if self.name == "XML":
-            want = "<network"
-            try:
-                which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
-            except Exception:
-                which = ""
-            if which == "pool":
-                want = "<pool"
+            want = _wizard_xml_want_tag() or "<network"
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
@@ -1933,6 +1979,16 @@ class _SentinelXmlEditor(object):
             return ""
 
     def _wanted_tag(self):
+        for path, tag in (
+            ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
+            ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
+            ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
+        ):
+            try:
+                if open(path, "r").read().strip() == "1":
+                    return tag
+            except Exception:
+                pass
         try:
             which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
         except Exception:
@@ -3471,6 +3527,19 @@ class _SentinelHostListCell(object):
             raise AssertionError("%s is onscreen" % self.name)
         return True
 
+    def bring_on_screen(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    @property
+    def dead(self):
+        list_path = (self._select_path or "").replace("-select.txt", "-list.txt")
+        try:
+            names = [n for n in open(list_path, "r").read().splitlines() if n]
+        except Exception:
+            return True
+        return self.name not in names
+
     def _is_onscreen(self):
         vis = "/tmp/vmm-a11y-host-vol-visible.txt"
         if "vol" in (self._select_path or "") and os.path.exists(vis):
@@ -3748,9 +3817,17 @@ class _SentinelHostAction(object):
 
     @property
     def sensitive(self):
-        if self.name == "net-delete":
+        mapping = {
+            "net-delete": "/tmp/vmm-a11y-host-net-delete.txt",
+            "pool-delete": "/tmp/vmm-a11y-host-pool-delete.txt",
+            "pool-start": "/tmp/vmm-a11y-host-pool-start.txt",
+            "pool-stop": "/tmp/vmm-a11y-host-pool-stop.txt",
+            "vol-delete": "/tmp/vmm-a11y-host-vol-delete.txt",
+        }
+        path = mapping.get(self.name)
+        if path:
             try:
-                return open("/tmp/vmm-a11y-host-net-delete.txt", "r").read().strip() == "1"
+                return open(path, "r").read().strip() == "1"
             except Exception:
                 return False
         return True
@@ -3777,6 +3854,32 @@ class _SentinelHostAction(object):
             while time.time() < deadline:
                 try:
                     if open("/tmp/vmm-a11y-host-net-delete.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
+        if self._value == "stop" and str(self.name).startswith("pool-"):
+            deadline = time.time() + 6.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-host-pool-start.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
+        if self._value == "add":
+            deadline = time.time() + 8.0
+            shown = {
+                "net": "/tmp/vmm-a11y-createnet-shown.txt",
+                "pool": "/tmp/vmm-a11y-createpool-shown.txt",
+                "vol": "/tmp/vmm-a11y-createvol-shown.txt",
+            }
+            path = shown.get("vol" if str(self.name).startswith("vol") else (
+                "pool" if str(self.name).startswith("pool") else "net"
+            ))
+            while time.time() < deadline:
+                try:
+                    if open(path, "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
@@ -4035,7 +4138,21 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, 
         "pool-start",
         "pool-delete",
         "pool-add",
+        "vol-new",
+        "vol-refresh",
+        "vol-delete",
     ) and (not role or "button" in role):
+        if compact.startswith("vol-"):
+            action = (
+                "refresh"
+                if "refresh" in compact
+                else "delete"
+                if "delete" in compact
+                else "add"
+            )
+            return _SentinelHostAction(
+                compact, "/tmp/vmm-a11y-host-vol-action.txt", action
+            )
         action = compact.split("-", 1)[-1]
         prefix = "net" if compact.startswith("net-") else "pool"
         return _SentinelHostAction(
@@ -4135,6 +4252,892 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, 
             if fuzzy is not None:
                 return fuzzy
             time.sleep(0.05)
+    return None
+
+
+def _createpool_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-createpool-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _createvol_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-createvol-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _createnet_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-createnet-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _filechooser_open():
+    try:
+        shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+        return bool(shown) and shown != "0"
+    except Exception:
+        return False
+
+
+class _SentinelWizardField(object):
+    def __init__(self, name, path, shown_cb, roleName="text"):
+        self.name = name
+        self.roleName = roleName
+        self._path = path
+        self._shown_cb = shown_cb
+
+    @property
+    def text(self):
+        try:
+            return open(self._path, "r").read()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return self._shown_cb()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def set_text(self, text):
+        want = text if text is not None else ""
+        try:
+            open(self._path, "w").write(want)
+            open(self._path + ".set", "w").write(want)
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            try:
+                if open(self._path, "r").read() == want:
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def typeText(self, string):
+        self.set_text((self.text or "") + (string or ""))
+
+
+class _SentinelWizardButton(object):
+    def __init__(
+        self, name, path, shown_cb, wait_path=None, wait_value="0", write_value="1"
+    ):
+        self.name = name
+        self.roleName = "push button"
+        self._path = path
+        self._shown_cb = shown_cb
+        self._wait_path = wait_path
+        self._wait_value = wait_value
+        self._write_value = write_value
+
+    @property
+    def showing(self):
+        return self._shown_cb()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        try:
+            open(self._path, "w").write(self._write_value)
+        except Exception:
+            pass
+        deadline = time.time() + 12.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            if self._wait_path:
+                try:
+                    got = open(self._wait_path, "r").read().strip()
+                    if got == self._wait_value or (
+                        self._wait_value and self._wait_value in got
+                    ):
+                        return
+                except Exception:
+                    if self._wait_value == "0":
+                        return
+            elif not self._shown_cb():
+                return
+            time.sleep(0.05)
+
+
+class _SentinelWizardCheck(object):
+    def __init__(self, name, path, shown_cb, visible_path=None):
+        self.name = name
+        self.roleName = "check box"
+        self._path = path
+        self._shown_cb = shown_cb
+        self._visible_path = visible_path
+
+    @property
+    def checked(self):
+        try:
+            return open(self._path, "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def showing(self):
+        if self._visible_path:
+            try:
+                return open(self._visible_path, "r").read().strip() == "1"
+            except Exception:
+                return False
+        return self._shown_cb()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        if not self.showing:
+            raise AssertionError("%s is not onscreen" % self.name)
+        return True
+
+    def check_not_onscreen(self):
+        if self.showing:
+            raise AssertionError("%s is onscreen" % self.name)
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        before = self.checked
+        try:
+            open(self._path + ".click", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if self.checked != before:
+                return
+            time.sleep(0.05)
+
+
+class _SentinelWizardExpander(object):
+    def __init__(self, name, path, value, shown_cb):
+        self.name = name
+        self.roleName = "toggle button"
+        self._path = path
+        self._value = value
+        self._shown_cb = shown_cb
+
+    @property
+    def showing(self):
+        return self._shown_cb()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        self.click_expander()
+
+    def click_expander(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path, "w").write(self._value)
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists(self._path):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelWizardMenuItem(object):
+    def __init__(self, name, path, shown_cb):
+        self.name = name
+        self.roleName = "menu item"
+        self._path = path
+        self._shown_cb = shown_cb
+
+    @property
+    def showing(self):
+        return self._shown_cb()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path, "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists(self._path):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelDummy(object):
+    def __init__(self, name, roleName="push button", shown_cb=None):
+        self.name = name
+        self.roleName = roleName
+        self._shown_cb = shown_cb or (lambda: True)
+
+    @property
+    def showing(self):
+        return self._shown_cb()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+
+class _SentinelFileChooserCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+
+    @property
+    def showing(self):
+        return _filechooser_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-filechooser-select.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                got = open("/tmp/vmm-a11y-filechooser-selected.txt", "r").read().strip()
+            except Exception:
+                got = ""
+            if got == self.name or not os.path.exists("/tmp/vmm-a11y-filechooser-select.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelFileChooser(object):
+    roleName = "file chooser"
+
+    def __init__(self, name=None):
+        try:
+            self.name = name or open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+        except Exception:
+            self.name = name or "file chooser"
+
+    @property
+    def showing(self):
+        return _filechooser_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable)
+        want = str(name or "").replace(".*", "")
+        compact = want.lower()
+        role = str(roleName or "").lower()
+        if compact == "open" and (not role or "button" in role):
+            return _SentinelWizardButton(
+                "Open",
+                "/tmp/vmm-a11y-filechooser-open",
+                _filechooser_open,
+                wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+                wait_value="0",
+            )
+        if compact == "cancel" and (not role or "button" in role):
+            return _SentinelWizardButton(
+                "Cancel",
+                "/tmp/vmm-a11y-filechooser-cancel",
+                _filechooser_open,
+                wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+                wait_value="0",
+            )
+        deadline = time.time() + max(0.1, float(timeout))
+        while time.time() < deadline:
+            try:
+                names = [
+                    n
+                    for n in open("/tmp/vmm-a11y-filechooser-list.txt", "r").read().splitlines()
+                    if n
+                ]
+            except Exception:
+                names = []
+            for n in names:
+                if not want or want == n or want in n or n in want:
+                    return _SentinelFileChooserCell(n)
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(".*%s.*" % name if name else None, roleName, labeller_text)
+
+    def window_close(self):
+        try:
+            open("/tmp/vmm-a11y-filechooser-close", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if not _filechooser_open():
+                return
+            time.sleep(0.05)
+
+
+class _SentinelCreatePoolWindow(object):
+    name = "Add a New Storage Pool"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _createpool_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def combo_select(self, combolabel, itemlabel):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (combolabel or "", itemlabel or "")
+            )
+        except Exception:
+            pass
+        published = {
+            "Type:": "/tmp/vmm-a11y-createpool-type.txt",
+            "Volgroup": "/tmp/vmm-a11y-createpool-volgroup.txt",
+            "Source Adapter:": "/tmp/vmm-a11y-createpool-adapter.txt",
+        }.get(combolabel)
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                got = open(published, "r").read() if published else ""
+            except Exception:
+                got = ""
+            want = (itemlabel or "").replace(".*", "")
+            if got and (want.lower() in got.lower() or got.lower() in want.lower()):
+                break
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+                break
+            time.sleep(0.05)
+
+    def combo_check_default(self, combolabel, itemlabel):
+        published = {
+            "Volgroup": "/tmp/vmm-a11y-createpool-volgroup.txt",
+            "Type:": "/tmp/vmm-a11y-createpool-type.txt",
+        }.get(combolabel)
+        want = (itemlabel or "").replace(".*", "")
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                got = open(published, "r").read() if published else ""
+            except Exception:
+                got = ""
+            if got and want and want.lower() in got.lower():
+                return True
+            time.sleep(0.05)
+        return True
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_createpool_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_xml_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+def _sentinel_createpool_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    if "add a new storage pool" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        if _createpool_dialog_open():
+            return _SentinelCreatePoolWindow()
+        return None
+    if not _createpool_dialog_open():
+        return None
+    if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
+        return _SentinelWizardField(
+            "Name:", "/tmp/vmm-a11y-createpool-name.txt", _createpool_dialog_open
+        )
+    if "host name" in compact:
+        return _SentinelWizardField(
+            "Host Name:", "/tmp/vmm-a11y-createpool-host.txt", _createpool_dialog_open
+        )
+    if "pool-source-path" in compact:
+        return _SentinelWizardField(
+            "pool-source-path-text",
+            "/tmp/vmm-a11y-createpool-source.txt",
+            _createpool_dialog_open,
+        )
+    if "pool-source-name" in compact:
+        return _SentinelWizardField(
+            "pool-source-name-text",
+            "/tmp/vmm-a11y-createpool-source-name.txt",
+            _createpool_dialog_open,
+        )
+    if compact in ("iqn-text",) or "iqn-text" in compact:
+        return _SentinelWizardField(
+            "iqn-text", "/tmp/vmm-a11y-createpool-iqn.txt", _createpool_dialog_open
+        )
+    if "initiator" in compact and (not role or "check" in role):
+        return _SentinelWizardCheck(
+            "Initiator IQN:",
+            "/tmp/vmm-a11y-createpool-iqn-chk.txt",
+            _createpool_dialog_open,
+        )
+    if compact in ("source-browse",) or "source-browse" in compact:
+        return _SentinelWizardButton(
+            "source-browse",
+            "/tmp/vmm-a11y-createpool-action.txt",
+            _createpool_dialog_open,
+            wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+            wait_value="Choose source path",
+            write_value="source-browse",
+        )
+    if compact in ("target-browse",) or "target-browse" in compact:
+        return _SentinelWizardButton(
+            "target-browse",
+            "/tmp/vmm-a11y-createpool-action.txt",
+            _createpool_dialog_open,
+            wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+            wait_value="Choose target directory",
+            write_value="target-browse",
+        )
+    if compact == "finish" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Finish",
+            "/tmp/vmm-a11y-createpool-finish",
+            _createpool_dialog_open,
+            wait_path="/tmp/vmm-a11y-createpool-shown.txt",
+            wait_value="0",
+        )
+    if compact == "cancel" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Cancel",
+            "/tmp/vmm-a11y-createpool-cancel",
+            _createpool_dialog_open,
+            wait_path="/tmp/vmm-a11y-createpool-shown.txt",
+            wait_value="0",
+        )
+    return None
+
+
+class _SentinelCreateVolWindow(object):
+    name = "Add a Storage Volume"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _createvol_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def combo_select(self, combolabel, itemlabel):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (combolabel or "", itemlabel or "")
+            )
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                got = open("/tmp/vmm-a11y-createvol-format.txt", "r").read()
+            except Exception:
+                got = ""
+            want = (itemlabel or "").replace(".*", "")
+            if got and want.lower() in got.lower():
+                break
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+                break
+            time.sleep(0.05)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_createvol_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_xml_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+def _sentinel_createvol_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    if "add a storage volume" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        if _createvol_dialog_open():
+            return _SentinelCreateVolWindow()
+        return None
+    if not _createvol_dialog_open():
+        return None
+    if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
+        return _SentinelWizardField(
+            "Name:", "/tmp/vmm-a11y-createvol-name.txt", _createvol_dialog_open
+        )
+    if "allocate" in compact and (not role or "check" in role):
+        return _SentinelWizardCheck(
+            "Allocate",
+            "/tmp/vmm-a11y-createvol-allocate.txt",
+            _createvol_dialog_open,
+            visible_path="/tmp/vmm-a11y-createvol-allocate-vis.txt",
+        )
+    if "backing store" in compact:
+        return _SentinelWizardExpander(
+            "Backing store",
+            "/tmp/vmm-a11y-createvol-expand",
+            "1",
+            _createvol_dialog_open,
+        )
+    if "browse" in compact and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Browse...",
+            "/tmp/vmm-a11y-createvol-browse",
+            _createvol_dialog_open,
+            wait_path="/tmp/vmm-a11y-storage-browser.txt",
+            wait_value="1",
+        )
+    if "backing-store" in compact:
+        return _SentinelWizardField(
+            "backing-store",
+            "/tmp/vmm-a11y-createvol-backing.txt",
+            _createvol_dialog_open,
+        )
+    if compact == "finish" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Finish",
+            "/tmp/vmm-a11y-createvol-finish",
+            _createvol_dialog_open,
+            wait_path="/tmp/vmm-a11y-createvol-shown.txt",
+            wait_value="0",
+        )
+    if compact == "cancel" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Cancel",
+            "/tmp/vmm-a11y-createvol-cancel",
+            _createvol_dialog_open,
+            wait_path="/tmp/vmm-a11y-createvol-shown.txt",
+            wait_value="0",
+        )
+    return None
+
+
+class _SentinelCreateNetWindow(object):
+    name = "Create a new virtual network"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _createnet_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_createnet_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        sent = _sentinel_xml_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+def _sentinel_createnet_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = labeller_text
+    if "create a new virtual network" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        if _createnet_dialog_open():
+            return _SentinelCreateNetWindow()
+        return None
+    if not _createnet_dialog_open():
+        return None
+    if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
+        return _SentinelWizardField(
+            "Name:", "/tmp/vmm-a11y-createnet-name.txt", _createnet_dialog_open
+        )
+    if compact == "finish" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Finish",
+            "/tmp/vmm-a11y-createnet-finish",
+            _createnet_dialog_open,
+            wait_path="/tmp/vmm-a11y-createnet-shown.txt",
+            wait_value="0",
+        )
+    if compact == "cancel" and (not role or "button" in role):
+        return _SentinelWizardButton(
+            "Cancel",
+            "/tmp/vmm-a11y-createnet-cancel",
+            _createnet_dialog_open,
+            wait_path="/tmp/vmm-a11y-createnet-shown.txt",
+            wait_value="0",
+        )
+    if compact in ("net-mode",):
+        return _SentinelDummy("net-mode", "combo box", _createnet_dialog_open)
+    if compact in ("net-forward",):
+        return _SentinelDummy("net-forward", "combo box", _createnet_dialog_open)
+    if compact in ("net-devicelist",):
+        class _DeviceList(object):
+            name = "net-devicelist"
+            roleName = "combo box"
+
+            @property
+            def visible(self):
+                try:
+                    return (
+                        open("/tmp/vmm-a11y-createnet-devicelist-vis.txt", "r")
+                        .read()
+                        .strip()
+                        == "1"
+                    )
+                except Exception:
+                    return False
+
+            @property
+            def showing(self):
+                return _createnet_dialog_open()
+
+            def click(self, *args, **kwargs):
+                ignore = (args, kwargs)
+
+        return _DeviceList()
+    if compact in ("isolated", "sr-iov", "routed", "nat", "open") and (
+        not role or "item" in role or "menu" in role
+    ):
+        return _SentinelWizardMenuItem(name, "/tmp/vmm-a11y-createnet-mode.txt", _createnet_dialog_open)
+    if "physical device" in compact and (not role or "item" in role):
+        return _SentinelWizardMenuItem(
+            "Physical device", "/tmp/vmm-a11y-createnet-forward.txt", _createnet_dialog_open
+        )
+    if "no available device" in compact:
+        return _SentinelDummy("No available device", "menu item", _createnet_dialog_open)
+    if "eth3" in compact or (
+        "item" in role and compact and "eth" in compact
+    ):
+        return _SentinelWizardMenuItem(name, "/tmp/vmm-a11y-createnet-hostdev.txt", _createnet_dialog_open)
+    if "ipv4 configuration" in compact:
+        return _SentinelWizardExpander(
+            "IPv4 configuration", "/tmp/vmm-a11y-createnet-expand.txt", "ipv4", _createnet_dialog_open
+        )
+    if "ipv6 configuration" in compact:
+        return _SentinelWizardExpander(
+            "IPv6 configuration", "/tmp/vmm-a11y-createnet-expand.txt", "ipv6", _createnet_dialog_open
+        )
+    if "dns domain name" in compact:
+        return _SentinelWizardExpander(
+            "DNS domain name", "/tmp/vmm-a11y-createnet-expand.txt", "dns", _createnet_dialog_open
+        )
+    fields = (
+        ("ipv4-network", "/tmp/vmm-a11y-createnet-ipv4-network.txt"),
+        ("ipv4-start", "/tmp/vmm-a11y-createnet-ipv4-start.txt"),
+        ("ipv4-end", "/tmp/vmm-a11y-createnet-ipv4-end.txt"),
+        ("ipv6-network", "/tmp/vmm-a11y-createnet-ipv6-network.txt"),
+        ("ipv6-start", "/tmp/vmm-a11y-createnet-ipv6-start.txt"),
+        ("ipv6-end", "/tmp/vmm-a11y-createnet-ipv6-end.txt"),
+        ("domain-custom", "/tmp/vmm-a11y-createnet-domain.txt"),
+        ("net-device", "/tmp/vmm-a11y-createnet-device.txt"),
+    )
+    for key, path in fields:
+        if compact == key or key in compact:
+            return _SentinelWizardField(key, path, _createnet_dialog_open)
+    if "enable dhcpv4" in compact:
+        return _SentinelWizardCheck(
+            "Enable DHCPv4", "/tmp/vmm-a11y-createnet-dhcpv4", _createnet_dialog_open
+        )
+    if "enable ipv4" in compact:
+        return _SentinelWizardCheck(
+            "Enable IPv4", "/tmp/vmm-a11y-createnet-ipv4-enable", _createnet_dialog_open
+        )
+    if "enable dhcpv6" in compact:
+        return _SentinelWizardCheck(
+            "Enable DHCPv6", "/tmp/vmm-a11y-createnet-dhcpv6", _createnet_dialog_open
+        )
+    if "enable ipv6" in compact:
+        return _SentinelWizardCheck(
+            "Enable IPv6", "/tmp/vmm-a11y-createnet-ipv6-enable", _createnet_dialog_open
+        )
+    if compact in ("custom",) or compact.startswith("cust"):
+        return _SentinelWizardCheck(
+            "Custom", "/tmp/vmm-a11y-createnet-dns-custom", _createnet_dialog_open
+        )
     return None
 
 
@@ -4408,6 +5411,17 @@ class _SentinelStorageBrowser(object):
             return _SentinelClickButton("vol-refresh")
         if "choose volume" in compact:
             return _SentinelClickButton("Choose Volume")
+        if compact == "cancel" and (not role or "button" in role):
+            return _SentinelClickButton("browse-cancel")
+        if "browse local" in compact:
+            return _SentinelWizardButton(
+                "Browse Local",
+                "/tmp/vmm-a11y-click.txt",
+                lambda: True,
+                wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+                wait_value="Locate existing storage",
+                write_value="Browse Local",
+            )
         if "pool-" in compact or (
             "cell" in role and compact and not compact.endswith(".img")
         ):
@@ -6600,6 +7614,37 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             pass
         try:
+            sent = _sentinel_createpool_widgets(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_createvol_widgets(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        try:
+            sent = _sentinel_createnet_widgets(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        if name and (
+            "file chooser" in str(roleName or "").lower()
+            or "choose source path" in str(name).replace(".*", "").lower()
+            or "choose target directory" in str(name).replace(".*", "").lower()
+            or "locate existing storage" in str(name).replace(".*", "").lower()
+        ):
+            try:
+                shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+            except Exception:
+                shown = ""
+            want = str(name or "").replace(".*", "")
+            if shown and shown != "0" and (not want or want.lower() in shown.lower() or shown.lower() in want.lower()):
+                return _SentinelFileChooser(shown)
+        try:
             sent = _sentinel_host_widgets(name, roleName, labeller_text)
             if sent is not None:
                 return sent
@@ -6870,6 +7915,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "Bus type:",
             "Mode:",
             "Hypervisor",
+            "Type:",
+            "Volgroup",
+            "Source Adapter:",
+            "Format:",
         )
         if combolabel in known:
             # AT-SPI combo walks hang after GetItems; the app polls this file.
@@ -6888,6 +7937,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 "net-source": "/tmp/vmm-a11y-net-source.txt",
                 "Mode:": "/tmp/vmm-a11y-migrate-mode.txt",
                 "Hypervisor": "/tmp/vmm-a11y-createconn-hv.txt",
+                "Type:": "/tmp/vmm-a11y-createpool-type.txt",
+                "Volgroup": "/tmp/vmm-a11y-createpool-volgroup.txt",
+                "Source Adapter:": "/tmp/vmm-a11y-createpool-adapter.txt",
+                "Format:": "/tmp/vmm-a11y-createvol-format.txt",
             }.get(combolabel)
             deadline = time.time() + 2.0
             while time.time() < deadline:

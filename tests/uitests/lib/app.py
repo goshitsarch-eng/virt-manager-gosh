@@ -77,6 +77,36 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Add a New Storage Pool" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createpool-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreatePoolWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Add a Storage Volume" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createvol-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreateVolWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Create a new virtual network" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createnet-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreateNetWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         if name and "Migrate the virtual machine" in name:
             while time.time() < deadline:
                 try:

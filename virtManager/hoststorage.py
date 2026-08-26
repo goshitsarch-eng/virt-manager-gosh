@@ -324,6 +324,21 @@ class vmmHostStorage(vmmGObjectUI):
         except Exception:
             pass
         self._publish_visible_vols()
+        try:
+            open("/tmp/vmm-a11y-host-pool-start.txt", "w").write(
+                "1" if self.widget("pool-start").get_sensitive() else "0"
+            )
+            open("/tmp/vmm-a11y-host-pool-stop.txt", "w").write(
+                "1" if self.widget("pool-stop").get_sensitive() else "0"
+            )
+            open("/tmp/vmm-a11y-host-pool-delete.txt", "w").write(
+                "1" if self.widget("pool-delete").get_sensitive() else "0"
+            )
+            open("/tmp/vmm-a11y-host-vol-delete.txt", "w").write(
+                "1" if self.widget("vol-delete").get_sensitive() else "0"
+            )
+        except Exception:
+            pass
 
     def _publish_visible_vols(self):
         names = []
@@ -543,8 +558,16 @@ class vmmHostStorage(vmmGObjectUI):
                 if os.path.exists(path):
                     action = open(path, "r").read().strip()
                     os.remove(path)
-                    if action == "copy-path":
-                        self._vol_copy_path_cb(None)
+                    mapping = {
+                        "copy-path": self._vol_copy_path_cb,
+                        "add": self._vol_add_cb,
+                        "refresh": self._pool_refresh_cb,
+                        "delete": self._vol_delete_cb,
+                    }
+                    fn = mapping.get(action)
+                    if fn is not None:
+                        fn(None)
+                    self._publish_a11y_state()
             except Exception:
                 pass
             try:
@@ -1037,6 +1060,7 @@ class vmmHostStorage(vmmGObjectUI):
         if curpool != pool:
             return  # pragma: no cover
         uiutil.set_list_selection(self.widget("vol-list"), vol)
+        self._publish_a11y_state()
 
     def _pool_autostart_changed_cb(self, src):
         self._enable_pool_apply(EDIT_POOL_AUTOSTART)

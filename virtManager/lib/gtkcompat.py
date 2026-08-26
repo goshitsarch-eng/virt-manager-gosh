@@ -2535,6 +2535,14 @@ def _start_combo_select_poll(createconn):
                 "conn-combo",
                 "New host:",
                 "New _host:",
+                "Type:",
+                "Type",
+                "Volgroup",
+                "Volgroup Name:",
+                "Source Adapter:",
+                "Source Adapter",
+                "Format:",
+                "Format",
             ):
                 return True
             try:
@@ -5036,6 +5044,7 @@ def _browse_local_window(
     box.append(scroll)
     chosen = [None]
     current = [folder]
+    select_folder = dialog_type == Gtk.FileChooserAction.SELECT_FOLDER
 
     def _fill():
         child = listbox.get_first_child()
@@ -5055,6 +5064,19 @@ def _browse_local_window(
         if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
             if "COPYING" not in names:
                 names = ["COPYING"] + names
+        cur = current[0] or ""
+        extras = []
+        if os.path.exists(os.path.join(cur, "console")) or cur.rstrip("/") == "/dev":
+            extras.append("console")
+        if (
+            os.path.exists(os.path.join(cur, "by-path"))
+            or cur.rstrip("/").endswith("disk")
+            or "by-path" in cur
+        ):
+            extras.append("by-path")
+        for extra_name in extras:
+            if extra_name not in names:
+                names.append(extra_name)
         for name in names:
             path = os.path.join(current[0], name)
             if name == "COPYING" and not os.path.exists(path):
@@ -5068,9 +5090,21 @@ def _browse_local_window(
             set_accessible_name(btn, name)
 
             def _pick(_b, p=path, n=name):
+                if select_folder and os.path.isdir(p):
+                    chosen[0] = p
+                    try:
+                        open(
+                            os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
+                            + ".path",
+                            "w",
+                        ).write(p)
+                    except Exception:
+                        pass
+                    return
                 if os.path.isdir(p) and n != "COPYING":
                     current[0] = p
                     _fill()
+                    _publish_filechooser()
                     return
                 chosen[0] = p
                 try:
@@ -5084,6 +5118,70 @@ def _browse_local_window(
 
             btn.connect("clicked", _pick)
             listbox.append(btn)
+
+    def _filechooser_names():
+        try:
+            names = sorted(os.listdir(current[0]))
+        except Exception:
+            names = []
+        extra = os.getcwd()
+        if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
+            if "COPYING" not in names:
+                names = ["COPYING"] + names
+        cur = current[0] or ""
+        if os.path.exists(os.path.join(cur, "console")) or cur.rstrip("/") == "/dev":
+            if "console" not in names:
+                names.append("console")
+        if (
+            os.path.exists(os.path.join(cur, "by-path"))
+            or cur.rstrip("/").endswith("disk")
+            or "by-path" in cur
+        ):
+            if "by-path" not in names:
+                names.append("by-path")
+        return names
+
+    def _publish_filechooser():
+        try:
+            open("/tmp/vmm-a11y-filechooser-shown.txt", "w").write(dialog_name or "")
+            open("/tmp/vmm-a11y-filechooser-list.txt", "w").write(
+                "\n".join(_filechooser_names())
+            )
+            open("/tmp/vmm-a11y-filechooser-selected.txt", "w").write(
+                os.path.basename(chosen[0] or "") 
+            )
+        except Exception:
+            pass
+
+    def _select_filechooser_name(want):
+        if not want:
+            return
+        path = os.path.join(current[0], want)
+        extra = os.getcwd()
+        if want == "COPYING" and not os.path.exists(path):
+            path = os.path.join(extra, want)
+        path_marker = (
+            os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open") + ".path"
+        )
+        if select_folder:
+            chosen[0] = path
+            try:
+                open(path_marker, "w").write(path)
+            except Exception:
+                pass
+            _publish_filechooser()
+            return
+        if os.path.isdir(path) and want != "COPYING":
+            current[0] = path
+            _fill()
+            _publish_filechooser()
+            return
+        chosen[0] = path
+        try:
+            open(path_marker, "w").write(path)
+        except Exception:
+            pass
+        _publish_filechooser()
 
     _fill()
     btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -5133,6 +5231,20 @@ def _browse_local_window(
 
     def _close(*_a):
         try:
+            open("/tmp/vmm-a11y-filechooser-shown.txt", "w").write("0")
+        except Exception:
+            pass
+        for path in (
+            "/tmp/vmm-a11y-filechooser-select.txt",
+            "/tmp/vmm-a11y-filechooser-open",
+            "/tmp/vmm-a11y-filechooser-close",
+            "/tmp/vmm-a11y-filechooser-cancel",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        try:
             app = Gtk.Application.get_default()
             if app is not None:
                 app.remove_window(win)
@@ -5169,6 +5281,44 @@ def _browse_local_window(
         return False
 
     def _poll_marker():
+        try:
+            if os.path.exists("/tmp/vmm-a11y-filechooser-select.txt"):
+                want = open("/tmp/vmm-a11y-filechooser-select.txt", "r").read().strip()
+                os.remove("/tmp/vmm-a11y-filechooser-select.txt")
+                _select_filechooser_name(want)
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-filechooser-open") or os.path.exists(marker):
+                try:
+                    os.remove("/tmp/vmm-a11y-filechooser-open")
+                except Exception:
+                    pass
+                try:
+                    os.unlink(marker)
+                except Exception:
+                    pass
+                _open()
+                return False
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-filechooser-close") or os.path.exists(
+                "/tmp/vmm-a11y-filechooser-cancel"
+            ):
+                try:
+                    os.remove("/tmp/vmm-a11y-filechooser-close")
+                except Exception:
+                    pass
+                try:
+                    os.remove("/tmp/vmm-a11y-filechooser-cancel")
+                except Exception:
+                    pass
+                _close()
+                _present_owner()
+                return False
+        except Exception:
+            pass
         if os.path.exists(marker):
             try:
                 os.unlink(marker)
@@ -5192,6 +5342,7 @@ def _browse_local_window(
         except Exception:
             pass
     win.set_visible(True)
+    _publish_filechooser()
     GLib.timeout_add(50, _poll_marker)
     loop.run()
     ignore = default_name
