@@ -3801,9 +3801,13 @@ def _start_config_apply_poll(details):
             text = None
             nwant = "/tmp/vmm-a11y-overview-name-want.txt"
             npath = "/tmp/vmm-a11y-overview-name.txt"
-            if os.path.exists(nwant):
+            if os.path.exists(nwant) and (
+                tab == "overview-tab" or "Overview" in (hw or "")
+            ):
                 text = open(nwant, "r").read()
-            elif os.path.exists(npath):
+            elif os.path.exists(npath) and (
+                tab == "overview-tab" or "Overview" in (hw or "")
+            ):
                 text = open(npath, "r").read()
                 os.remove(npath)
             if text is not None:

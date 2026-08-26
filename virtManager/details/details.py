@@ -2704,14 +2704,6 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             apply_on = False
         if not apply_on:
-            try:
-                apply_on = (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
-                    == "1"
-                )
-            except Exception:
-                apply_on = False
-        if not apply_on:
             apply_on = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
         if not apply_on:
             return False
@@ -3518,7 +3510,6 @@ class vmmDetails(vmmGObjectUI):
             pagetype = HW_LIST_TYPE_BOOT
         if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt") and (
             pagetype in (None, HW_LIST_TYPE_GENERAL)
-            or self._edited(EDIT_NAME)
             or "Overview" in (want or "")
             or "Overview" in (last_hw or "")
         ):
