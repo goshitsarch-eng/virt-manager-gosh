@@ -8857,6 +8857,22 @@ class _SentinelManagerVMCell(object):
                 pass
             time.sleep(0.05)
 
+    def doubleClick(self, *args, **kwargs):
+        self.click(*args, **kwargs)
+        try:
+            open("/tmp/vmm-a11y-vm-open.txt", "w").write(self._vm)
+        except Exception:
+            pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            try:
+                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                if shown and (self._vm in shown or shown in self._vm):
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
 
 def _conn_list_rows():
     rows = []

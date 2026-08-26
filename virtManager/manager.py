@@ -280,6 +280,15 @@ class vmmManager(vmmGObjectUI):
                     open("/tmp/vmm-a11y-vm-selected.txt", "w").write(want)
                 except Exception:
                     pass
+            path = "/tmp/vmm-a11y-vm-open.txt"
+            try:
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip().split("\n")[0].strip()
+                    os.remove(path)
+                    if name:
+                        self.activate_row_for_name(name)
+            except Exception:
+                pass
             return True
 
         if not getattr(self, "_vmm_vm_list_poll", False):
