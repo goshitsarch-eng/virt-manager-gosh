@@ -3019,9 +3019,23 @@ class _SentinelMediaComboItem(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        path = self.name or ""
         try:
-            open("/tmp/vmm-a11y-details-media-entry.txt.set", "w").write(self.name)
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write(self.name)
+            match = re.search(r"\((/[^)]+)\)", path)
+            if match:
+                path = match.group(1)
+        except Exception:
+            path = self.name or ""
+        try:
+            open("/tmp/vmm-a11y-media-select.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-media-entry.txt", "w").write(path)
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-media-entry.txt.set")
         except Exception:
             pass
 

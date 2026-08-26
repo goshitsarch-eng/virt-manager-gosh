@@ -836,11 +836,11 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 try:
                     if src is not None and src.get_active():
-                        if bucket == "virt":
+                        if bucket == "virt" and not virt_active:
                             virt_active = key
-                        elif bucket == "container":
+                        elif bucket == "container" and not container_active:
                             container_active = key
-                        else:
+                        elif bucket == "vz" and not vz_active:
                             vz_active = key
                 except Exception:
                     pass
@@ -945,9 +945,17 @@ class vmmCreateVM(vmmGObjectUI):
                 wid = mapping.get(key)
                 if wid:
                     try:
-                        src = self.widget(wid)
-                        if src is not None:
-                            src.set_active(True)
+                        for other in mapping.values():
+                            src = self.widget(other)
+                            if src is None:
+                                continue
+                            if other == wid:
+                                src.set_active(True)
+                            else:
+                                try:
+                                    src.set_active(False)
+                                except Exception:
+                                    pass
                     except Exception:
                         pass
                 try:
@@ -1532,6 +1540,7 @@ class vmmCreateVM(vmmGObjectUI):
             "/tmp/vmm-a11y-detect-state.txt",
             "/tmp/vmm-a11y-disk-inuse-allow",
             "/tmp/vmm-a11y-import-entry.txt",
+            "/tmp/vmm-a11y-method-active.txt",
             "/tmp/vmm-a11y-media-entry.txt",
             "/tmp/vmm-a11y-createvm-media-combo.txt",
             "/tmp/vmm-a11y-alert.txt",
@@ -2258,6 +2267,21 @@ class vmmCreateVM(vmmGObjectUI):
         return uiutil.get_list_selection(self.widget("machine"), check_visible=True)
 
     def _get_config_install_page(self):
+        try:
+            key = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
+        except Exception:
+            key = ""
+        by_key = {
+            "local": INSTALL_PAGE_ISO,
+            "tree": INSTALL_PAGE_URL,
+            "import": INSTALL_PAGE_IMPORT,
+            "manual": INSTALL_PAGE_MANUAL,
+            "app": INSTALL_PAGE_CONTAINER_APP,
+            "os": INSTALL_PAGE_CONTAINER_OS,
+            "container": INSTALL_PAGE_VZ_TEMPLATE,
+        }
+        if key in by_key:
+            return by_key[key]
         if self.widget("vz-install-box").get_visible():
             if self.widget("vz-virt-type-exe").get_active():
                 return INSTALL_PAGE_VZ_TEMPLATE
