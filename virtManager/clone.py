@@ -237,6 +237,8 @@ class vmmCloneVM(vmmGObjectUI):
             "/tmp/vmm-a11y-clone-stg-ok",
             "/tmp/vmm-a11y-clone-stg-browse",
             "/tmp/vmm-a11y-clone-flags.txt",
+            "/tmp/vmm-a11y-alert.txt",
+            "/tmp/vmm-a11y-alert-response.txt",
         ):
             try:
                 os.remove(path)
@@ -958,9 +960,11 @@ class vmmCloneVM(vmmGObjectUI):
                 pass
             try:
                 if os.path.exists("/tmp/vmm-a11y-clone-finish"):
+                    if getattr(self, "_vmm_clone_finishing", False):
+                        os.remove("/tmp/vmm-a11y-clone-finish")
+                        return True
                     os.remove("/tmp/vmm-a11y-clone-finish")
-                    if not getattr(self, "_vmm_clone_finishing", False):
-                        self._finish()
+                    self._finish()
                     return True
             except Exception:
                 pass

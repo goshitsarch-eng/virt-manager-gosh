@@ -249,8 +249,6 @@ class VMMDogtailApp:
                 open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
             except Exception:
                 pass
-            # Do not write click.txt for generic Close/OK: those labels
-            # used to match window-close handlers and hide the manager.
             try:
                 utils.check(lambda: _alert_text() != stored, timeout=3)
             except Exception:
