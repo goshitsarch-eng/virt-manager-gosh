@@ -8532,10 +8532,25 @@ class _SentinelVMWindow(object):
             shown = ""
         self._vmname = vmname or shown or "test-snapshots"
         self.name = "%s on testdriver.xml" % self._vmname
+        try:
+            self._was_customize = (
+                open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+            )
+        except Exception:
+            self._was_customize = False
 
     @property
     def showing(self):
         return _vmwindow_open(self._vmname)
+
+    @property
+    def dead(self):
+        if self._was_customize:
+            try:
+                return open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() != "1"
+            except Exception:
+                return True
+        return not self.showing
 
     @property
     def onscreen(self):

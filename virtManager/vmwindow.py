@@ -222,6 +222,12 @@ class vmmVMWindow(vmmGObjectUI):
         except Exception:
             pass
         try:
+            open("/tmp/vmm-a11y-customize-shown.txt", "w").write(
+                "1" if self.is_customize_dialog else "0"
+            )
+        except Exception:
+            pass
+        try:
             self.topwin.present()
         except Exception:
             pass
@@ -447,6 +453,11 @@ class vmmVMWindow(vmmGObjectUI):
             created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
             if created and (not name or created == name):
                 os.remove("/tmp/vmm-a11y-created-vm.txt")
+        except Exception:
+            pass
+        try:
+            if self.is_customize_dialog:
+                open("/tmp/vmm-a11y-customize-shown.txt", "w").write("0")
         except Exception:
             pass
 
