@@ -4954,7 +4954,9 @@ def _sentinel_createvol_widgets(name, roleName, labeller_text=None):
             "1",
             _createvol_dialog_open,
         )
-    if "browse" in compact and (not role or "button" in role):
+    if compact in ("browse", "browse...", "browse…") and (
+        not role or "button" in role
+    ):
         return _SentinelWizardButton(
             "Browse...",
             "/tmp/vmm-a11y-createvol-browse",
