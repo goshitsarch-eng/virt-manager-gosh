@@ -460,10 +460,17 @@ class vmmDetails(vmmGObjectUI):
         self._init_hw_list()
         self._refresh_page()
         gtkcompat.set_accessible_name(self.widget("config-apply"), "config-apply")
+        def _apply_clicked():
+            try:
+                self._restore_boot_init_sentinels()
+            except Exception:
+                pass
+            self.widget("config-apply").emit("clicked")
+
         apply_btn = gtkcompat.expose_a11y_button(
             "details-config-apply",
             "config-apply",
-            lambda: self.widget("config-apply").emit("clicked"),
+            _apply_clicked,
             window=self.topwin,
         )
         gtkcompat.bind_button_sensitivity(
@@ -1649,6 +1656,10 @@ class vmmDetails(vmmGObjectUI):
         self._refresh_page()
 
     def _config_apply(self, row=None):
+        try:
+            self._restore_boot_init_sentinels()
+        except Exception:
+            pass
         pagetype = None
         dev = None
 
@@ -1861,7 +1872,15 @@ class vmmDetails(vmmGObjectUI):
                 msg = _("Cannot set kernel arguments without specifying a kernel path")
                 return self.err.val_err(msg)
 
-        if self._edited(EDIT_INIT) or os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+        try:
+            self._restore_boot_init_sentinels()
+        except Exception:
+            pass
+        if (
+            self._edited(EDIT_INIT)
+            or os.path.exists("/tmp/vmm-a11y-boot-init-path.txt")
+            or (self.vm.is_container() and self._edited(EDIT_INIT))
+        ):
             kwargs["init"] = self._get_text("boot-init-path")
             kwargs["initargs"] = self._get_text("boot-init-args") or ""
             if not kwargs["init"]:

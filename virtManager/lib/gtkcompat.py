@@ -3129,6 +3129,11 @@ def _start_config_apply_poll(details):
             if btn is None or not btn.get_sensitive():
                 return True
             os.remove(path)
+            if hasattr(d, "_restore_boot_init_sentinels"):
+                try:
+                    d._restore_boot_init_sentinels()
+                except Exception:
+                    pass
             btn.emit("clicked")
         except Exception:
             pass
