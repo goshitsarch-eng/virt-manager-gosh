@@ -1832,6 +1832,8 @@ def _sentinel_container_extra(name, roleName):
         return sent
     if compact.replace(".*", "") in ("begin installation",) or "begin installation" in compact:
         return _SentinelClickButton("Begin Installation")
+    if "cancel installation" in compact:
+        return _SentinelClickButton("Cancel Installation")
     if "config-apply" in compact:
         return _SentinelConfigApply()
     return None
@@ -8721,6 +8723,11 @@ class _SentinelVMWindow(object):
 
     @property
     def showing(self):
+        if self._was_customize:
+            try:
+                return open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
         return _vmwindow_open(self._vmname)
 
     @property

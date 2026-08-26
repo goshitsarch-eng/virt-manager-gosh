@@ -3698,7 +3698,7 @@ class vmmDetails(vmmGObjectUI):
             pagetype in (None, HW_LIST_TYPE_GENERAL)
             or "Overview" in (want or "")
             or "Overview" in (last_hw or "")
-        ):
+        ) and tab not in ("boot-tab", "cpu-tab", "disk-tab", "network-tab"):
             pagetype = HW_LIST_TYPE_GENERAL
 
         success = False
@@ -4205,17 +4205,16 @@ class vmmDetails(vmmGObjectUI):
             kwargs["init"] = self._get_text("boot-init-path")
             kwargs["initargs"] = self._get_text("boot-init-args") or ""
             if not kwargs["init"]:
+                msg = _("An init path must be specified")
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
-                        _("An init path must be specified")
-                    )
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
                 except Exception:
                     pass
                 try:
                     self._enable_apply(EDIT_INIT)
                 except Exception:
                     pass
-                return False
+                return self.err.val_err(msg)
 
         return self._change_config(self.vm.define_boot, kwargs)
 

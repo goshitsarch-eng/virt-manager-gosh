@@ -119,6 +119,14 @@ class vmmVMWindow(vmmGObjectUI):
                 lambda: begin.emit("clicked"),
                 window=self.topwin,
             )
+            cancel = self.widget("details-cancel-customize")
+            gtkcompat.set_accessible_name(cancel, "Cancel Installation")
+            gtkcompat.expose_a11y_button(
+                "details-cancel-customize",
+                "Cancel Installation",
+                lambda: cancel.emit("clicked"),
+                window=self.topwin,
+            )
         except Exception:
             pass
         gtkcompat.expose_a11y_label(
