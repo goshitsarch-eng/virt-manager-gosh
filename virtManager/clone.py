@@ -636,13 +636,28 @@ class vmmCloneVM(vmmGObjectUI):
 
     def _finish_cb(self, error, details, conn, cloner):
         self.reset_finish_cursor()
+        self._vmm_clone_finishing = False
+        try:
+            os.remove("/tmp/vmm-a11y-clone-finish")
+        except Exception:
+            pass
 
         if error is not None:
             error = _("Error creating virtual machine clone '%(vm)s': %(error)s") % {
                 "vm": cloner.new_guest.name,
                 "error": error,
             }
-            self.err.show_err(error, details=details)
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(error)
+            except Exception:
+                pass
+            self._vmm_file_alert = True
+            try:
+                self._publish_a11y_state()
+                self.topwin.present()
+            except Exception:
+                pass
+            self.err.show_err(error, details=details, modal=False)
             return
 
         conn.schedule_priority_tick(pollvm=True)
@@ -741,8 +756,9 @@ class vmmCloneVM(vmmGObjectUI):
                 self.topwin,
             )
             progWin.run()
-        finally:
+        except Exception:
             self._vmm_clone_finishing = False
+            raise
 
     #################
     # A11y sentinels #
