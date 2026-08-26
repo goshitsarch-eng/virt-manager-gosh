@@ -578,6 +578,8 @@ def _sentinel_method_radio(name, roleName):
     if role and "radio" not in role and "button" not in role and "check" not in role:
         return None
     compact = str(name).replace(".*", "").lower()
+    if "entry" in compact or "oslist" in compact or "combo" in compact:
+        return None
     mapping = (
         ("local", "local", "Local install media (ISO image or CDROM)"),
         ("import", "import", "Import existing disk image"),
