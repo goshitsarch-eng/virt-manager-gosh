@@ -3205,7 +3205,7 @@ class _SentinelAlert(object):
         try:
             return open("/tmp/vmm-a11y-alert.txt", "r").read()
         except Exception:
-            return self._text or ""
+            return ""
 
     @property
     def showing(self):
