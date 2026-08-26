@@ -3674,8 +3674,17 @@ class _SentinelAddhwCell(object):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if self.selected:
-                return
+                break
             time.sleep(0.05)
+        if "pci" in (self.name or "").lower() or "usb host" in (self.name or "").lower():
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-addhw-error.txt", "r").read().strip():
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
 
 
 class _SentinelAddhwHostCell(object):
@@ -3829,6 +3838,19 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         return None
     if compact == "finish" and (not role or "button" in role):
         return _SentinelAddhwFinish()
+    if "not supported for containers" in compact or (
+        "not supported" in compact and "container" in compact
+    ):
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            try:
+                err = open("/tmp/vmm-a11y-addhw-error.txt", "r").read()
+                if "container" in err.lower() or "not supported" in err.lower():
+                    return _SentinelAddhwError(err.strip() or "Not supported for containers")
+            except Exception:
+                pass
+            time.sleep(0.05)
+        return _SentinelAddhwError("Not supported for containers")
     if not _addhw_dialog_open() and compact not in (
         "controller",
         "storage",
