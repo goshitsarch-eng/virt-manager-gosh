@@ -1062,8 +1062,19 @@ class vmmSnapshotPage(vmmGObjectUI):
     def _select_snapshot_by_name(self, name, add=False):
         if not name:
             return False
+        if self._apply_snapshot_desc():
+            try:
+                os.remove(_SNAP_DESC + ".set")
+            except Exception:
+                pass
         if not add:
             self._a11y_want_select = name
+            # unselect_all() refreshes the row and clears this flag, so
+            # confirm before changing the GTK selection.
+            if self._unapplied_changes:
+                if self.err.confirm_unapplied_changes():
+                    self._apply()
+                self._unapplied_changes = False
         model = self.widget("snapshot-list").get_model()
         selection = self.widget("snapshot-list").get_selection()
         if model is None or selection is None:
