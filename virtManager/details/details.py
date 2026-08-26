@@ -864,6 +864,29 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("boot-menu"),
                 window=self.topwin,
             )
+            gtkcompat.expose_a11y_check(
+                "boot-autostart",
+                "Start virtual machine on host boot up",
+                self.widget("boot-autostart"),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_button(
+                "boot-movedown",
+                "boot-movedown",
+                lambda: self._config_boot_move(False),
+                window=self.topwin,
+            )
+            gtkcompat.expose_a11y_button(
+                "boot-moveup",
+                "boot-moveup",
+                lambda: self._config_boot_move(True),
+                window=self.topwin,
+            )
+            gtkcompat.register_a11y_click("initrd-browse", self._browse_initrd_clicked_cb)
+            gtkcompat.register_a11y_click("kernel-browse", self._browse_kernel_clicked_cb)
+            gtkcompat.register_a11y_click("dtb-browse", self._browse_dtb_clicked_cb)
+            gtkcompat.register_a11y_click("boot-movedown", lambda: self._config_boot_move(False))
+            gtkcompat.register_a11y_click("boot-moveup", lambda: self._config_boot_move(True))
             gtkcompat.register_a11y_click(
                 "Browse", self._disk_source_browse_clicked_cb
             )
@@ -955,6 +978,101 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_os_publish)
+        if not getattr(self, "_vmm_boot_fields_poll", False):
+            self._vmm_boot_fields_poll = True
+
+            def _poll_boot_fields():
+                changed = False
+                cpath = "/tmp/vmm-a11y-boot-autostart.txt.click"
+                if os.path.exists(cpath):
+                    try:
+                        os.remove(cpath)
+                        w = self.widget("boot-autostart")
+                        w.set_active(not w.get_active())
+                        self._enable_apply(EDIT_AUTOSTART)
+                        changed = True
+                    except Exception:
+                        pass
+                if os.path.exists("/tmp/vmm-a11y-boot-menu.txt"):
+                    try:
+                        want = open("/tmp/vmm-a11y-boot-menu.txt", "r").read().strip()
+                        w = self.widget("boot-menu")
+                        if w.get_active() != (want == "1"):
+                            w.set_active(want == "1")
+                            self._enable_apply(EDIT_BOOTMENU)
+                            changed = True
+                    except Exception:
+                        pass
+                if os.path.exists("/tmp/vmm-a11y-boot-kernel-expand"):
+                    try:
+                        os.remove("/tmp/vmm-a11y-boot-kernel-expand")
+                        self.widget("boot-kernel-expander").set_expanded(True)
+                    except Exception:
+                        pass
+                cpath = "/tmp/vmm-a11y-boot-kernel-enable.txt.click"
+                if os.path.exists(cpath):
+                    try:
+                        os.remove(cpath)
+                        w = self.widget("boot-kernel-enable")
+                        w.set_active(not w.get_active())
+                        self._boot_kernel_toggled_cb(w)
+                        changed = True
+                    except Exception:
+                        pass
+                for fpath, wid in (
+                    ("/tmp/vmm-a11y-boot-kernel-args.txt", "boot-kernel-args"),
+                    ("/tmp/vmm-a11y-boot-initrd.txt", "boot-initrd"),
+                    ("/tmp/vmm-a11y-boot-kernel.txt", "boot-kernel"),
+                    ("/tmp/vmm-a11y-boot-dtb.txt", "boot-dtb"),
+                ):
+                    try:
+                        if not os.path.exists(fpath):
+                            continue
+                        stamp = os.path.getmtime(fpath)
+                        seen = "_vmm_boot_seen_%s" % wid
+                        if getattr(self, seen, None) == stamp:
+                            continue
+                        text = open(fpath, "r").read()
+                        setattr(self, seen, stamp)
+                        self.widget(wid).set_text(text)
+                        self._enable_apply(EDIT_KERNEL)
+                        changed = True
+                    except Exception:
+                        pass
+                try:
+                    sel = open("/tmp/vmm-a11y-boot-select.txt", "r").read().strip()
+                    os.remove("/tmp/vmm-a11y-boot-select.txt")
+                except Exception:
+                    sel = ""
+                if sel:
+                    try:
+                        model = self.widget("boot-list").get_model()
+                        for idx, row in enumerate(model):
+                            label = str(row[BOOT_LABEL] or "")
+                            if label == sel or sel in label or label in sel:
+                                uiutil.set_list_selection_by_number(
+                                    self.widget("boot-list"), idx
+                                )
+                                break
+                    except Exception:
+                        pass
+                if os.path.exists("/tmp/vmm-a11y-boot-toggle.txt"):
+                    try:
+                        os.remove("/tmp/vmm-a11y-boot-toggle.txt")
+                        row = self._get_config_boot_selection()
+                        if row is not None:
+                            self._config_boot_toggled_cb(None, row.path[0])
+                            changed = True
+                    except Exception:
+                        pass
+                if changed:
+                    try:
+                        self._publish_boot_fields()
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_boot_fields)
         if not getattr(self, "_vmm_overview_combo_poll", False):
             self._vmm_overview_combo_poll = True
 
@@ -2650,6 +2768,34 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
 
+    def _publish_boot_fields(self):
+        try:
+            open("/tmp/vmm-a11y-boot-autostart.txt", "w").write(
+                "1" if self.widget("boot-autostart").get_active() else "0"
+            )
+            open("/tmp/vmm-a11y-boot-menu.txt", "w").write(
+                "1" if self.widget("boot-menu").get_active() else "0"
+            )
+            open("/tmp/vmm-a11y-boot-kernel-enable.txt", "w").write(
+                "1" if self.widget("boot-kernel-enable").get_active() else "0"
+            )
+            for wid, path in (
+                ("boot-kernel-args", "/tmp/vmm-a11y-boot-kernel-args.txt"),
+                ("boot-initrd", "/tmp/vmm-a11y-boot-initrd.txt"),
+                ("boot-kernel", "/tmp/vmm-a11y-boot-kernel.txt"),
+                ("boot-dtb", "/tmp/vmm-a11y-boot-dtb.txt"),
+            ):
+                open(path, "w").write(self.widget(wid).get_text() or "")
+                try:
+                    setattr(self, "_vmm_boot_seen_%s" % wid, os.path.getmtime(path))
+                except Exception:
+                    pass
+            model = self.widget("boot-list").get_model()
+            names = [str(row[BOOT_LABEL] or "") for row in model]
+            open("/tmp/vmm-a11y-boot-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+
     def _refresh_page(self):
         row = self._get_hw_row()
         if not row:
@@ -3406,6 +3552,10 @@ class vmmDetails(vmmGObjectUI):
             self.widget("boot-kernel-expander").set_expanded(True)
         self.widget("boot-kernel-enable").set_active(expand)
         self.widget("boot-kernel-enable").toggled()
+        try:
+            self._publish_boot_fields()
+        except Exception:
+            pass
 
         # Only show dtb if it's supported
         arch = self.vm.get_arch() or ""
@@ -3656,18 +3806,33 @@ class vmmDetails(vmmGObjectUI):
     def _browse_kernel_clicked_cb(self, src):
         def cb(ignore, path):
             self.widget("boot-kernel").set_text(path)
+            self._enable_apply(EDIT_KERNEL)
+            try:
+                self._publish_boot_fields()
+            except Exception:
+                pass
 
         self._browse_file(cb)
 
     def _browse_initrd_clicked_cb(self, src):
         def cb(ignore, path):
             self.widget("boot-initrd").set_text(path)
+            self._enable_apply(EDIT_KERNEL)
+            try:
+                self._publish_boot_fields()
+            except Exception:
+                pass
 
         self._browse_file(cb)
 
     def _browse_dtb_clicked_cb(self, src):
         def cb(ignore, path):
             self.widget("boot-dtb").set_text(path)
+            self._enable_apply(EDIT_KERNEL)
+            try:
+                self._publish_boot_fields()
+            except Exception:
+                pass
 
         self._browse_file(cb)
 

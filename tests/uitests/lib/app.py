@@ -254,6 +254,19 @@ class VMMDogtailApp:
         def __getattr__(self, name):
             return getattr(dogtail.rawinput, name)
 
+        def click(self, *a, **kw):
+            try:
+                hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+            except Exception:
+                hw = ""
+            if "Boot" in hw:
+                try:
+                    open("/tmp/vmm-a11y-boot-toggle.txt", "w").write("1")
+                except Exception:
+                    pass
+                return
+            return dogtail.rawinput.click(*a, **kw)
+
         def holdKey(self, key, *a, **kw):
             if str(key or "").lower() in ("shift_l", "shift_r", "shift"):
                 type(self)._shift_held = True

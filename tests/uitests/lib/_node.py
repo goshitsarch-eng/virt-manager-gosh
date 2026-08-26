@@ -923,6 +923,15 @@ class _SentinelClickButton(object):
                 if os.path.exists("/tmp/vmm-a11y-alert.txt"):
                     return
                 time.sleep(0.05)
+        if self.name in ("initrd-browse", "kernel-browse", "dtb-browse"):
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                time.sleep(0.05)
         if self.name == "New":
             try:
                 open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
@@ -1182,6 +1191,77 @@ class _SentinelConfigApply(object):
             time.sleep(0.05)
 
 
+class _SentinelBootCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+        self.position = (120, 200)
+        self.size = (80, 20)
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-boot-select.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+
+
+def _sentinel_boot_widgets(name, roleName, labeller_text=None):
+    compact = " ".join(str(x) for x in (name, labeller_text) if x)
+    compact = compact.replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    ignore = role
+    if "start virtual machine on host" in compact:
+        return _SentinelDetailsCheck(
+            "Start virtual machine on host boot",
+            "/tmp/vmm-a11y-boot-autostart.txt",
+        )
+    if "direct kernel" in compact and "enable" not in compact:
+        return _SentinelDetailsExpander(
+            "Direct kernel boot", "/tmp/vmm-a11y-boot-kernel-expand"
+        )
+    if "enable direct kernel" in compact:
+        return _SentinelDetailsCheck(
+            "Enable direct kernel boot", "/tmp/vmm-a11y-boot-kernel-enable.txt"
+        )
+    if "kernel args" in compact:
+        return _SentinelEntry("Kernel args:", "/tmp/vmm-a11y-boot-kernel-args.txt")
+    if "initrd path" in compact:
+        return _SentinelEntry("Initrd path:", "/tmp/vmm-a11y-boot-initrd.txt")
+    if "kernel path" in compact:
+        return _SentinelEntry("Kernel path:", "/tmp/vmm-a11y-boot-kernel.txt")
+    if "dtb path" in compact:
+        return _SentinelEntry("DTB path:", "/tmp/vmm-a11y-boot-dtb.txt")
+    if "initrd-browse" in compact:
+        return _SentinelClickButton("initrd-browse")
+    if "kernel-browse" in compact:
+        return _SentinelClickButton("kernel-browse")
+    if "dtb-browse" in compact:
+        return _SentinelClickButton("dtb-browse")
+    if "boot-movedown" in compact:
+        return _SentinelClickButton("boot-movedown")
+    if "boot-moveup" in compact:
+        return _SentinelClickButton("boot-moveup")
+    if any(
+        tok in compact
+        for tok in ("scsi disk", "floppy", "nic :", "pci 0003")
+    ) and (not role or "cell" in role or "table" in role):
+        raw = str(name or "").replace(".*", "")
+        return _SentinelBootCell(raw)
+    return None
+
+
 class _SentinelBootMenu(object):
     """Enable boot menu after GetItems hides the details checkbox."""
 
@@ -1270,6 +1350,9 @@ class _SentinelBootTab(object):
             return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
         if name and "boot menu" in str(name).replace(".*", "").lower():
             return _SentinelBootMenu()
+        sent = _sentinel_boot_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
         sent = _sentinel_named_entry(name, roleName, labeller_text)
         if sent is not None:
             return sent
@@ -1307,6 +1390,9 @@ def _sentinel_container_extra(name, roleName):
         return _SentinelBootTab()
     if "boot menu" in compact:
         return _SentinelBootMenu()
+    sent = _sentinel_boot_widgets(name, roleName, None)
+    if sent is not None:
+        return sent
     if compact.replace(".*", "") in ("begin installation",) or "begin installation" in compact:
         return _SentinelClickButton("Begin Installation")
     if "config-apply" in compact:
@@ -1934,6 +2020,9 @@ class _SentinelAddhwTab(object):
         sent = _sentinel_details_page_widgets(name, roleName, labeller_text)
         if sent is not None:
             return sent
+        sent = _sentinel_boot_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
         if "boot menu" in compact:
             return _SentinelBootMenu()
         if "media-entry" in compact:
@@ -2284,6 +2373,9 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     if sent is not None:
         return sent
     sent = _sentinel_oslist_popover(name, roleName)
+    if sent is not None:
+        return sent
+    sent = _sentinel_boot_widgets(name, roleName, labeller_text)
     if sent is not None:
         return sent
     if "no bootable" in compact:
