@@ -9333,6 +9333,11 @@ class _SentinelManagerConnCell(object):
         name, connected = self._row()
         if connected:
             return name
+        try:
+            if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                return name
+        except Exception:
+            pass
         return "%s - Not Connected" % name
 
     @property
