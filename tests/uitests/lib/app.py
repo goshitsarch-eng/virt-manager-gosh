@@ -123,6 +123,21 @@ class VMMDogtailApp:
             from . import _node
 
             return _node._SentinelManagerWindow()
+        if name and "vmm-fake-systray" in name:
+            from . import _node
+
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-systray-shown.txt", "r").read().strip() == "1":
+                        return _node._SentinelFakeSystray()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+            return _node._SentinelFakeSystray()
+        if name and "vmm-systray-menu" in name:
+            from . import _node
+
+            return _node._SentinelSystrayMenu()
         if name and "Saving Virtual Machine" in name:
             while time.time() < deadline:
                 try:
@@ -329,6 +344,13 @@ class VMMDogtailApp:
                 except Exception:
                     pass
             if key_l == "escape":
+                try:
+                    if open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip() == "1":
+                        open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
+                        open("/tmp/vmm-a11y-systray-escape", "w").write("1")
+                        return
+                except Exception:
+                    pass
                 try:
                     with open("/tmp/vmm-a11y-oslist-escape", "w") as fh:
                         fh.write("1")

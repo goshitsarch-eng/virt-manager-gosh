@@ -265,6 +265,11 @@ class vmmManager(vmmGObjectUI):
                 if os.path.exists("/tmp/vmm-a11y-manager-restore-lock"):
                     return True
                 if self.is_visible():
+                    try:
+                        if open("/tmp/vmm-a11y-manager-shown.txt", "r").read().strip() == "0":
+                            return True
+                    except Exception:
+                        pass
                     open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
                     if not os.path.exists("/tmp/vmm-a11y-manager-position.txt"):
                         x, y = self.topwin.get_position()

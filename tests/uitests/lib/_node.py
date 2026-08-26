@@ -9827,6 +9827,366 @@ class _SentinelManagerWindow(object):
         return self.find(name, roleName, labeller_text)
 
 
+def _systray_menu_lines():
+    try:
+        return [ln for ln in open("/tmp/vmm-a11y-systray-menu-items.txt", "r").read().splitlines() if ln]
+    except Exception:
+        return []
+
+
+def _systray_menu_shown():
+    try:
+        return open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _systray_shown():
+    try:
+        return open("/tmp/vmm-a11y-systray-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _systray_match(want, have):
+    a = str(want or "").replace(".*", "").strip().lower()
+    b = str(have or "").strip().lower()
+    if not a or not b:
+        return False
+    return a == b or a in b or b in a
+
+
+class _SentinelFakeSystray(object):
+    name = "vmm-fake-systray"
+    roleName = "frame"
+
+    @property
+    def showing(self):
+        return _systray_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def grab_focus(self):
+        return None
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        button = kwargs.get("button", 1)
+        if args:
+            try:
+                button = int(args[0])
+            except Exception:
+                pass
+        try:
+            open("/tmp/vmm-a11y-systray-click.txt", "w").write(str(int(button)))
+        except Exception:
+            pass
+        if int(button) != 1:
+            try:
+                open("/tmp/vmm-a11y-systray-menu.txt", "w").write("1")
+            except Exception:
+                pass
+        else:
+            try:
+                open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
+            except Exception:
+                pass
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").lower()
+        if "vmm-systray-menu" in compact:
+            return _SentinelSystrayMenu()
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSystrayMenu(object):
+    name = "vmm-systray-menu"
+    roleName = "menu"
+
+    @property
+    def showing(self):
+        return _systray_menu_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable)
+        compact = str(name or "").replace(".*", "").strip()
+        role = str(roleName or "").lower()
+        if compact.lower() == "quit" and (not role or "item" in role or "menu" in role):
+            return _SentinelSystrayItem("Quit", "quit")
+        deadline = time.time() + max(0.2, float(timeout or 5))
+        while time.time() < deadline:
+            for line in _systray_menu_lines():
+                parts = line.split("\t")
+                if parts and parts[0] == "CONN" and len(parts) >= 2:
+                    if _systray_match(compact, parts[1]):
+                        return _SentinelSystrayConnMenu(parts[1], parts[2] if len(parts) > 2 else "")
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s' labeller_text='%s'"
+            % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSystrayConnMenu(object):
+    def __init__(self, desc, state):
+        self.name = desc
+        self.roleName = "menu"
+        self._desc = desc
+        self._state = state
+
+    def _row(self):
+        for line in _systray_menu_lines():
+            parts = line.split("\t")
+            if parts and parts[0] == "CONN" and len(parts) >= 2 and _systray_match(self._desc, parts[1]):
+                return parts[1], parts[2] if len(parts) > 2 else ""
+        return self._desc, self._state
+
+    @property
+    def showing(self):
+        return _systray_menu_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").strip()
+        low = compact.lower()
+        desc, state = self._row()
+        active = state == "active"
+        if low in ("connect", "disconnect"):
+            visible = (low == "disconnect" and active) or (low == "connect" and not active)
+            return _SentinelSystrayItem(compact, "%s\t%s" % (low, desc), visible=visible)
+        deadline = time.time() + max(0.2, float(timeout or 5))
+        while time.time() < deadline:
+            for line in _systray_menu_lines():
+                parts = line.split("\t")
+                if (
+                    parts
+                    and parts[0] == "VM"
+                    and len(parts) >= 3
+                    and _systray_match(desc, parts[1])
+                    and _systray_match(compact, parts[2])
+                ):
+                    return _SentinelSystrayVMMenu(parts[1], parts[2], parts[3] if len(parts) > 3 else "")
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSystrayVMMenu(object):
+    def __init__(self, conn_desc, vmname, vmstate):
+        self.name = vmname
+        self.roleName = "menu"
+        self._conn = conn_desc
+        self._vm = vmname
+        self._state = vmstate
+
+    def _state_now(self):
+        for line in _systray_menu_lines():
+            parts = line.split("\t")
+            if (
+                parts
+                and parts[0] == "VM"
+                and len(parts) >= 3
+                and _systray_match(self._conn, parts[1])
+                and _systray_match(self._vm, parts[2])
+            ):
+                return parts[3] if len(parts) > 3 else self._state
+        return self._state
+
+    @property
+    def showing(self):
+        return _systray_menu_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").strip()
+        low = compact.lower()
+        state = self._state_now()
+        if low == "pause":
+            return _SentinelSystrayItem(
+                compact, "pause\t%s\t%s" % (self._conn, self._vm), visible=state != "paused"
+            )
+        if low == "resume":
+            return _SentinelSystrayItem(
+                compact, "resume\t%s\t%s" % (self._conn, self._vm), visible=state == "paused"
+            )
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSystrayItem(object):
+    def __init__(self, name, action, visible=True):
+        self.name = name
+        self.roleName = "menu item"
+        self._action = action
+        self._visible = visible
+
+    @property
+    def showing(self):
+        if not _systray_menu_shown():
+            return False
+        parts = (self._action or "").split("\t")
+        kind = parts[0] if parts else ""
+        if kind in ("connect", "disconnect") and len(parts) >= 2:
+            for line in _systray_menu_lines():
+                lp = line.split("\t")
+                if lp and lp[0] == "CONN" and _systray_match(parts[1], lp[1]):
+                    active = len(lp) > 2 and lp[2] == "active"
+                    return (kind == "disconnect") is active
+        if kind in ("pause", "resume") and len(parts) >= 3:
+            for line in _systray_menu_lines():
+                lp = line.split("\t")
+                if (
+                    lp
+                    and lp[0] == "VM"
+                    and _systray_match(parts[1], lp[1])
+                    and _systray_match(parts[2], lp[2])
+                ):
+                    paused = len(lp) > 3 and lp[3] == "paused"
+                    return (kind == "resume") is paused
+        return bool(self._visible)
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-systray-action.txt", "w").write(self._action or "")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-systray-action.txt"):
+                return
+            time.sleep(0.05)
+
+
 def _conn_list_rows():
     rows = []
     try:
@@ -10653,6 +11013,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             nname = self.name or ""
+            if "Virtual Machine Manager" in nname:
+                try:
+                    return open("/tmp/vmm-a11y-manager-shown.txt", "r").read().strip() != "0"
+                except Exception:
+                    pass
+            if "vmm-fake-systray" in nname:
+                return _systray_shown()
+            if "vmm-systray-menu" in nname:
+                return _systray_menu_shown()
             if nname in ("Delete", "Remove Disk"):
                 return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
             if nname == "Clone Virtual Machine":
@@ -11828,6 +12197,17 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 except Exception:
                     pass
         compact_name = str(name or "").replace(".*", "").lower().strip()
+        if compact_name == "vmm-fake-systray":
+            deadline = time.time() + max(0.2, float(timeout or 5))
+            while time.time() < deadline:
+                if os.path.exists("/tmp/vmm-a11y-systray-shown.txt"):
+                    return _SentinelFakeSystray()
+                time.sleep(0.05)
+            return _SentinelFakeSystray()
+        if compact_name == "vmm-systray-menu":
+            return _SentinelSystrayMenu()
+        if compact_name == "virtual machine manager":
+            return _SentinelManagerWindow()
         if compact_name in (
             "conn-connect",
             "conn-disconnect",

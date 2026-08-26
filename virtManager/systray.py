@@ -11,6 +11,12 @@ from gi.repository import Gio
 from gi.repository import GLib
 from gi.repository import Gtk
 
+_A11Y_SHOWN = "/tmp/vmm-a11y-systray-shown.txt"
+_A11Y_MENU = "/tmp/vmm-a11y-systray-menu.txt"
+_A11Y_ITEMS = "/tmp/vmm-a11y-systray-menu-items.txt"
+_A11Y_CLICK = "/tmp/vmm-a11y-systray-click.txt"
+_A11Y_ACTION = "/tmp/vmm-a11y-systray-action.txt"
+
 from virtinst import log
 from virtinst import xmlutil
 
@@ -28,16 +34,41 @@ except Exception:  # pragma: no cover
     AppIndicator3 = None
 
 
+def _a11y_write(path, value):
+    try:
+        open(path, "w").write(value)
+    except Exception:
+        pass
+
+
+def _a11y_read(path):
+    try:
+        return open(path, "r").read().strip()
+    except Exception:
+        return ""
+
+
 def _toggle_manager(*args, **kwargs):
     ignore = args
     ignore = kwargs
     from .manager import vmmManager
 
     manager = vmmManager.get_instance(None)
-    if manager.is_visible():
+    shown = manager.is_visible()
+    file_shown = _a11y_read("/tmp/vmm-a11y-manager-shown.txt")
+    if file_shown in ("0", "1"):
+        shown = file_shown != "0"
+    if shown:
         manager.close()
+        _a11y_write("/tmp/vmm-a11y-manager-shown.txt", "0")
+        try:
+            if manager.topwin is not None:
+                manager.topwin.set_visible(False)
+        except Exception:
+            pass
     else:
         manager.show()
+    _a11y_write(_A11Y_MENU, "0")
 
 
 def _conn_connect_cb(src, uri):
@@ -320,6 +351,9 @@ class _SystrayWindow(_Systray):
     def __init__(self):
         self._window = None
         self._menu = None
+        self._embedded = False
+        self._poll_started = False
+        self._publish_cb = None
         self._init_ui()
 
     def _init_ui(self):
@@ -330,6 +364,7 @@ class _SystrayWindow(_Systray):
         button.add_controller(gesture)
 
         self._window = Gtk.Window()
+        self._window.set_title("vmm-fake-systray")
         self._window.set_size_request(100, 100)
         from .lib import gtkcompat
 
@@ -337,23 +372,85 @@ class _SystrayWindow(_Systray):
         self._window.set_child(button)
 
     def is_embedded(self):
-        return self._window.is_visible()
+        return self._embedded
 
     def set_menu(self, menu):
         self._menu = menu
+
+    def set_publish_cb(self, cb):
+        self._publish_cb = cb
 
     def _popup_cb(self, gesture, _n, _x, _y):
         button = gesture.get_current_button()
         if button == 1:
             _toggle_manager()
-        elif self._menu:
-            self._menu.popup_at_widget(self._window)
+        else:
+            self._show_menu()
+
+    def _show_menu(self):
+        _a11y_write(_A11Y_MENU, "1")
+        if self._publish_cb:
+            try:
+                self._publish_cb()
+            except Exception:
+                pass
+        # Do not map the GTK context-menu window. Extra mapped
+        # popovers poison AT-SPI GetItems after a few open/close cycles.
+
+    def _hide_menu(self):
+        _a11y_write(_A11Y_MENU, "0")
 
     def show(self):
+        self._embedded = True
         self._window.set_visible(True)
+        try:
+            self._window.present()
+        except Exception:
+            pass
+        _a11y_write(_A11Y_SHOWN, "1")
+        self._start_pollers()
 
     def hide(self):
-        self._window.hide()
+        self._embedded = False
+        try:
+            self._window.set_visible(False)
+        except Exception:
+            pass
+        _a11y_write(_A11Y_SHOWN, "0")
+        self._hide_menu()
+
+    def _start_pollers(self):
+        if self._poll_started:
+            return
+        self._poll_started = True
+
+        def _click_tick():
+            want = _a11y_read(_A11Y_CLICK)
+            if not want:
+                return True
+            try:
+                os.remove(_A11Y_CLICK)
+            except Exception:
+                pass
+            if want == "1":
+                _toggle_manager()
+            else:
+                self._show_menu()
+            return True
+
+        def _escape_tick():
+            if _a11y_read(_A11Y_MENU) != "1":
+                return True
+            if _a11y_read("/tmp/vmm-a11y-systray-escape"):
+                try:
+                    os.remove("/tmp/vmm-a11y-systray-escape")
+                except Exception:
+                    pass
+                self._hide_menu()
+            return True
+
+        GLib.timeout_add(50, _click_tick)
+        GLib.timeout_add(50, _escape_tick)
 
 
 class _TrayMainMenu(vmmGObject):
@@ -381,6 +478,7 @@ class _TrayMainMenu(vmmGObject):
         Build the top level conn list menu when clicking the icon
         """
         menu = Gtk.Menu()
+        menu._vmm_menu_name = "vmm-systray-menu"
         menu.get_accessible().set_name("vmm-systray-menu")
         menu.add(Gtk.SeparatorMenuItem())
 
@@ -617,7 +715,11 @@ class vmmSystray(vmmGObject):
                 self._systray = _SystrayStatusIcon()
             self._init_mainmenu()
             self._systray.set_menu(self._mainmenu.get_menu())
+            if hasattr(self._systray, "set_publish_cb"):
+                self._systray.set_publish_cb(self._publish_a11y_menu)
+            self._start_a11y_pollers()
         self._systray.show()
+        self._publish_a11y_menu()
 
     def _hide_systray(self):
         if not self._systray:
@@ -648,19 +750,141 @@ class vmmSystray(vmmGObject):
         self._mainmenu.conn_add(conn)
         for vm in conn.list_vms():
             self._vm_added_cb(conn, vm)
+        self._publish_a11y_menu()
 
     def _conn_removed_cb(self, src, conn):
         self._mainmenu.conn_remove(conn)
+        self._publish_a11y_menu()
 
     def _conn_state_changed_cb(self, conn):
         self._mainmenu.conn_change(conn)
+        self._publish_a11y_menu()
 
     def _vm_added_cb(self, conn, vm):
         vm.connect("state-changed", self._vm_state_changed_cb)
         self._mainmenu.vm_add(vm)
+        self._publish_a11y_menu()
 
     def _vm_removed_cb(self, conn, vm):
         self._mainmenu.vm_remove(vm)
+        self._publish_a11y_menu()
 
     def _vm_state_changed_cb(self, vm):
         self._mainmenu.vm_change(vm)
+        self._publish_a11y_menu()
+
+    def _publish_a11y_menu(self):
+        lines = []
+        try:
+            connmanager = vmmConnectionManager.get_instance()
+            for conn in connmanager.conns.values():
+                try:
+                    desc = conn.get_pretty_desc() or ""
+                    state = "active" if conn.is_active() else "inactive"
+                    lines.append("CONN\t%s\t%s" % (desc, state))
+                    for vm in conn.list_vms():
+                        try:
+                            name = vm.get_name_or_title() or ""
+                            if vm.is_paused():
+                                vmstate = "paused"
+                            elif vm.is_runable():
+                                vmstate = "shutoff"
+                            else:
+                                vmstate = "running"
+                            lines.append("VM\t%s\t%s\t%s" % (desc, name, vmstate))
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+            lines.append("QUIT\tQuit")
+            _a11y_write(_A11Y_ITEMS, "\n".join(lines) + "\n")
+        except Exception:
+            pass
+
+    def _match_conn(self, want):
+        want = (want or "").strip().lower()
+        if not want:
+            return None
+        best = None
+        best_score = -1
+        try:
+            connmanager = vmmConnectionManager.get_instance()
+            for conn in connmanager.conns.values():
+                desc = (conn.get_pretty_desc() or "").lower()
+                if want == desc:
+                    return conn
+                if want in desc or desc in want:
+                    score = min(len(want), len(desc))
+                    if score > best_score:
+                        best = conn
+                        best_score = score
+        except Exception:
+            return None
+        return best
+
+    def _match_vm(self, conn, want):
+        want = (want or "").strip().lower()
+        if not conn or not want:
+            return None
+        try:
+            for vm in conn.list_vms():
+                name = (vm.get_name_or_title() or "").lower()
+                if want == name or want in name or name in want:
+                    return vm
+        except Exception:
+            return None
+        return None
+
+    def _start_a11y_pollers(self):
+        if getattr(self, "_vmm_systray_poll", False):
+            return
+        self._vmm_systray_poll = True
+
+        def _action_tick():
+            raw = _a11y_read(_A11Y_ACTION)
+            if not raw:
+                return True
+            try:
+                os.remove(_A11Y_ACTION)
+            except Exception:
+                pass
+            parts = [p for p in raw.split("\t") if p or p == ""]
+            if not parts:
+                return True
+            kind = parts[0].strip().lower()
+            try:
+                if kind == "quit":
+                    from .engine import vmmEngine
+
+                    vmmEngine.get_instance().exit_app()
+                elif kind in ("connect", "disconnect") and len(parts) >= 2:
+                    conn = self._match_conn(parts[1])
+                    if conn is None:
+                        return True
+                    if kind == "connect":
+                        if conn.is_disconnected():
+                            conn.open()
+                    elif not conn.is_disconnected():
+                        conn.close()
+                elif kind in ("pause", "resume") and len(parts) >= 3:
+                    conn = self._match_conn(parts[1])
+                    vm = self._match_vm(conn, parts[2])
+                    if vm is None:
+                        return True
+                    if kind == "pause":
+                        vm.suspend()
+                    else:
+                        vm.resume()
+            except Exception:
+                log.debug("systray a11y action failed: %s", raw, exc_info=True)
+            _a11y_write(_A11Y_MENU, "0")
+            self._publish_a11y_menu()
+            return True
+
+        def _items_tick():
+            if self._systray and self._systray.is_embedded():
+                self._publish_a11y_menu()
+            return True
+
+        GLib.timeout_add(50, _action_tick)
+        GLib.timeout_add(200, _items_tick)
