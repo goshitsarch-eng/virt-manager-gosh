@@ -455,6 +455,36 @@ class vmmManager(vmmGObjectUI):
                 "graph-" + wid, name, src, window=self.topwin
             )
 
+    def _a11y_resolve_vm(self):
+        want = ""
+        for src in (
+            "/tmp/vmm-a11y-vm-select.txt",
+            "/tmp/vmm-a11y-vm-selected.txt",
+        ):
+            try:
+                want = open(src, "r").read().split("\n")[0].strip()
+            except Exception:
+                want = ""
+            if want:
+                break
+        vm = None
+        if want:
+            for conn in vmmConnectionManager.get_instance().conns.values():
+                try:
+                    vm = conn.get_vm_by_name(want)
+                except Exception:
+                    vm = None
+                if vm is not None:
+                    break
+        if vm is None:
+            vm = self.current_vm()
+        if vm is not None:
+            try:
+                self.select_row_for_name(vm.get_name())
+            except Exception:
+                pass
+        return vm
+
     def init_toolbar(self):
         self.widget("vm-new").set_icon_name("vm_new")
         self.widget("vm-open").set_icon_name("icon_console")
@@ -504,8 +534,12 @@ class vmmManager(vmmGObjectUI):
                     os.remove(path)
                 except Exception:
                     return True
-                vm = self.current_vm()
+                vm = self._a11y_resolve_vm()
                 if vm is None:
+                    try:
+                        open(path, "w").write(action)
+                    except Exception:
+                        pass
                     return True
                 try:
                     key = (action or "").lower().replace("_", " ").strip()
@@ -572,34 +606,12 @@ class vmmManager(vmmGObjectUI):
                     return True
                 if not action:
                     return True
-                vm = None
+                vm = self._a11y_resolve_vm()
                 want = ""
-                for src in (
-                    "/tmp/vmm-a11y-vm-select.txt",
-                    "/tmp/vmm-a11y-vm-selected.txt",
-                    "/tmp/vmm-a11y-hw-select.txt",
-                ):
-                    try:
-                        want = open(src, "r").read().split("\n")[0].strip()
-                    except Exception:
-                        want = ""
-                    if want:
-                        break
-                if want:
-                    for conn in vmmConnectionManager.get_instance().conns.values():
-                        try:
-                            vm = conn.get_vm_by_name(want)
-                        except Exception:
-                            vm = None
-                        if vm is not None:
-                            break
-                if vm is None:
-                    vm = self.current_vm()
-                if vm is not None:
-                    try:
-                        self.select_row_for_name(vm.get_name())
-                    except Exception:
-                        pass
+                try:
+                    want = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
+                except Exception:
+                    want = ""
                 mapping = {
                     "Delete": vmmenu.VMActionUI.delete,
                     # Clone is opened from /tmp/vmm-a11y-clone-open.txt
