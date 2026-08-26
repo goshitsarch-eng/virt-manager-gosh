@@ -2997,16 +2997,21 @@ class vmmDetails(vmmGObjectUI):
             if guest is None:
                 guest = self._inactive_guest_xml()
             target = getattr(current, "target", None)
-            ejected = not current.get_source_path()
-            if not ejected:
-                for disk in guest.devices.disk:
-                    if not disk.is_cdrom():
-                        continue
-                    if target and getattr(disk, "target", None) != target:
-                        continue
-                    if not disk.get_source_path():
-                        ejected = True
-                    break
+            inactive_path = None
+            for disk in guest.devices.disk:
+                if not disk.is_cdrom():
+                    continue
+                if target and getattr(disk, "target", None) != target:
+                    continue
+                inactive_path = disk.get_source_path() or ""
+                break
+            # Persistent XML is authoritative after shutdown. A stale
+            # empty running disk must not hide a just-applied ISO path.
+            if inactive_path:
+                return
+            ejected = inactive_path == "" or (
+                inactive_path is None and not current.get_source_path()
+            )
             if not ejected:
                 return
             for path in (
