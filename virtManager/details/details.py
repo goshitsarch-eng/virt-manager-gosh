@@ -2635,6 +2635,12 @@ class vmmDetails(vmmGObjectUI):
                 exact = row
                 break
             if want_l and (want_l in label.lower() or label.lower() in want_l):
+                if "controller" in want_l or "controller" in label.lower():
+                    tokens = ("usb", "scsi", "sata", "ide", "pci", "virtio", "fdc")
+                    want_toks = [t for t in tokens if t in want_l]
+                    have_toks = [t for t in tokens if t in label.lower()]
+                    if want_toks and have_toks and not set(want_toks) & set(have_toks):
+                        continue
                 if fuzzy is None:
                     fuzzy = row
         return exact if exact is not None else fuzzy
@@ -3262,8 +3268,17 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 alert = ""
             open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
-                "done pagetype=%s success=%s alert=%r\n"
-                % (pagetype, success, alert)
+                "done pagetype=%s success=%s want=%r last=%r tab=%r "
+                "dev=%s alert=%r\n"
+                % (
+                    pagetype,
+                    success,
+                    want,
+                    last_hw,
+                    tab,
+                    getattr(dev, "type", getattr(dev, "DEVICE_TYPE", None)),
+                    alert,
+                )
             )
         except Exception:
             pass
@@ -3778,6 +3793,18 @@ class vmmDetails(vmmGObjectUI):
             ):
                 model = typed
             kwargs["model"] = model
+            try:
+                open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                    "controller model=%r typed=%r active=%s devtype=%s\n"
+                    % (
+                        model,
+                        typed,
+                        combo.get_active(),
+                        getattr(devobj, "type", None),
+                    )
+                )
+            except Exception:
+                pass
 
         return self._change_config(self.vm.define_controller, kwargs, devobj=devobj)
 
