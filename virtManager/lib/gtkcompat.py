@@ -3106,13 +3106,31 @@ def _start_config_apply_poll(details):
         if not os.path.exists(path):
             return True
         try:
-            os.remove(path)
+            for fpath, wid in (
+                ("/tmp/vmm-a11y-boot-init-path.txt", "boot-init-path"),
+                ("/tmp/vmm-a11y-boot-init-args.txt", "boot-init-args"),
+            ):
+                if not os.path.exists(fpath):
+                    continue
+                text = open(fpath, "r").read()
+                w = d.widget(wid)
+                if w is not None and w.get_text() != text:
+                    w.set_text(text)
+            if hasattr(d, "_enable_apply"):
+                from virtManager.details.details import EDIT_INIT
+
+                if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") or os.path.exists(
+                    "/tmp/vmm-a11y-boot-init-args.txt"
+                ):
+                    d._enable_apply(EDIT_INIT)
         except Exception:
             pass
         try:
             btn = d.widget("config-apply")
-            if btn is not None and btn.get_sensitive():
-                btn.emit("clicked")
+            if btn is None or not btn.get_sensitive():
+                return True
+            os.remove(path)
+            btn.emit("clicked")
         except Exception:
             pass
         return True

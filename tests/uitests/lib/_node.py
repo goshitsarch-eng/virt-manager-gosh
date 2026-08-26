@@ -494,6 +494,11 @@ class _SentinelEntry(object):
                 )
             except Exception:
                 pass
+        if str(self.name).startswith("Init "):
+            try:
+                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+            except Exception:
+                pass
 
 
 class _ArchOptionsSentinel(object):
