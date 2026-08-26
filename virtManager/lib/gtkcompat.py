@@ -262,6 +262,10 @@ def _window_get_position(window):
     xid = _window_xid(window)
     if xid:
         try:
+            open("/tmp/vmm-a11y-manager-xid.txt", "w").write(hex(int(xid)))
+        except Exception:
+            pass
+        try:
             pos = _xdotool_geometry(xid)
             window._vmm_win_pos = pos
             return pos
@@ -271,22 +275,44 @@ def _window_get_position(window):
 
 
 def _window_move(window, x, y):
+    want = (int(x), int(y))
     try:
-        window._vmm_win_pos = (int(x), int(y))
+        window._vmm_win_pos = want
     except Exception:
         window._vmm_win_pos = (0, 0)
     xid = _window_xid(window)
     if not xid:
         return
     try:
+        open("/tmp/vmm-a11y-manager-xid.txt", "w").write(hex(int(xid)))
+    except Exception:
+        pass
+    try:
         import subprocess
+        import time
 
-        subprocess.check_call(
-            ["xdotool", "windowmove", hex(int(xid)), str(int(x)), str(int(y))],
-            timeout=2,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        target_x, target_y = want
+        for _try in range(8):
+            subprocess.check_call(
+                [
+                    "xdotool",
+                    "windowmove",
+                    hex(int(xid)),
+                    str(int(target_x)),
+                    str(int(target_y)),
+                ],
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.05)
+            got = _xdotool_geometry(xid)
+            if abs(got[0] - want[0]) <= 2 and abs(got[1] - want[1]) <= 2:
+                window._vmm_win_pos = got
+                return
+            target_x = want[0] + (want[0] - got[0])
+            target_y = want[1] + (want[1] - got[1])
+        window._vmm_win_pos = want
     except Exception:
         pass
 

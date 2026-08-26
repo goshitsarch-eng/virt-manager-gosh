@@ -9523,17 +9523,23 @@ class _SentinelManagerWindow(object):
         try:
             import subprocess
 
-            out = subprocess.check_output(
-                [
-                    "xdotool",
-                    "search",
-                    "--name",
-                    "^Virtual Machine Manager$",
-                ],
-                text=True,
-                timeout=2,
-            )
-            xid = (out.strip().split() or [""])[0]
+            xid = ""
+            try:
+                xid = open("/tmp/vmm-a11y-manager-xid.txt", "r").read().strip()
+            except Exception:
+                xid = ""
+            if not xid:
+                out = subprocess.check_output(
+                    [
+                        "xdotool",
+                        "search",
+                        "--name",
+                        "^Virtual Machine Manager$",
+                    ],
+                    text=True,
+                    timeout=2,
+                )
+                xid = (out.strip().split() or [""])[0]
             if xid:
                 info = subprocess.check_output(
                     ["xdotool", "getwindowgeometry", "--shell", xid],

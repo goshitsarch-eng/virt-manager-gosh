@@ -392,7 +392,14 @@ class vmmManager(vmmGObjectUI):
 
         log.debug("Showing manager")
         if self.prev_position:
-            self.topwin.move(*self.prev_position)
+            dest = self.prev_position
+            self.topwin.move(*dest)
+            try:
+                open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                    "%s %s" % (int(dest[0]), int(dest[1]))
+                )
+            except Exception:
+                pass
             self.prev_position = None
 
         vmmEngine.get_instance().increment_window_counter()
