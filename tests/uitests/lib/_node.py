@@ -6636,6 +6636,18 @@ class _SentinelHostAction(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        if self._value == "apply":
+            # Details-tab confirm consumes xml.txt; republish so Apply
+            # defines the same bogus XML the editor sentinel still holds.
+            try:
+                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+            except Exception:
+                xml = ""
+            if xml.strip():
+                try:
+                    open("/tmp/vmm-a11y-xml.txt", "w").write(xml)
+                except Exception:
+                    pass
         try:
             open(self._path, "w").write(self._value)
         except Exception:
@@ -6647,6 +6659,23 @@ class _SentinelHostAction(object):
                     break
                 time.sleep(0.05)
             time.sleep(0.15)
+            try:
+                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+            except Exception:
+                xml = ""
+            if "<FOO" in xml:
+                deadline = time.time() + 4.0
+                while time.time() < deadline:
+                    try:
+                        alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                    except Exception:
+                        alert = ""
+                    compact = alert.lower()
+                    if "xmlparsedoc" in compact or (
+                        "tag" in compact and "mismatch" in compact
+                    ):
+                        return
+                    time.sleep(0.05)
             return
         if self._value == "stop" and str(self.name).startswith("net-"):
             deadline = time.time() + 6.0

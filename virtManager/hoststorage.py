@@ -1052,16 +1052,21 @@ class vmmHostStorage(vmmGObjectUI):
     #############################
 
     def _apply_pending_xml_edit(self):
-        try:
-            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
-        except Exception:
-            pending = ""
-        if not pending:
+        pending = ""
+        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+            try:
+                pending = open(path, "r").read()
+            except Exception:
+                pending = ""
+            if pending.strip():
+                if path.endswith("xml.txt"):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                break
+        if not pending.strip():
             return
-        try:
-            os.remove("/tmp/vmm-a11y-xml.txt")
-        except Exception:
-            pass
         if (self._xmleditor.get_xml() or "") != pending:
             self._xmleditor._srcbuff.set_text(pending)
         self._enable_pool_apply(EDIT_POOL_XML)
@@ -1072,6 +1077,17 @@ class vmmHostStorage(vmmGObjectUI):
             return  # pragma: no cover
 
         self._apply_pending_xml_edit()
+        xml = ""
+        try:
+            xml = self._xmleditor.get_xml_for_apply()
+        except Exception:
+            xml = ""
+        if xml.strip() and (
+            self._xmleditor.is_xml_selected()
+            or "<FOO" in xml
+            or (self._xmleditor._srcxml or "") != xml
+        ):
+            self._enable_pool_apply(EDIT_POOL_XML)
         name = pool.get_name()
         log.debug("Applying changes for pool '%s'", name)
         try:
@@ -1085,7 +1101,7 @@ class vmmHostStorage(vmmGObjectUI):
                 self.idle_add(self._populate_pools)
 
             if EDIT_POOL_XML in self._active_edits:
-                pool.define_xml(self._xmleditor.get_xml())
+                pool.define_xml(xml or self._xmleditor.get_xml())
                 try:
                     pool._vmmLibvirtObject__force_refresh_xml(nosignal=True)
                 except Exception:

@@ -298,6 +298,24 @@ class vmmXMLEditor(vmmGObjectUI):
         """
         return self._srcbuff.get_property("text")
 
+    def get_xml_for_apply(self):
+        """Return editor XML, preferring a pending a11y edit."""
+        xml = self.get_xml() or ""
+        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+            try:
+                pending = open(path, "r").read()
+            except Exception:
+                pending = ""
+            if not pending.strip() or pending == xml:
+                continue
+            try:
+                if (self.get_xml() or "") != pending:
+                    self._srcbuff.set_text(pending)
+            except Exception:
+                pass
+            return pending
+        return xml
+
     def set_xml(self, xml):
         """
         Set the editor UI XML to the passed string
