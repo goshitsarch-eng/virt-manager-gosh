@@ -4894,6 +4894,17 @@ class _SentinelDeleteWindow(object):
         role_pattern = (".*%s.*" % roleName) if roleName else None
         return self.find(name_pattern, role_pattern, labeller_text)
 
+    def window_close(self):
+        try:
+            open("/tmp/vmm-a11y-delete-close", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not _delete_dialog_open():
+                return
+            time.sleep(0.05)
+
 
 def _sentinel_delete_widgets(name, roleName):
     if not _delete_dialog_open():

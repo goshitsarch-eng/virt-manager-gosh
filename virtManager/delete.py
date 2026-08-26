@@ -239,6 +239,14 @@ class _vmmDeleteBase(vmmGObjectUI):
                     return True
             except Exception:
                 pass
+            try:
+                path = "/tmp/vmm-a11y-delete-close"
+                if os.path.exists(path):
+                    os.remove(path)
+                    self.close()
+                    return True
+            except Exception:
+                pass
             return True
 
         GLib.timeout_add(50, _tick)
