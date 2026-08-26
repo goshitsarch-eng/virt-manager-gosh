@@ -603,6 +603,21 @@ def _sentinel_method_radio(name, roleName):
     compact = str(name).replace(".*", "").lower()
     if "entry" in compact or "oslist" in compact or "combo" in compact:
         return None
+    if any(
+        token in compact
+        for token in (
+            "install-",
+            "source-",
+            "bootstrap",
+            "uri",
+            "passwd",
+            "browse",
+            "directory",
+            "template",
+            "oscontainer",
+        )
+    ):
+        return None
     mapping = (
         ("local", "local", "Local install media (ISO image or CDROM)"),
         ("import", "import", "Import existing disk image"),
@@ -614,7 +629,7 @@ def _sentinel_method_radio(name, roleName):
         ("virtual machine", "hvm", "Virtual machine"),
     )
     for needle, key, pretty in mapping:
-        if needle in compact:
+        if re.search(r"(^|[^a-z])%s([^a-z]|$)" % re.escape(needle), compact):
             return _SentinelMethodRadio(pretty, key)
     return None
 
@@ -3491,13 +3506,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             pass
         try:
-            sent = _sentinel_method_radio(name, roleName)
+            sent = _sentinel_named_entry(name, roleName, labeller_text)
             if sent is not None:
                 return sent
         except Exception:
             pass
         try:
-            sent = _sentinel_named_entry(name, roleName, labeller_text)
+            sent = _sentinel_method_radio(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
