@@ -2170,6 +2170,12 @@ class vmmDetails(vmmGObjectUI):
                     finally:
                         self._ui_refreshing = False
                     if labeled[HW_LIST_COL_TYPE] == HW_LIST_TYPE_CPU:
+                        try:
+                            mode = self.vm.xmlobj.cpu.mode or ""
+                            if mode in ("host-model", "host-passthrough"):
+                                self.widget("cpu-copy-host").set_active(True)
+                        except Exception:
+                            pass
                         self._publish_cpu_fields()
                 else:
                     self._refresh_page()
@@ -2990,7 +2996,18 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("cpu-model"), virtinst.DomainCpu.SPECIAL_MODE_HV_DEFAULT, column=2
             )
 
-        self.widget("cpu-copy-host").set_active(bool(is_host))
+        copyhost = self.widget("cpu-copy-host")
+        try:
+            copyhost.set_active(bool(is_host))
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-cpu-refresh-debug.txt", "w").write(
+                "mode=%r is_host=%s active=%s\n"
+                % (cpu.mode, is_host, copyhost.get_active())
+            )
+        except Exception:
+            pass
         text = _("Copy host CP_U configuration")
         if is_host:
             text += " (%s)" % cpu.mode
