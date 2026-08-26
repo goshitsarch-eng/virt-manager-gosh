@@ -2605,10 +2605,6 @@ def _start_combo_select_poll(createconn):
                 c.open_conn(None)
             except Exception:
                 pass
-            try:
-                hide_createconn_window(c)
-            except Exception:
-                pass
         return True
 
     GLib.timeout_add(50, _tick)

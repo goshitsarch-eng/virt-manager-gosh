@@ -303,7 +303,9 @@ class VMMDogtailApp:
             return
         # New VM wizard alerts are file sentinels. Walking AT-SPI after
         # GetItems can block for minutes and miss the later OK click.
-        if os.path.exists("/tmp/vmm-a11y-pagenum.txt"):
+        if os.path.exists("/tmp/vmm-a11y-pagenum.txt") or os.path.exists(
+            "/tmp/vmm-a11y-createconn-shown.txt"
+        ):
             try:
                 utils.check(_alert_matches, timeout=20)
             except Exception:
