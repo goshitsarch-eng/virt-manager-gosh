@@ -653,6 +653,11 @@ class VMMDogtailApp:
         tab = win.find_fuzzy(tab, "page tab")
         tab.point()
         tab.click()
+        try:
+            which = "pool" if "storage" in str(tab.name or "").lower() else "net"
+            open("/tmp/vmm-a11y-host-active-list.txt", "w").write(which)
+        except Exception:
+            pass
         return win
 
     def manager_test_conn_window_cleanup(self, conn_label, childwin):

@@ -272,11 +272,12 @@ class vmmHost(vmmGObjectUI):
                     if not which:
                         page = self.widget("details-tabs").get_current_page()
                         which = "net" if page == 1 else "pool" if page == 2 else ""
-                    os.remove(nav)
-                    if which == "net":
-                        self._hostnets._nav_list(direction)
-                    elif which == "pool":
-                        self._storagelist._nav_list(direction)
+                    if which in ("net", "pool"):
+                        os.remove(nav)
+                        if which == "net":
+                            self._hostnets._nav_list(direction)
+                        else:
+                            self._storagelist._nav_list(direction)
             except Exception:
                 pass
             path = "/tmp/vmm-a11y-host-tab.txt"

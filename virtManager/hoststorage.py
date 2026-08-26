@@ -244,8 +244,12 @@ class vmmHostStorage(vmmGObjectUI):
     ###############
 
     def refresh_page(self):
-        self._populate_vols()
         self.conn.schedule_priority_tick(pollpool=True)
+        try:
+            self._populate_pools()
+        except Exception:
+            pass
+        self._populate_vols()
         self._publish_a11y_state()
 
     def _publish_a11y_state(self):
@@ -339,25 +343,35 @@ class vmmHostStorage(vmmGObjectUI):
     def _select_pool_by_name(self, name):
         if not name:
             return False
-        pool_list = self.widget("pool-list")
-        model = pool_list.get_model()
-        sel = pool_list.get_selection()
-        if model is None or sel is None:
+
+        def _from_model():
+            pool_list = self.widget("pool-list")
+            model = pool_list.get_model()
+            sel = pool_list.get_selection()
+            if model is None or sel is None:
+                return False
+            it = model.get_iter_first()
+            while it is not None:
+                try:
+                    pool = model[it][POOL_COLUMN_HANDLE]
+                    have = pool.get_name() if pool is not None else ""
+                    if have == name:
+                        sel.select_iter(it)
+                        pool_list.grab_focus()
+                        self._publish_a11y_state()
+                        return True
+                except Exception:
+                    pass
+                it = model.iter_next(it)
             return False
-        it = model.get_iter_first()
-        while it is not None:
-            try:
-                pool = model[it][POOL_COLUMN_HANDLE]
-                have = pool.get_name() if pool is not None else ""
-                if have == name or name == have:
-                    sel.select_iter(it)
-                    pool_list.grab_focus()
-                    self._publish_a11y_state()
-                    return True
-            except Exception:
-                pass
-            it = model.iter_next(it)
-        return False
+
+        if _from_model():
+            return True
+        try:
+            self._populate_pools()
+        except Exception:
+            pass
+        return _from_model()
 
     def _start_a11y_poll(self):
         if getattr(self, "_vmm_hostpool_poll", False):
