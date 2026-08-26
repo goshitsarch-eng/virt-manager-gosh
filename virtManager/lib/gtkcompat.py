@@ -2331,6 +2331,18 @@ def _start_combo_select_poll(createconn):
         except Exception:
             text = ""
         if text:
+            key = text.split("\t", 1)[0].strip()
+            if key in (
+                "Chipset:",
+                "Firmware:",
+                "machine-combo",
+                "Architecture",
+                "Machine Type",
+                "Virt Type",
+                "net-source",
+                "Bus type:",
+            ):
+                return True
             try:
                 os.remove(path)
             except Exception:

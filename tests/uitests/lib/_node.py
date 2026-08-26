@@ -2349,6 +2349,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     fh.write(raw or "config-apply")
             except Exception:
                 pass
+            deadline = time.time() + 2.0
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "0":
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.05)
             return
         _SENTINEL_CLICK = (
             "install-iso-browse",

@@ -687,6 +687,7 @@ class vmmDetails(vmmGObjectUI):
                     model = combo.get_model() if combo is not None else None
                     if model is None:
                         return True
+                    match = None
                     it = model.get_iter_first()
                     while it is not None:
                         label = str(model[it][0] or "")
@@ -696,19 +697,44 @@ class vmmDetails(vmmGObjectUI):
                         except Exception:
                             extra = ""
                         blob = "%s %s" % (label, extra)
-                        if (
-                            item.lower() in blob.lower()
-                            or label.lower() in item.lower()
-                        ):
-                            combo.set_active_iter(it)
+                        if label.lower() == item.lower():
+                            match = it
                             break
                         try:
-                            if re.match(item, label) or re.match(item, blob):
-                                combo.set_active_iter(it)
+                            if re.fullmatch(item, label):
+                                match = it
                                 break
                         except Exception:
                             pass
                         it = model.iter_next(it)
+                    if match is None:
+                        it = model.get_iter_first()
+                        while it is not None:
+                            label = str(model[it][0] or "")
+                            extra = ""
+                            try:
+                                extra = str(model[it][1] or "")
+                            except Exception:
+                                extra = ""
+                            blob = "%s %s" % (label, extra)
+                            if item.lower() in blob.lower() or (
+                                label and label.lower() in item.lower()
+                            ):
+                                match = it
+                                break
+                            try:
+                                if re.match(item, label) or re.match(item, blob):
+                                    match = it
+                                    break
+                            except Exception:
+                                pass
+                            it = model.iter_next(it)
+                    if match is not None:
+                        combo.set_active_iter(match)
+                        if wid == "overview-firmware":
+                            self._enable_apply(EDIT_FIRMWARE)
+                        elif wid == "overview-chipset":
+                            self._enable_apply(EDIT_MACHTYPE)
                     self._publish_overview_combos()
                 except Exception:
                     pass
