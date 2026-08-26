@@ -555,6 +555,13 @@ class vmmVMWindow(vmmGObjectUI):
 
         pages = self.widget("details-pages")
         if pages.get_current_page() == DETAILS_PAGE_DETAILS:
+            try:
+                if self._details.widget("config-apply").get_sensitive():
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "There are unapplied changes. Would you like to apply them now?"
+                    )
+            except Exception:
+                pass
             if self._details.vmwindow_has_unapplied_changes():
                 self._sync_toolbar_page_buttons(pages.get_current_page())
                 return
@@ -787,6 +794,13 @@ class vmmVMWindow(vmmGObjectUI):
         self._console_refresh_can_usbredir()
 
     def control_vm_run(self, src_ignore):
+        try:
+            if self._details.widget("config-apply").get_sensitive():
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "There are unapplied changes. Would you like to apply them now?"
+                )
+        except Exception:
+            pass
         if self._details.vmwindow_has_unapplied_changes():
             return
         vmmenu.VMActionUI.run(self, self.vm)

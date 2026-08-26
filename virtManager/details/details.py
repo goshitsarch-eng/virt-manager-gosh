@@ -3333,10 +3333,6 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         try:
-            self._restore_boot_init_sentinels()
-        except Exception:
-            pass
-        try:
             self._load_a11y_xml_editor()
         except Exception:
             pass
@@ -3395,7 +3391,11 @@ class vmmDetails(vmmGObjectUI):
         if row:
             pagetype = row[HW_LIST_COL_TYPE]
             dev = row[HW_LIST_COL_DEVICE]
-        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and (
+            pagetype is HW_LIST_TYPE_BOOT
+            or tab == "boot-tab"
+            or "Boot" in (want or "")
+        ):
             pagetype = HW_LIST_TYPE_BOOT
 
         success = False
