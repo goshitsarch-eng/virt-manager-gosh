@@ -389,6 +389,15 @@ class VMMDogtailApp:
             os.remove("/tmp/vmm-a11y-alert.txt")
         except Exception:
             pass
+        for path in (
+            "/tmp/vmm-a11y-createconn-user.txt",
+            "/tmp/vmm-a11y-createconn-host.txt",
+            "/tmp/vmm-a11y-createconn-connect",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         try:
             open("/tmp/vmm-a11y-createconn-open", "w").write("1")
         except Exception:
