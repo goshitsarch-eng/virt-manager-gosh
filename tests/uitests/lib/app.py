@@ -501,6 +501,10 @@ class VMMDogtailApp:
                     os.remove("/tmp/vmm-a11y-alert-response.txt")
                 except Exception:
                     pass
+            try:
+                os.remove("/tmp/vmm-a11y-alert.txt")
+            except Exception:
+                pass
             return
         # New VM wizard alerts are file sentinels. Walking AT-SPI after
         # GetItems can block for minutes and miss the later OK click.
@@ -539,6 +543,10 @@ class VMMDogtailApp:
                         os.remove("/tmp/vmm-a11y-alert-response.txt")
                     except Exception:
                         pass
+                try:
+                    os.remove("/tmp/vmm-a11y-alert.txt")
+                except Exception:
+                    pass
                 return
             raise RuntimeError("Did not find alert text '%s'" % label_text)
         alert = None
