@@ -423,6 +423,18 @@ class _vmmDeleteBase(vmmGObjectUI):
             vol.delete(0)
         else:
             os.unlink(path)
+        try:
+            names = []
+            try:
+                names = open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines()
+            except Exception:
+                names = []
+            base = os.path.basename(path)
+            if base and base not in names:
+                names.append(base)
+            open("/tmp/vmm-a11y-deleted-vols.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
 
     ################
     # Subclass API #

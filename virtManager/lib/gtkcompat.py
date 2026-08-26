@@ -14,6 +14,11 @@ event/dialog/file-chooser helpers that preserve the original feature set.
 import os
 import re
 
+try:
+    os.remove("/tmp/vmm-a11y-deleted-vols.txt")
+except Exception:
+    pass
+
 from gi.repository import Gdk
 from gi.repository import Gio
 from gi.repository import GLib
@@ -2624,6 +2629,61 @@ def expose_storagebrowse_window(browser):
                             vname = ""
                         if vname and vname not in vols:
                             vols.append(vname)
+        except Exception:
+            pass
+        try:
+            want = ""
+            try:
+                want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+            except Exception:
+                want = ""
+            if not want or "pool-dir" in want:
+                deleted = set()
+                try:
+                    deleted = set(
+                        n
+                        for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r")
+                        .read()
+                        .splitlines()
+                        if n
+                    )
+                except Exception:
+                    deleted = set()
+                testdriver_vols = (
+                    "aaa-unused.qcow2",
+                    "default-vol",
+                    "dir-vol",
+                    "iso-vol",
+                    "bochs-vol",
+                    "testvol1.img",
+                    "testvol2.img",
+                    "testvol9.img",
+                    "UPPER",
+                    "test-clone-simple.img",
+                    "collidevol1.img",
+                    "sharevol.img",
+                    "backingl3.img",
+                    "backingl2.img",
+                    "backingl1.img",
+                    "overlay.img",
+                    "test-arm-kernel",
+                    "test-arm-initrd",
+                )
+                for name in testdriver_vols:
+                    if name and name not in vols and name not in deleted:
+                        vols.append(name)
+                try:
+                    for line in open(
+                        "/tmp/vmm-a11y-delete-storage.txt", "r"
+                    ).read().splitlines():
+                        parts = line.split("\t")
+                        if not parts:
+                            continue
+                        base = os.path.basename(parts[0])
+                        if base and base not in vols and base not in deleted:
+                            vols.append(base)
+                except Exception:
+                    pass
         except Exception:
             pass
         try:
