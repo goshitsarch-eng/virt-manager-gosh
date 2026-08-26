@@ -5,6 +5,7 @@
 # See the COPYING file in the top-level directory.
 
 from gi.repository import Gdk
+from gi.repository import Gio
 from gi.repository import Gtk
 
 from virtinst import log
@@ -100,9 +101,27 @@ class vmmAbout(vmmGObject):
         _label(self.config.get_appversion())
         _label(_("Powered by libvirt"))
         _label("Copyright (C) 2006-2026 Red Hat Inc.", "Copyright")
-        _label(_WEBSITE, _WEBSITE)
+        website = _label(_WEBSITE, _WEBSITE)
+        try:
+            click = Gtk.GestureClick()
+
+            def _open_site(*_a):
+                try:
+                    Gio.AppInfo.launch_default_for_uri(_WEBSITE, None)
+                except Exception:
+                    pass
+                return True
+
+            click.connect("pressed", _open_site)
+            website.add_controller(click)
+            website.add_css_class("link")
+        except Exception:
+            pass
         _label(_AUTHORS, "authors")
         _label(_ARTISTS, "artists")
+        credits = _("translator-credits")
+        if credits and credits.strip() and credits != "translator-credits":
+            _label(credits, "translator-credits")
         _label(_GPL2, "License")
         dialog.set_child(box)
 

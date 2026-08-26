@@ -1020,6 +1020,24 @@ def main():
         assert disp.get_allow_resize()
         disp.set_allow_resize(False)
         assert not disp.get_allow_resize()
+        disp.set_shared_flag(False)
+        assert not disp.get_shared_flag()
+        disp.set_shared_flag(True)
+        # CoRRE: background + one 8-bit subrect
+        disp._alloc_pixels(4, 4)
+        corre = st.pack("!I", 1) + b"\x11\x11\x11\x00" + b"\x22\x22\x22\x00" + bytes([1, 1, 1, 1])
+        disp._read_corre(FakeSock(corre), 4, 0, 0, 4, 4)
+        assert bytes(disp._pixels[0:4]) == b"\x11\x11\x11\x00"
+        assert bytes(disp._pixels[(1 * 4 + 1) * 4 : (1 * 4 + 1) * 4 + 4]) == b"\x22\x22\x22\x00"
+        # Unknown negative pseudo-encoding is ignored, not a disconnect
+        disp._read_fb_update(
+            FakeSock(b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 0, 0, 0, 0, -999)),
+            4,
+            4,
+        )
+        disp._bells = 0
+        disp._ring_bell()
+        assert disp._bells == 1
         sent = []
 
         class _Cap:
@@ -1045,6 +1063,9 @@ def main():
         spice._push_monitor_config(800, 600)
         spice._on_file_drop(None, [], 0, 0)
         spice._spice_clip_notify(None, 0, 1, b"hi")
+        assert spice._gdk_clipboard(0) is not None
+        assert spice._gdk_clipboard(1) is not None
+        spice._on_spice_clip_data(None, 1, 1, b"primary-from-guest")
         spice.close()
         usb = gtk4display.UsbDeviceWidget.new(None)
         assert usb is not None

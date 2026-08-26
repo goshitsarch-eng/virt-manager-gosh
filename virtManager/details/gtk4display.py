@@ -34,6 +34,9 @@ _BUTTON_BITS = {1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32, 7: 64}
 # spice-protocol VD_AGENT_CLIPBOARD_UTF8_TEXT
 _SPICE_CLIP_UTF8 = 1
 _SPICE_CLIP_SELECTION = 0
+_SPICE_CLIP_PRIMARY = 1
+_VNC_ENC_CORRE = 4
+_VNC_ENC_TIGHTPNG = 20
 # QEMU RFB client message + encoding for guest resize
 _VNC_SET_DESKTOP_SIZE = 251
 _VNC_ENC_DESKTOPSIZE = -223
@@ -551,6 +554,8 @@ class VNCDisplay(_DisplayBase):
         self._zrle_z = None
         self._buttons = 0
         self._qemu_ext_key = False
+        self._shared = True
+        self._bells = 0
 
     def set_credential(self, cred, value):
         name = str(cred).upper()
@@ -578,6 +583,22 @@ class VNCDisplay(_DisplayBase):
             except Exception:
                 pass
         self._sock = None
+
+    def set_shared_flag(self, val):
+        self._shared = bool(val)
+
+    def get_shared_flag(self):
+        return bool(getattr(self, "_shared", True))
+
+    def _ring_bell(self):
+        self._bells = getattr(self, "_bells", 0) + 1
+        try:
+            display = Gdk.Display.get_default()
+            if display is not None:
+                display.beep()
+        except Exception:
+            pass
+        return False
 
     def _apply_resize_guest(self, val):
         if val:
@@ -684,7 +705,7 @@ class VNCDisplay(_DisplayBase):
         if result != 0:
             GLib.idle_add(self.emit, "vnc-auth-failure", "VNC authentication failed")
             raise RuntimeError("VNC authentication failed")
-        sock.sendall(struct.pack("!B", 1))  # shared
+        sock.sendall(struct.pack("!B", 1 if getattr(self, "_shared", True) else 0))
         width, height, _ppf = struct.unpack("!HH16s", self._recv_n(sock, 20))
         namelen = struct.unpack("!I", self._recv_n(sock, 4))[0]
         self._name = self._recv_n(sock, namelen).decode("utf-8", "replace")
@@ -715,8 +736,10 @@ class VNCDisplay(_DisplayBase):
             _VNC_ENC_TRLE,
             6,  # zlib
             5,  # hextile
+            _VNC_ENC_CORRE,
             2,  # RRE
             1,  # CopyRect
+            _VNC_ENC_TIGHTPNG,
             0,  # raw
             _VNC_ENC_DESKTOPSIZE,
             _VNC_ENC_EXTENDED_DESKTOPSIZE,
@@ -748,6 +771,7 @@ class VNCDisplay(_DisplayBase):
                 self._recv_n(sock, n * 6)
             elif msg[0] == 2:
                 self._recv_n(sock, 5)
+                GLib.idle_add(self._ring_bell)
             elif msg[0] == 3:
                 slen = struct.unpack("!xxxI", self._recv_n(sock, 7))[0]
                 text = self._recv_n(sock, slen)
@@ -841,8 +865,10 @@ class VNCDisplay(_DisplayBase):
         text = raw.decode("latin1", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
         self._clip_from_guest = True
         try:
-            clip = Gdk.Display.get_default().get_clipboard()
-            clip.set(text)
+            display = Gdk.Display.get_default()
+            display.get_clipboard().set(text)
+            if hasattr(display, "get_primary_clipboard"):
+                display.get_primary_clipboard().set(text)
         except Exception:
             pass
         try:
@@ -965,6 +991,15 @@ class VNCDisplay(_DisplayBase):
         for _ in range(nsub):
             pix = self._recv_n(sock, 4)
             sx, sy, sw, sh = struct.unpack("!HHHH", self._recv_n(sock, 8))
+            self._fill_rect(width, x + sx, y + sy, sw, sh, pix)
+
+    def _read_corre(self, sock, width, x, y, w, h):
+        nsub = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        bg = self._recv_n(sock, 4)
+        self._fill_rect(width, x, y, w, h, bg)
+        for _ in range(nsub):
+            pix = self._recv_n(sock, 4)
+            sx, sy, sw, sh = struct.unpack("!BBBB", self._recv_n(sock, 4))
             self._fill_rect(width, x + sx, y + sy, sw, sh, pix)
 
     def _tight_compact_len(self, sock):
@@ -1323,11 +1358,13 @@ class VNCDisplay(_DisplayBase):
                 self._copy_rect(width, height, x, y, w, h, srcx, srcy)
             elif enc == 2:
                 self._read_rre(sock, width, x, y, w, h)
+            elif enc == _VNC_ENC_CORRE:
+                self._read_corre(sock, width, x, y, w, h)
             elif enc == 5:
                 self._read_hextile(sock, width, x, y, w, h)
             elif enc == 6:
                 self._read_zlib(sock, width, x, y, w, h)
-            elif enc == _VNC_ENC_TIGHT:
+            elif enc in (_VNC_ENC_TIGHT, _VNC_ENC_TIGHTPNG):
                 self._read_tight(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_TRLE:
                 self._read_trle(sock, width, x, y, w, h)
@@ -1335,6 +1372,8 @@ class VNCDisplay(_DisplayBase):
                 self._read_zrle(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_CURSOR:
                 self._read_cursor(sock, x, y, w, h)
+            elif enc < 0:
+                log.debug("Ignoring VNC pseudo-encoding %s", enc)
             else:
                 raise RuntimeError("Unsupported VNC encoding %s" % enc)
         self._publish_fb(width, height)
@@ -1514,18 +1553,32 @@ class SpiceDisplay(_DisplayBase):
         except Exception:
             pass
 
-    def _gdk_clipboard(self):
+    def _gdk_clipboard(self, selection=_SPICE_CLIP_SELECTION):
         display = Gdk.Display.get_default()
-        return display.get_clipboard() if display is not None else None
+        if display is None:
+            return None
+        if int(selection or 0) == _SPICE_CLIP_PRIMARY and hasattr(display, "get_primary_clipboard"):
+            return display.get_primary_clipboard()
+        return display.get_clipboard()
 
     def _bind_gdk_clipboard(self):
-        clip = self._gdk_clipboard()
-        if clip is None:
+        display = Gdk.Display.get_default()
+        if display is None:
             return
-        try:
-            clip.connect("changed", self._on_gdk_clip_changed)
-        except Exception:
-            pass
+        for selection, getter in (
+            (_SPICE_CLIP_SELECTION, "get_clipboard"),
+            (_SPICE_CLIP_PRIMARY, "get_primary_clipboard"),
+        ):
+            if not hasattr(display, getter):
+                continue
+            try:
+                clip = getattr(display, getter)()
+                clip.connect(
+                    "changed",
+                    lambda c, sel=selection: self._on_gdk_clip_changed(c, sel),
+                )
+            except Exception:
+                pass
 
     def _clear_clip_from_guest(self):
         self._clip_from_guest = False
@@ -1558,7 +1611,7 @@ class SpiceDisplay(_DisplayBase):
         except Exception as exc:
             log.debug("spice clipboard grab failed: %s", exc)
 
-    def _on_gdk_clip_changed(self, clip):
+    def _on_gdk_clip_changed(self, clip, selection=_SPICE_CLIP_SELECTION):
         if self._clip_from_guest or self._main is None:
             return
 
@@ -1570,8 +1623,8 @@ class SpiceDisplay(_DisplayBase):
             if text is None:
                 return
             data = text.encode("utf-8")
-            self._spice_clip_grab(self._main, _SPICE_CLIP_SELECTION, [_SPICE_CLIP_UTF8])
-            self._spice_clip_notify(self._main, _SPICE_CLIP_SELECTION, _SPICE_CLIP_UTF8, data)
+            self._spice_clip_grab(self._main, selection, [_SPICE_CLIP_UTF8])
+            self._spice_clip_notify(self._main, selection, _SPICE_CLIP_UTF8, data)
 
         try:
             clip.read_text_async(None, _got)
@@ -1592,7 +1645,7 @@ class SpiceDisplay(_DisplayBase):
         self._on_spice_clip_grab(channel, _SPICE_CLIP_SELECTION, types)
 
     def _on_spice_clip_request(self, channel, selection, typ, *_args):
-        clip = self._gdk_clipboard()
+        clip = self._gdk_clipboard(selection)
         if clip is None:
             return
 
@@ -1628,7 +1681,7 @@ class SpiceDisplay(_DisplayBase):
                 return
         except Exception:
             return
-        clip = self._gdk_clipboard()
+        clip = self._gdk_clipboard(_selection)
         if clip is None:
             return
         self._clip_from_guest = True

@@ -200,19 +200,106 @@ class _SystrayIndicator(_Systray):  # pragma: no cover
         self._icon.set_status(AppIndicator3.IndicatorStatus.PASSIVE)
 
 
+def _xembed_dock_xid(xid):
+    """
+    Dock an X11 window into _NET_SYSTEM_TRAY, the same protocol GTK 3
+    Gtk.StatusIcon used when AppIndicator/SNI are unavailable.
+    """
+    try:
+        import ctypes
+        import ctypes.util
+    except Exception:
+        return False
+
+    libname = ctypes.util.find_library("X11")
+    if not libname:
+        return False
+    x11 = ctypes.CDLL(libname)
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    dpy = x11.XOpenDisplay(None)
+    if not dpy:
+        return False
+
+    class _XClientMessage(ctypes.Structure):
+        _fields_ = [
+            ("type", ctypes.c_int),
+            ("serial", ctypes.c_ulong),
+            ("send_event", ctypes.c_int),
+            ("display", ctypes.c_void_p),
+            ("window", ctypes.c_ulong),
+            ("message_type", ctypes.c_ulong),
+            ("format", ctypes.c_int),
+            ("data", ctypes.c_long * 5),
+        ]
+
+    try:
+        x11.XDefaultScreen.argtypes = [ctypes.c_void_p]
+        x11.XDefaultScreen.restype = ctypes.c_int
+        screen = x11.XDefaultScreen(dpy)
+        x11.XInternAtom.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+        x11.XInternAtom.restype = ctypes.c_ulong
+        sel = x11.XInternAtom(dpy, b"_NET_SYSTEM_TRAY_S%d" % int(screen), 0)
+        opcode = x11.XInternAtom(dpy, b"_NET_SYSTEM_TRAY_OPCODE", 0)
+        x11.XGetSelectionOwner.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x11.XGetSelectionOwner.restype = ctypes.c_ulong
+        owner = x11.XGetSelectionOwner(dpy, sel)
+        if not owner:
+            return False
+        ev = _XClientMessage()
+        ev.type = 33  # ClientMessage
+        ev.serial = 0
+        ev.send_event = 1
+        ev.display = dpy
+        ev.window = owner
+        ev.message_type = opcode
+        ev.format = 32
+        ev.data[0] = 0  # CurrentTime
+        ev.data[1] = 0  # SYSTEM_TRAY_REQUEST_DOCK
+        ev.data[2] = int(xid)
+        ev.data[3] = 0
+        ev.data[4] = 0
+        x11.XSendEvent.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_long,
+            ctypes.c_void_p,
+        ]
+        x11.XSendEvent.restype = ctypes.c_int
+        NoEventMask = 0
+        x11.XSendEvent(dpy, owner, 0, NoEventMask, ctypes.byref(ev))
+        x11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        x11.XSync(dpy, 0)
+        return True
+    except Exception:
+        return False
+    finally:
+        try:
+            x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+            x11.XCloseDisplay(dpy)
+        except Exception:
+            pass
+
+
 class _SystrayStatusIcon(_Systray):  # pragma: no cover
     """
-    GTK 4 no longer has Gtk.StatusIcon. Show a compact tray window that
-    still exposes the full connection/VM action menu. Left-click toggles
-    the manager (GTK 3 StatusIcon activate); right-click opens the menu.
+    GTK 4 no longer has Gtk.StatusIcon. Prefer docking into the X11
+    notification area (GTK 3 StatusIcon). If no tray manager exists,
+    keep a compact window that still exposes the full action menu.
+    Left-click toggles the manager; right-click opens the menu.
     """
 
     def __init__(self):
         self._window = Gtk.Window()
         self._window.set_title(_("Virtual Machine Manager"))
-        self._window.set_default_size(48, 48)
-        self._window.set_decorated(True)
+        self._window.set_default_size(24, 24)
+        self._window.set_decorated(False)
         self._window.set_resizable(False)
+        try:
+            self._window.set_deletable(False)
+        except Exception:
+            pass
         button = Gtk.Button(icon_name="virt-manager")
         button.set_tooltip_text(_("Virtual Machine Manager"))
         button.connect("clicked", lambda *_a: _toggle_manager())
@@ -223,6 +310,7 @@ class _SystrayStatusIcon(_Systray):  # pragma: no cover
         self._window.set_child(button)
         self._menu = None
         self._visible = False
+        self._docked = False
 
     def is_embedded(self):
         return self._visible
@@ -235,9 +323,30 @@ class _SystrayStatusIcon(_Systray):  # pragma: no cover
         if self._menu:
             self._menu.popup_at_widget(self._window)
 
+    def _try_dock(self):
+        if self._docked:
+            return
+        try:
+            surface = self._window.get_surface()
+            xid = surface.get_xid() if surface is not None and hasattr(surface, "get_xid") else None
+        except Exception:
+            xid = None
+        if not xid:
+            return
+        if _xembed_dock_xid(xid):
+            self._docked = True
+            return
+        # No tray manager: restore a findable standalone icon window
+        try:
+            self._window.set_decorated(True)
+            self._window.set_default_size(48, 48)
+        except Exception:
+            pass
+
     def show(self):
         self._visible = True
         self._window.set_visible(True)
+        GLib.idle_add(self._try_dock)
 
     def hide(self):
         self._visible = False

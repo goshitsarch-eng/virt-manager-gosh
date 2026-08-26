@@ -626,6 +626,10 @@ class SpiceViewer(Viewer):
         self._spice_session = SpiceClientGLib.Session()
         if hasattr(SpiceClientGLib, "set_session_option"):
             SpiceClientGLib.set_session_option(self._spice_session)
+        try:
+            self._spice_session.set_property("enable-audio", True)
+        except Exception:
+            pass
         if SpiceClientGtk is not None:
             gtk_session = SpiceClientGtk.GtkSession.get(self._spice_session)
             gtk_session.set_property("auto-clipboard", True)
