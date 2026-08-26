@@ -623,6 +623,13 @@ class VMMDogtailApp:
             if shown and _node._vmwindow_matches(shown, want):
                 win = _node._SentinelVMWindow(shown)
                 break
+            try:
+                created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+            except Exception:
+                created = ""
+            if created and _node._vmwindow_matches(created, want):
+                win = _node._SentinelVMWindow(created)
+                break
             now = time.time()
             if want and now - last_nudge >= 2.0:
                 last_nudge = now
