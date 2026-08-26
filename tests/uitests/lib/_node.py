@@ -10154,6 +10154,515 @@ class _SentinelPrefsCheck(object):
             time.sleep(0.05)
 
 
+def _prefs_shown():
+    try:
+        return open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+def _prefs_current_page():
+    try:
+        return open("/tmp/vmm-a11y-prefs-page-current.txt", "r").read().strip()
+    except Exception:
+        return "general-tab"
+
+
+def _grab_dialog_shown():
+    try:
+        return open("/tmp/vmm-a11y-grab-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+_PREFS_PAGE_IDS = {
+    "general": "general-tab",
+    "general-tab": "general-tab",
+    "polling": "polling-tab",
+    "polling-tab": "polling-tab",
+    "new vm": "newvm-tab",
+    "newvm": "newvm-tab",
+    "newvm-tab": "newvm-tab",
+    "console": "console-tab",
+    "console-tab": "console-tab",
+    "feedback": "feedback-tab",
+    "feedback-tab": "feedback-tab",
+}
+
+_PREFS_PAGE_LABELS = {
+    "general-tab": "General",
+    "polling-tab": "Polling",
+    "newvm-tab": "New VM",
+    "console-tab": "Console",
+    "feedback-tab": "Feedback",
+}
+
+_PREFS_COMBO_FILES = {
+    "CPU default:": "/tmp/vmm-a11y-prefs-cpu-default.txt",
+    "Storage format:": "/tmp/vmm-a11y-prefs-storage-format.txt",
+    "Graphics type": "/tmp/vmm-a11y-prefs-graphics-type.txt",
+    "x86 Firmware": "/tmp/vmm-a11y-prefs-firmware.txt",
+    "SPICE USB": "/tmp/vmm-a11y-prefs-usb-redir.txt",
+    "Resize guest": "/tmp/vmm-a11y-prefs-resize-guest.txt",
+    "Graphical console scaling": "/tmp/vmm-a11y-prefs-scaling.txt",
+}
+
+
+def _prefs_combo_select(combolabel, itemlabel):
+    try:
+        open("/tmp/vmm-a11y-prefs-combo.txt", "w").write(
+            "%s\t%s" % (combolabel or "", itemlabel or "")
+        )
+    except Exception:
+        pass
+    path = None
+    cl = combolabel or ""
+    for key, published in _PREFS_COMBO_FILES.items():
+        if key in cl or cl in key:
+            path = published
+            break
+    want = (itemlabel or "").replace(".*", "")
+    deadline = time.time() + 3.0
+    while time.time() < deadline:
+        try:
+            got = open(path, "r").read() if path else ""
+        except Exception:
+            got = ""
+        if got and want and want.lower() in got.lower():
+            return
+        if not os.path.exists("/tmp/vmm-a11y-prefs-combo.txt") and got:
+            return
+        time.sleep(0.05)
+
+
+def _sentinel_prefs_widgets(name, roleName=None):
+    if not _prefs_shown() and not _grab_dialog_shown():
+        return None
+    compact = str(name or "").replace(".*", "").lower().strip()
+    role = str(roleName or "").lower()
+    if not compact:
+        return None
+    if compact in (
+        "general-tab",
+        "polling-tab",
+        "newvm-tab",
+        "console-tab",
+        "feedback-tab",
+    ):
+        return _SentinelPrefsPage(compact)
+    if compact in _PREFS_PAGE_IDS and compact not in (
+        "general-tab",
+        "polling-tab",
+        "newvm-tab",
+        "console-tab",
+        "feedback-tab",
+    ):
+        if not role or "tab" in role or "button" in role:
+            return _SentinelPrefsPageTab(_PREFS_PAGE_IDS[compact])
+    if _prefs_shown():
+        prefs_keys = (
+            ("enable system tray", "system-tray"),
+            ("enable xml", "xmleditor"),
+            ("libguestfs", "libguestfs"),
+            ("poll cpu", "poll-cpu"),
+            ("poll disk", "poll-disk"),
+            ("poll memory", "poll-memory"),
+            ("poll network", "poll-network"),
+            ("console autoconnect", "console-autoconnect"),
+            ("force poweroff", "force-poweroff"),
+            ("poweroff/reboot", "poweroff"),
+            ("device removal", "removedev"),
+            ("unapplied changes", "unapplied"),
+            ("deleting storage", "delstorage"),
+        )
+        if not role or "check" in role or role in ("button", "push button"):
+            for needle, key in prefs_keys:
+                if needle in compact:
+                    return _SentinelPrefsCheck(key)
+            if compact == "pause":
+                return _SentinelPrefsCheck("pause")
+        if "cpu-poll" in compact and (
+            not role or "spin" in role or "text" in role or "entry" in role
+        ):
+            return _SentinelPrefsSpin()
+        if compact in ("change...", "change") and (not role or "button" in role):
+            return _SentinelPrefsButton("Change...", "/tmp/vmm-a11y-prefs-change-grab")
+        if compact == "close" and (not role or "button" in role):
+            return _SentinelPrefsButton("Close", "/tmp/vmm-a11y-prefs-close")
+    if _grab_dialog_shown() and compact in ("ok", "cancel") and (
+        not role or "button" in role
+    ):
+        return _SentinelGrabButton(compact.upper() if compact == "ok" else "Cancel")
+    return None
+
+
+class _SentinelPrefsSpin(object):
+    def __init__(self):
+        self.name = "cpu-poll"
+        self.roleName = "spin button"
+        self._path = "/tmp/vmm-a11y-prefs-cpu-poll.txt"
+
+    @property
+    def text(self):
+        try:
+            return open(self._path, "r").read().strip()
+        except Exception:
+            return ""
+
+    @text.setter
+    def text(self, value):
+        self.set_text(value)
+
+    @property
+    def showing(self):
+        return _prefs_shown() and _prefs_current_page() == "polling-tab"
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def set_text(self, text):
+        want = text if text is not None else ""
+        try:
+            open(self._path + ".set", "w").write(want)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if not os.path.exists(self._path + ".set"):
+                    got = open(self._path, "r").read().strip()
+                    if got == want:
+                        return
+                    if got and want and float(got) == float(want):
+                        return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def typeText(self, string):
+        self.set_text(string)
+
+
+class _SentinelPrefsButton(object):
+    def __init__(self, name, path):
+        self.name = name
+        self.roleName = "push button"
+        self._path = path
+
+    @property
+    def showing(self):
+        return _prefs_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path, "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if self.name == "Close" and not _prefs_shown():
+                return
+            if self.name == "Change..." and _grab_dialog_shown():
+                return
+            if not os.path.exists(self._path):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelPrefsPage(object):
+    def __init__(self, page_id):
+        self.name = page_id
+        self.roleName = "page tab"
+        self._page_id = page_id
+
+    @property
+    def showing(self):
+        return _prefs_shown() and _prefs_current_page() == self._page_id
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+    def check_not_onscreen(self):
+        utils.check(lambda: not self.onscreen)
+
+    def combo_select(self, combolabel, itemlabel):
+        _prefs_combo_select(combolabel, itemlabel)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable, timeout)
+        sent = _sentinel_prefs_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+class _SentinelPrefsPageTab(object):
+    def __init__(self, page_id):
+        self.name = _PREFS_PAGE_LABELS.get(page_id, page_id)
+        self.roleName = "page tab"
+        self._page_id = page_id
+
+    @property
+    def showing(self):
+        return _prefs_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-prefs-page.txt", "w").write(self._page_id)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if _prefs_current_page() == self._page_id:
+                return
+            time.sleep(0.05)
+
+    def combo_select(self, combolabel, itemlabel):
+        _prefs_combo_select(combolabel, itemlabel)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable, timeout)
+        sent = _sentinel_prefs_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+class _SentinelPrefsWindow(object):
+    name = "Preferences"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _prefs_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing and not _grab_dialog_shown()
+
+    def grab_focus(self):
+        return None
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+    def check_not_onscreen(self):
+        utils.check(lambda: not self.onscreen)
+
+    def combo_select(self, combolabel, itemlabel):
+        _prefs_combo_select(combolabel, itemlabel)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable, timeout)
+        sent = _sentinel_prefs_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
+class _SentinelGrabButton(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "push button"
+
+    @property
+    def showing(self):
+        return _grab_dialog_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        path = (
+            "/tmp/vmm-a11y-grab-ok.txt"
+            if (self.name or "").lower() == "ok"
+            else "/tmp/vmm-a11y-grab-cancel.txt"
+        )
+        try:
+            open(path, "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not _grab_dialog_shown():
+                return
+            time.sleep(0.05)
+
+
+class _SentinelGrabWindow(object):
+    name = "Configure grab key combination"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _grab_dialog_shown()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def grab_focus(self):
+        return None
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").lower().strip()
+        role = str(roleName or "").lower()
+        if compact in ("ok", "cancel") and (not role or "button" in role):
+            return _SentinelGrabButton("OK" if compact == "ok" else "Cancel")
+        sent = _sentinel_prefs_widgets(name, roleName)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+
 class _SentinelFakeSystray(object):
     name = "vmm-fake-systray"
     roleName = "frame"
@@ -12506,38 +13015,23 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelSystrayMenu()
         if compact_name == "virtual machine manager":
             return _SentinelManagerWindow()
-        if name and "enable system tray" in compact_name:
-            try:
-                if open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1":
-                    return _SentinelPrefsCheck("system-tray")
-            except Exception:
-                pass
-        try:
-            prefs_open = open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1"
-        except Exception:
-            prefs_open = False
-        if prefs_open and compact_name:
-            prefs_keys = (
-                ("enable xml", "xmleditor"),
-                ("libguestfs", "libguestfs"),
-                ("poll cpu", "poll-cpu"),
-                ("poll disk", "poll-disk"),
-                ("poll memory", "poll-memory"),
-                ("poll network", "poll-network"),
-                ("console autoconnect", "console-autoconnect"),
-                ("force poweroff", "force-poweroff"),
-                ("poweroff/reboot", "poweroff"),
-                ("device removal", "removedev"),
-                ("unapplied changes", "unapplied"),
-                ("deleting storage", "delstorage"),
-            )
-            role = str(raw_role or "").lower()
-            if not role or "check" in role or "button" in role:
-                for needle, key in prefs_keys:
-                    if needle in compact_name:
-                        return _SentinelPrefsCheck(key)
-                if compact_name == "pause":
-                    return _SentinelPrefsCheck("pause")
+        if compact_name == "preferences" and (
+            not raw_role
+            or any(tok in raw_role for tok in ("frame", "dialog", "window", "panel"))
+        ):
+            if _prefs_shown():
+                return _SentinelPrefsWindow()
+        if name and "configure grab" in compact_name:
+            deadline = time.time() + max(1.0, float(timeout or 5))
+            while time.time() < deadline:
+                if _grab_dialog_shown():
+                    return _SentinelGrabWindow()
+                time.sleep(0.05)
+            if _grab_dialog_shown():
+                return _SentinelGrabWindow()
+        sent = _sentinel_prefs_widgets(name, raw_role or roleName)
+        if sent is not None:
+            return sent
         if name and "xml editing is disabled" in compact_name:
             try:
                 if open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() == "1":
@@ -13012,6 +13506,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "Volgroup",
             "Source Adapter:",
             "Format:",
+            "CPU default:",
+            "Storage format:",
+            "Graphics type",
+            "x86 Firmware",
+            "SPICE USB",
+            "Resize guest",
+            "Graphical console scaling",
         )
         if combolabel in known:
             # AT-SPI combo walks hang after GetItems; the app polls this file.
@@ -13034,6 +13535,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 "Volgroup": "/tmp/vmm-a11y-createpool-volgroup.txt",
                 "Source Adapter:": "/tmp/vmm-a11y-createpool-adapter.txt",
                 "Format:": "/tmp/vmm-a11y-createvol-format.txt",
+                "CPU default:": "/tmp/vmm-a11y-prefs-cpu-default.txt",
+                "Storage format:": "/tmp/vmm-a11y-prefs-storage-format.txt",
+                "Graphics type": "/tmp/vmm-a11y-prefs-graphics-type.txt",
+                "x86 Firmware": "/tmp/vmm-a11y-prefs-firmware.txt",
+                "SPICE USB": "/tmp/vmm-a11y-prefs-usb-redir.txt",
+                "Resize guest": "/tmp/vmm-a11y-prefs-resize-guest.txt",
+                "Graphical console scaling": "/tmp/vmm-a11y-prefs-scaling.txt",
             }.get(combolabel)
             deadline = time.time() + 2.0
             while time.time() < deadline:

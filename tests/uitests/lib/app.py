@@ -149,13 +149,27 @@ class VMMDogtailApp:
                     last_err = exc
                 time.sleep(0.1)
         if name and name == "Preferences":
+            from . import _node
+
             while time.time() < deadline:
                 try:
                     if open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1":
-                        break
+                        return _node._SentinelPrefsWindow()
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+            return _node._SentinelPrefsWindow()
+        if name and "Configure grab" in name:
+            from . import _node
+
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-grab-shown.txt", "r").read().strip() == "1":
+                        return _node._SentinelGrabWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+            return _node._SentinelGrabWindow()
         if name and "Authentication required" in name:
             while time.time() < deadline:
                 try:

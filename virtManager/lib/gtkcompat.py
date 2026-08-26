@@ -2981,6 +2981,16 @@ def _start_combo_select_poll(createconn):
                 "smartcard-mode",
                 "Version:",
                 "Version",
+                "CPU default:",
+                "Storage format:",
+                "Graphics type",
+                "x86 Firmware",
+                "SPICE USB",
+                "SPICE USB Redirection:",
+                "Resize guest",
+                "Resize guest with window:",
+                "Graphical console scaling",
+                "Graphical console scaling:",
             ):
                 return True
             try:
