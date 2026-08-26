@@ -8425,6 +8425,56 @@ class _SentinelVMFileMenu(object):
         return self.find(name, roleName, labeller_text)
 
 
+class _SentinelVMWindowMenu(object):
+    name = "Virtual Machine"
+    roleName = "menu"
+
+    def __init__(self, vmname):
+        self._vmname = vmname or ""
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        if self._vmname:
+            try:
+                open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vmname)
+                open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vmname)
+            except Exception:
+                pass
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        if self._vmname:
+            try:
+                open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vmname)
+                open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vmname)
+            except Exception:
+                pass
+        return _SentinelVMActionItem(str(name or "").replace(".*", ""))
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
 class _SentinelVMWindow(object):
     roleName = "frame"
 
@@ -8502,6 +8552,10 @@ class _SentinelVMWindow(object):
             return _SentinelStaticLabel("Hypervisor Details")
         if compact == "file" and (not role or "menu" in role):
             return _SentinelVMFileMenu()
+        if "virtual machine" in compact and "manager" not in compact and (
+            not role or "menu" in role
+        ):
+            return _SentinelVMWindowMenu(self._vmname)
         view_name = compact.replace("^", "").replace("$", "").strip()
         if view_name == "view" and (not role or "menu" in role):
             return _SentinelViewMenu()
