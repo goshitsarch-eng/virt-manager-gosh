@@ -402,14 +402,21 @@ def sync_accessible_checked(widget):
     """
     if widget is None or not hasattr(widget, "get_active"):
         return
+    if getattr(widget, "_vmm_syncing_checked", False):
+        return
 
     def _sync(*_a):
+        if getattr(widget, "_vmm_syncing_checked", False):
+            return False
+        widget._vmm_syncing_checked = True
         try:
             widget.update_state(
                 [Gtk.AccessibleState.CHECKED], [_checked_tristate(widget.get_active())]
             )
         except Exception:
             pass
+        finally:
+            widget._vmm_syncing_checked = False
         return False
 
     if not getattr(widget, "_vmm_checked_synced", False):
@@ -5925,11 +5932,17 @@ class CheckMenuItem(Gtk.CheckButton):
             pass
 
     def _on_toggled(self, *_args):
-        sync_accessible_checked(self)
+        if getattr(self, "_vmm_in_toggled", False):
+            return
+        self._vmm_in_toggled = True
         try:
-            self.emit("activate")
-        except Exception:
-            pass
+            sync_accessible_checked(self)
+            try:
+                self.emit("activate")
+            except Exception:
+                pass
+        finally:
+            self._vmm_in_toggled = False
         menu = getattr(self, "_vmm_menu", None)
         while menu is not None:
             try:
