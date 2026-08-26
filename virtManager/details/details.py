@@ -1410,20 +1410,22 @@ class vmmDetails(vmmGObjectUI):
         if checksens and (not widget.is_sensitive() or not widget.is_visible()):
             return ""
 
-        ret = widget.get_text()
-        if strip:
-            ret = ret.strip()
-        if not ret and widgetname in ("boot-init-path", "boot-init-args"):
+        if widgetname in ("boot-init-path", "boot-init-args"):
             path = {
                 "boot-init-path": "/tmp/vmm-a11y-boot-init-path.txt",
                 "boot-init-args": "/tmp/vmm-a11y-boot-init-args.txt",
             }[widgetname]
             try:
-                ret = open(path, "r").read()
-                if strip:
-                    ret = ret.strip()
+                if os.path.exists(path):
+                    ret = open(path, "r").read()
+                    if strip:
+                        ret = ret.strip()
+                    return ret
             except Exception:
                 pass
+        ret = widget.get_text()
+        if strip:
+            ret = ret.strip()
         return ret
 
     ##############################
@@ -1854,11 +1856,6 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_INIT):
             kwargs["init"] = self._get_text("boot-init-path")
             kwargs["initargs"] = self._get_text("boot-init-args") or ""
-            if not kwargs["init"]:
-                try:
-                    kwargs["init"] = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
-                except Exception:
-                    kwargs["init"] = ""
             if not kwargs["init"]:
                 try:
                     open("/tmp/vmm-a11y-alert.txt", "w").write(
@@ -2712,11 +2709,6 @@ class vmmDetails(vmmGObjectUI):
         init, initargs = self.vm.get_init()
         self.widget("boot-init-path").set_text(init or "")
         self.widget("boot-init-args").set_text(initargs or "")
-        try:
-            open("/tmp/vmm-a11y-boot-init-path.txt", "w").write(init or "")
-            open("/tmp/vmm-a11y-boot-init-args.txt", "w").write(initargs or "")
-        except Exception:
-            pass
 
         # Boot menu populate
         menu = self.vm.get_boot_menu() or False
