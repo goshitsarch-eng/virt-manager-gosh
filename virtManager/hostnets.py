@@ -144,6 +144,11 @@ class vmmHostNets(vmmGObjectUI):
             net = self._current_network()
             if net is not None:
                 selected = net.get_name() or ""
+            if not names:
+                for net in self.conn.list_nets():
+                    n = net.get_name()
+                    if n:
+                        names.append(n)
         except Exception:
             pass
         try:
@@ -234,9 +239,15 @@ class vmmHostNets(vmmGObjectUI):
                     which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
                 except Exception:
                     which = "net"
-                if os.path.exists(nav) and which == "net":
+                if os.path.exists(nav) and which in ("net", ""):
                     direction = open(nav, "r").read().strip().lower()
                     os.remove(nav)
+                    try:
+                        open("/tmp/vmm-a11y-host-nav-debug.txt", "a").write(
+                            "net nav %s which=%s\n" % (direction, which)
+                        )
+                    except Exception:
+                        pass
                     self._nav_list(direction)
             except Exception:
                 pass

@@ -3414,6 +3414,7 @@ class _SentinelHostListCell(object):
         self.roleName = "table cell"
         self._select_path = select_path
         self._selected_path = selected_path
+        self.focused = self.state_selected
 
     @property
     def state_selected(self):
@@ -3460,8 +3461,10 @@ class _SentinelHostListCell(object):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if self.state_selected:
+                self.focused = True
                 return
             time.sleep(0.05)
+        self.focused = self.state_selected
 
 
 class _SentinelHostList(object):
