@@ -1155,7 +1155,12 @@ class VMMDogtailApp:
 
         if check_already_running:
             self.error_if_already_running()
-        self._proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr)
+        env = os.environ.copy()
+        if enable_libguestfs is True:
+            stub = os.path.join(tests.utils.TOPDIR, "tests", "guestfs_stub")
+            if os.path.isdir(stub):
+                env["PYTHONPATH"] = stub + os.pathsep + env.get("PYTHONPATH", "")
+        self._proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, env=env)
         if will_fail:
             return
 

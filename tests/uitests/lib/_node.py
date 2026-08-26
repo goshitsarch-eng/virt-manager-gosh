@@ -2837,10 +2837,24 @@ class _SentinelInspectionRefresh(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        before = ""
+        try:
+            before = open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
+        except Exception:
+            before = ""
         try:
             open("/tmp/vmm-a11y-inspection-refresh.txt", "w").write("1")
         except Exception:
             pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                after = open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
+            except Exception:
+                after = ""
+            if after and after != before:
+                return
+            time.sleep(0.05)
 
 
 class _SentinelDetailsExpander(object):

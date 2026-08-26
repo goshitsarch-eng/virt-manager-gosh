@@ -1074,7 +1074,24 @@ class vmmDetails(vmmGObjectUI):
                 try:
                     sel = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
                 except Exception:
-                    return True
+                    sel = ""
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-inspection-refresh.txt"):
+                        shown = ""
+                        try:
+                            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                        except Exception:
+                            shown = ""
+                        if not shown or shown == self.vm.get_name():
+                            os.remove("/tmp/vmm-a11y-inspection-refresh.txt")
+                            self._inspection_refresh_clicked_cb(None)
+                except Exception as exc:
+                    try:
+                        open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                            "os-publish-refresh-err: %s\n" % exc
+                        )
+                    except Exception:
+                        pass
                 if "OS information" not in sel:
                     return True
                 if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
@@ -1095,10 +1112,21 @@ class vmmDetails(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-inspection-refresh.txt"
                 try:
                     if os.path.exists(path):
-                        os.remove(path)
-                        self._inspection_refresh_clicked_cb(None)
-                except Exception:
-                    pass
+                        shown = ""
+                        try:
+                            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                        except Exception:
+                            shown = ""
+                        if not shown or shown == self.vm.get_name():
+                            os.remove(path)
+                            self._inspection_refresh_clicked_cb(None)
+                except Exception as exc:
+                    try:
+                        open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                            "poll-refresh-err: %s\n" % exc
+                        )
+                    except Exception:
+                        pass
                 return True
 
             GLib.timeout_add(50, _poll_inspection_refresh)
@@ -2973,11 +3001,27 @@ class vmmDetails(vmmGObjectUI):
         from ..lib.inspection import vmmInspection
 
         ignore = src
-        inspection = vmmInspection.get_instance()
-        if inspection:
-            inspection.vm_refresh(self.vm)
-        elif self.vm.conn.is_test():
-            self.vm.set_inspection_data(inspmod._make_fake_data(self.vm))
+        try:
+            if self.vm.conn.is_test():
+                self.vm.set_inspection_data(inspmod._make_fake_data(self.vm))
+        except Exception as exc:
+            try:
+                open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                    "fake-data-err: %s\n" % exc
+                )
+            except Exception:
+                pass
+        try:
+            inspection = vmmInspection.get_instance()
+            if inspection:
+                inspection.vm_refresh(self.vm)
+        except Exception as exc:
+            try:
+                open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                    "vm-refresh-err: %s\n" % exc
+                )
+            except Exception:
+                pass
         self._refresh_os_page()
 
     def _os_list_name_selected_cb(self, src, osobj):
@@ -4356,11 +4400,43 @@ class vmmDetails(vmmGObjectUI):
 
         self.widget("details-inspection-apps").set_visible(inspection_supported)
         self.widget("details-inspection-refresh").set_visible(inspection_supported)
+
+        # Applications (also inspection data). Always publish the sentinel
+        # from the inspection objects so Refresh updates even when the
+        # GTK model is hidden or inspection_supported is False.
+        apps = self.vm.inspection.applications or []
+        lines = []
+        for app in apps:
+            name = ""
+            if app.display_name:
+                name = app.display_name
+            elif app.name:
+                name = app.name
+            version = ""
+            if app.epoch > 0:
+                version += str(app.epoch) + ":"
+            if app.version:
+                version += app.version
+            if app.release:
+                version += "-" + app.release
+            summary = ""
+            if app.summary:
+                summary = app.summary
+            elif app.description:
+                summary = app.description
+                pos = summary.find("\n")
+                if pos > -1:
+                    summary = _("%(summary)s ...") % {"summary": summary[0:pos]}
+            lines.append("\t".join([name, version, summary]))
+        self._inspection_publish_gen = int(getattr(self, "_inspection_publish_gen", 0)) + 1
+        lines.append("#gen=%s" % self._inspection_publish_gen)
+        try:
+            open("/tmp/vmm-a11y-inspection-apps.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
         if not inspection_supported:
             return
 
-        # Applications (also inspection data)
-        apps = self.vm.inspection.applications or []
         apps_list = self.widget("inspection-apps")
         apps_model = apps_list.get_model()
         apps_model.clear()
@@ -4385,13 +4461,7 @@ class vmmDetails(vmmGObjectUI):
                 pos = summary.find("\n")
                 if pos > -1:
                     summary = _("%(summary)s ...") % {"summary": summary[0:pos]}
-
             apps_model.append([name, version, summary])
-        try:
-            lines = ["\t".join(str(c) for c in row) for row in apps_model]
-            open("/tmp/vmm-a11y-inspection-apps.txt", "w").write("\n".join(lines))
-        except Exception:
-            pass
 
     def _refresh_stats_page(self):
         def _multi_color(text1, text2):
