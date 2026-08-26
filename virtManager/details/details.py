@@ -1682,6 +1682,7 @@ class vmmDetails(vmmGObjectUI):
     def _a11y_model_combo(self):
         want = ""
         for path in (
+            "/tmp/vmm-a11y-details-tab.txt",
             "/tmp/vmm-a11y-hw-clicked.txt",
             "/tmp/vmm-a11y-hw-selected.txt",
         ):
@@ -1690,13 +1691,24 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 want = ""
             if want:
-                break
-        if "Sound" in want:
-            return self.widget("sound-model"), EDIT_SOUND_MODEL
-        if "Video" in want:
-            return self.widget("video-model"), EDIT_VIDEO_MODEL
-        if "Watchdog" in want:
-            return self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL
+                if "sound" in want.lower():
+                    return self.widget("sound-model"), EDIT_SOUND_MODEL
+                if "video" in want.lower():
+                    return self.widget("video-model"), EDIT_VIDEO_MODEL
+                if "watchdog" in want.lower():
+                    return self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL
+        try:
+            text = open("/tmp/vmm-a11y-details-model.txt.set", "r").read().strip()
+        except Exception:
+            text = ""
+        if text:
+            for combo, edit in (
+                (self.widget("sound-model"), EDIT_SOUND_MODEL),
+                (self.widget("video-model"), EDIT_VIDEO_MODEL),
+                (self.widget("watchdog-model"), EDIT_WATCHDOG_MODEL),
+            ):
+                if self._a11y_select_combo(combo, text):
+                    return combo, edit
         return None, None
 
     def _publish_details_device_fields(self):
@@ -2855,6 +2867,20 @@ class vmmDetails(vmmGObjectUI):
                 want = ""
             if want:
                 break
+        try:
+            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+        except Exception:
+            tab = ""
+        if tab == "sound-tab" and "Sound" not in (want or ""):
+            want = "Sound"
+        elif tab == "video-tab" and "Video" not in (want or ""):
+            want = "Video"
+        elif tab == "watchdog-tab" and "Watchdog" not in (want or ""):
+            want = "Watchdog"
+        elif tab == "host-tab" and not any(
+            tok in (want or "") for tok in ("PCI", "USB", "Host")
+        ):
+            want = want or "PCI"
 
         if not row:
             row = self._get_hw_row()
