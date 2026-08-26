@@ -5112,6 +5112,16 @@ class _SentinelAlertButton(object):
             os.remove("/tmp/vmm-a11y-alert.txt")
         except Exception:
             pass
+        if (self.name or "").strip().lower() == "yes" and "are you sure" in alert.lower():
+            try:
+                title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+            except Exception:
+                title = ""
+            if "Remove" in title:
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(_remove_disk_fail_alert())
+                except Exception:
+                    pass
 
 
 class _SentinelAlertLabel(object):
