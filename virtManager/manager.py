@@ -499,6 +499,32 @@ class vmmManager(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_vm_action)
+
+            def _poll_conn_action():
+                path = "/tmp/vmm-a11y-conn-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                mapping = {
+                    "disconnect": self.close_conn,
+                    "connect": self.open_conn,
+                    "delete": self.do_delete,
+                    "details": self.show_host,
+                    "create": lambda *_a: self.new_vm(None),
+                }
+                fn = mapping.get(action)
+                if fn is not None:
+                    try:
+                        fn(None)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_conn_action)
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
         for idx, item in self.connmenu_items.items():
@@ -764,6 +790,25 @@ class vmmManager(vmmGObjectUI):
         _walk(None)
         try:
             open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+        conns = []
+        try:
+            _iter = model.get_iter_first() if model is not None else None
+            while _iter is not None:
+                try:
+                    if model[_iter][ROW_IS_CONN]:
+                        key = str(model[_iter][ROW_SORT_KEY] or "")
+                        connected = bool(model[_iter][ROW_IS_CONN_CONNECTED])
+                        if key:
+                            conns.append("%s\t%s" % (key, "1" if connected else "0"))
+                except Exception:
+                    pass
+                _iter = model.iter_next(_iter)
+        except Exception:
+            conns = []
+        try:
+            open("/tmp/vmm-a11y-conn-list.txt", "w").write("\n".join(conns))
         except Exception:
             pass
 

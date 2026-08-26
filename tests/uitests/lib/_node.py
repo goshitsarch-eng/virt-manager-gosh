@@ -3664,6 +3664,164 @@ class _SentinelManagerVMCell(object):
             time.sleep(0.05)
 
 
+def _conn_list_rows():
+    rows = []
+    try:
+        for line in open("/tmp/vmm-a11y-conn-list.txt", "r").read().splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\t", 1)
+            name = parts[0].strip()
+            connected = parts[1].strip() == "1" if len(parts) > 1 else True
+            rows.append((name, connected))
+    except Exception:
+        rows = []
+    return rows
+
+
+class _SentinelManagerConnCell(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "table cell"
+        self._name = name
+
+    def _row(self):
+        for name, connected in _conn_list_rows():
+            if self._name == name or self._name in name or name in self._name:
+                return name, connected
+        return self._name, True
+
+    @property
+    def text(self):
+        name, connected = self._row()
+        if connected:
+            return name
+        return "%s - Not Connected" % name
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def dead(self):
+        return not any(
+            self._name == n or self._name in n or n in self._name for n, _c in _conn_list_rows()
+        )
+
+    @property
+    def state_selected(self):
+        try:
+            return self._name in open("/tmp/vmm-a11y-selected-conn.txt", "r").read()
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        button = kwargs.get("button", 1)
+        try:
+            open("/tmp/vmm-a11y-select-conn.txt", "w").write(self._name)
+            open("/tmp/vmm-a11y-selected-conn.txt", "w").write(self._name)
+        except Exception:
+            pass
+        if button == 3:
+            try:
+                os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+            except Exception:
+                pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if self._name in open("/tmp/vmm-a11y-selected-conn.txt", "r").read():
+                    break
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def doubleClick(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        self.click()
+        try:
+            open("/tmp/vmm-a11y-conn-action.txt", "w").write("connect")
+        except Exception:
+            pass
+
+
+class _SentinelConnMenuItem(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu item"
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def showing(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        key = (self.name or "").replace("conn-", "")
+        try:
+            open("/tmp/vmm-a11y-conn-action.txt", "w").write(key)
+            open("/tmp/vmm-a11y-conn-menu-hidden", "w").write("1")
+        except Exception:
+            pass
+
+
+class _SentinelConnMenu(object):
+    name = "conn-menu"
+    roleName = "menu"
+
+    @property
+    def onscreen(self):
+        try:
+            return not os.path.exists("/tmp/vmm-a11y-conn-menu-hidden")
+        except Exception:
+            return True
+
+    @property
+    def showing(self):
+        return self.onscreen
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        return _SentinelConnMenuItem(str(name or "").replace(".*", ""))
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+def _sentinel_manager_conn_cell(name, roleName):
+    if not name:
+        return None
+    role = str(roleName or "").lower()
+    if role and "cell" not in role and "button" not in role and "list item" not in role:
+        return None
+    want = str(name or "").replace(".*", "").split("\n")[0].strip()
+    if not want:
+        return None
+    for cname, _connected in _conn_list_rows():
+        if want == cname or want in cname or cname in want:
+            return _SentinelManagerConnCell(cname)
+    return None
+
+
 def _sentinel_manager_vm_cell(name, roleName):
     if not name:
         return None
@@ -5521,6 +5679,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         try:
             sent = _sentinel_hw_cell(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
+        if name and "conn-menu" in str(name).lower():
+            try:
+                os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+            except Exception:
+                pass
+            return _SentinelConnMenu()
+        try:
+            sent = _sentinel_manager_conn_cell(name, roleName)
             if sent is not None:
                 return sent
         except Exception:
