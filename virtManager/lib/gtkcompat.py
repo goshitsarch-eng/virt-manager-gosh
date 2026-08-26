@@ -30,6 +30,40 @@ try:
 except ImportError:  # pragma: no cover
     Adw = None
 
+
+def claim_a11y_request(path):
+    """Atomically take a /tmp/vmm-a11y-*-open.txt request.
+
+    Returns the first-line payload, or None if the file is missing or
+    another poller already claimed it. The sibling `.taking` file stays
+    until finish_a11y_request() or restore_a11y_request() so a test
+    helper does not rewrite the request mid-show().
+    """
+    taking = path + ".taking"
+    try:
+        os.rename(path, taking)
+    except Exception:
+        return None
+    try:
+        return open(taking, "r").read().strip().split("\n")[0].strip()
+    except Exception:
+        return ""
+
+
+def finish_a11y_request(path):
+    try:
+        os.remove(path + ".taking")
+    except Exception:
+        pass
+
+
+def restore_a11y_request(path, name):
+    try:
+        open(path, "w").write(name or "")
+    except Exception:
+        pass
+    finish_a11y_request(path)
+
 # ATK names from the GTK 3 .ui files. gtk4-builder-tool dropped AtkObject
 # children; restore them so dogtail find("general-tab") etc. still works.
 _BUILDER_A11Y_NAMES = {

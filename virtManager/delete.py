@@ -59,6 +59,10 @@ class _vmmDeleteBase(vmmGObjectUI):
 
     def show(self, parent, vm):
         log.debug("Showing delete wizard")
+        try:
+            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
+        except Exception:
+            pass
         self._set_vm(vm)
         self._reset_state()
         self.topwin.set_transient_for(parent)

@@ -4206,33 +4206,73 @@ class _SentinelVMActionItem(object):
             open("/tmp/vmm-a11y-vm-menu-hidden", "w").write("1")
         except Exception:
             pass
-        if (self.name or "").rstrip(".") == "Clone":
-            try:
-                vm = ""
+
+        def _selected_vm():
+            for src in (
+                "/tmp/vmm-a11y-vm-selected.txt",
+                "/tmp/vmm-a11y-vm-select.txt",
+            ):
                 try:
-                    vm = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
+                    vm = open(src, "r").read().split("\n")[0].strip()
                 except Exception:
                     vm = ""
                 if vm:
-                    open("/tmp/vmm-a11y-clone-open.txt", "w").write(vm)
-            except Exception:
-                pass
+                    return vm
+            return ""
+
+        action_key = (self.name or "").rstrip(".")
+        shown_path = None
+        open_path = None
+        if action_key == "Clone":
+            shown_path = "/tmp/vmm-a11y-clone-shown.txt"
+            open_path = "/tmp/vmm-a11y-clone-open.txt"
+        elif action_key == "Delete":
+            shown_path = "/tmp/vmm-a11y-delete-shown.txt"
+            open_path = "/tmp/vmm-a11y-delete-open.txt"
+        elif action_key == "Migrate":
+            shown_path = "/tmp/vmm-a11y-migrate-shown.txt"
+            open_path = "/tmp/vmm-a11y-migrate-open.txt"
         if (self.name or "") == "Open":
             try:
-                vm = ""
-                try:
-                    vm = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
-                except Exception:
-                    vm = ""
+                vm = _selected_vm()
                 if vm:
                     open("/tmp/vmm-a11y-vm-open.txt", "w").write(vm)
             except Exception:
                 pass
-        deadline = time.time() + 6.0
+        vm = _selected_vm()
+        if open_path and vm:
+            try:
+                open(open_path, "w").write(vm)
+            except Exception:
+                pass
+        deadline = time.time() + 8.0
         while time.time() < deadline:
             if os.path.exists("/tmp/vmm-a11y-alert.txt"):
                 return
-            if not os.path.exists("/tmp/vmm-a11y-vm-action.txt"):
+            if shown_path:
+                try:
+                    if open(shown_path, "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
+                # Poller may have claimed the request before the VM
+                # existed; rewrite so the next tick can retry.
+                if vm:
+                    try:
+                        if not os.path.exists(open_path) and not os.path.exists(
+                            open_path + ".taking"
+                        ):
+                            open(open_path, "w").write(vm)
+                    except Exception:
+                        pass
+                else:
+                    vm = _selected_vm()
+                    if vm and open_path:
+                        try:
+                            open(open_path, "w").write(vm)
+                        except Exception:
+                            pass
+            elif not os.path.exists("/tmp/vmm-a11y-vm-action.txt"):
                 return
             time.sleep(0.05)
 
@@ -4850,7 +4890,11 @@ class _SentinelDeleteStorageList(object):
 
     def findChildren(self, pred, isLambda=False, **kwargs):
         ignore = kwargs
+        deadline = time.time() + 4.0
         cells = self._cells()
+        while time.time() < deadline and not cells:
+            time.sleep(0.05)
+            cells = self._cells()
         if isLambda:
             try:
                 return [c for c in cells if pred(c)]
@@ -5450,7 +5494,11 @@ class _SentinelCloneStorageList(object):
 
     def findChildren(self, pred, isLambda=False, **kwargs):
         ignore = kwargs
+        deadline = time.time() + 4.0
         cells = self._cells()
+        while time.time() < deadline and not cells:
+            time.sleep(0.05)
+            cells = self._cells()
         if isLambda:
             try:
                 return [c for c in cells if pred(c)]

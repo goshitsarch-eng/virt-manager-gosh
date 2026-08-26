@@ -308,21 +308,15 @@ class vmmManager(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-clone-open.txt"
-                if os.path.exists(path):
-                    name = open(path, "r").read().strip().split("\n")[0].strip()
-                    os.remove(path)
-                    vm = None
-                    if name:
-                        for conn in vmmConnectionManager.get_instance().conns.values():
-                            try:
-                                vm = conn.get_vm_by_name(name)
-                            except Exception:
-                                vm = None
-                            if vm is not None:
-                                break
-                    if vm is not None:
-                        vmmenu.VMActionUI.clone(self, vm)
+                self._a11y_open_vm_dialog(
+                    "/tmp/vmm-a11y-clone-open.txt", vmmenu.VMActionUI.clone
+                )
+                self._a11y_open_vm_dialog(
+                    "/tmp/vmm-a11y-delete-open.txt", vmmenu.VMActionUI.delete
+                )
+                self._a11y_open_vm_dialog(
+                    "/tmp/vmm-a11y-migrate-open.txt", vmmenu.VMActionUI.migrate
+                )
             except Exception:
                 pass
             path = "/tmp/vmm-a11y-vm-select.txt"
@@ -548,6 +542,41 @@ class vmmManager(vmmGObjectUI):
                 "graph-" + wid, name, src, window=self.topwin
             )
 
+    def _a11y_lookup_vm(self, name):
+        want = (name or "").split("\n")[0].strip()
+        if not want:
+            return None
+        try:
+            conns = list(vmmConnectionManager.get_instance().conns.values())
+        except Exception:
+            conns = []
+        for conn in conns:
+            try:
+                vm = conn.get_vm_by_name(want)
+            except Exception:
+                vm = None
+            if vm is not None:
+                return vm
+        return None
+
+    def _a11y_open_vm_dialog(self, path, opener):
+        name = gtkcompat.claim_a11y_request(path)
+        if name is None:
+            return False
+        vm = self._a11y_lookup_vm(name) if name else None
+        if vm is None:
+            vm = self._a11y_resolve_vm() if name else None
+        if vm is None:
+            gtkcompat.restore_a11y_request(path, name)
+            return False
+        try:
+            opener(self, vm)
+        except Exception:
+            gtkcompat.restore_a11y_request(path, name)
+            return False
+        gtkcompat.finish_a11y_request(path)
+        return True
+
     def _a11y_resolve_vm(self):
         want = ""
         for src in (
@@ -560,15 +589,7 @@ class vmmManager(vmmGObjectUI):
                 want = ""
             if want:
                 break
-        vm = None
-        if want:
-            for conn in vmmConnectionManager.get_instance().conns.values():
-                try:
-                    vm = conn.get_vm_by_name(want)
-                except Exception:
-                    vm = None
-                if vm is not None:
-                    break
+        vm = self._a11y_lookup_vm(want) if want else None
         if vm is None:
             vm = self.current_vm()
         if vm is not None:
@@ -698,10 +719,36 @@ class vmmManager(vmmGObjectUI):
                     if not os.path.exists(path):
                         return True
                     action = open(path, "r").read().strip()
-                    os.remove(path)
                 except Exception:
                     return True
                 if not action:
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                    return True
+                # Dedicated *-open.txt pollers own Clone/Delete/Migrate
+                # so a second show() does not reset the wizard mid-populate.
+                action_key = (action or "").rstrip(".")
+                open_for = {
+                    "Clone": "/tmp/vmm-a11y-clone-open.txt",
+                    "Delete": "/tmp/vmm-a11y-delete-open.txt",
+                    "Migrate": "/tmp/vmm-a11y-migrate-open.txt",
+                }
+                if action_key in open_for and (
+                    os.path.exists(open_for[action_key])
+                    or os.path.exists(open_for[action_key] + ".taking")
+                ):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                    return True
+                if action_key == "Clone":
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
                     return True
                 vm = self._a11y_resolve_vm()
                 want = ""
@@ -711,8 +758,6 @@ class vmmManager(vmmGObjectUI):
                     want = ""
                 mapping = {
                     "Delete": vmmenu.VMActionUI.delete,
-                    # Clone is opened from /tmp/vmm-a11y-clone-open.txt
-                    # so a second show() does not reset the wizard.
                     "Migrate": vmmenu.VMActionUI.migrate,
                     "Open": vmmenu.VMActionUI.show,
                     "Run": vmmenu.VMActionUI.run,
@@ -748,6 +793,10 @@ class vmmManager(vmmGObjectUI):
                 if fn is not None and vm is not None:
                     try:
                         fn(self, vm)
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
                     except Exception:
                         try:
                             import traceback
@@ -762,12 +811,16 @@ class vmmManager(vmmGObjectUI):
                             pass
                 elif fn is not None and vm is None:
                     try:
-                        open(path, "w").write(action)
                         if (action or "") == "Open" and want:
                             open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
                         open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
                             "no-vm %s want=%s" % (action, want)
                         )
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        os.remove(path)
                     except Exception:
                         pass
                 return True

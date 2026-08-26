@@ -91,9 +91,17 @@ class vmmMigrateDialog(vmmGObjectUI):
                 self.topwin.present()
             except Exception:
                 pass
+            try:
+                open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+            except Exception:
+                pass
             self._publish_a11y_state()
             return
         log.debug("Showing migrate wizard")
+        try:
+            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+        except Exception:
+            pass
         for path in (
             "/tmp/vmm-a11y-migrate-finish",
             "/tmp/vmm-a11y-migrate-cancel",

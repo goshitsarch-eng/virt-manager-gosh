@@ -69,6 +69,13 @@ class VMMDogtailApp:
             )
             if found is not None:
                 return found
+            # Do not fall through to a substring AT-SPI child; the
+            # clone wizard is only usable via the sentinel.
+            while time.time() < deadline:
+                if _sentinel_is("/tmp/vmm-a11y-clone-shown.txt"):
+                    return _node._SentinelCloneWindow()
+                time.sleep(0.1)
+            return _node._SentinelCloneWindow()
         if name and "Connection Details" in name:
             while time.time() < deadline:
                 try:
@@ -196,8 +203,7 @@ class VMMDogtailApp:
         if name in ("Remove Disk", "Delete"):
             from . import _node
 
-            end = min(deadline, time.time() + 6)
-            while time.time() < end:
+            while time.time() < deadline:
                 if _sentinel_is("/tmp/vmm-a11y-delete-shown.txt"):
                     return _node._SentinelDeleteWindow(name)
                 try:
@@ -215,6 +221,7 @@ class VMMDogtailApp:
                 except Exception:
                     pass
                 time.sleep(0.1)
+            return _node._SentinelDeleteWindow(name)
         if name and "Add New Virtual Hardware" in name:
             while time.time() < deadline:
                 try:
@@ -237,15 +244,16 @@ class VMMDogtailApp:
                     last_err = exc
                 time.sleep(0.1)
         if name and "Migrate the virtual machine" in name:
+            from . import _node
+
             while time.time() < deadline:
                 try:
                     if open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() == "1":
-                        from . import _node
-
                         return _node._SentinelMigrateWindow()
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+            return _node._SentinelMigrateWindow()
         if name and "Migrating VM" in name:
             while time.time() < deadline:
                 try:

@@ -237,8 +237,16 @@ class vmmCloneVM(vmmGObjectUI):
                 self.topwin.present()
             except Exception:
                 pass
+            try:
+                open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+            except Exception:
+                pass
             return
         log.debug("Showing clone wizard")
+        try:
+            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+        except Exception:
+            pass
         for path in (
             "/tmp/vmm-a11y-clone-cancel",
             "/tmp/vmm-a11y-clone-finish",
@@ -841,9 +849,8 @@ class vmmCloneVM(vmmGObjectUI):
         def _tick():
             try:
                 path = "/tmp/vmm-a11y-clone-open.txt"
-                if os.path.exists(path):
-                    name = open(path, "r").read().strip().split("\n")[0].strip()
-                    os.remove(path)
+                name = gtkcompat.claim_a11y_request(path)
+                if name is not None:
                     vm = None
                     if name:
                         try:
@@ -861,13 +868,20 @@ class vmmCloneVM(vmmGObjectUI):
                                     vm = None
                                 if vm is not None:
                                     break
-                    if vm is not None:
+                    if vm is None:
+                        gtkcompat.restore_a11y_request(path, name)
+                    else:
                         parent = None
                         try:
                             parent = self.topwin.get_transient_for()
                         except Exception:
                             parent = None
-                        self.show(parent, vm)
+                        try:
+                            self.show(parent, vm)
+                        except Exception:
+                            gtkcompat.restore_a11y_request(path, name)
+                            return True
+                        gtkcompat.finish_a11y_request(path)
                         return True
             except Exception:
                 pass
