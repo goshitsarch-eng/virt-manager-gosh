@@ -854,6 +854,21 @@ class vmmCreateVM(vmmGObjectUI):
             pass
         if active:
             try:
+                existing = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
+            except Exception:
+                existing = ""
+            if existing in (
+                "local",
+                "tree",
+                "manual",
+                "import",
+                "app",
+                "os",
+                "container",
+                "hvm",
+            ):
+                active = existing
+            try:
                 open("/tmp/vmm-a11y-method-active.txt", "w").write(active)
             except Exception:
                 pass
