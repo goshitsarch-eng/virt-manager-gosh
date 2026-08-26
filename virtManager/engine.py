@@ -97,6 +97,9 @@ class vmmEngine(vmmGObject):
         """
         vmmSystray.get_instance()
         vmmInspection.get_instance()
+        from .lib import gtkcompat
+
+        gtkcompat.start_add_conn_poll()
 
         self.add_gsettings_handle(
             self.config.on_stats_update_interval_changed(self._timer_changed_cb)

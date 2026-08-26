@@ -1007,7 +1007,8 @@ class vmmConnection(vmmGObject):
             initial_poll=True,
         )
 
-        self._init_object_event.wait()
+        if not self._init_object_event.wait(timeout=15):
+            log.debug("Timed out waiting for initial objects on %s", self.get_uri())
         self._init_object_event = None
         self._init_object_count = None
 

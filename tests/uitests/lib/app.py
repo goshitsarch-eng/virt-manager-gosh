@@ -56,6 +56,26 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Migrate the virtual machine" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelMigrateWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Migrating VM" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelProgressWindow(name)
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
         while time.time() < deadline:
             try:
                 return self.root.find(
@@ -372,14 +392,26 @@ class VMMDogtailApp:
         except Exception:
             pass
         try:
+            os.remove("/tmp/vmm-a11y-conn-open.txt")
+        except Exception:
+            pass
+        try:
             with open("/tmp/vmm-a11y-add-conn.txt", "w") as fh:
                 fh.write(uri or "")
         except Exception:
             pass
         utils.check(
             lambda: os.path.exists("/tmp/vmm-a11y-createconn-hidden"),
-            timeout=8,
+            timeout=15,
         )
+        def _opened():
+            try:
+                got = open("/tmp/vmm-a11y-conn-open.txt", "r").read().strip()
+            except Exception:
+                return False
+            return bool(got)
+
+        utils.check(_opened, timeout=20)
 
     def manager_get_conn_cell(self, conn_label):
         return self.get_manager().find(conn_label, "table cell")

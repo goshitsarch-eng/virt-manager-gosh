@@ -2861,6 +2861,291 @@ def _sentinel_clone_widgets(name, roleName, labeller_text=None):
     return None
 
 
+def _migrate_dialog_open():
+    try:
+        return open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() == "1"
+    except Exception:
+        return False
+
+
+class _SentinelMigrateCheck(object):
+    def __init__(self, name, path, toggle=True):
+        self.name = name
+        self.roleName = "check box"
+        self._path = path
+        self._toggle = toggle
+
+    def _state(self):
+        try:
+            return open(self._path, "r").read().strip()
+        except Exception:
+            return "1" if "address-check" in (self.name or "") else "0"
+
+    @property
+    def checked(self):
+        return self._state() in ("1", "true", "yes", "on")
+
+    @property
+    def showing(self):
+        return _migrate_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open(self._path, "w").write("1")
+        except Exception:
+            pass
+        if "address-check" in (self.name or ""):
+            try:
+                open("/tmp/vmm-a11y-migrate-address-check-click", "w").write("1")
+            except Exception:
+                pass
+
+
+class _SentinelMigrateLabel(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "label"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-migrate-libvirt-decide.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        utils.check(lambda: self.onscreen)
+
+
+class _SentinelMigrateComboItem(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu item"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "conn-combo\t%s" % (self.name or "")
+            )
+        except Exception:
+            pass
+
+
+class _SentinelMigrateCombo(object):
+    name = "conn-combo"
+    roleName = "combo box"
+
+    @property
+    def showing(self):
+        return _migrate_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def _labels(self):
+        try:
+            return open("/tmp/vmm-a11y-migrate-dest.txt", "r").read().splitlines()
+        except Exception:
+            return []
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        want = str(name or "").replace(".*", "").lower()
+        deadline = time.time() + max(0.2, float(timeout))
+        while time.time() < deadline:
+            for label in self._labels():
+                if want in label.lower() or label.lower() in want:
+                    return _SentinelMigrateComboItem(label)
+            time.sleep(0.05)
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelMigrateWindow(object):
+    name = "Migrate the virtual machine"
+    roleName = "dialog"
+
+    @property
+    def showing(self):
+        return _migrate_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def active(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable, timeout)
+        sent = _sentinel_migrate_widgets(name, roleName, labeller_text)
+        if sent is not None:
+            return sent
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        name_pattern = (".*%s.*" % name) if name else None
+        role_pattern = (".*%s.*" % roleName) if roleName else None
+        return self.find(name_pattern, role_pattern, labeller_text)
+
+    def combo_select(self, combolabel, itemlabel):
+        try:
+            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+                "%s\t%s" % (combolabel or "", itemlabel or "")
+            )
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+                break
+            time.sleep(0.05)
+
+    def window_close(self):
+        try:
+            open("/tmp/vmm-a11y-migrate-cancel", "w").write("1")
+            open("/tmp/vmm-a11y-window-close.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not _migrate_dialog_open():
+                return
+            time.sleep(0.05)
+
+
+def _sentinel_migrate_widgets(name, roleName, labeller_text=None):
+    compact = str(name or "").replace(".*", "").lower()
+    role = str(roleName or "").lower()
+    blob = " ".join(str(x) for x in (name, labeller_text) if x).replace(".*", "").lower()
+    if "migrate the virtual machine" in compact and (
+        not role or any(tok in role for tok in ("frame", "dialog", "window", "panel"))
+    ):
+        if _migrate_dialog_open():
+            return _SentinelMigrateWindow()
+        return None
+    if not _migrate_dialog_open():
+        return None
+    if compact.strip() == "migrate" and "button" in role:
+        return _SentinelCloneButton("Migrate", "/tmp/vmm-a11y-migrate-finish")
+    if "cancel" in compact and "button" in role:
+        return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-migrate-cancel")
+    if "address-check" in compact:
+        return _SentinelMigrateCheck(
+            "address-check", "/tmp/vmm-a11y-migrate-address-check-click"
+        )
+    if "address-text" in compact or (compact == "address-text"):
+        return _SentinelEntry("address-text", "/tmp/vmm-a11y-migrate-address.txt")
+    if "let libvirt decide" in compact:
+        return _SentinelMigrateLabel("Let libvirt decide")
+    if "conn-combo" in compact:
+        return _SentinelMigrateCombo()
+    if compact.strip() in ("mode:", "mode") or "mode:" in compact:
+        return _SentinelMigrateCombo()
+    if "advanced" in compact and (not role or "toggle" in role or "button" in role):
+        return _SentinelMigrateExpander()
+    if "allow unsafe" in compact:
+        return _SentinelMigrateCheck("Allow unsafe:", "/tmp/vmm-a11y-migrate-unsafe")
+    if "temporary" in compact:
+        return _SentinelMigrateCheck("Temporary", "/tmp/vmm-a11y-migrate-temporary")
+    ignore = blob
+    return None
+
+
+class _SentinelMigrateExpander(object):
+    name = "Advanced"
+    roleName = "toggle button"
+
+    @property
+    def showing(self):
+        return _migrate_dialog_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def sensitive(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-migrate-advanced", "w").write("1")
+        except Exception:
+            pass
+
+    def click_expander(self, *args, **kwargs):
+        self.click()
+
+
 def _sentinel_alert(name, roleName):
     role = str(roleName or "").lower()
     # find_window() role aliases include alert|dialog. Only intercept
@@ -3127,6 +3412,25 @@ class _SentinelProgressWindow(object):
         return self.showing
 
     def find(self, *args, **kwargs):
+        name = ""
+        roleName = None
+        if args:
+            name = args[0] or ""
+            if len(args) > 1:
+                roleName = args[1]
+        name = kwargs.get("name", name) or ""
+        roleName = kwargs.get("roleName", roleName)
+        compact = str(name).replace(".*", "").lower()
+        role = str(roleName or "").lower()
+        if "cancel" in compact and (not role or "button" in role):
+            return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-progress-cancel")
+        if compact:
+            try:
+                warn = open("/tmp/vmm-a11y-progress-warning.txt", "r").read()
+            except Exception:
+                warn = ""
+            if compact in warn.lower() or warn.lower() in compact:
+                return _SentinelMigrateLabel(warn or name)
         raise dogtail.tree.SearchError("progress window has no children")
 
 
@@ -4799,6 +5103,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "Remove Disk",
             "Clone Virtual Machine",
             "Change storage path",
+            "Migrate the virtual machine",
         ):
             deadline = time.time() + 2.0
             while time.time() < deadline:
@@ -5044,6 +5349,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         if name and "creating virtual machine" in str(name).lower():
             return _SentinelProgressWindow(str(name).replace(".*", ""))
+        if name and "migrating vm" in str(name).replace(".*", "").lower():
+            try:
+                if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                    return _SentinelProgressWindow(str(name).replace(".*", ""))
+            except Exception:
+                pass
+        try:
+            sent = _sentinel_migrate_widgets(name, roleName, labeller_text)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
         if name and "new vm" in str(name).replace(".*", "").lower():
             role = str(roleName or "").lower()
             if not role or any(
@@ -5295,6 +5612,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             "Virt Type",
             "net-source",
             "Bus type:",
+            "Mode:",
         )
         if combolabel in known:
             # AT-SPI combo walks hang after GetItems; the app polls this file.
@@ -5311,6 +5629,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
                 "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
                 "net-source": "/tmp/vmm-a11y-net-source.txt",
+                "Mode:": "/tmp/vmm-a11y-migrate-mode.txt",
             }.get(combolabel)
             deadline = time.time() + 2.0
             while time.time() < deadline:

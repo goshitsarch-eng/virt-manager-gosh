@@ -175,37 +175,7 @@ class vmmManager(vmmGObjectUI):
         for conn in connmanager.conns.values():
             self._conn_added(connmanager, conn)
 
-        def _mark_added():
-            try:
-                open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
-            except Exception:
-                pass
-
-        def _add_conn_tick():
-            try:
-                uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
-            except Exception:
-                return True
-            if not uri:
-                return True
-            try:
-                os.remove("/tmp/vmm-a11y-add-conn.txt")
-            except Exception:
-                pass
-            try:
-                conn = vmmConnectionManager.get_instance().add_conn(uri)
-                if conn is None:
-                    _mark_added()
-                elif conn.is_disconnected():
-                    conn.connect_once("open-completed", lambda *_a: _mark_added())
-                    conn.open()
-                else:
-                    _mark_added()
-            except Exception:
-                _mark_added()
-            return True
-
-        GLib.timeout_add(50, _add_conn_tick)
+        gtkcompat.start_add_conn_poll()
 
         def _select_tick():
             try:

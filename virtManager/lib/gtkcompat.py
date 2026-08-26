@@ -682,6 +682,64 @@ def _start_a11y_click_poll():
         return True
 
     GLib.timeout_add(50, _tick)
+    start_add_conn_poll()
+
+
+_ADD_CONN_POLL = {"on": False}
+
+
+def start_add_conn_poll():
+    """Add a URI from /tmp/vmm-a11y-add-conn.txt even if the manager tick
+    never registered. Write createconn-hidden immediately, then conn-open
+    after the connection finishes opening."""
+    if _ADD_CONN_POLL["on"]:
+        return
+    _ADD_CONN_POLL["on"] = True
+
+    def _mark_added():
+        try:
+            open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
+        except Exception:
+            pass
+
+    def _mark_open(uri):
+        try:
+            open("/tmp/vmm-a11y-conn-open.txt", "w").write(uri or "1")
+        except Exception:
+            pass
+
+    def _tick():
+        try:
+            uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
+        except Exception:
+            return True
+        if not uri:
+            return True
+        try:
+            os.remove("/tmp/vmm-a11y-add-conn.txt")
+        except Exception:
+            pass
+        try:
+            from virtManager.connmanager import vmmConnectionManager
+
+            conn = vmmConnectionManager.get_instance().add_conn(uri)
+            _mark_added()
+            if conn is None:
+                _mark_open(uri)
+            elif conn.is_disconnected():
+                def _opened(*_a, u=uri):
+                    _mark_open(u)
+
+                conn.connect_once("open-completed", _opened)
+                conn.open()
+            else:
+                _mark_open(uri)
+        except Exception:
+            _mark_added()
+            _mark_open(uri)
+        return True
+
+    GLib.timeout_add(50, _tick)
 
 
 def _a11y_sidecar_box(window=None):
@@ -2472,6 +2530,11 @@ def _start_combo_select_poll(createconn):
                 "Virt Type",
                 "net-source",
                 "Bus type:",
+                "Mode:",
+                "Mode",
+                "conn-combo",
+                "New host:",
+                "New _host:",
             ):
                 return True
             try:

@@ -4,6 +4,7 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
 import threading
 import traceback
 
@@ -204,6 +205,27 @@ class vmmAsyncJob(vmmGObjectUI):
         gtkcompat.set_accessible_name(self.widget("pbar-text"), text or "")
         gtkcompat.ensure_button_accessible_name(self.widget("cancel-async-job"), "Cancel")
         self.widget("cancel-async-job").set_visible(bool(self.cancel_cb))
+        try:
+            open("/tmp/vmm-a11y-progress-title.txt", "w").write(title or "")
+            open("/tmp/vmm-a11y-progress-warning.txt", "w").write("")
+        except Exception:
+            pass
+        if not getattr(self, "_vmm_progress_poll", False):
+            self._vmm_progress_poll = True
+
+            def _poll_cancel():
+                if os.path.exists("/tmp/vmm-a11y-progress-cancel"):
+                    try:
+                        os.remove("/tmp/vmm-a11y-progress-cancel")
+                    except Exception:
+                        pass
+                    try:
+                        self._on_cancel()
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_cancel)
 
     ####################
     # Internal helpers #
@@ -260,6 +282,10 @@ class vmmAsyncJob(vmmGObjectUI):
         self.widget("warning-box").show()
         self.widget("warning-text").set_markup(markup)
         gtkcompat.set_accessible_name(self.widget("warning-text"), summary)
+        try:
+            open("/tmp/vmm-a11y-progress-warning.txt", "w").write(summary or "")
+        except Exception:
+            pass
 
     def _thread_finished(self):
         GLib.source_remove(self._timer)
