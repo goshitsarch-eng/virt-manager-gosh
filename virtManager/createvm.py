@@ -499,8 +499,29 @@ class vmmCreateVM(vmmGObjectUI):
                 try:
                     if os.path.exists(fwd):
                         if getattr(self, "_vmm_forward_busy", False):
+                            try:
+                                open("/tmp/vmm-bootstrap-debug.log", "a").write(
+                                    "nav skip busy page=%s\n"
+                                    % self._current_create_page()
+                                )
+                            except Exception:
+                                pass
                             return True
                         os.remove(fwd)
+                        try:
+                            open("/tmp/vmm-bootstrap-debug.log", "a").write(
+                                "nav forward page=%s boot=%s fs=%r\n"
+                                % (
+                                    self._current_create_page(),
+                                    self._get_config_oscontainer_bootstrap(),
+                                    self._get_widget_or_file(
+                                        "install-oscontainer-fs",
+                                        "/tmp/vmm-a11y-oscontainer-fs.txt",
+                                    ),
+                                )
+                            )
+                        except Exception:
+                            pass
                         try:
                             before = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
                         except Exception:
@@ -570,6 +591,10 @@ class vmmCreateVM(vmmGObjectUI):
             pass
         try:
             open("/tmp/vmm-a11y-alert.txt", "w").write(msg or "")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-bootstrap-debug.log", "a").write("alert %r\n" % (msg,))
         except Exception:
             pass
         log.debug("Validation Error: %s", msg)
@@ -1966,16 +1991,8 @@ class vmmCreateVM(vmmGObjectUI):
             if os.path.exists("/tmp/vmm-a11y-oscontainer-bootstrap.txt"):
                 want = open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "r").read().strip().lower()
                 if want in ("1", "true", "on"):
-                    try:
-                        self.widget("install-oscontainer-bootstrap").set_active(True)
-                    except Exception:
-                        pass
                     return True
                 if want in ("0", "false", "off"):
-                    try:
-                        self.widget("install-oscontainer-bootstrap").set_active(False)
-                    except Exception:
-                        pass
                     return False
         except Exception:
             pass
@@ -2349,6 +2366,15 @@ class vmmCreateVM(vmmGObjectUI):
 
         # Auto-generate a path if not specified
         if enable_src and not self.widget("install-oscontainer-fs").get_text():
+            existing = ""
+            try:
+                if os.path.exists("/tmp/vmm-a11y-oscontainer-fs.txt"):
+                    existing = open("/tmp/vmm-a11y-oscontainer-fs.txt", "r").read()
+            except Exception:
+                existing = ""
+            if existing:
+                self.widget("install-oscontainer-fs").set_text(existing)
+                return
             fs_dir = ["/var/lib/libvirt/filesystems/"]
             if os.geteuid() != 0:
                 fs_dir = [os.path.expanduser("~"), ".local/share/libvirt/filesystems/"]
@@ -2819,6 +2845,26 @@ class vmmCreateVM(vmmGObjectUI):
         return bool(self._gdata.build_guest())
 
     def _validate_oscontainer_bootstrap(self, fs, src_url, user, passwd):
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oscontainer-fs.txt"):
+                file_fs = open("/tmp/vmm-a11y-oscontainer-fs.txt", "r").read()
+                if file_fs:
+                    fs = file_fs
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-bootstrap-debug.log", "a").write(
+                "validate_bootstrap fs=%r exists=%s isdir=%s url=%r user=%r\n"
+                % (
+                    fs,
+                    os.path.exists(fs) if fs else None,
+                    os.path.isdir(fs) if fs else None,
+                    src_url,
+                    user,
+                )
+            )
+        except Exception:
+            pass
         # Check if the source path was provided
         if not src_url:
             return self._write_a11y_alert(_("Source URL is required"))
