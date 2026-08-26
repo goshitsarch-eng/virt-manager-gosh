@@ -1118,6 +1118,47 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_boot_fields)
+        if not getattr(self, "_vmm_disk_fields_poll", False):
+            self._vmm_disk_fields_poll = True
+
+            def _poll_disk_fields():
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-disk-advanced-expand"):
+                        os.remove("/tmp/vmm-a11y-disk-advanced-expand")
+                        self._addstorage.widget("storage-advanced").set_expanded(True)
+                except Exception:
+                    pass
+                for cpath, wid, edit in (
+                    ("/tmp/vmm-a11y-disk-shareable.txt.click", "disk-shareable", EDIT_DISK),
+                    ("/tmp/vmm-a11y-disk-readonly.txt.click", "disk-readonly", EDIT_DISK),
+                ):
+                    if not os.path.exists(cpath):
+                        continue
+                    try:
+                        os.remove(cpath)
+                        w = self._addstorage.widget(wid)
+                        w.set_active(not w.get_active())
+                        pub = cpath.replace(".click", "")
+                        open(pub, "w").write("1" if w.get_active() else "0")
+                        self._enable_apply(edit)
+                    except Exception:
+                        pass
+                spath = "/tmp/vmm-a11y-disk-serial.txt"
+                try:
+                    if os.path.exists(spath):
+                        stamp = os.path.getmtime(spath)
+                        if getattr(self, "_vmm_disk_serial_seen", None) != stamp:
+                            self._vmm_disk_serial_seen = stamp
+                            text = open(spath, "r").read()
+                            w = self._addstorage.widget("disk-serial")
+                            if w is not None and (w.get_text() or "") != text:
+                                w.set_text(text)
+                                self._enable_apply(EDIT_DISK)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_disk_fields)
         if not getattr(self, "_vmm_overview_combo_poll", False):
             self._vmm_overview_combo_poll = True
 
@@ -1133,6 +1174,37 @@ class vmmDetails(vmmGObjectUI):
                         return True
                     key = key.strip()
                     item = item.strip()
+                    addstorage_wids = {
+                        "Cache mode:": "disk-cache",
+                        "Discard mode:": "disk-discard",
+                    }
+                    if key in addstorage_wids:
+                        os.remove(sel)
+                        combo = self._addstorage.widget(addstorage_wids[key])
+                        model = combo.get_model() if combo is not None else None
+                        if model is None:
+                            return True
+                        match = None
+                        it = model.get_iter_first()
+                        while it is not None:
+                            label = str(model[it][0] or "")
+                            extra = ""
+                            try:
+                                extra = str(model[it][1] or "")
+                            except Exception:
+                                extra = ""
+                            if (
+                                item.lower() in label.lower()
+                                or item.lower() in extra.lower()
+                                or extra.lower() == item.lower()
+                            ):
+                                match = it
+                                break
+                            it = model.iter_next(it)
+                        if match is not None:
+                            combo.set_active_iter(match)
+                            self._enable_apply(EDIT_DISK)
+                        return True
                     wid = {
                         "Chipset:": "overview-chipset",
                         "Firmware:": "overview-firmware",

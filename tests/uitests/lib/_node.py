@@ -2384,6 +2384,20 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         return sent
     if "no bootable" in compact:
         return _SentinelStaticLabel("No bootable devices")
+    if "advanced options" in compact:
+        return _SentinelDetailsExpander(
+            "Advanced options", "/tmp/vmm-a11y-disk-advanced-expand"
+        )
+    if "shareable" in compact:
+        return _SentinelDetailsCheck("Shareable:", "/tmp/vmm-a11y-disk-shareable.txt")
+    if "readonly" in compact:
+        return _SentinelDetailsCheck("Readonly:", "/tmp/vmm-a11y-disk-readonly.txt")
+    if compact.startswith("serial") or "serial:" in compact:
+        return _SentinelEntry("Serial:", "/tmp/vmm-a11y-disk-serial.txt")
+    if "cache mode" in compact:
+        return _SentinelDetailsCombo("Cache mode:")
+    if "discard mode" in compact:
+        return _SentinelDetailsCombo("Discard mode:")
     if compact == "config-remove":
         return _SentinelClickButton("config-remove")
     if "menu item" in role or any(
