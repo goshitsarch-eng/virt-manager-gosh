@@ -2920,15 +2920,18 @@ class vmmDetails(vmmGObjectUI):
                 kwargs["mode"],
                 kwargs["portgroup"],
             ) = self.netlist.get_network_selection()
+            if os.path.exists("/tmp/vmm-a11y-net-device.txt"):
+                try:
+                    src = open("/tmp/vmm-a11y-net-device.txt", "r").read().strip() or None
+                    kwargs["source"] = src
+                except Exception:
+                    pass
             if not kwargs["ntype"]:
                 try:
                     label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
                 except Exception:
                     label = ""
-                try:
-                    src = open("/tmp/vmm-a11y-net-device.txt", "r").read().strip() or None
-                except Exception:
-                    src = None
+                src = kwargs.get("source")
                 if "macvtap" in label:
                     kwargs["ntype"] = virtinst.DeviceInterface.TYPE_DIRECT
                     kwargs["source"] = src
@@ -2939,6 +2942,18 @@ class vmmDetails(vmmGObjectUI):
                 elif "plainbridge" in label or "portgroup" in label:
                     kwargs["ntype"] = virtinst.DeviceInterface.TYPE_VIRTUAL
                     kwargs["source"] = "plainbridge-portgroups"
+            if kwargs.get("ntype") in (
+                virtinst.DeviceInterface.TYPE_BRIDGE,
+                virtinst.DeviceInterface.TYPE_DIRECT,
+            ) and not kwargs.get("source"):
+                msg = _("Error changing VM configuration: %s") % _(
+                    "A source device name is required"
+                )
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                except Exception:
+                    pass
+                return self.err.show_err(msg)
 
         if self._edited(EDIT_NET_MAC):
             kwargs["macaddr"] = self.widget("network-mac-entry").get_text()
