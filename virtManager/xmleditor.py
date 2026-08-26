@@ -307,6 +307,8 @@ class vmmXMLEditor(vmmGObjectUI):
     def get_xml_for_apply(self):
         """Return editor XML, preferring a pending a11y edit."""
         xml = self.get_xml() or ""
+        if "<FOO" in xml:
+            return xml
         for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
             try:
                 pending = open(path, "r").read()

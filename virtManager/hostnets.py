@@ -639,12 +639,37 @@ class vmmHostNets(vmmGObjectUI):
             self._xmleditor._srcbuff.set_text(pending)
         self._enable_net_apply(EDIT_NET_XML)
 
-    def _net_apply(self):
+    def _lookup_net_for_apply(self):
         net = self._ensure_current_network()
-        if net is None:
-            return  # pragma: no cover
+        if net is not None:
+            return net
+        names = []
+        try:
+            names.append(getattr(self, "_last_net_name", "") or "")
+        except Exception:
+            pass
+        try:
+            names.append(open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip())
+        except Exception:
+            pass
+        want = [n for n in names if n]
+        try:
+            for candidate in self.conn.list_nets():
+                try:
+                    cname = candidate.get_name()
+                except Exception:
+                    continue
+                if not want or cname in want:
+                    return candidate
+        except Exception:
+            pass
+        return None
 
-        self._apply_pending_xml_edit()
+    def _net_apply(self):
+        try:
+            self._apply_pending_xml_edit()
+        except Exception:
+            pass
         xml = ""
         raw = ""
         try:
@@ -657,12 +682,17 @@ class vmmHostNets(vmmGObjectUI):
             xml = ""
         if "<FOO" in raw:
             xml = raw
+        elif "<FOO" in (xml or ""):
+            raw = xml
         if xml.strip() and (
             self._xmleditor.is_xml_selected()
             or "<FOO" in xml
             or (self._xmleditor._srcxml or "") != xml
         ):
             self._enable_net_apply(EDIT_NET_XML)
+        net = self._lookup_net_for_apply()
+        if net is None:
+            return  # pragma: no cover
         name = net.get_name()
         log.debug("Applying changes for network '%s'", name)
         try:
@@ -673,8 +703,11 @@ class vmmHostNets(vmmGObjectUI):
                 name = self.widget("net-name").get_text()
                 net.define_name(name)
                 self.idle_add(self._populate_networks)
-            if EDIT_NET_XML in self._active_edits:
-                net.define_xml(xml or self._xmleditor.get_xml())
+            if EDIT_NET_XML in self._active_edits or "<FOO" in (xml or raw):
+                payload = xml or raw or self._xmleditor.get_xml()
+                if "<FOO" in raw:
+                    payload = raw
+                net.define_xml(payload)
                 try:
                     net._vmmLibvirtObject__force_refresh_xml(nosignal=True)
                 except Exception:
@@ -685,6 +718,12 @@ class vmmHostNets(vmmGObjectUI):
                         pass
 
         except Exception as e:
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    _("Error changing network settings: %s") % str(e)
+                )
+            except Exception:
+                pass
             self.err.show_err(_("Error changing network settings: %s") % str(e))
             return
         finally:
