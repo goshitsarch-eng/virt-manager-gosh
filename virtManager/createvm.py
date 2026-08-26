@@ -257,6 +257,9 @@ class vmmCreateVM(vmmGObjectUI):
             self._reset_state(uri)
             self.topwin.set_transient_for(parent)
             vmmEngine.get_instance().increment_window_counter()
+        else:
+            # Connection list can change while the wizard stays mapped.
+            self._reset_state(uri)
 
         self.topwin.present()
         try:
@@ -274,6 +277,10 @@ class vmmCreateVM(vmmGObjectUI):
         gtkcompat.expose_oslist_activate_window(self._os_list)
         try:
             open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
+        except Exception:
+            pass
+        try:
+            GLib.timeout_add(200, self._retry_conn_if_none)
         except Exception:
             pass
         if not getattr(self, "_vmm_close_poll", False):
@@ -1726,6 +1733,17 @@ class vmmCreateVM(vmmGObjectUI):
     def _conn_state_changed(self, conn):
         if conn.is_disconnected():
             self._close()
+
+    def _retry_conn_if_none(self):
+        if self.conn is not None:
+            return False
+        try:
+            activeconn = self._populate_conn_list()
+        except Exception:
+            return False
+        if activeconn is not None:
+            self._set_conn(activeconn)
+        return False
 
     def _set_conn(self, newconn):
         self.widget("startup-error-box").hide()

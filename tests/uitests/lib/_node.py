@@ -9356,9 +9356,7 @@ class _SentinelNewVMWindow(object):
     @property
     def showing(self):
         try:
-            return os.path.exists("/tmp/vmm-a11y-newvm-shown.txt") or os.path.exists(
-                "/tmp/vmm-a11y-pagenum.txt"
-            )
+            return open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -9421,13 +9419,32 @@ class _SentinelNewVMWindow(object):
         compact = str(name or "").replace(".*", "").lower()
         if "install-iso-browse" in compact:
             return _SentinelClickButton("install-iso-browse")
-        try:
-            err = open("/tmp/vmm-a11y-createvm-startup-error.txt", "r").read()
-        except Exception:
-            err = ""
-        want = str(name or "").replace(".*", "")
-        if want and err and want.lower() in err.lower():
-            return _SentinelStaticLabel(err)
+        if name and any(
+            tok in compact
+            for tok in (
+                "hypervisor",
+                "kvm is not",
+                "active connection",
+                "install method",
+                "install on",
+                "kvm kernel",
+            )
+        ):
+            deadline = time.time() + 8.0
+            while time.time() < deadline:
+                try:
+                    err = open("/tmp/vmm-a11y-createvm-startup-error.txt", "r").read()
+                except Exception:
+                    err = ""
+                if err:
+                    try:
+                        if re.search(str(name), err, re.I | re.DOTALL):
+                            return _SentinelStaticLabel(err)
+                    except re.error:
+                        want = str(name).replace(".*", " ").strip()
+                        if want and want.lower() in err.lower():
+                            return _SentinelStaticLabel(err)
+                time.sleep(0.05)
         raise dogtail.tree.SearchError(
             "Didn't find widget with name='%s' "
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
