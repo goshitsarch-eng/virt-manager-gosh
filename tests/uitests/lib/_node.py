@@ -724,6 +724,65 @@ class _SentinelAddhwError(object):
         return True
 
 
+class _SentinelConfigApply(object):
+    name = "config-apply"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def sensitive(self):
+        try:
+            if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+                return True
+        except Exception:
+            pass
+        try:
+            return open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def check_sensitive(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-config-apply", "w").write("1")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-click.txt", "w").write("config-apply")
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline and os.path.exists("/tmp/vmm-a11y-config-apply"):
+            time.sleep(0.05)
+        try:
+            pending = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
+        except Exception:
+            pending = None
+        if pending == "":
+            return
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "0":
+                    break
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+
 class _SentinelBootTab(object):
     name = "boot-tab"
     roleName = "panel"
@@ -785,6 +844,8 @@ def _sentinel_container_extra(name, roleName):
         return _SentinelAddhwError("Not supported for containers")
     if "boot-tab" in compact:
         return _SentinelBootTab()
+    if "config-apply" in compact:
+        return _SentinelConfigApply()
     return None
 
 
@@ -2138,7 +2199,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
             raw_name = dogtail.tree.Node.name.__get__(self) or ""
         except Exception:
             raw_name = getattr(self, "name", None) or ""
-        if "config-apply" in raw_name:
+        shown = raw_name or getattr(self, "name", "") or ""
+        if "config-apply" in str(shown).lower():
             try:
                 if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
                     return True
