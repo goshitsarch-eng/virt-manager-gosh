@@ -239,7 +239,10 @@ class VMMDogtailApp:
             try:
                 utils.check(lambda: _alert_text() != stored, timeout=3)
             except Exception:
-                pass
+                try:
+                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+                except Exception:
+                    pass
             return
         alert = None
         for name, role in (
