@@ -1148,6 +1148,11 @@ class _SentinelClickButton(object):
                 return open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "r").read().strip() == "1"
             except Exception:
                 return False
+        if self.name == "Browse Local":
+            try:
+                return open("/tmp/vmm-a11y-browse-local-sensitive.txt", "r").read().strip() == "1"
+            except Exception:
+                return True
         return True
 
     def check_onscreen(self):
@@ -7328,7 +7333,14 @@ class _SentinelWizardField(object):
 
 class _SentinelWizardButton(object):
     def __init__(
-        self, name, path, shown_cb, wait_path=None, wait_value="0", write_value="1"
+        self,
+        name,
+        path,
+        shown_cb,
+        wait_path=None,
+        wait_value="0",
+        write_value="1",
+        sensitive_path=None,
     ):
         self.name = name
         self.roleName = "push button"
@@ -7337,6 +7349,7 @@ class _SentinelWizardButton(object):
         self._wait_path = wait_path
         self._wait_value = wait_value
         self._write_value = write_value
+        self._sensitive_path = sensitive_path
 
     @property
     def showing(self):
@@ -7352,6 +7365,11 @@ class _SentinelWizardButton(object):
 
     @property
     def sensitive(self):
+        if self._sensitive_path:
+            try:
+                return open(self._sensitive_path, "r").read().strip() == "1"
+            except Exception:
+                return True
         return True
 
     def check_onscreen(self):
@@ -7359,6 +7377,8 @@ class _SentinelWizardButton(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        if not self.sensitive:
+            return
         try:
             os.remove("/tmp/vmm-a11y-alert.txt")
         except Exception:
@@ -9557,6 +9577,10 @@ class _SentinelNewVMWindow(object):
         x, y = self.position
         return x + 200, y + 10
 
+    def click_title(self):
+        clickX, clickY = self.title_coordinates()
+        dogtail.rawinput.click(clickX, clickY, 1)
+
     def window_close(self):
         try:
             open("/tmp/vmm-a11y-window-close.txt", "w").write("New VM")
@@ -9588,6 +9612,8 @@ class _SentinelNewVMWindow(object):
             _sentinel_oslist_popover,
             _sentinel_container_extra,
             _sentinel_url_widgets,
+            _sentinel_arch_combo,
+            _sentinel_kernel_info,
         ):
             try:
                 if fn is _sentinel_named_entry:
@@ -9864,6 +9890,7 @@ class _SentinelStorageBrowser(object):
                 wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
                 wait_value="Locate existing storage",
                 write_value="Browse Local",
+                sensitive_path="/tmp/vmm-a11y-browse-local-sensitive.txt",
             )
         if "pool-" in compact or (
             "cell" in role and compact and not compact.endswith(".img")

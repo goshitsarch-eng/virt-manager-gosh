@@ -100,6 +100,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                 open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
             except Exception:
                 pass
+            self._publish_browse_local_sensitive()
             try:
                 if not os.path.exists("/tmp/vmm-a11y-pool-select.txt"):
                     open("/tmp/vmm-a11y-pool-select.txt", "w").write("pool-dir")
@@ -292,6 +293,7 @@ class vmmStorageBrowser(vmmGObjectUI):
         self.storagelist.widget("choose-volume").set_visible(True)
         self.storagelist.widget("choose-volume").set_sensitive(False)
         self.storagelist.widget("pool-apply").set_visible(False)
+        self._publish_browse_local_sensitive()
 
         self.set_browse_reason(self._browse_reason)
 
@@ -399,7 +401,21 @@ class vmmStorageBrowser(vmmGObjectUI):
     # Internal helpers #
     ####################
 
+    def _publish_browse_local_sensitive(self):
+        try:
+            btn = self.storagelist.widget("browse-local")
+            sensitive = bool(
+                btn is not None and btn.get_visible() and btn.get_sensitive()
+            )
+            open("/tmp/vmm-a11y-browse-local-sensitive.txt", "w").write(
+                "1" if sensitive else "0"
+            )
+        except Exception:
+            pass
+
     def _browse_local(self):
+        if self.conn.is_remote():
+            return
         data = _BrowseReasonMetadata(self._browse_reason)
         gsettings_key = data.gsettings_key
 
