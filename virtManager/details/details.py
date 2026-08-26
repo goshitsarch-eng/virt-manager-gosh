@@ -1563,6 +1563,10 @@ class vmmDetails(vmmGObjectUI):
                         w = getter()
                         w.set_active(not w.get_active())
                         if is_gfx:
+                            try:
+                                w.set_visible(True)
+                            except Exception:
+                                pass
                             self.gfxdetails._change_cb(edit)
                             self._enable_apply(EDIT_GFX)
                         else:
@@ -2931,8 +2935,14 @@ class vmmDetails(vmmGObjectUI):
             self.err.show_err(_("Error applying changes: %s") % e)
 
         try:
+            alert = ""
+            try:
+                alert = open("/tmp/vmm-a11y-alert.txt", "r").read()[:200]
+            except Exception:
+                alert = ""
             open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
-                "done pagetype=%s success=%s\n" % (pagetype, success)
+                "done pagetype=%s success=%s alert=%r\n"
+                % (pagetype, success, alert)
             )
         except Exception:
             pass

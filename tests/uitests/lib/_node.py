@@ -832,6 +832,9 @@ class _SentinelEntry(object):
                     except Exception:
                         pass
 
+    def typeText(self, string):
+        self.set_text(string)
+
 
 class _ArchOptionsSentinel(object):
     name = "Architecture options"
