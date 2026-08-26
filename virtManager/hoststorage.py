@@ -302,6 +302,30 @@ class vmmHostStorage(vmmGObjectUI):
         except Exception:
             pass
 
+    def _nav_list(self, direction):
+        names = []
+        try:
+            names = [
+                n
+                for n in open("/tmp/vmm-a11y-host-pool-list.txt", "r").read().splitlines()
+                if n
+            ]
+        except Exception:
+            names = []
+        cur = ""
+        try:
+            cur = open("/tmp/vmm-a11y-host-pool-selected.txt", "r").read().strip()
+        except Exception:
+            cur = ""
+        if not names:
+            return
+        idx = names.index(cur) if cur in names else 0
+        if direction == "down":
+            idx = min(idx + 1, len(names) - 1)
+        elif direction == "up":
+            idx = max(idx - 1, 0)
+        self._select_pool_by_name(names[idx])
+
     def _select_pool_by_name(self, name):
         if not name:
             return False

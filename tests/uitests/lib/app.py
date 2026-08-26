@@ -208,6 +208,18 @@ class VMMDogtailApp:
                             fh.write("")
                 except Exception:
                     pass
+            if key_l in ("down", "up"):
+                try:
+                    if open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip():
+                        open("/tmp/vmm-a11y-host-nav.txt", "w").write(key_l)
+                        deadline = time.time() + 2.0
+                        while time.time() < deadline:
+                            if not os.path.exists("/tmp/vmm-a11y-host-nav.txt"):
+                                return
+                            time.sleep(0.05)
+                        return
+                except Exception:
+                    pass
             if key_l in ("enter", "return"):
                 try:
                     url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()

@@ -259,6 +259,18 @@ class vmmHost(vmmGObjectUI):
         from gi.repository import GLib
 
         def _tick():
+            try:
+                nav = "/tmp/vmm-a11y-host-nav.txt"
+                if os.path.exists(nav):
+                    direction = open(nav, "r").read().strip().lower()
+                    os.remove(nav)
+                    page = self.widget("details-tabs").get_current_page()
+                    if page == 1:
+                        self._hostnets._nav_list(direction)
+                    elif page == 2:
+                        self._storagelist._nav_list(direction)
+            except Exception:
+                pass
             path = "/tmp/vmm-a11y-host-tab.txt"
             try:
                 if not os.path.exists(path):
