@@ -2969,11 +2969,16 @@ class vmmDetails(vmmGObjectUI):
         GLib.idle_add(_do_show)
 
     def _inspection_refresh_clicked_cb(self, src):
+        from ..lib import inspection as inspmod
         from ..lib.inspection import vmmInspection
 
+        ignore = src
         inspection = vmmInspection.get_instance()
         if inspection:
             inspection.vm_refresh(self.vm)
+        elif self.vm.conn.is_test():
+            self.vm.set_inspection_data(inspmod._make_fake_data(self.vm))
+        self._refresh_os_page()
 
     def _os_list_name_selected_cb(self, src, osobj):
         if getattr(self, "_ui_refreshing", False):
