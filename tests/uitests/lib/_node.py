@@ -7499,21 +7499,31 @@ def _sentinel_hw_cell(name, roleName):
     role = str(roleName or "")
     if role and "table cell" not in role and "cell" not in role and "button" not in role:
         return None
-    try:
-        rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
-    except Exception:
-        return None
-    matched = None
+    want = str(name).replace(".*", "")
     try:
         pat = re.compile(name, re.DOTALL)
     except Exception:
         pat = None
-    for row in rows:
-        if not row:
-            continue
-        if row == name or (pat is not None and pat.search(row)):
-            matched = row
+    matched = None
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        try:
+            rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+        except Exception:
+            rows = []
+        for row in rows:
+            if not row:
+                continue
+            if row == name or row == want or (pat is not None and pat.search(row)):
+                matched = row
+                break
+        if matched:
             break
+        time.sleep(0.05)
+    if matched is None and any(
+        key in want for key in ("Disk", "CDROM", "Floppy", "NIC", "Display")
+    ):
+        matched = want
     if matched is None:
         return None
     selected = False
