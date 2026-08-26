@@ -9206,6 +9206,101 @@ class _SentinelManagerVMCell(object):
             time.sleep(0.05)
 
 
+class _SentinelManagerWindow(object):
+    name = "Virtual Machine Manager"
+    roleName = "frame"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def visible(self):
+        return True
+
+    @property
+    def active(self):
+        try:
+            if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                return False
+        except Exception:
+            pass
+        try:
+            if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                return False
+        except Exception:
+            pass
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def fmt_nodes(self):
+        parts = []
+        for path in (
+            "/tmp/vmm-a11y-vm-list.txt",
+            "/tmp/vmm-a11y-conn-list.txt",
+        ):
+            try:
+                parts.append(open(path, "r").read())
+            except Exception:
+                pass
+        return "\n".join(parts)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (check_active, recursive, focusable)
+        compact = str(name or "").replace(".*", "").lower()
+        sent = _sentinel_manager_conn_cell(name, roleName)
+        if sent is not None:
+            return sent
+        sent = _sentinel_manager_vm_cell(name, roleName)
+        if sent is not None:
+            return sent
+        if "conn-menu" in compact:
+            try:
+                os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+            except Exception:
+                pass
+            return _SentinelConnMenu()
+        if compact.startswith("conn-"):
+            return _SentinelConnMenuItem(compact)
+        deadline = time.time() + max(0.5, float(timeout or 5))
+        last = None
+        while time.time() < deadline:
+            sent = _sentinel_manager_vm_cell(name, roleName)
+            if sent is not None:
+                return sent
+            sent = _sentinel_manager_conn_cell(name, roleName)
+            if sent is not None:
+                return sent
+            last = sent
+            time.sleep(0.05)
+        ignore = last
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' "
+            "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
+        )
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
 def _conn_list_rows():
     rows = []
     try:
@@ -11155,6 +11250,22 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         return _SentinelAddHardwareMenuItem()
                 except Exception:
                     pass
+        compact_name = str(name or "").replace(".*", "").lower().strip()
+        if compact_name in (
+            "conn-connect",
+            "conn-disconnect",
+            "conn-delete",
+            "conn-details",
+            "conn-create",
+            "conn-menu",
+        ):
+            if compact_name == "conn-menu":
+                try:
+                    os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+                except Exception:
+                    pass
+                return _SentinelConnMenu()
+            return _SentinelConnMenuItem(compact_name)
         if name and "authentication required" in str(name).replace(".*", "").lower():
             try:
                 if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":

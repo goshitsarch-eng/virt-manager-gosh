@@ -119,6 +119,10 @@ class VMMDogtailApp:
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+        if name and "Virtual Machine Manager" in name:
+            from . import _node
+
+            return _node._SentinelManagerWindow()
         if name and "Authentication required" in name:
             while time.time() < deadline:
                 try:
