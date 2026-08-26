@@ -1142,6 +1142,14 @@ class _SentinelClickButton(object):
     def check_sensitive(self):
         return True
 
+    def bring_on_screen(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         # config-remove has a dedicated file poller. Writing click.txt as
