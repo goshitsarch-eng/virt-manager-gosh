@@ -3039,6 +3039,12 @@ class _SentinelMigrateWindow(object):
         timeout=5,
     ):
         ignore = (check_active, recursive, focusable, timeout)
+        try:
+            sent = _sentinel_xml_widgets(name, roleName)
+            if sent is not None:
+                return sent
+        except Exception:
+            pass
         sent = _sentinel_migrate_widgets(name, roleName, labeller_text)
         if sent is not None:
             return sent
