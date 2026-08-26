@@ -3025,6 +3025,9 @@ class vmmCreateVM(vmmGObjectUI):
             msg += "\n\n" + self._os_list.eol_text
             return self._write_a11y_alert(msg)
 
+        if cdrom and str(cdrom).startswith("/dev/") and not os.path.exists(cdrom):
+            return self._write_a11y_alert(_("Error setting installer parameters."))
+
         # Build the installer and Guest instance
         try:
             if init:
