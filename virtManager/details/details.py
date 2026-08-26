@@ -691,6 +691,10 @@ class vmmDetails(vmmGObjectUI):
                 self.widget("boot-menu"),
                 window=self.topwin,
             )
+            try:
+                open("/tmp/vmm-a11y-boot-menu.txt", "w").write("0")
+            except Exception:
+                pass
         except Exception:
             pass
         if not getattr(self, "_vmm_boot_init_poll", False):
@@ -2139,12 +2143,6 @@ class vmmDetails(vmmGObjectUI):
             if xml_for_a11y:
                 try:
                     open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml_for_a11y)
-                except Exception:
-                    pass
-                try:
-                    xml_l = (xml_for_a11y or "").replace('"', "'").lower()
-                    if "<bootmenu" in xml_l and "enable='yes'" in xml_l:
-                        open("/tmp/vmm-a11y-boot-menu.txt", "w").write("1")
                 except Exception:
                     pass
 
