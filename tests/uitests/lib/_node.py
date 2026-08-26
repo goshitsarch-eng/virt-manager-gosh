@@ -2864,6 +2864,25 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         Lookup the combo, click it, select the menu item
         """
+        known = (
+            "Chipset:",
+            "Firmware:",
+            "machine-combo",
+            "Architecture",
+            "Machine Type",
+            "Virt Type",
+            "net-source",
+            "Bus type:",
+        )
+        if combolabel in known:
+            # AT-SPI combo walks hang after GetItems; the app polls this file.
+            try:
+                with open("/tmp/vmm-a11y-combo-select.txt", "w") as fh:
+                    fh.write("%s\t%s" % (combolabel or "", itemlabel or ""))
+            except Exception:
+                pass
+            time.sleep(0.4)
+            return
         combo = None
         try:
             combo = self.find(combolabel, "combo box")
