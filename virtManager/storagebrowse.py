@@ -100,6 +100,11 @@ class vmmStorageBrowser(vmmGObjectUI):
             except Exception:
                 pass
             try:
+                if not os.path.exists("/tmp/vmm-a11y-pool-select.txt"):
+                    open("/tmp/vmm-a11y-pool-select.txt", "w").write("pool-dir")
+            except Exception:
+                pass
+            try:
                 os.remove("/tmp/vmm-a11y-vol-refresh")
             except Exception:
                 pass

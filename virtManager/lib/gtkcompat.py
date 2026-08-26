@@ -2601,6 +2601,32 @@ def expose_storagebrowse_window(browser):
                 if extra and extra not in vols:
                     vols.append(extra)
         try:
+            conn = getattr(slist, "conn", None) or getattr(browser, "conn", None)
+            want = ""
+            try:
+                want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+            except Exception:
+                want = ""
+            if not want:
+                want = "pool-dir"
+            if conn is not None:
+                for pool in conn.list_pools():
+                    try:
+                        pname = pool.get_name()
+                    except Exception:
+                        pname = ""
+                    if want and want not in str(pname):
+                        continue
+                    for vol in pool.get_volumes() or []:
+                        try:
+                            vname = vol.get_name()
+                        except Exception:
+                            vname = ""
+                        if vname and vname not in vols:
+                            vols.append(vname)
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
             open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
         except Exception:
@@ -2626,6 +2652,11 @@ def expose_storagebrowse_window(browser):
             win.set_title("vmm-storage-browser")
             win.set_visible(True)
             _rebuild()
+            try:
+                GLib.timeout_add(200, lambda: _rebuild() or False)
+                GLib.timeout_add(800, lambda: _rebuild() or False)
+            except Exception:
+                pass
             return win
         except Exception:
             browser._vmm_browse_win = None
