@@ -1414,15 +1414,16 @@ class vmmDetails(vmmGObjectUI):
                         self._addstorage._change_cb(1)
                 except Exception:
                     pass
-                npath = "/tmp/vmm-a11y-net-device.txt"
-                nset = npath + ".set"
+                nset = "/tmp/vmm-a11y-net-device.txt.set"
                 try:
-                    use = nset if os.path.exists(nset) else npath
-                    if os.path.exists(use):
-                        stamp = os.path.getmtime(use)
+                    # Only .set is a details edit. The wizard also writes
+                    # net-device.txt for New VM Device name.
+                    if os.path.exists(nset):
+                        stamp = os.path.getmtime(nset)
                         if getattr(self, "_vmm_net_device_seen", None) != stamp:
                             self._vmm_net_device_seen = stamp
-                            text = open(use, "r").read()
+                            text = open(nset, "r").read()
+                            os.remove(nset)
                             w = self.netlist.widget("net-manual-source")
                             if w is not None and (w.get_text() or "") != text:
                                 w.set_text(text)

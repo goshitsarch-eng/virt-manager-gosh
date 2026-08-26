@@ -218,13 +218,13 @@ class vmmVMWindow(vmmGObjectUI):
         log.debug("Showing VM details: %s", self.vm)
         vis = self.is_visible()
         try:
-            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
-        except Exception:
-            pass
-        try:
             open("/tmp/vmm-a11y-customize-shown.txt", "w").write(
                 "1" if self.is_customize_dialog else "0"
             )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
         except Exception:
             pass
         try:
@@ -376,14 +376,30 @@ class vmmVMWindow(vmmGObjectUI):
     def customize_finish(self, src):
         ignore = src
         try:
-            if self._details.widget("config-apply").get_sensitive():
+            edits = list(getattr(self._details, "_active_edits", []) or [])
+        except Exception:
+            edits = []
+        apply_on = False
+        try:
+            apply_on = bool(self._details.widget("config-apply").get_sensitive())
+        except Exception:
+            apply_on = False
+        # Wizard leftover files (net-device, name) can mark Apply without
+        # a user edit. Begin Installation should not be blocked then.
+        if apply_on and edits:
+            try:
                 open("/tmp/vmm-a11y-alert.txt", "w").write(
                     "There are unapplied changes. Would you like to apply them now?"
                 )
-        except Exception:
-            pass
-        if self._details.vmwindow_has_unapplied_changes():
-            return
+            except Exception:
+                pass
+            if self._details.vmwindow_has_unapplied_changes():
+                return
+        else:
+            try:
+                self._details._disable_apply()
+            except Exception:
+                pass
         self.emit("customize-finished", self.vm)
 
     def _set_initial_window_size(self):
