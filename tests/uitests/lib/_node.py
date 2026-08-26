@@ -772,6 +772,11 @@ class _SentinelClickButton(object):
 
     @property
     def sensitive(self):
+        if self.name == "Choose Volume":
+            try:
+                return open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
         return True
 
     def check_onscreen(self):

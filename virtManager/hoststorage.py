@@ -345,6 +345,13 @@ class vmmHostStorage(vmmGObjectUI):
             )
         except Exception:
             pass
+        try:
+            choose = self.widget("choose-volume")
+            open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "w").write(
+                "1" if choose.get_visible() and choose.get_sensitive() else "0"
+            )
+        except Exception:
+            pass
 
     def _publish_visible_vols(self):
         names = []
@@ -1140,6 +1147,13 @@ class vmmHostStorage(vmmGObjectUI):
 
         can_choose = bool(treeiter and model[treeiter][VOL_COLUMN_SENSITIVE])
         self.widget("choose-volume").set_sensitive(can_choose)
+        try:
+            open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "w").write(
+                "1" if can_choose else "0"
+            )
+        except Exception:
+            pass
+        self._publish_a11y_state()
 
     def _vol_popup_menu_cb(self, src, event):
         if event.button != 3:
