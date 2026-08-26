@@ -4552,10 +4552,6 @@ class vmmDetails(vmmGObjectUI):
         if is_removable:
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")
-            try:
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
-            except Exception:
-                pass
 
         self._addstorage.set_dev(disk)
 
