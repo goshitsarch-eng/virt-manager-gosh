@@ -1468,6 +1468,8 @@ class vmmDetails(vmmGObjectUI):
                         }.get(wid)
                         if aedit is not None:
                             self._addstorage._change_cb(aedit)
+                        if wid == "disk-shareable":
+                            self._vmm_last_disk_kwargs = None
                         self._enable_apply(edit)
                     except Exception:
                         pass
@@ -1903,6 +1905,14 @@ class vmmDetails(vmmGObjectUI):
             def _poll_device_fields():
                 try:
                     _tab, hw = self._details_hw_context()
+                    try:
+                        last_kw = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+                        if last_kw.get("shareable") and (
+                            _tab == "disk-tab" or "Disk" in (hw or "")
+                        ):
+                            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                    except Exception:
+                        pass
                     last = getattr(self, "_vmm_last_refreshed_hw", None)
                     if hw and hw != last:
                         apply_on = False
@@ -3843,8 +3853,6 @@ class vmmDetails(vmmGObjectUI):
             self._active_edits.append(edittype)
         if edittype != EDIT_XML:
             self._xmleditor.details_changed = True
-        if edittype in (EDIT_DISK, EDIT_DISK_PATH, EDIT_DISK_BUS):
-            self._vmm_last_disk_kwargs = None
         try:
             dirty = getattr(self, "_vmm_last_refreshed_hw", None)
             if not dirty:
@@ -4307,6 +4315,12 @@ class vmmDetails(vmmGObjectUI):
                     if dev is not None and hasattr(dev, "get_source_path"):
                         path = dev.get_source_path() or ""
                     open("/tmp/vmm-a11y-disk-source-path.txt", "w").write(path)
+            except Exception:
+                pass
+            try:
+                last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+                if success and last.get("shareable"):
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
             except Exception:
                 pass
         return success
