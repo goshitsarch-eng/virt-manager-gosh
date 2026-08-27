@@ -4885,9 +4885,15 @@ class vmmDetails(vmmGObjectUI):
                     self._disable_apply()
                 elif self._active_edits == [EDIT_XML]:
                     # Programmatic set_xml can emit delayed "changed"
-                    # after the XML tab refresh, which blocks hardware
-                    # keyboard walks with an unapplied-changes confirm.
-                    self._disable_apply()
+                    # after the XML tab refresh. Only clear Apply when
+                    # the buffer still matches the loaded XML.
+                    try:
+                        if (self._xmleditor.get_xml() or "") == (
+                            self._xmleditor._srcxml or ""
+                        ):
+                            self._disable_apply()
+                    except Exception:
+                        pass
                 return False
 
             try:

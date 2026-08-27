@@ -475,7 +475,8 @@ class VMMDogtailApp:
                     vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
                 except Exception:
                     vm_open = False
-                if vm_open and hw_names:
+                # hw-list.txt is enough: vmwindow can lag on first show.
+                if hw_names and (vm_open or os.path.exists("/tmp/vmm-a11y-hw-list.txt")):
                     idx = 0
                     try:
                         idx = int(

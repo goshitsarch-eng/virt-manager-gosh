@@ -429,7 +429,15 @@ class vmmXMLEditor(vmmGObjectUI):
 
     def _buffer_changed_cb(self, buf):
         if getattr(self, "_ignore_buffer_changed", False):
-            return
+            # Keep ignoring only while the buffer still matches the
+            # programmatic load. A user edit before the idle runs
+            # must still enable Apply.
+            try:
+                if (self.get_xml() or "") == (self._srcxml or ""):
+                    return
+            except Exception:
+                return
+            self._ignore_buffer_changed = False
         self.emit("changed")
 
     def _before_page_changed_cb(self, notebook, widget, pagenum):
