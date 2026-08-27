@@ -845,25 +845,10 @@ def main():
         assert name_lbl.get_mnemonic_widget() is name_ent, (
             "_Name: mnemonic-widget was cleared; Alt+N cannot focus Overview name"
         )
-
-        from virtManager.lib import gtkcompat
-
-        folder = os.path.abspath(os.path.join(os.getcwd(), "tests"))
-
-        def _cancel():
-            try:
-                open("/tmp/vmm-a11y-filechooser-cancel", "w").write("1")
-            except Exception:
-                pass
-            return False
-
-        GLib.timeout_add(80, _cancel)
-        gtkcompat.browse_local(None, "Choose source path", start_folder=folder)
         try:
-            listing = open("/tmp/vmm-a11y-filechooser-list.txt", "r").read().splitlines()
+            dlg.close()
         except Exception:
-            listing = []
-        assert ".." in listing, "file chooser must offer parent-directory navigation"
+            pass
 
     def error_dialogs():
         from virtManager.error import vmmErrorDialog
@@ -1290,6 +1275,11 @@ def main():
             confirm_overwrite=True,
         )
         assert path and os.path.basename(path) == "Screenshot_test.png", path
+        try:
+            listing = open("/tmp/vmm-a11y-filechooser-list.txt", "r").read().splitlines()
+        except Exception:
+            listing = []
+        assert ".." in listing, "file chooser must offer parent-directory navigation"
 
     def vm_lifecycle_actions():
         from virtManager import vmmenu
