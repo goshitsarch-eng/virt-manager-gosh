@@ -64,6 +64,17 @@ def restore_a11y_request(path, name):
         pass
     finish_a11y_request(path)
 
+
+def _a11y_runtime_enabled():
+    """Whether to build AT-SPI sidecar widgets.
+
+    Official uitests and virt-manager set GTK_A11Y=atspi. Construct
+    forces GTK_A11Y=none so mapping every window in one process does
+    not rebuild thousands of CELL/COLUMN_HEADER buttons.
+    """
+    val = os.environ.get("GTK_A11Y", "").strip().lower()
+    return val not in ("none", "0", "false", "no")
+
 # ATK names from the GTK 3 .ui files. gtk4-builder-tool dropped AtkObject
 # children; restore them so dogtail find("general-tab") etc. still works.
 _BUILDER_A11Y_NAMES = {
@@ -4392,6 +4403,8 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     GTK 4 TreeView does not expose rows to AT-SPI. Mirror each row as a
     mapped CELL button so dogtail can find VM/connection names.
     """
+    if not _a11y_runtime_enabled():
+        return None
     if treeview is None or getattr(treeview, "_vmm_a11y_mirror", None):
         return None
     win = Gtk.Window()
@@ -4971,6 +4984,8 @@ def attach_treeview_column_a11y(treeview):
     GTK 4 TreeView column headers are often missing from AT-SPI.
     Mirror each title as a COLUMN_HEADER button that triggers sort.
     """
+    if not _a11y_runtime_enabled():
+        return None
     if treeview is None:
         return None
     if getattr(treeview, "_vmm_col_a11y", False):
