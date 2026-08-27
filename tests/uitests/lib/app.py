@@ -175,10 +175,21 @@ class VMMDogtailApp:
             from . import _node
 
             while time.time() < deadline:
+                shown = ""
                 try:
                     shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
                     if shown and _node._vmwindow_matches(shown, want):
                         return _node._SentinelVMWindow(shown)
+                except Exception as exc:
+                    last_err = exc
+                try:
+                    title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+                    if title and (
+                        want in title
+                        or name in title
+                        or re.search(str(name), title)
+                    ):
+                        return _node._SentinelVMWindow(shown or want)
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)

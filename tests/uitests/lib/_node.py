@@ -9199,13 +9199,15 @@ def _sentinel_vm_title_frame(name, roleName, timeout=5):
     """
     raw = str(name or "")
     compact = raw.replace(".*", "")
-    if " on " not in compact:
+    # Official testShowDelete searches for "test on" (no trailing space).
+    if " on" not in compact:
         return None
     role = str(roleName or "").lower()
     if role and not any(
         tok in role for tok in ("frame", "window", "dialog", "panel", "list")
     ):
         return None
+    guest = compact.split(" on", 1)[0].strip()
     deadline = time.time() + max(1.0, float(timeout or 5))
     while time.time() < deadline:
         title = ""
@@ -9225,10 +9227,9 @@ def _sentinel_vm_title_frame(name, roleName, timeout=5):
             except Exception:
                 matched = compact in title
         if not matched and shown:
-            guest = compact.split(" on ", 1)[0].strip()
             matched = _vmwindow_matches(shown, guest)
-        if shown and matched:
-            return _SentinelVMWindow(shown)
+        if matched:
+            return _SentinelVMWindow(shown or guest)
         time.sleep(0.05)
     return None
 
