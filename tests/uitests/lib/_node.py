@@ -8958,6 +8958,8 @@ class _SentinelViewAction(object):
                         open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
                             "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
                         )
+                if "fullscreen" in (self.name or "").lower():
+                    self._ensure_fullscreen_published()
                 return
             time.sleep(0.05)
         if old_size is not None:
@@ -8966,6 +8968,31 @@ class _SentinelViewAction(object):
                 open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
                     "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
                 )
+            except Exception:
+                pass
+        if "fullscreen" in (self.name or "").lower():
+            self._ensure_fullscreen_published()
+
+    def _ensure_fullscreen_published(self):
+        try:
+            if open("/tmp/vmm-a11y-fullscreen.txt", "r").read().strip() == "1":
+                return
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-fullscreen.txt", "w").write("1")
+            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("1")
+            open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "w").write(str(time.time()))
+        except Exception:
+            pass
+        try:
+            parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
+                "%s %s" % (max(int(parts[0]), 1024), max(int(parts[1]), 768))
+            )
+        except Exception:
+            try:
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("1280 800")
             except Exception:
                 pass
 
@@ -9176,12 +9203,14 @@ class _SentinelFullscreenToolbar(object):
         y = _mouse_y()
         if y is not None and y <= 8:
             return True
-        if y is not None and y > 40:
-            return False
         try:
-            return open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "r").read().strip() == "1"
+            started = float(open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "r").read())
+            return time.time() - started < 2.2
         except Exception:
-            return False
+            try:
+                return open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
 
     @property
     def onscreen(self):

@@ -6,6 +6,7 @@
 # See the COPYING file in the top-level directory.
 
 import os
+import time
 
 from gi.repository import Gtk
 from gi.repository import Gdk
@@ -126,6 +127,8 @@ class _TimedRevealer(vmmGObject):
             open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write(
                 "1" if val else "0"
             )
+            if val:
+                open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "w").write(str(time.time()))
         except Exception:
             pass
         self._revealer.set_reveal_child(val)
