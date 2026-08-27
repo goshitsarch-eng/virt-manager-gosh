@@ -57,10 +57,15 @@ def _compile_schemas():
     os.environ["GSETTINGS_SCHEMA_DIR"] = schemadir
 
 
+_PUMP_DEADLINE = None
+
+
 def _pump(GLib, seconds=0.05):
     ctx = GLib.MainContext.default()
     end = time.monotonic() + seconds
     while time.monotonic() < end:
+        if _PUMP_DEADLINE is not None and time.monotonic() > _PUMP_DEADLINE:
+            raise TimeoutError("construct pump exceeded deadline")
         if not ctx.iteration(False):
             time.sleep(0.005)
 
@@ -165,7 +170,11 @@ def main():
         class _Timeout(Exception):
             pass
 
+        global _PUMP_DEADLINE
+        _PUMP_DEADLINE = time.monotonic() + timeout
+
         def _on_alarm(_signum, _frame):
+            # GLib may swallow this; _pump also checks _PUMP_DEADLINE.
             raise _Timeout("%s exceeded %ss" % (name, timeout))
 
         import signal
@@ -177,7 +186,7 @@ def main():
             _pump(GLib, 0.05)
             results.append((name, True, None))
             print("OK  ", name, flush=True)
-        except _Timeout as exc:
+        except (_Timeout, TimeoutError) as exc:
             results.append((name, False, str(exc)))
             print("TIMEOUT", name, flush=True)
         except Exception:
@@ -186,6 +195,7 @@ def main():
             print("FAIL", name, flush=True)
             print(err, flush=True)
         finally:
+            _PUMP_DEADLINE = None
             signal.alarm(0)
             signal.signal(signal.SIGALRM, old)
 
@@ -1479,12 +1489,13 @@ def main():
         win = vmmVMWindow.get_instance(None, vmobj)
         win.show()
         details = win._details
+        _auto_confirm(details)
         uiutil.set_list_selection_by_number(details.widget("hw-list"), 0)
         details._hw_changed_cb(details.widget("hw-list"))
         details.widget("overview-title").set_text("gtk4-applied-title")
         details._enable_apply(EDIT_TITLE)
         details._config_apply()
-        _pump(GLib, 0.8)
+        _pump(GLib, 0.2)
         title = vmobj.get_title() if hasattr(vmobj, "get_title") else None
         xmltitle = getattr(vmobj.xmlobj, "title", None)
         assert "gtk4-applied-title" in str(title or xmltitle or "")
