@@ -1528,7 +1528,10 @@ class vmmDetails(vmmGObjectUI):
                         if aedit is not None:
                             self._addstorage._change_cb(aedit)
                         if wid == "disk-shareable":
-                            self._vmm_last_disk_kwargs = None
+                            # Keep last successful kwargs so Don't-warn /
+                            # unapplied No can restore Shareable. The
+                            # poller already skips while Apply is pending
+                            # and the sentinel is 0.
                             self._addstorage._a11y_cache_override = None
                         self._enable_apply(edit)
                     except Exception:

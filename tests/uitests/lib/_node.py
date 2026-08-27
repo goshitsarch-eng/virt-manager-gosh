@@ -3629,11 +3629,6 @@ class _SentinelDetailsCheck(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
-        if "disk-shareable" in (self._path or ""):
-            try:
-                os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
-            except Exception:
-                pass
         before = self.checked
         try:
             open(self._path + ".click", "w").write("1")
