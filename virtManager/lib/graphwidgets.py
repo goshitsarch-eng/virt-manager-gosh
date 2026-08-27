@@ -31,10 +31,7 @@ def _theme_base_rgb(widget=None):
         except Exception:
             ctx = None
     if ctx is None:
-        try:
-            ctx = Gtk.StyleContext()
-        except Exception:
-            ctx = None
+        return 1.0, 1.0, 1.0
     names = (
         "theme_base_color",
         "theme_bg_color",
@@ -56,11 +53,6 @@ def _theme_base_rgb(widget=None):
 
 
 BASECOLOR = _RGB()
-try:
-    _r, _g, _b = _theme_base_rgb()
-    BASECOLOR.red, BASECOLOR.green, BASECOLOR.blue = _r, _g, _b
-except Exception:
-    pass
 
 
 def rect_print(name, rect):  # pragma: no cover
