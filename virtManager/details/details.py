@@ -3838,25 +3838,36 @@ class vmmDetails(vmmGObjectUI):
             # Prefer the last AT-SPI hw-list label so Remove targets Serial 1
             # even if GTK selection drifted. Do not re-select the row here:
             # _set_hw_selection can fire _hw_changed_cb and steal the confirm.
-            want = ""
+            wants = []
             for path in (
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-hw-select.txt",
                 "/tmp/vmm-a11y-hw-selected.txt",
+                "/tmp/vmm-a11y-hw-select.txt",
+                "/tmp/vmm-a11y-last-hw.txt",
+                "/tmp/vmm-a11y-hw-clicked.txt",
             ):
                 try:
                     want = open(path, "r").read().strip()
                 except Exception:
                     want = ""
-                if want:
+                if want and want not in wants:
+                    wants.append(want)
+            labeled = None
+            want = wants[0] if wants else ""
+            for cand in wants:
+                found = self._hw_row_for_label(cand)
+                if found is None:
+                    try:
+                        self._repopulate_hw_list()
+                    except Exception:
+                        pass
+                    found = self._hw_row_for_label(cand)
+                if found is not None and found[HW_LIST_COL_DEVICE] is not None:
+                    labeled = found
+                    want = cand
                     break
-            labeled = self._hw_row_for_label(want)
-            if labeled is None and want:
-                try:
-                    self._repopulate_hw_list()
-                except Exception:
-                    pass
-                labeled = self._hw_row_for_label(want)
+                if labeled is None and found is not None:
+                    labeled = found
+                    want = cand
             if labeled is not None:
                 row = labeled
             if not row:
