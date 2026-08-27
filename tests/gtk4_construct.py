@@ -1828,6 +1828,27 @@ def main():
             details._vmm_last_disk_kwargs = None
             details._vmm_last_disk_target = None
 
+        from virtManager.device.addstorage import _EDIT_SHARE
+
+        details._vmm_last_disk_kwargs = {"shareable": True}
+        details._vmm_last_disk_target = getattr(disk, "target", None)
+        details._addstorage.widget("disk-shareable").set_active(False)
+        details._addstorage._active_edits = [_EDIT_SHARE]
+        details.widget("config-apply").set_sensitive(True)
+        try:
+            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+        except Exception:
+            pass
+        try:
+            details._refresh_disk_page(disk)
+            assert not details._addstorage.widget("disk-shareable").get_active(), (
+                "unapplied Shareable uncheck must survive refresh / VM start"
+            )
+        finally:
+            details._vmm_last_disk_kwargs = None
+            details._vmm_last_disk_target = None
+            details.widget("config-apply").set_sensitive(False)
+
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
         from virtManager.lib import uiutil

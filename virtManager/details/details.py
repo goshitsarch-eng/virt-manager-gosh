@@ -5986,6 +5986,15 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
 
+        # set_dev clears _active_edits. Remember an in-progress Shareable
+        # edit so last-applied kwargs cannot clobber it after a refresh
+        # or VM start (GTK 3: "VM State change doesn't refresh UI").
+        pending_share = _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
+        try:
+            if os.path.exists("/tmp/vmm-a11y-disk-shareable.txt.click"):
+                pending_share = True
+        except Exception:
+            pass
         self._addstorage.set_dev(disk)
         # Testdriver inactive XML can lag the just-applied Guest
         # object. Keep Shareable visible until the user edits again.
@@ -6019,7 +6028,12 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 applied = False
-            if last.get("shareable") is False and (
+            if pending_share or apply_on:
+                live_w = bool(self._addstorage.widget("disk-shareable").get_active())
+                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
+                    "1" if live_w else "0"
+                )
+            elif last.get("shareable") is False and (
                 last_tgt is None or last_tgt == tgt
             ):
                 if self.vm.is_active():
