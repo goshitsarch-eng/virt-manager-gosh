@@ -4539,10 +4539,16 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             except Exception:
                 published = want
             if tname == "hw-list" or wname == "hw-list":
+                # GTK 4 get_selected() often still names Overview after
+                # select_iter. Publish the requested label so Remove/Apply
+                # keep targeting SCSI Disk 1 / Serial 1 / etc.
+                label = want or published
+                if published and published != want and published == "Overview":
+                    label = want
                 try:
-                    open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(published)
-                    open("/tmp/vmm-a11y-hw-selected.txt", "w").write(published)
-                    open("/tmp/vmm-a11y-last-hw.txt", "w").write(published)
+                    open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-hw-selected.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-last-hw.txt", "w").write(label)
                 except Exception:
                     pass
             _sync_row_selected()

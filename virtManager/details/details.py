@@ -3838,19 +3838,42 @@ class vmmDetails(vmmGObjectUI):
             # Prefer the last AT-SPI hw-list label so Remove targets Serial 1
             # even if GTK selection drifted. Do not re-select the row here:
             # _set_hw_selection can fire _hw_changed_cb and steal the confirm.
+            _NON_DEVICE = (
+                "Overview",
+                "OS information",
+                "Performance",
+                "CPUs",
+                "Memory",
+                "Boot Options",
+            )
             wants = []
+            try:
+                target = open(
+                    "/tmp/vmm-a11y-config-remove-target.txt", "r"
+                ).read().strip()
+            except Exception:
+                target = ""
+            if target and target not in _NON_DEVICE:
+                wants.append(target)
+            try:
+                os.remove("/tmp/vmm-a11y-config-remove-target.txt")
+            except Exception:
+                pass
             for path in (
-                "/tmp/vmm-a11y-hw-selected.txt",
+                "/tmp/vmm-a11y-hw-clicked.txt",
                 "/tmp/vmm-a11y-hw-select.txt",
                 "/tmp/vmm-a11y-last-hw.txt",
-                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-selected.txt",
             ):
                 try:
                     want = open(path, "r").read().strip()
                 except Exception:
                     want = ""
-                if want and want not in wants:
-                    wants.append(want)
+                if not want or want in wants:
+                    continue
+                if want in _NON_DEVICE:
+                    continue
+                wants.append(want)
             labeled = None
             want = wants[0] if wants else ""
             for cand in wants:

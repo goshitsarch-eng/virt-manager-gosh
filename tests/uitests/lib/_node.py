@@ -1481,19 +1481,48 @@ class _SentinelClickButton(object):
             except Exception:
                 pass
         if self.name == "config-remove":
+            target = ""
+            for path in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-selected.txt",
+                "/tmp/vmm-a11y-last-hw.txt",
+            ):
+                try:
+                    cand = open(path, "r").read().strip()
+                except Exception:
+                    cand = ""
+                if cand and cand not in (
+                    "Overview",
+                    "OS information",
+                    "Performance",
+                    "CPUs",
+                    "Memory",
+                    "Boot Options",
+                ):
+                    target = cand
+                    break
             try:
+                if target:
+                    open("/tmp/vmm-a11y-config-remove-target.txt", "w").write(target)
                 open("/tmp/vmm-a11y-config-remove", "w").write("1")
             except Exception:
                 pass
-            deadline = time.time() + 3.0
+            deadline = time.time() + 5.0
             while time.time() < deadline:
-                if os.path.exists("/tmp/vmm-a11y-alert.txt"):
-                    return
                 try:
                     if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
+                try:
+                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+                except Exception:
+                    alert = ""
+                if alert and (
+                    "are you sure you want to remove" in alert
+                    or "remove this device" in alert
+                ):
+                    return
                 time.sleep(0.05)
         if self.name == "config-cancel":
             deadline = time.time() + 3.0

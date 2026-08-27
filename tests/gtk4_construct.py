@@ -2925,6 +2925,79 @@ def main():
         finally:
             vmobj.config.CLITestOptions.test_update_device_fail = orig
 
+    def details_config_remove_ignores_overview():
+        from virtManager.details.details import HW_LIST_COL_DEVICE
+        from virtManager.details.details import HW_LIST_COL_LABEL
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_DISK
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-clone-simple")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        hwlist = details.widget("hw-list")
+        disk_row = None
+        disk_idx = None
+        for idx, row in enumerate(hwlist.get_model()):
+            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
+                continue
+            if row[HW_LIST_COL_DEVICE] is None:
+                continue
+            disk_row = row
+            disk_idx = idx
+            break
+        assert disk_row is not None, "test-clone-simple has no disk"
+        label = str(disk_row[HW_LIST_COL_LABEL] or "")
+        uiutil.set_list_selection_by_number(hwlist, disk_idx)
+        details._hw_changed_cb(hwlist)
+        uiutil.set_list_selection_by_number(hwlist, 0)
+        details._hw_changed_cb(hwlist)
+        for path, text in (
+            ("/tmp/vmm-a11y-hw-selected.txt", "Overview"),
+            ("/tmp/vmm-a11y-hw-select.txt", "Overview"),
+            ("/tmp/vmm-a11y-last-hw.txt", "Overview"),
+            ("/tmp/vmm-a11y-hw-clicked.txt", label),
+            ("/tmp/vmm-a11y-config-remove-target.txt", label),
+        ):
+            open(path, "w").write(text)
+        for stale in (
+            "/tmp/vmm-a11y-delete-shown.txt",
+            "/tmp/vmm-a11y-delete-title.txt",
+            "/tmp/vmm-a11y-config-remove-err.txt",
+        ):
+            try:
+                os.remove(stale)
+            except Exception:
+                pass
+        details._config_remove()
+        _pump(GLib, 0.3)
+        shown = ""
+        title = ""
+        err = ""
+        try:
+            shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        try:
+            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+        except Exception:
+            title = ""
+        try:
+            err = open("/tmp/vmm-a11y-config-remove-err.txt", "r").read()
+        except Exception:
+            err = ""
+        assert not err, "config-remove used the Overview row: %s" % err
+        assert shown == "1", "Remove Disk must open, shown=%r title=%r" % (
+            shown,
+            title,
+        )
+        assert "Remove" in title, title
+        open("/tmp/vmm-a11y-delete-close", "w").write("1")
+        _pump(GLib, 0.3)
+
     def snapshot_revert_delete():
         from virtManager.lib import uiutil
         from virtManager.vmwindow import vmmVMWindow
@@ -3158,6 +3231,7 @@ def main():
         ("details_apply_xml", details_apply_xml),
         ("media_change", media_change),
         ("details_media_hotplug_deferred", details_media_hotplug_deferred),
+        ("details_config_remove_ignores_overview", details_config_remove_ignores_overview),
         ("snapshot_revert_delete", snapshot_revert_delete),
         ("pool_start_stop", pool_start_stop),
         ("createpool_finish", createpool_finish),
