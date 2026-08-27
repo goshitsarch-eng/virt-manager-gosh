@@ -5445,8 +5445,9 @@ class vmmDetails(vmmGObjectUI):
         share_edited = _EDIT_SHARE in getattr(
             self._addstorage, "_active_edits", []
         )
+        applying_eject = self._edited(EDIT_DISK_PATH) and not (path or "").strip()
         path_only = (
-            self._edited(EDIT_DISK_PATH)
+            applying_eject
             and not self._edited(EDIT_DISK)
             and not share_edited
         )
