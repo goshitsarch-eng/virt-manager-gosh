@@ -1645,7 +1645,9 @@ class vmmDetails(vmmGObjectUI):
                             w = self.netlist.widget("net-manual-source")
                             if w is not None and (w.get_text() or "") != text:
                                 w.set_text(text)
-                                self._enable_apply(EDIT_NET_SOURCE)
+                            # Empty Device name is still an edit even when
+                            # the widget was already blank.
+                            self._enable_apply(EDIT_NET_SOURCE)
                 except Exception:
                     pass
                 bset = "/tmp/vmm-a11y-disk-bus.txt.set"
@@ -1727,29 +1729,37 @@ class vmmDetails(vmmGObjectUI):
                             return True
                         item_l = item.replace(".*", "").strip().lower()
                         match = None
+                        match_idx = None
+                        best_rank = 99
                         idx = 0
                         it = model.get_iter_first()
                         while it is not None:
                             label = str(model[it][0] or "")
                             ll = label.lower()
-                            if (
-                                item_l in ll
-                                or ll in item_l
-                                or (item_l and item_l.split()[0] in ll)
-                            ):
+                            rank = 99
+                            if item_l == ll or item_l.rstrip(".") == ll.rstrip("."):
+                                rank = 0
+                            elif "device" in item_l and item_l in ll:
+                                rank = 1
+                            elif item_l in ll or ll in item_l:
+                                rank = 2
+                            elif item_l and item_l.split()[0] in ll:
+                                rank = 3
+                            else:
+                                try:
+                                    if re.search(item, label, re.I):
+                                        rank = 4
+                                except Exception:
+                                    pass
+                            if rank < best_rank:
+                                best_rank = rank
                                 match = it
-                                break
-                            try:
-                                if re.search(item, label, re.I):
-                                    match = it
-                                    break
-                            except Exception:
-                                pass
+                                match_idx = idx
                             idx += 1
                             it = model.iter_next(it)
                         if match is not None:
                             try:
-                                combo.set_active(idx)
+                                combo.set_active(match_idx)
                             except Exception:
                                 combo.set_active_iter(match)
                             try:
@@ -5306,10 +5316,15 @@ class vmmDetails(vmmGObjectUI):
                 elif "plainbridge" in label or "portgroup" in label:
                     kwargs["ntype"] = virtinst.DeviceInterface.TYPE_VIRTUAL
                     kwargs["source"] = "plainbridge-portgroups"
-            if kwargs.get("ntype") in (
+            try:
+                src_label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
+            except Exception:
+                src_label = ""
+            want_manual = kwargs.get("ntype") in (
                 virtinst.DeviceInterface.TYPE_BRIDGE,
                 virtinst.DeviceInterface.TYPE_DIRECT,
-            ) and not kwargs.get("source"):
+            ) or any(tok in src_label for tok in ("bridge device", "macvtap"))
+            if want_manual and not kwargs.get("source"):
                 msg = _("Error changing VM configuration: %s") % _(
                     "A source device name is required"
                 )
