@@ -503,6 +503,12 @@ class VMMDogtailApp:
                         open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(nxt)
                     except Exception:
                         pass
+                    try:
+                        from . import _node
+
+                        _node._write_hw_details_tab(nxt)
+                    except Exception:
+                        pass
                     return
                 which = ""
                 try:

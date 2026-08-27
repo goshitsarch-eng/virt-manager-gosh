@@ -4883,6 +4883,11 @@ class vmmDetails(vmmGObjectUI):
                     if pending:
                         return False
                     self._disable_apply()
+                elif self._active_edits == [EDIT_XML]:
+                    # Programmatic set_xml can emit delayed "changed"
+                    # after the XML tab refresh, which blocks hardware
+                    # keyboard walks with an unapplied-changes confirm.
+                    self._disable_apply()
                 return False
 
             try:

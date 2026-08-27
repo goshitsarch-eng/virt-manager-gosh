@@ -104,6 +104,65 @@ def _live_manager_node():
     return None
 
 
+def _hw_details_tab_for_label(label):
+    """Details notebook tab for a hardware-list label."""
+    label = label or ""
+    if any(key in label for key in ("Disk", "CDROM", "Floppy")):
+        return "disk-tab"
+    if "NIC" in label or "Network" in label:
+        return "network-tab"
+    if label in ("Overview",):
+        return "overview-tab"
+    if "OS information" in label:
+        return "os-tab"
+    if label in ("Performance",):
+        return "performance-tab"
+    if label in ("CPUs", "CPU"):
+        return "cpu-tab"
+    if label in ("Memory",):
+        return "memory-tab"
+    if "Boot" in label:
+        return "boot-tab"
+    if any(key in label for key in ("Serial", "Parallel", "Console", "Channel")):
+        return "char-tab"
+    if "Sound" in label:
+        return "sound-tab"
+    if "Video" in label:
+        return "video-tab"
+    if "Watchdog" in label:
+        return "watchdog-tab"
+    if "Smartcard" in label:
+        return "smartcard-tab"
+    if "TPM" in label:
+        return "tpm-tab"
+    if "VSOCK" in label or "vsock" in label.lower():
+        return "vsock-tab"
+    if "Filesystem" in label:
+        return "filesystem-tab"
+    if "Controller" in label:
+        return "controller-tab"
+    if "Display" in label or "Graphics" in label:
+        return "graphics-tab"
+    if any(key in label for key in ("PCI", "USB ", "Host")):
+        return "host-tab"
+    return None
+
+
+def _write_hw_details_tab(label):
+    tab = _hw_details_tab_for_label(label)
+    if not tab:
+        return
+    try:
+        open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
+    except Exception:
+        pass
+    if tab == "host-tab":
+        try:
+            open("/tmp/vmm-a11y-hostdev-clicked.txt", "w").write(label or "")
+        except Exception:
+            pass
+
+
 class _SentinelTableCell(object):
     """hw-list row when AT-SPI walks hang after GetItems."""
 
@@ -161,9 +220,10 @@ class _SentinelTableCell(object):
                 unique_hit = True
         except Exception:
             pass
-        # Sound sb16 -> ac97 keeps a unique-type/tab match even if the
-        # published index is still Floppy. Duplicate NIC/Sound labels
-        # must not stay selected when the index moved to the next copy.
+        # Sound sb16 -> ac97 keeps a unique-type match when click/selected
+        # still names this type and the published index lags on Floppy.
+        # A stale details-tab after keyboard walk must not keep the
+        # previous Watchdog/Sound/Video selected once the index moved.
         if unique_hit:
             if index_match is not False:
                 return True
@@ -176,9 +236,29 @@ class _SentinelTableCell(object):
                 cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
                 at = rows[int(cur)]
                 if at.split()[0] != (self.name or "").split()[0]:
-                    return True
+                    for path in (
+                        "/tmp/vmm-a11y-hw-clicked.txt",
+                        "/tmp/vmm-a11y-hw-selected.txt",
+                    ):
+                        try:
+                            pub = open(path, "r").read().strip()
+                        except Exception:
+                            pub = ""
+                        if (
+                            pub
+                            and self.name
+                            and pub.split()[0] == (self.name or "").split()[0]
+                            and pub.split()[0]
+                            in (
+                                "Sound",
+                                "Video",
+                                "Display",
+                                "Watchdog",
+                            )
+                        ):
+                            return True
             except Exception:
-                return True
+                pass
         if index_match is False:
             return False
         if name_hit:
@@ -348,52 +428,7 @@ class _SentinelTableCell(object):
             except Exception:
                 pass
         try:
-            label = self.name or ""
-            tab = None
-            if any(
-                key in label
-                for key in ("Disk", "CDROM", "Floppy")
-            ):
-                tab = "disk-tab"
-            elif "NIC" in label or "Network" in label:
-                tab = "network-tab"
-            elif label in ("Overview",):
-                tab = "overview-tab"
-            elif "OS information" in label:
-                tab = "os-tab"
-            elif label in ("Performance",):
-                tab = "performance-tab"
-            elif label in ("CPUs", "CPU"):
-                tab = "cpu-tab"
-            elif label in ("Memory",):
-                tab = "memory-tab"
-            elif "Boot" in label:
-                tab = "boot-tab"
-            elif any(key in label for key in ("Serial", "Parallel", "Console", "Channel")):
-                tab = "char-tab"
-            elif "Sound" in label:
-                tab = "sound-tab"
-            elif "Video" in label:
-                tab = "video-tab"
-            elif "Watchdog" in label:
-                tab = "watchdog-tab"
-            elif "Smartcard" in label:
-                tab = "smartcard-tab"
-            elif "TPM" in label:
-                tab = "tpm-tab"
-            elif "VSOCK" in label or "vsock" in label.lower():
-                tab = "vsock-tab"
-            elif "Filesystem" in label:
-                tab = "filesystem-tab"
-            elif "Controller" in label:
-                tab = "controller-tab"
-            elif "Display" in label or "Graphics" in label:
-                tab = "graphics-tab"
-            elif any(key in label for key in ("PCI", "USB ", "Host")):
-                tab = "host-tab"
-                open("/tmp/vmm-a11y-hostdev-clicked.txt", "w").write(label)
-            if tab:
-                open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
+            _write_hw_details_tab(self.name or "")
         except Exception:
             pass
         deadline = time.time() + 2.0

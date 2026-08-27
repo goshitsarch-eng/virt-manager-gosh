@@ -63,6 +63,7 @@ class vmmXMLEditor(vmmGObjectUI):
         self._init_ui()
 
         self.details_changed = False
+        self._ignore_buffer_changed = False
 
         self.add_gsettings_handle(
             self.config.on_xmleditor_enabled_changed(self._xmleditor_enabled_changed_cb)
@@ -328,6 +329,7 @@ class vmmXMLEditor(vmmGObjectUI):
         """
         Set the editor UI XML to the passed string
         """
+        self._ignore_buffer_changed = True
         try:
             self._srcbuff.disconnect_by_func(self._buffer_changed_cb)
             self._srcxml = xml or ""
@@ -335,7 +337,19 @@ class vmmXMLEditor(vmmGObjectUI):
             self._reset_cursor()
             self._publish_xml_a11y()
         finally:
-            self._srcbuff.connect("changed", self._buffer_changed_cb)
+            try:
+                self._srcbuff.connect("changed", self._buffer_changed_cb)
+            except Exception:
+                pass
+
+            def _allow():
+                self._ignore_buffer_changed = False
+                return False
+
+            try:
+                GLib.idle_add(_allow)
+            except Exception:
+                self._ignore_buffer_changed = False
 
     def set_xml_from_libvirtobject(self, libvirtobject):
         """
@@ -414,6 +428,8 @@ class vmmXMLEditor(vmmGObjectUI):
     #############
 
     def _buffer_changed_cb(self, buf):
+        if getattr(self, "_ignore_buffer_changed", False):
+            return
         self.emit("changed")
 
     def _before_page_changed_cb(self, notebook, widget, pagenum):
