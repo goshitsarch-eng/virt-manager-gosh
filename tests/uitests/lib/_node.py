@@ -675,6 +675,7 @@ class _SentinelOslistEntry(object):
                 pass
         try:
             open("/tmp/vmm-a11y-oslist-reopen", "w").write("1")
+            open("/tmp/vmm-a11y-oslist-focus", "w").write("1")
         except Exception:
             pass
 

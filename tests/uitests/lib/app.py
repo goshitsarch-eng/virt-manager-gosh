@@ -447,6 +447,17 @@ class VMMDogtailApp:
                         return
                 except Exception:
                     pass
+                oslist_open = False
+                try:
+                    oslist_open = (
+                        os.path.exists("/tmp/vmm-a11y-oslist-reopen")
+                        or os.path.exists("/tmp/vmm-a11y-oslist-typed")
+                        or open("/tmp/vmm-a11y-oslist-focus", "r").read().strip() == "1"
+                    )
+                except Exception:
+                    oslist_open = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
+                if oslist_open:
+                    return dogtail.rawinput.pressKey(key, *a, **kw)
                 snap_page = False
                 try:
                     snap_page = (
