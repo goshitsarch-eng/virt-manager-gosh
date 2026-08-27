@@ -2466,9 +2466,15 @@ class SpiceDisplay(_DisplayBase):
                 modifiers = 0
         if modifiers & int(Gdk.ModifierType.LOCK_MASK):
             locks |= caps
-        if modifiers & int(Gdk.ModifierType.MOD2_MASK):
+        # GTK 4 dropped MOD2_MASK / MOD3_MASK (Num/Scroll). Use them
+        # only when the Gdk version still exposes the bits.
+        num_mask = getattr(Gdk.ModifierType, "MOD2_MASK", None) or getattr(
+            Gdk.ModifierType, "NUM_LOCK_MASK", None
+        )
+        scroll_mask = getattr(Gdk.ModifierType, "MOD3_MASK", None)
+        if num_mask and modifiers & int(num_mask):
             locks |= num
-        if modifiers & int(getattr(Gdk.ModifierType, "MOD3_MASK", 0) or 0):
+        if scroll_mask and modifiers & int(scroll_mask):
             locks |= scroll
         return locks
 
