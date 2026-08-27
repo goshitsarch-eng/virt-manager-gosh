@@ -677,9 +677,11 @@ class vmmCreatePool(vmmGObjectUI):
                     action = open(_CREATEPOOL_ACTION, "r").read().strip()
                     os.remove(_CREATEPOOL_ACTION)
                     if action == "source-browse":
-                        self._browse_source_cb(None)
+                        # browse_local runs a nested MainLoop. Do not
+                        # start it from this timeout tick or GLib hangs.
+                        GLib.idle_add(self._browse_source_cb, None)
                     elif action == "target-browse":
-                        self._browse_target_cb(None)
+                        GLib.idle_add(self._browse_target_cb, None)
                     self._publish_a11y_state()
             except Exception:
                 pass
@@ -698,5 +700,7 @@ class vmmCreatePool(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _fields_tick)
-        GLib.timeout_add(50, _tick)
+        self._vmm_createpool_fields_tick = _fields_tick
+        self._vmm_createpool_tick = _tick
+        GLib.timeout_add(50, self._vmm_createpool_fields_tick)
+        GLib.timeout_add(50, self._vmm_createpool_tick)
