@@ -761,40 +761,7 @@ class vmmDetails(vmmGObjectUI):
 
             GLib.timeout_add(50, _poll_mem_fields)
 
-            def _poll_media_entry():
-                path = "/tmp/vmm-a11y-details-media-entry.txt.set"
-                try:
-                    if not os.path.exists(path):
-                        return True
-                    hw = ""
-                    for hwpath in (
-                        "/tmp/vmm-a11y-hw-clicked.txt",
-                        "/tmp/vmm-a11y-hw-selected.txt",
-                        "/tmp/vmm-a11y-last-hw.txt",
-                    ):
-                        try:
-                            hw = open(hwpath, "r").read().strip().lower()
-                        except Exception:
-                            hw = ""
-                        if hw:
-                            break
-                    if not any(token in hw for token in ("cdrom", "floppy")):
-                        # media-entry is removable media only. "IDE Disk 2"
-                        # contains "disk" but must not consume an ISO leftover.
-                        os.remove(path)
-                        return True
-                    text = open(path, "r").read()
-                    os.remove(path)
-                except Exception:
-                    return True
-                try:
-                    self._mediacombo.set_path(text)
-                    self._enable_apply(EDIT_DISK_PATH)
-                except Exception:
-                    pass
-                return True
-
-            GLib.timeout_add(50, _poll_media_entry)
+            GLib.timeout_add(50, self._poll_media_entry_tick)
         try:
             gtkcompat.expose_a11y_spin(
                 "mem-memory",
@@ -4461,6 +4428,8 @@ class vmmDetails(vmmGObjectUI):
                 or getattr(self, "_vmm_pending_vsock_cid", None) is not None
             ):
                 pass
+            elif edittype == EDIT_DISK_PATH and self._pending_media_path() is not None:
+                pass
             else:
                 return
         self._vmm_apply_failed = False
@@ -5404,12 +5373,16 @@ class vmmDetails(vmmGObjectUI):
         if devobj is None:
             return False
 
-        if self._edited(EDIT_DISK_PATH):
+        pending_media = self._pending_media_path()
+        path = None
+        if self._edited(EDIT_DISK_PATH) or pending_media is not None:
             path = self._mediacombo.get_path()
             try:
                 path = self._mediacombo._path_from_display(path)
             except Exception:
                 pass
+            if pending_media and not path:
+                path = pending_media
             is_removable = False
             try:
                 is_removable = bool(devobj.is_cdrom() or devobj.is_floppy())
@@ -5438,9 +5411,9 @@ class vmmDetails(vmmGObjectUI):
         share_edited = _EDIT_SHARE in getattr(
             self._addstorage, "_active_edits", []
         )
-        applying_eject = self._edited(EDIT_DISK_PATH) and not (path or "").strip()
+        applying_media = "path" in kwargs
         path_only = (
-            applying_eject
+            applying_media
             and not self._edited(EDIT_DISK)
             and not share_edited
         )
@@ -5492,6 +5465,11 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 self._vmm_last_disk_kwargs = None
                 self._vmm_last_disk_target = None
+            if "path" in kwargs:
+                try:
+                    self._mediacombo.set_path(kwargs.get("path") or "")
+                except Exception:
+                    pass
             if "shareable" in kwargs:
                 try:
                     if kwargs.get("shareable"):
@@ -5811,6 +5789,55 @@ class vmmDetails(vmmGObjectUI):
 
         return self._change_config(self.vm.define_tpm, kwargs, devobj=devobj)
 
+    def _pending_media_path(self):
+        """A11y media path the user typed that refresh must not drop."""
+        try:
+            if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set"):
+                text = open(
+                    "/tmp/vmm-a11y-details-media-entry.txt.set", "r"
+                ).read().strip()
+                if text:
+                    return self._mediacombo._path_from_display(text)
+        except Exception:
+            pass
+        stored = getattr(self._mediacombo, "_a11y_path", None)
+        if stored:
+            return stored
+        return None
+
+    def _poll_media_entry_tick(self):
+        path = "/tmp/vmm-a11y-details-media-entry.txt.set"
+        try:
+            if not os.path.exists(path):
+                return True
+            hw = ""
+            for hwpath in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-selected.txt",
+                "/tmp/vmm-a11y-last-hw.txt",
+            ):
+                try:
+                    hw = open(hwpath, "r").read().strip().lower()
+                except Exception:
+                    hw = ""
+                if hw:
+                    break
+            if not any(token in hw for token in ("cdrom", "floppy")):
+                # media-entry is removable media only. "IDE Disk 2"
+                # contains "disk" but must not consume an ISO leftover.
+                os.remove(path)
+                return True
+            text = open(path, "r").read()
+            os.remove(path)
+        except Exception:
+            return True
+        try:
+            self._mediacombo.set_path(text)
+            self._enable_apply(EDIT_DISK_PATH)
+        except Exception:
+            pass
+        return True
+
     def _vsock_device(self, devobj=None):
         if devobj is not None:
             return devobj
@@ -6118,6 +6145,8 @@ class vmmDetails(vmmGObjectUI):
                 or getattr(self, "_vmm_pending_vsock_cid", None) is not None
             ):
                 return False
+            if self._pending_media_path() is not None:
+                return False
             self._disable_apply()
         return False
 
@@ -6259,12 +6288,24 @@ class vmmDetails(vmmGObjectUI):
             or os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.click")
             or getattr(self, "_vmm_pending_vsock_cid", None) is not None
         )
+        keep_media = (
+            EDIT_DISK_PATH in getattr(self, "_active_edits", [])
+            or self._pending_media_path() is not None
+        )
         if keep_share:
             if _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", []):
                 self._addstorage._active_edits.append(_EDIT_SHARE)
             self._enable_apply(EDIT_DISK)
         elif keep_vsock:
             self._restore_vsock_cid_want()
+        elif keep_media:
+            try:
+                path = self._pending_media_path()
+                if path:
+                    self._mediacombo.set_path(path)
+                self._enable_apply(EDIT_DISK_PATH)
+            except Exception:
+                pass
         else:
             self._disable_apply()
         self._restore_boot_init_sentinels()
