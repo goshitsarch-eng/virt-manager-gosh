@@ -13,6 +13,7 @@ from gi.repository import Pango
 from virtinst import DeviceDisk
 from virtinst import log
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -102,6 +103,9 @@ class vmmHostStorage(vmmGObjectUI):
                 "on_pool_name_changed": (lambda *x: self._enable_pool_apply(EDIT_POOL_NAME)),
                 "on_pool_autostart_toggled": self._pool_autostart_changed_cb,
             }
+        )
+        gtkcompat.connect_legacy_event(
+            self.widget("vol-list"), "button-press-event", self._vol_popup_menu_cb
         )
 
         self._init_ui()

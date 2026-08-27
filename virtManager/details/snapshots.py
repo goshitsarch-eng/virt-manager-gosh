@@ -19,6 +19,7 @@ from virtinst import generatename
 from virtinst import log
 from virtinst import xmlutil
 
+from ..lib import gtkcompat
 from ..lib import uiutil
 from ..asyncjob import vmmAsyncJob
 from ..baseclass import vmmGObjectUI
@@ -604,6 +605,11 @@ class vmmSnapshotPage(vmmGObjectUI):
                 "on_snapshot_refresh_clicked": self._on_refresh_clicked,
                 "on_snapshot_list_row_activated": self._on_start_clicked,
             }
+        )
+        gtkcompat.connect_legacy_event(
+            self.widget("snapshot-list"),
+            "button-press-event",
+            self._popup_snapshot_menu,
         )
 
         self.top_box = self.widget("snapshot-top-box")

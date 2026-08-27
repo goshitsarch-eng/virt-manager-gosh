@@ -8029,6 +8029,27 @@ def _install_menuitem_activate_signal():
         )
 
 
+def connect_legacy_event(widget, signal, callback):
+    """Connect a GTK 3 event that gtk4-builder-tool stripped from .ui files.
+
+    GTK 4 widgets no longer emit button-press-event, key-press-event, or
+    configure-event, so Builder.connect_signals() silently drops those
+    handlers. Widget.connect is patched to GestureClick / size ticks;
+    call this after connect_signals so real (non-AT-SPI) right-click
+    menus and window-size persistence still match GTK 3.
+    """
+    if widget is None or callback is None:
+        return
+    seen = getattr(widget, "_vmm_legacy_signals", None)
+    if seen is None:
+        seen = set()
+        widget._vmm_legacy_signals = seen
+    if signal in seen:
+        return
+    seen.add(signal)
+    widget.connect(signal, callback)
+
+
 def install():
     """
     Install GTK4 compatibility types and monkeypatches. Call after

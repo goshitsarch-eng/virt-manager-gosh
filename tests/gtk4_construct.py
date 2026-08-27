@@ -597,6 +597,106 @@ def main():
         shut.update_widget_states(vm)
         menu.show()
 
+    def gtk3_context_menus_and_window_size():
+        """GTK 4 .ui dropped button-press/configure-event; prove they work."""
+        from virtManager.host import vmmHost
+        from virtManager.lib.gtkcompat import _FakeEvent
+        from virtManager.manager import vmmManager
+        from virtManager.vmwindow import vmmVMWindow
+
+        mgr = vmmManager.get_instance(None)
+        mgr.show()
+        vmlist = mgr.widget("vm-list")
+        assert "button-press-event" in getattr(vmlist, "_vmm_legacy_signals", set())
+        assert "key-press-event" in getattr(vmlist, "_vmm_legacy_signals", set())
+        assert "configure-event" in getattr(mgr.topwin, "_vmm_legacy_signals", set())
+
+        model = vmlist.get_model()
+        treeiter = model.get_iter_first()
+        assert treeiter is not None
+        # First row is a connection; second is typically a VM.
+        vmiter = model.iter_children(treeiter) or model.iter_next(treeiter)
+        assert vmiter is not None
+        path = model.get_path(vmiter)
+        try:
+            vmlist.scroll_to_cell(path, None, False, 0, 0)
+        except Exception:
+            pass
+        _pump(GLib, 0.05)
+        area = None
+        try:
+            area = vmlist.get_cell_area(path, vmlist.get_column(0))
+        except Exception:
+            area = None
+        x = int(getattr(area, "x", 8) + 8)
+        y = int(getattr(area, "y", 8) + 8)
+        ev = _FakeEvent(button=3, x=x, y=y)
+        handled = mgr.popup_vm_menu_button(vmlist, ev)
+        if handled is False:
+            mgr.popup_vm_menu(model, vmiter, ev)
+        _pump(GLib, 0.05)
+        opened = bool(getattr(mgr.vmmenu, "_opened", False)) or bool(
+            getattr(mgr.connmenu, "_opened", False)
+        )
+        if not opened:
+            pop = getattr(mgr.vmmenu, "_popover", None) or getattr(
+                mgr.connmenu, "_popover", None
+            )
+            try:
+                opened = bool(pop is not None and pop.get_visible())
+            except Exception:
+                opened = False
+        assert opened, "right-click did not open the VM or connection menu"
+
+        mgr.topwin.set_default_size(960, 640)
+        _pump(GLib, 0.15)
+        assert mgr._window_size is not None, "manager resize did not persist"
+
+        vwin = vmmVMWindow.get_instance(None, vm)
+        vwin.show()
+        assert "configure-event" in getattr(vwin.topwin, "_vmm_legacy_signals", set())
+        hwlist = vwin._details.widget("hw-list")
+        assert "button-press-event" in getattr(hwlist, "_vmm_legacy_signals", set())
+        snaplist = vwin._snapshots.widget("snapshot-list")
+        assert "button-press-event" in getattr(snaplist, "_vmm_legacy_signals", set())
+        vwin.topwin.set_default_size(1000, 700)
+        _pump(GLib, 0.15)
+        assert vwin._window_size is not None, "VM window resize did not persist"
+
+        hw_ev = _FakeEvent(button=3, x=12, y=12)
+        vwin._details._popup_addhw_menu_cb(hwlist, hw_ev)
+        if not getattr(vwin._details._popupmenu, "_opened", False):
+            vwin._details._popupmenu.popup_at_pointer(hw_ev)
+        _pump(GLib, 0.05)
+        hwmenu = getattr(vwin._details, "_popupmenu", None)
+        assert hwmenu is not None
+        hw_open = bool(getattr(hwmenu, "_opened", False))
+        if not hw_open:
+            pop = getattr(hwmenu, "_popover", None)
+            try:
+                hw_open = bool(pop is not None and pop.get_visible())
+            except Exception:
+                hw_open = False
+        assert hw_open, "hardware-list right-click did not open Add/Remove menu"
+
+        hwin = vmmHost.show_instance(None, conn)
+        if hwin is None:
+            hwin = vmmHost._instances[conn.get_uri()]
+        assert "configure-event" in getattr(hwin.topwin, "_vmm_legacy_signals", set())
+        vollist = hwin._storagelist.widget("vol-list")
+        assert "button-press-event" in getattr(vollist, "_vmm_legacy_signals", set())
+        hwin._storagelist._vol_popup_menu_cb(vollist, _FakeEvent(button=3, x=8, y=8))
+        _pump(GLib, 0.05)
+        volmenu = hwin._storagelist._volmenu
+        vol_open = bool(getattr(volmenu, "_opened", False))
+        if not vol_open:
+            pop = getattr(volmenu, "_popover", None)
+            try:
+                vol_open = bool(pop is not None and pop.get_visible())
+            except Exception:
+                vol_open = False
+        assert vol_open, "volume-list right-click did not open Copy Volume Path"
+
     def error_dialogs():
         from virtManager.error import vmmErrorDialog
 
@@ -3509,6 +3609,7 @@ def main():
         ("createnet_modes", createnet_modes),
         ("host_pages", host_pages),
         ("vm_lifecycle_menus", vm_lifecycle_menus),
+        ("gtk3_context_menus_and_window_size", gtk3_context_menus_and_window_size),
         ("error_dialogs", error_dialogs),
         ("cli_windows", cli_windows),
         ("xmleditor_pages", xmleditor_pages),

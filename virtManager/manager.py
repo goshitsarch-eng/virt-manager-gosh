@@ -131,6 +131,15 @@ class vmmManager(vmmGObjectUI):
                 "on_menu_help_about_activate": self.show_about,
             }
         )
+        gtkcompat.connect_legacy_event(
+            self.widget("vm-list"), "button-press-event", self.popup_vm_menu_button
+        )
+        gtkcompat.connect_legacy_event(
+            self.widget("vm-list"), "key-press-event", self.popup_vm_menu_key
+        )
+        gtkcompat.connect_legacy_event(
+            self.topwin, "configure-event", self.window_resized
+        )
 
         # There seem to be ref counting issues with calling
         # list.get_column, so avoid it

@@ -506,6 +506,9 @@ class vmmDetails(vmmGObjectUI):
                 "on_hw_list_button_press_event": self._popup_addhw_menu_cb,
             }
         )
+        gtkcompat.connect_legacy_event(
+            self.widget("hw-list"), "button-press-event", self._popup_addhw_menu_cb
+        )
 
         self._init_hw_list()
         self._refresh_page()

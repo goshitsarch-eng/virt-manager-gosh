@@ -99,6 +99,9 @@ class vmmVMWindow(vmmGObjectUI):
         else:
             self.topwin.set_default_size(w, h)
         self._window_size = None
+        gtkcompat.connect_legacy_event(
+            self.topwin, "configure-event", self.window_resized
+        )
 
         self._shutdownmenu = None
         self._vmmenu = None

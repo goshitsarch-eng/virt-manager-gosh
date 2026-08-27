@@ -70,6 +70,9 @@ class vmmHost(vmmGObjectUI):
                 "on_config_autoconnect_toggled": self._autoconnect_toggled_cb,
             }
         )
+        gtkcompat.connect_legacy_event(
+            self.topwin, "configure-event", self._window_resized_cb
+        )
 
         self.conn.connect("state-changed", self._conn_state_changed_cb)
         self.conn.connect("resources-sampled", self._conn_resources_sampled_cb)
