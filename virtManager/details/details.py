@@ -1954,8 +1954,23 @@ class vmmDetails(vmmGObjectUI):
                     _tab, hw = self._details_hw_context()
                     try:
                         last_kw = getattr(self, "_vmm_last_disk_kwargs", None) or {}
-                        if last_kw.get("shareable") and (
-                            _tab == "disk-tab" or "Disk" in (hw or "")
+                        applied = False
+                        try:
+                            applied = (
+                                open(
+                                    "/tmp/vmm-a11y-disk-shareable-applied.txt",
+                                    "r",
+                                )
+                                .read()
+                                .strip()
+                                == "1"
+                            )
+                        except Exception:
+                            applied = False
+                        if (
+                            applied
+                            and last_kw.get("shareable")
+                            and (_tab == "disk-tab" or "Disk" in (hw or ""))
                         ):
                             # After Apply, testdriver XML can lag. Do not
                             # clobber a later user uncheck while Apply is
@@ -1976,9 +1991,9 @@ class vmmDetails(vmmGObjectUI):
                                 except Exception:
                                     skip = False
                             if not skip:
-                                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
-                                    "1"
-                                )
+                                open(
+                                    "/tmp/vmm-a11y-disk-shareable.txt", "w"
+                                ).write("1")
                     except Exception:
                         pass
                     last = getattr(self, "_vmm_last_refreshed_hw", None)
@@ -4755,7 +4770,10 @@ class vmmDetails(vmmGObjectUI):
             share_s = open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip()
         except Exception:
             share_s = ""
-        if self._edited(EDIT_DISK) or share_s == "1":
+        share_edited = _EDIT_SHARE in getattr(
+            self._addstorage, "_active_edits", []
+        )
+        if self._edited(EDIT_DISK) or share_edited or share_s in ("0", "1"):
             vals = self._addstorage.get_values()
             try:
                 share_w = bool(
@@ -4763,12 +4781,11 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 share_w = None
-            if share_s == "1" or share_w is True:
-                vals["shareable"] = True
-            elif "shareable" not in vals and share_s == "0":
-                vals["shareable"] = False
-            elif "shareable" not in vals and share_w is not None:
-                vals["shareable"] = share_w
+            if share_edited:
+                if share_s == "1" or share_w is True:
+                    vals["shareable"] = True
+                elif share_s == "0" or share_w is False:
+                    vals["shareable"] = False
             kwargs.update(vals)
             typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
             try:
@@ -4809,13 +4826,18 @@ class vmmDetails(vmmGObjectUI):
             else:
                 kwargs["bus"] = uiutil.get_list_selection(combo)
 
-        try:
-            self._vmm_last_disk_kwargs = dict(kwargs)
-            self._vmm_last_disk_target = getattr(devobj, "target", None)
-        except Exception:
+        ok = self._change_config(self.vm.define_disk, kwargs, devobj=devobj)
+        if ok:
+            try:
+                self._vmm_last_disk_kwargs = dict(kwargs)
+                self._vmm_last_disk_target = getattr(devobj, "target", None)
+            except Exception:
+                self._vmm_last_disk_kwargs = None
+                self._vmm_last_disk_target = None
+        else:
             self._vmm_last_disk_kwargs = None
             self._vmm_last_disk_target = None
-        return self._change_config(self.vm.define_disk, kwargs, devobj=devobj)
+        return ok
 
     def _apply_sound(self, devobj):
         kwargs = {}

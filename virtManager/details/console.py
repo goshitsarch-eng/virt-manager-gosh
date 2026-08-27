@@ -1434,14 +1434,18 @@ class vmmConsolePages(vmmGObjectUI):
             self._activate_console_connect_page()
             return
 
-        serial.open_console()
+        opened = serial.open_console()
         page_idx = self._serial_consoles.index(serial)
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_SERIAL)
         self.widget("serial-pages").set_current_page(page_idx)
-        try:
-            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
-        except Exception:
-            pass
+        # testdriver Serial open fails with virDomainOpenConsole; keep
+        # that error for testDetailsConsoleSerialSwitch. Only clear a
+        # stale graphics error after a successful serial attach.
+        if opened:
+            try:
+                open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+            except Exception:
+                pass
         self._publish_auth_state()
         self._publish_gfx_viewport()
 

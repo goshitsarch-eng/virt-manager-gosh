@@ -362,15 +362,19 @@ class vmmAddStorage(vmmGObjectUI):
         self.widget("disk-serial").set_text(serial or "")
         self.widget("disk-readonly").set_active(ro)
         self.widget("disk-readonly").set_sensitive(not disk.is_cdrom())
-        pending_share = False
+        # Only keep a pending Shareable click. A cache/serial edit must
+        # not pin the previous disk's checkbox onto the next row.
+        pending_share = _EDIT_SHARE in (self._active_edits or [])
         try:
-            pending_share = (
+            apply_on = (
                 open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
                 == "1"
-                and os.path.exists("/tmp/vmm-a11y-disk-shareable.txt")
             )
+            pending_share = pending_share and apply_on
         except Exception:
             pending_share = False
+        if os.path.exists("/tmp/vmm-a11y-disk-shareable.txt.click"):
+            pending_share = True
         if not pending_share:
             self.widget("disk-shareable").set_active(share)
         self.widget("disk-removable").set_active(removable)
