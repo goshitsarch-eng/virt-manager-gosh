@@ -92,6 +92,10 @@ _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
 _VNC_SEC_RA2 = 5
 _VNC_SEC_RA2NE = 6
+_VNC_SEC_RA2R = 13
+_VNC_SEC_RA2_256 = 129
+_VNC_SEC_RA2NE_256 = 130
+_VNC_SEC_RA2R_256 = 133
 _VNC_SEC_TIGHT = 16
 _VNC_SEC_ULTRA_AUTH = 17
 _VNC_SEC_TLS = 18
@@ -1094,8 +1098,9 @@ class VNCDisplay(_DisplayBase):
     (PLAIN, DIGEST-MD5, Cyrus when libsasl2 plugins exist, and GSSAPI
     via libgssapi_krb5), and
     TLS; TightVNC security type 16 (tunnels, VNC/None/Unix/SASL/VeNCrypt
-    auth, extended ServerInit); RealVNC RA2/RA2ne, Apple ARD, and
-    UltraVNC MSLogonII; TigerVNC UTF-8 extended clipboard;
+    auth, extended ServerInit); RealVNC RA2/RA2ne/RA2r and 256-bit
+    variants, Apple ARD, and UltraVNC MSLogonII; TigerVNC UTF-8
+    extended clipboard;
     32-bit pixels; QEMU audio and LED state;
     and the encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile,
     zlib, ZlibHex, Ultra, Tight, ZRLE, DesktopSize, and cursor.
@@ -1444,9 +1449,25 @@ class VNCDisplay(_DisplayBase):
             sock.sendall(bytes([_VNC_SEC_RA2NE]))
             sock = self._vnc_ra2(sock, encrypt_session=False)
             self._sock = sock
+        elif _VNC_SEC_RA2NE_256 in types:
+            sock.sendall(bytes([_VNC_SEC_RA2NE_256]))
+            sock = self._vnc_ra2(sock, encrypt_session=False, sha256=True)
+            self._sock = sock
         elif _VNC_SEC_RA2 in types:
             sock.sendall(bytes([_VNC_SEC_RA2]))
             sock = self._vnc_ra2(sock, encrypt_session=True)
+            self._sock = sock
+        elif _VNC_SEC_RA2_256 in types:
+            sock.sendall(bytes([_VNC_SEC_RA2_256]))
+            sock = self._vnc_ra2(sock, encrypt_session=True, sha256=True)
+            self._sock = sock
+        elif _VNC_SEC_RA2R in types:
+            sock.sendall(bytes([_VNC_SEC_RA2R]))
+            sock = self._vnc_ra2(sock, encrypt_session=True, two_step=True)
+            self._sock = sock
+        elif _VNC_SEC_RA2R_256 in types:
+            sock.sendall(bytes([_VNC_SEC_RA2R_256]))
+            sock = self._vnc_ra2(sock, encrypt_session=True, sha256=True, two_step=True)
             self._sock = sock
         elif _VNC_SEC_ARD in types:
             sock.sendall(bytes([_VNC_SEC_ARD]))
@@ -1808,8 +1829,8 @@ class VNCDisplay(_DisplayBase):
             return sock
         raise RuntimeError("Unsupported TightVNC auth type %s" % chosen)
 
-    def _vnc_ra2(self, sock, encrypt_session=False):
-        """RealVNC RA2 / RA2ne (rfbproto RSA-AES + AES-EAX)."""
+    def _vnc_ra2(self, sock, encrypt_session=False, sha256=False, two_step=False):
+        """RealVNC RA2 / RA2ne / RA2r and 256-bit variants (rfbproto RSA-AES)."""
         from cryptography.hazmat.primitives.asymmetric import padding
         from cryptography.hazmat.primitives.asymmetric import rsa
 
@@ -1839,8 +1860,7 @@ class VNCDisplay(_DisplayBase):
         enc_client = server_pub.encrypt(client_random, padding.PKCS1v15())
         sock.sendall(struct.pack("!H", len(enc_client)) + enc_client)
 
-        send_key = hashlib.sha1(server_random + client_random).digest()[:16]
-        recv_key = hashlib.sha1(client_random + server_random).digest()[:16]
+        send_key, recv_key = _ra2_session_keys(server_random, client_random, sha256=sha256)
         send_ctr = [0]
         recv_ctr = [0]
 
@@ -1853,11 +1873,12 @@ class VNCDisplay(_DisplayBase):
             sock.sendall(_ra2_seal(send_key, send_ctr[0], data))
             send_ctr[0] += 1
 
+        digest = hashlib.sha256 if sha256 else hashlib.sha1
         server_hash = _recv_msg()
-        expect = hashlib.sha1(server_blob + client_blob).digest()
+        expect = digest(server_blob + client_blob).digest()
         if server_hash != expect:
             raise RuntimeError("RA2 server hash mismatch")
-        _send_msg(hashlib.sha1(client_blob + server_blob).digest())
+        _send_msg(digest(client_blob + server_blob).digest())
 
         subtype = _recv_msg()
         if not subtype or subtype[0] not in (1, 2):
@@ -1870,6 +1891,15 @@ class VNCDisplay(_DisplayBase):
         else:
             creds = bytes([len(user)]) + user + bytes([len(pw)]) + pw
         _send_msg(creds)
+        if two_step:
+            server_random2 = _recv_msg()
+            client_random2 = os.urandom(16)
+            _send_msg(client_random2)
+            send_key, recv_key = _ra2_session_keys(
+                server_random2, client_random2, sha256=sha256
+            )
+            send_ctr[0] = 0
+            recv_ctr[0] = 0
         if encrypt_session:
             return _RA2Sock(sock, send_key, recv_key, send_ctr[0], recv_ctr[0])
         return sock
@@ -2685,6 +2715,14 @@ def _aes_eax_decrypt(key, nonce, ad, ciphertext, tag):
         raise RuntimeError("RA2 AES-EAX MAC check failed")
     dec = Cipher(algorithms.AES(key), modes.CTR(n)).decryptor()
     return dec.update(ciphertext or b"") + dec.finalize()
+
+
+def _ra2_session_keys(server_random, client_random, sha256=False):
+    digest = hashlib.sha256 if sha256 else hashlib.sha1
+    keylen = 32 if sha256 else 16
+    send_key = digest(server_random + client_random).digest()[:keylen]
+    recv_key = digest(client_random + server_random).digest()[:keylen]
+    return send_key, recv_key
 
 
 def _ra2_seal(key, counter, plaintext):

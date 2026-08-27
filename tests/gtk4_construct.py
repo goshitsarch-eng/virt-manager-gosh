@@ -1015,6 +1015,10 @@ def main():
         assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
         ct, tag = gtk4display._aes_eax_encrypt(b"\x11" * 16, b"\x22" * 16, b"\x00\x04", b"ping")
         assert gtk4display._aes_eax_decrypt(b"\x11" * 16, b"\x22" * 16, b"\x00\x04", ct, tag) == b"ping"
+        send256, recv256 = gtk4display._ra2_session_keys(b"S" * 16, b"C" * 16, sha256=True)
+        assert len(send256) == 32 and len(recv256) == 32 and send256 != recv256
+        ct256, tag256 = gtk4display._aes_eax_encrypt(send256, b"\x00" * 16, b"\x00\x04", b"ping")
+        assert gtk4display._aes_eax_decrypt(send256, b"\x00" * 16, b"\x00\x04", ct256, tag256) == b"ping"
         frame = gtk4display._ra2_seal(b"\x33" * 16, 0, b"rfb")
         class _Mem:
             def __init__(self, data):
