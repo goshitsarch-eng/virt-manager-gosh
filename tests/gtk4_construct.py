@@ -1290,6 +1290,22 @@ def main():
         assert _pixel(0, 0) == b"\xaa\xbb\xcc\x00"
         assert _pixel(1, 1) == b"\xaa\xbb\xcc\x00"
 
+        # Ultra (encoding 9): LZO-compressed raw pixels
+        import ctypes
+        import ctypes.util
+
+        pixels = b"\x44\x55\x66\x00" * 4
+        lzo = ctypes.CDLL(ctypes.util.find_library("lzo2") or "liblzo2.so.2")
+        wrk = ctypes.create_string_buffer(16384 * 8)
+        cdst = ctypes.create_string_buffer(len(pixels) + 64)
+        clen = ctypes.c_ulong(len(cdst))
+        assert lzo.lzo1x_1_compress(pixels, len(pixels), cdst, ctypes.byref(clen), wrk) == 0
+        ultra = st.pack("!I", clen.value) + cdst.raw[: clen.value]
+        disp._alloc_pixels(4, 4)
+        disp._read_ultra(FakeSock(ultra), 4, 0, 0, 2, 2)
+        assert _pixel(0, 0) == b"\x44\x55\x66\x00"
+        assert _pixel(1, 1) == b"\x44\x55\x66\x00"
+
         # Tight fill rectangle (control 0x80 + RGB) → BGRA
         disp._alloc_pixels(4, 4)
         tight = b"\x80\xaa\xbb\xcc"

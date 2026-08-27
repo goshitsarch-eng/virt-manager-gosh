@@ -50,6 +50,7 @@ _VNC_ENC_DESKTOPSIZE = -223
 _VNC_ENC_EXTENDED_DESKTOPSIZE = -308
 _VNC_ENC_TIGHT = 7
 _VNC_ENC_ZLIBHEX = 8
+_VNC_ENC_ULTRA = 9
 _VNC_ENC_TRLE = 15
 _HEXTILE_RAW = 1
 _HEXTILE_BG = 2
@@ -1081,7 +1082,7 @@ class VNCDisplay(_DisplayBase):
     TLS; TightVNC security type 16 (tunnels, VNC/None/Unix/SASL/VeNCrypt
     auth, extended ServerInit); 32-bit pixels; QEMU audio and LED state;
     and the encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile,
-    zlib, ZlibHex, Tight, ZRLE, DesktopSize, and cursor.
+    zlib, ZlibHex, Ultra, Tight, ZRLE, DesktopSize, and cursor.
     """
 
     def __init__(self, **kwargs):
@@ -1470,6 +1471,7 @@ class VNCDisplay(_DisplayBase):
             5,  # hextile
             6,  # zlib
             _VNC_ENC_ZLIBHEX,
+            _VNC_ENC_ULTRA,
             _VNC_ENC_CORRE,
             _VNC_ENC_TRLE,
             _VNC_ENC_ZRLE,
@@ -1959,6 +1961,21 @@ class VNCDisplay(_DisplayBase):
     def _read_zlibhex(self, sock, width, x, y, w, h):
         self._read_hextile(sock, width, x, y, w, h, zlibhex=True)
 
+    def _lzo_decompress(self, rawz, expect):
+        libname = ctypes.util.find_library("lzo2") or "liblzo2.so.2"
+        lib = ctypes.CDLL(libname)
+        dst = ctypes.create_string_buffer(max(expect, 1) + 64)
+        dlen = ctypes.c_ulong(len(dst))
+        rc = lib.lzo1x_decompress(rawz, len(rawz), dst, ctypes.byref(dlen), None)
+        if rc != 0:
+            raise RuntimeError("Ultra LZO decompress failed: %s" % rc)
+        return dst.raw[: dlen.value]
+
+    def _read_ultra(self, sock, width, x, y, w, h):
+        n = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        raw = self._lzo_decompress(self._recv_n(sock, n), w * h * 4)
+        self._blit_raw(width, x, y, w, h, raw[: w * h * 4])
+
     def _read_zlib(self, sock, width, x, y, w, h):
         import zlib
 
@@ -2354,6 +2371,8 @@ class VNCDisplay(_DisplayBase):
                 self._read_hextile(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_ZLIBHEX:
                 self._read_zlibhex(sock, width, x, y, w, h)
+            elif enc == _VNC_ENC_ULTRA:
+                self._read_ultra(sock, width, x, y, w, h)
             elif enc == 6:
                 self._read_zlib(sock, width, x, y, w, h)
             elif enc in (_VNC_ENC_TIGHT, _VNC_ENC_TIGHTPNG):
