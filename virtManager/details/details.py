@@ -6022,12 +6022,24 @@ class vmmDetails(vmmGObjectUI):
             if last.get("shareable") is False and (
                 last_tgt is None or last_tgt == tgt
             ):
-                self._addstorage.widget("disk-shareable").set_active(False)
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-                try:
-                    os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
-                except Exception:
-                    pass
+                if self.vm.is_active():
+                    # Hotplug of shareable=False is deferred
+                    # ("changes will take effect after the next guest
+                    # shutdown"). GTK 3 keeps showing the running XML
+                    # until the guest actually stops.
+                    live_w = bool(
+                        self._addstorage.widget("disk-shareable").get_active()
+                    )
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
+                        "1" if live_w else "0"
+                    )
+                else:
+                    self._addstorage.widget("disk-shareable").set_active(False)
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                    try:
+                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                    except Exception:
+                        pass
             elif (last.get("shareable") or applied) and (
                 last_tgt is None or last_tgt == tgt
             ):

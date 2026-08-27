@@ -364,6 +364,237 @@ class _CyrusSaslClient:
             self._conn = None
 
 
+_GSS_S_COMPLETE = 0
+_GSS_S_CONTINUE_NEEDED = 1
+_GSS_C_MUTUAL_FLAG = 2
+_GSS_C_INTEG_FLAG = 1
+_GSS_C_CONF_FLAG = 16
+
+
+class _GssBuffer(ctypes.Structure):
+    _fields_ = [("length", ctypes.c_size_t), ("value", ctypes.c_void_p)]
+
+
+class _GssOID(ctypes.Structure):
+    _fields_ = [("length", ctypes.c_uint), ("elements", ctypes.c_void_p)]
+
+
+class _GssapiKr5Backend:
+    """MIT libgssapi_krb5 — the same GSS stack gtk-vnc/Cyrus GSSAPI uses."""
+
+    _lib = None
+
+    @classmethod
+    def _load(cls):
+        if cls._lib is not None:
+            return cls._lib
+        name = ctypes.util.find_library("gssapi_krb5") or ctypes.util.find_library("gssapi")
+        if not name:
+            return None
+        lib = ctypes.CDLL(name)
+        lib.gss_import_name.restype = ctypes.c_uint32
+        lib.gss_init_sec_context.restype = ctypes.c_uint32
+        lib.gss_unwrap.restype = ctypes.c_uint32
+        lib.gss_wrap.restype = ctypes.c_uint32
+        lib.gss_release_buffer.restype = ctypes.c_uint32
+        lib.gss_release_name.restype = ctypes.c_uint32
+        lib.gss_delete_sec_context.restype = ctypes.c_uint32
+        cls._lib = lib
+        return lib
+
+    @classmethod
+    def available(cls):
+        return cls._load() is not None
+
+    def __init__(self, host):
+        lib = self._load()
+        if lib is None:
+            raise RuntimeError("libgssapi_krb5 is not available")
+        self._lib = lib
+        self._ctx = ctypes.c_void_p()
+        self._name = ctypes.c_void_p()
+        self.complete = False
+        target = ("vnc@%s" % (host or "localhost")).encode("utf-8")
+        buf = _GssBuffer(len(target), ctypes.cast(ctypes.c_char_p(target), ctypes.c_void_p))
+        self._keep = [target]
+        try:
+            # MIT exports GSS_C_NT_HOSTBASED_SERVICE as a gss_OID (pointer).
+            oid_ptr = ctypes.c_void_p.in_dll(lib, "GSS_C_NT_HOSTBASED_SERVICE")
+        except ValueError:
+            oid_ptr = None
+        minor = ctypes.c_uint32()
+        maj = lib.gss_import_name(
+            ctypes.byref(minor),
+            ctypes.byref(buf),
+            oid_ptr,
+            ctypes.byref(self._name),
+        )
+        if maj != _GSS_S_COMPLETE or not self._name:
+            raise RuntimeError("gss_import_name failed: %s" % maj)
+
+    def _copy_buf(self, buf):
+        if not buf.value or not buf.length:
+            return b""
+        return ctypes.string_at(buf.value, int(buf.length))
+
+    def _release(self, buf):
+        minor = ctypes.c_uint32()
+        try:
+            self._lib.gss_release_buffer(ctypes.byref(minor), ctypes.byref(buf))
+        except Exception:
+            pass
+
+    def init(self, serverin):
+        minor = ctypes.c_uint32()
+        out = _GssBuffer()
+        flags = ctypes.c_uint32()
+        time_rec = ctypes.c_uint32()
+        inp = _GssBuffer()
+        raw = serverin if isinstance(serverin, (bytes, bytearray)) else None
+        if raw:
+            inp.length = len(raw)
+            inp.value = ctypes.cast(ctypes.c_char_p(bytes(raw)), ctypes.c_void_p)
+            self._keep.append(bytes(raw))
+        maj = self._lib.gss_init_sec_context(
+            ctypes.byref(minor),
+            None,
+            ctypes.byref(self._ctx),
+            self._name,
+            None,
+            _GSS_C_MUTUAL_FLAG | _GSS_C_INTEG_FLAG | _GSS_C_CONF_FLAG,
+            0,
+            None,
+            ctypes.byref(inp) if raw else None,
+            None,
+            ctypes.byref(out),
+            ctypes.byref(flags),
+            ctypes.byref(time_rec),
+        )
+        token = self._copy_buf(out)
+        self._release(out)
+        if maj == _GSS_S_COMPLETE:
+            self.complete = True
+            return token
+        if maj == _GSS_S_CONTINUE_NEEDED:
+            return token
+        raise RuntimeError("gss_init_sec_context failed: %s" % maj)
+
+    def unwrap(self, data):
+        minor = ctypes.c_uint32()
+        inp = _GssBuffer()
+        raw = data if isinstance(data, (bytes, bytearray)) else b""
+        inp.length = len(raw)
+        inp.value = ctypes.cast(ctypes.c_char_p(bytes(raw)), ctypes.c_void_p) if raw else None
+        if raw:
+            self._keep.append(bytes(raw))
+        out = _GssBuffer()
+        conf = ctypes.c_int()
+        qop = ctypes.c_uint32()
+        maj = self._lib.gss_unwrap(
+            ctypes.byref(minor),
+            self._ctx,
+            ctypes.byref(inp),
+            ctypes.byref(out),
+            ctypes.byref(conf),
+            ctypes.byref(qop),
+        )
+        token = self._copy_buf(out)
+        self._release(out)
+        if maj != _GSS_S_COMPLETE:
+            raise RuntimeError("gss_unwrap failed: %s" % maj)
+        return token
+
+    def wrap(self, data):
+        minor = ctypes.c_uint32()
+        inp = _GssBuffer()
+        raw = data if isinstance(data, (bytes, bytearray)) else b""
+        inp.length = len(raw)
+        inp.value = ctypes.cast(ctypes.c_char_p(bytes(raw)), ctypes.c_void_p) if raw else None
+        if raw:
+            self._keep.append(bytes(raw))
+        out = _GssBuffer()
+        conf = ctypes.c_int()
+        maj = self._lib.gss_wrap(
+            ctypes.byref(minor),
+            self._ctx,
+            0,
+            0,
+            ctypes.byref(inp),
+            ctypes.byref(conf),
+            ctypes.byref(out),
+        )
+        token = self._copy_buf(out)
+        self._release(out)
+        if maj != _GSS_S_COMPLETE:
+            raise RuntimeError("gss_wrap failed: %s" % maj)
+        return token
+
+    def dispose(self):
+        minor = ctypes.c_uint32()
+        if self._ctx:
+            try:
+                self._lib.gss_delete_sec_context(
+                    ctypes.byref(minor), ctypes.byref(self._ctx), None
+                )
+            except Exception:
+                pass
+            self._ctx = None
+        if self._name:
+            try:
+                self._lib.gss_release_name(ctypes.byref(minor), ctypes.byref(self._name))
+            except Exception:
+                pass
+            self._name = None
+
+
+class _GssapiSaslClient:
+    """RFC 4752 SASL GSSAPI, matching gtk-vnc/Cyrus when a TGT is present."""
+
+    def __init__(self, username, password, host, backend=None):
+        ignore = username
+        ignore = password
+        self._backend = backend or _GssapiKr5Backend(host)
+        self._need_layer = False
+
+    def start(self, _mechlist):
+        token = self._backend.init(None)
+        return "GSSAPI", token, True
+
+    def step(self, serverin):
+        if not getattr(self._backend, "complete", False):
+            token = self._backend.init(serverin or None)
+            if not self._backend.complete:
+                return token, False
+            self._need_layer = True
+            if token:
+                return token, False
+            if not serverin:
+                return None, False
+        return self._finish_layer(serverin)
+
+    def _finish_layer(self, serverin):
+        raw = self._backend.unwrap(serverin or b"")
+        if len(raw) < 4:
+            raise RuntimeError("GSSAPI security layer message too short")
+        offered = raw[0]
+        if offered & 1:
+            layer = 1
+        elif offered & 2:
+            layer = 2
+        elif offered & 4:
+            layer = 4
+        else:
+            raise RuntimeError("GSSAPI server offered no usable security layer")
+        payload = bytes([layer]) + struct.pack("!I", 0x00FFFF)[1:]
+        return self._backend.wrap(payload), True
+
+    def dispose(self):
+        try:
+            self._backend.dispose()
+        except Exception:
+            pass
+
+
 # Linux evdev codes used by SpiceClientGLib.inputs_key_press and QEMU
 # VNC extended key events. Gdk hardware keycodes on X11 are evdev + 8.
 _SPICE_EVDEV = {
@@ -819,7 +1050,8 @@ class VNCDisplay(_DisplayBase):
     RFB/VNC client painted on a GTK 4 DrawingArea.
 
     Supports None, VNC-auth, VeNCrypt (including SASL subtypes), RFB SASL
-    (PLAIN, DIGEST-MD5, and Cyrus/GSSAPI when libsasl2 is present), and
+    (PLAIN, DIGEST-MD5, Cyrus when libsasl2 plugins exist, and GSSAPI
+    via libgssapi_krb5), and
     TLS; 32-bit pixels; and the encodings QEMU commonly sends: raw,
     CopyRect, RRE, Hextile, zlib, Tight, ZRLE, DesktopSize, and cursor.
     """
@@ -1153,6 +1385,8 @@ class VNCDisplay(_DisplayBase):
         for cand in ("PLAIN", "DIGEST-MD5"):
             if cand in mechs:
                 return cand
+        if "GSSAPI" in mechs:
+            return "GSSAPI"
         return None
 
     def _sasl_plain_clientout(self):
@@ -1191,6 +1425,8 @@ class VNCDisplay(_DisplayBase):
             return _Plain()
         if chosen == "DIGEST-MD5":
             return _DigestMd5Client(self._username, self._password, self._host, cnonce=cnonce)
+        if chosen == "GSSAPI":
+            return _GssapiSaslClient(self._username, self._password, self._host)
         return None
 
     def _vnc_sasl(self, sock, cnonce=None):
@@ -2323,10 +2559,61 @@ class SpiceDisplay(_DisplayBase):
             return False
         if not files:
             return False
+        return self._start_file_copy(main, files)
+
+    def _start_file_copy(self, main, files):
+        """Start a spice-gtk style guest file transfer and show progress."""
+        names = []
+        for fobj in files:
+            try:
+                names.append(fobj.get_basename() or fobj.get_path() or _("file"))
+            except Exception:
+                names.append(_("file"))
+        progress = _SpiceFileTransferWindow(names)
+        progress.present()
+
+        def _progress(_current, _total):
+            try:
+                progress.set_fraction(
+                    (float(_current) / float(_total)) if _total else 0.0
+                )
+            except Exception:
+                pass
+
+        def _done(_src, result):
+            ok = True
+            err = None
+            try:
+                ok = bool(SpiceClientGLib.main_file_copy_finish(main, result))
+            except Exception as exc:
+                ok = False
+                err = str(exc)
+            if ok and err is None:
+                progress.finish_ok()
+            else:
+                progress.finish_error(err or _("File transfer failed"))
+
         try:
-            SpiceClientGLib.main_file_copy_async(main, files, 0)
+            SpiceClientGLib.main_file_copy_async(
+                main,
+                files,
+                0,
+                None,
+                _progress,
+                None,
+                _done,
+            )
             return True
+        except TypeError:
+            try:
+                SpiceClientGLib.main_file_copy_async(main, files, 0, None, _done)
+                return True
+            except Exception as exc:
+                progress.finish_error(str(exc))
+                log.debug("spice file transfer failed: %s", exc)
+                return False
         except Exception as exc:
+            progress.finish_error(str(exc))
             log.debug("spice file transfer failed: %s", exc)
             return False
 
@@ -2423,6 +2710,55 @@ def _cairo_from_spice_primary(primary):
     except Exception as exc:
         log.debug("Failed to create cairo surface: %s", exc)
         return None
+
+
+class _SpiceFileTransferWindow(Gtk.Window):
+    """
+    spice-gtk Display shows in-guest file copy progress. Recreate that
+    on the GTK 4 DrawingArea path after a drag-and-drop.
+    """
+
+    def __init__(self, names, **kwargs):
+        title = _("File transfer")
+        super().__init__(title=title, **kwargs)
+        self.set_default_size(360, 120)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+        label = Gtk.Label(
+            label=_("Transferring %s") % ", ".join(names or [_("file")]),
+            wrap=True,
+            xalign=0,
+        )
+        self._bar = Gtk.ProgressBar()
+        self._bar.set_show_text(True)
+        self._status = Gtk.Label(label=_("Copying to the guest…"), xalign=0)
+        box.append(label)
+        box.append(self._bar)
+        box.append(self._status)
+        self.set_child(box)
+
+    def set_fraction(self, value):
+        try:
+            frac = max(0.0, min(1.0, float(value)))
+        except Exception:
+            frac = 0.0
+        self._bar.set_fraction(frac)
+        self._bar.set_text("%d%%" % int(frac * 100))
+
+    def finish_ok(self):
+        self._bar.set_fraction(1.0)
+        self._bar.set_text("100%")
+        self._status.set_text(_("Transfer complete"))
+        GLib.timeout_add(1200, self.close)
+        return False
+
+    def finish_error(self, message):
+        self._status.set_text(message or _("File transfer failed"))
+        GLib.timeout_add(2500, self.close)
+        return False
 
 
 class UsbDeviceWidget(Gtk.Box):

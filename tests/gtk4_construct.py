@@ -175,6 +175,7 @@ def main():
         "details_many_devices": 20,
         "cli_windows": 90,
         "createvm_finish": 90,
+        "inspection_os_page": 90,
     }
 
     def _run(name, fn, timeout=None):
@@ -1015,7 +1016,7 @@ def main():
         assert disp._choose_vencrypt_subtype([264, 263]) == 263
         assert disp._sasl_choose_mech("GSSAPI,PLAIN") == "PLAIN"
         assert disp._sasl_choose_mech("DIGEST-MD5") == "DIGEST-MD5"
-        assert disp._sasl_choose_mech("GSSAPI") is None
+        assert disp._sasl_choose_mech("GSSAPI") == "GSSAPI"
         disp._username = "alice"
         disp._password = "s3cret"
         assert disp._sasl_plain_clientout() == b"\x00alice\x00s3cret"
@@ -1085,9 +1086,47 @@ def main():
         disp._vnc_sasl(dsock, cnonce="OA6MHXh6VqTrRk")
         assert b"DIGEST-MD5" in dsock.sent
         assert b"response=" in dsock.sent
+
+        class _FakeGss:
+            def __init__(self):
+                self.complete = False
+
+            def init(self, serverin):
+                if serverin is None:
+                    return b"gss-token-1"
+                self.complete = True
+                return b""
+
+            def unwrap(self, data):
+                assert data == b"gss-layer"
+                return b"\x07\x00\xff\xff"
+
+            def wrap(self, data):
+                assert data[0] == 1
+                return b"gss-wrap-" + data
+
+            def dispose(self):
+                self.complete = True
+
+        gss = gtk4display._GssapiSaslClient("user", "pw", "vnc.example", backend=_FakeGss())
+        name, token, cont = gss.start("GSSAPI")
+        assert name == "GSSAPI" and token == b"gss-token-1" and cont
+        token, done = gss.step(b"gss-token-2")
+        assert token == b"" and not done
+        token, done = gss.step(b"gss-layer")
+        assert done and token.startswith(b"gss-wrap-")
+        gss.dispose()
+        assert gtk4display._GssapiKr5Backend.available()
         disp.send_keys([97])
         disp.set_property("resize-guest", True)
         disp._apply_resize_guest(True)
+
+        xfer = gtk4display._SpiceFileTransferWindow(["demo.iso"])
+        xfer.set_fraction(0.4)
+        assert abs(xfer._bar.get_fraction() - 0.4) < 0.01
+        xfer.finish_error("nope")
+        spice = gtk4display.SpiceDisplay(None)
+        assert spice._on_file_drop(None, [], 0, 0) is False
 
         class FakeSock:
             def __init__(self, data):
@@ -1429,6 +1468,8 @@ def main():
         from virtManager.lib import uiutil
         from virtManager.vmwindow import vmmVMWindow
 
+        prev_gfs = vmmInspection._libguestfs_installed
+        prev_inspect = vmmConfig.get_instance().get_libguestfs_inspect_vms()
         vmmInspection._libguestfs_installed = True
         vmmConfig.get_instance().set_libguestfs_inspect_vms(True)
 
@@ -1486,6 +1527,8 @@ def main():
         edetails._refresh_os_page()
         _pump(GLib, 0.05)
         assert "no disks" in (edetails.widget("details-overview-error").get_text() or "")
+        vmmConfig.get_instance().set_libguestfs_inspect_vms(prev_inspect)
+        vmmInspection._libguestfs_installed = prev_gfs
 
     def inspection_perform_path():
         stub = os.path.join(TOPDIR, "tests", "guestfs_stub")
@@ -1641,6 +1684,38 @@ def main():
         _pump(GLib, 1.5)
         names = [net.get_name() for net in conn.list_nets()]
         assert "gtk4-created-net" in names
+
+    def disk_shareable_live_deferred():
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-clone-simple")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        win.activate_config_page()
+        details = win._details
+        disks = list(vmobj.xmlobj.devices.disk)
+        assert disks, "test-clone-simple has no disks"
+        disk = disks[0]
+        orig_active = details.vm.is_active
+        details._vmm_last_disk_kwargs = {"shareable": False}
+        details._vmm_last_disk_target = getattr(disk, "target", None)
+        disk.shareable = True
+        details.vm.is_active = lambda: True
+        try:
+            details._refresh_disk_page(disk)
+            assert details._addstorage.widget("disk-shareable").get_active(), (
+                "running guest must keep live Shareable until shutdown"
+            )
+        finally:
+            details.vm.is_active = orig_active
+        details.vm.is_active = lambda: False
+        try:
+            details._refresh_disk_page(disk)
+            assert not details._addstorage.widget("disk-shareable").get_active(), (
+                "shut-off guest must show the deferred shareable=False apply"
+            )
+        finally:
+            details.vm.is_active = orig_active
 
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
@@ -2119,6 +2194,7 @@ def main():
         ("createvm_oslist", createvm_oslist),
         ("vnc_protocol_helpers", vnc_protocol_helpers),
         ("vnc_live_handshake", vnc_live_handshake),
+        ("disk_shareable_live_deferred", disk_shareable_live_deferred),
         ("inspection_os_page", inspection_os_page),
         ("inspection_perform_path", inspection_perform_path),
         ("createvm_wizard_nav", createvm_wizard_nav),
