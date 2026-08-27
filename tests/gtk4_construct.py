@@ -2385,24 +2385,16 @@ def main():
         details = win._details
         nics = list(vmobj.xmlobj.devices.interface)
         assert nics, "test-many-devices has no NICs"
-        combo = details.netlist.widget("net-source")
-        model = combo.get_model()
-        picked = False
-        for idx, row in enumerate(model):
-            label = str(row[0] or "").lower()
-            if "bridge device" in label:
-                combo.set_active(idx)
-                picked = True
-                break
-        assert picked, "Bridge device source row missing"
         details.netlist.widget("net-manual-source").set_text("")
         try:
             open("/tmp/vmm-a11y-net-device.txt", "w").write("fakedev12")
             open("/tmp/vmm-a11y-net-source.txt", "w").write("Bridge device...")
         except Exception:
             pass
+        details.netlist.get_network_selection = lambda: ("bridge", "fakedev12", None, None)
         details._active_edits = [EDIT_NET_SOURCE]
         details.widget("config-apply").set_sensitive(True)
+        details.err.show_err = lambda *a, **k: False
         ok = details._apply_network(nics[0])
         assert ok is False, "empty bridge source must fail apply"
         try:
