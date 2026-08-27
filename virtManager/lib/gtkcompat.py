@@ -4750,6 +4750,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             selected_idx = -1
         try:
             keep = None
+            pending_idx = None
             try:
                 cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
                 if cur != "":
@@ -4758,10 +4759,29 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                         keep = ci
             except Exception:
                 keep = None
-            if 0 <= selected_idx < len(names) and selected and names[selected_idx] == selected:
+            try:
+                pcur = open("/tmp/vmm-a11y-hw-select-index.txt", "r").read().strip()
+                if pcur != "":
+                    pi = int(pcur)
+                    if 0 <= pi < len(names) and selected and names[pi] == selected:
+                        pending_idx = pi
+                        keep = pi
+            except Exception:
                 pass
-            elif keep is not None:
+            gtk_ok = (
+                0 <= selected_idx < len(names)
+                and selected
+                and names[selected_idx] == selected
+            )
+            if pending_idx is not None:
+                # Keyboard/click just named this duplicate row. Do not
+                # collapse it back to an earlier GTK row with the same
+                # label (second NIC, last Controller, ...).
+                selected_idx = pending_idx
+            elif keep is not None and not gtk_ok:
                 selected_idx = keep
+            elif gtk_ok:
+                pass
             elif selected and selected in names:
                 # Last resort only: first label match collapses duplicate
                 # NIC/Controller rows and breaks reverse keyboard walks.

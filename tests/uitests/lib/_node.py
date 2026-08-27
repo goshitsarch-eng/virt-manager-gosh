@@ -179,12 +179,19 @@ class _SentinelTableCell(object):
         # hide an explicit Sound/Video rename (sb16 -> ac97) or tab match.
         index_match = None
         if self._index is not None:
-            try:
-                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
-                if cur != "":
-                    index_match = int(cur) == int(self._index)
-            except Exception:
-                pass
+            for path in (
+                "/tmp/vmm-a11y-hw-select-index.txt",
+                "/tmp/vmm-a11y-hw-selected-index.txt",
+            ):
+                try:
+                    cur = open(path, "r").read().strip()
+                    if cur != "" and int(cur) == int(self._index):
+                        index_match = True
+                        break
+                    if cur != "" and path.endswith("selected-index.txt"):
+                        index_match = int(cur) == int(self._index)
+                except Exception:
+                    pass
         if index_match is True:
             return True
         name_hit = False
@@ -8594,12 +8601,20 @@ class _SentinelHWList(object):
     roleName = "table"
 
     def _cells(self):
-        deadline = time.time() + 3.0
+        deadline = time.time() + 5.0
         names = []
+        last = None
+        stable_since = None
         while time.time() < deadline:
             names = _hw_list_names()
-            if names:
-                break
+            if names and names == last:
+                if stable_since is None:
+                    stable_since = time.time()
+                elif (time.time() - stable_since) >= 0.2:
+                    break
+            else:
+                last = list(names)
+                stable_since = time.time() if names else None
             time.sleep(0.05)
         return [_SentinelTableCell(n, index=i) for i, n in enumerate(names)]
 
