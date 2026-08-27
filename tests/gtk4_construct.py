@@ -2403,6 +2403,54 @@ def main():
             alert = ""
         assert "Error changing VM configuration" in alert, alert
 
+    def details_controller_typed_model():
+        from virtManager.details.details import EDIT_CONTROLLER_MODEL
+        from virtManager.details.details import HW_LIST_COL_DEVICE
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_CONTROLLER
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-many-devices")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        hwlist = details.widget("hw-list")
+        usb_row = None
+        for idx, row in enumerate(hwlist.get_model()):
+            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_CONTROLLER:
+                continue
+            dev = row[HW_LIST_COL_DEVICE]
+            if getattr(dev, "type", None) == "usb":
+                uiutil.set_list_selection_by_number(hwlist, idx)
+                details._hw_changed_cb(hwlist)
+                usb_row = row
+                break
+        assert usb_row is not None, "test-many-devices has no USB controller"
+        combo = details.widget("controller-model")
+        child = combo.get_child()
+        details._enable_apply(EDIT_CONTROLLER_MODEL)
+        child.set_text("piix3-uhci")
+        try:
+            combo.set_active(-1)
+        except Exception:
+            pass
+        ok = details._apply_controller(usb_row[HW_LIST_COL_DEVICE])
+        assert ok is not False
+        details._disable_apply()
+        details._vmm_apply_just_succeeded = True
+        details._ui_refreshing = True
+        try:
+            details._refresh_controller_page(usb_row[HW_LIST_COL_DEVICE])
+        finally:
+            details._ui_refreshing = False
+        details._enable_apply(EDIT_CONTROLLER_MODEL)
+        details._clear_post_apply_refresh()
+        assert not details.widget("config-apply").get_sensitive(), (
+            "typed controller apply must not leave Apply armed after refresh"
+        )
+
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
         from virtManager.lib import uiutil
@@ -2885,6 +2933,7 @@ def main():
         ("vnc_ra2_handshake", vnc_ra2_handshake),
         ("disk_shareable_live_deferred", disk_shareable_live_deferred),
         ("details_empty_bridge", details_empty_bridge),
+        ("details_controller_typed_model", details_controller_typed_model),
         ("inspection_os_page", inspection_os_page),
         ("inspection_perform_path", inspection_perform_path),
         ("createvm_wizard_nav", createvm_wizard_nav),

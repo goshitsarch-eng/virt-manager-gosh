@@ -4267,6 +4267,8 @@ class vmmDetails(vmmGObjectUI):
             pass
 
     def _enable_apply(self, edittype):
+        if getattr(self, "_ui_refreshing", False):
+            return
         self._vmm_apply_failed = False
         self.widget("config-apply").set_sensitive(True)
         try:
@@ -4666,6 +4668,7 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 labeled = None
             self._disable_apply()
+            self._vmm_apply_just_succeeded = True
             success = True
             try:
                 os.remove("/tmp/vmm-a11y-xml.txt")
@@ -4772,6 +4775,10 @@ class vmmDetails(vmmGObjectUI):
                         self._refresh_page_body(labeled)
                     finally:
                         self._ui_refreshing = False
+                    try:
+                        GLib.idle_add(self._clear_post_apply_refresh)
+                    except Exception:
+                        pass
                     if labeled[HW_LIST_COL_TYPE] == HW_LIST_TYPE_CPU:
                         try:
                             guest = self.vm.get_xmlobj(
@@ -5408,6 +5415,17 @@ class vmmDetails(vmmGObjectUI):
                 typed = combo.get_child().get_text().strip()
             except Exception:
                 typed = ""
+            if not typed:
+                for path in (
+                    "/tmp/vmm-a11y-combo-controller-model.txt.set",
+                    "/tmp/vmm-a11y-combo-controller-model.txt",
+                ):
+                    try:
+                        typed = open(path, "r").read().strip()
+                    except Exception:
+                        typed = ""
+                    if typed:
+                        break
             if typed and (
                 combo.get_active() < 0
                 or typed
@@ -5632,6 +5650,13 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
 
+    def _clear_post_apply_refresh(self):
+        """Drop Apply re-armed by combo/entry 'changed' after a successful apply."""
+        if getattr(self, "_vmm_apply_just_succeeded", False):
+            self._vmm_apply_just_succeeded = False
+            self._disable_apply()
+        return False
+
     def _refresh_page(self):
         row = self._get_hw_row()
         if not row:
@@ -5652,6 +5677,8 @@ class vmmDetails(vmmGObjectUI):
                 # even when the user did not edit anything.
                 if getattr(self, "_ui_refreshing", False):
                     return False
+                if getattr(self, "_vmm_apply_just_succeeded", False):
+                    return self._clear_post_apply_refresh()
                 if self._active_edits == [EDIT_DISK_PATH]:
                     pending = ""
                     try:
@@ -6590,6 +6617,18 @@ class vmmDetails(vmmGObjectUI):
         if controller.type == "usb" and "xhci" in str(model):
             model = "usb3"
         uiutil.set_list_selection(self.widget("controller-model"), model)
+        try:
+            combo = self.widget("controller-model")
+            child = combo.get_child() if combo is not None else None
+            if child is not None and controller.model and hasattr(child, "set_text"):
+                pretty = uiutil.get_list_selection(combo)
+                if pretty != controller.model and controller.model not in (
+                    "usb3",
+                    "ich9-ehci1",
+                ):
+                    child.set_text(controller.model)
+        except Exception:
+            pass
         try:
             self._publish_controller_devices()
             self._publish_details_device_fields()
