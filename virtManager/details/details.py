@@ -3456,6 +3456,14 @@ class vmmDetails(vmmGObjectUI):
             # libvirt; still publish that so media-entry does not keep the ISO.
             if not self.vm.is_active():
                 self._sync_inactive_cdrom_media()
+                last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+                if last.get("shareable") is False:
+                    try:
+                        self._addstorage.widget("disk-shareable").set_active(False)
+                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                    except Exception:
+                        pass
             return
 
         self._refresh_page()
