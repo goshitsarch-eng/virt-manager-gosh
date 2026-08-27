@@ -950,6 +950,8 @@ def main():
         gtkcompat.show_all(oslist.search_entry)
 
     def vnc_protocol_helpers():
+        import struct as st
+
         from virtManager.details import gtk4display
 
         disp = gtk4display.VNCDisplay()
@@ -1047,7 +1049,19 @@ def main():
         text = out.decode("ascii")
         assert 'username="chris"' in text
         assert "response=" in text
-        assert expect == rspauth
+        _vnc_resp, vnc_rspauth = gtk4display._digest_md5_hashes(
+            "chris",
+            "secret",
+            "elwood.innosoft.com",
+            "OA6MG9tEQGm2hh",
+            "OA6MHXh6VqTrRk",
+            "00000001",
+            "auth",
+            "vnc/elwood.innosoft.com",
+            "md5-sess",
+        )
+        assert expect == vnc_rspauth
+        assert ("response=%s" % _vnc_resp) in text
 
         class _SaslSock:
             def __init__(self, data):
