@@ -427,6 +427,7 @@ class vmmPreferences(vmmGObjectUI):
         dialog.set_default_size(325, 160)
         gtkcompat.set_toplevel_a11y_role(dialog)
         gtkcompat.set_accessible_name(dialog, "Configure grab key combination")
+        gtkcompat.apply_gtk3_window_hints(dialog, dialog=True)
         app = Gtk.Application.get_default()
         if app is not None:
             try:
