@@ -461,6 +461,10 @@ class vmmAddHardware(vmmGObjectUI):
             widget.hide()
 
         self._set_hw_selection(0)
+        try:
+            self._hw_selected_cb(self.widget("hw-list"))
+        except Exception:
+            pass
 
         # Storage params
         self.widget("storage-devtype").set_active(0)
@@ -2128,6 +2132,27 @@ class vmmAddHardware(vmmGObjectUI):
         try:
             row = self._get_hw_selection()
             open(_ADDHW_SELECTED, "w").write(str(row[0] if row else ""))
+            page_names = {
+                PAGE_DISK: "storage-tab",
+                PAGE_CONTROLLER: "controller-tab",
+                PAGE_NETWORK: "network-tab",
+                PAGE_INPUT: "input-tab",
+                PAGE_GRAPHICS: "graphics-tab",
+                PAGE_SOUND: "sound-tab",
+                PAGE_HOSTDEV: "host-tab",
+                PAGE_CHAR: "char-tab",
+                PAGE_VIDEO: "video-tab",
+                PAGE_WATCHDOG: "watchdog-tab",
+                PAGE_FILESYSTEM: "filesystem-tab",
+                PAGE_SMARTCARD: "smartcard-tab",
+                PAGE_USBREDIR: "usbredir-tab",
+                PAGE_TPM: "tpm-tab",
+                PAGE_RNG: "rng-tab",
+                PAGE_PANIC: "panic-tab",
+                PAGE_VSOCK: "vsock-tab",
+            }
+            if row and row[3]:
+                open(_ADDHW_TAB, "w").write(page_names.get(row[2], ""))
         except Exception:
             pass
         try:

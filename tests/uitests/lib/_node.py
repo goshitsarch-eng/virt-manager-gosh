@@ -2943,6 +2943,16 @@ class _SentinelAddhwTab(object):
         current = self._current()
         if current == self.name:
             return True
+        try:
+            selected = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read().strip()
+        except Exception:
+            selected = ""
+        if self.name == "storage-tab" and selected.lower().startswith("storage"):
+            return True
+        if self.name == "controller-tab" and selected.lower().startswith("controller"):
+            return True
+        if self.name == "network-tab" and selected.lower().startswith("network"):
+            return True
         if self.name in ("filesystem-tab", "fs-tab") and current in (
             "filesystem-tab",
             "fs-tab",
