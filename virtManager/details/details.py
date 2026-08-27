@@ -5445,7 +5445,17 @@ class vmmDetails(vmmGObjectUI):
         share_edited = _EDIT_SHARE in getattr(
             self._addstorage, "_active_edits", []
         )
-        if self._edited(EDIT_DISK) or share_edited or share_s in ("0", "1"):
+        path_only = (
+            self._edited(EDIT_DISK_PATH)
+            and not self._edited(EDIT_DISK)
+            and not share_edited
+        )
+        if path_only:
+            # Media insert/eject must not also hotplug leftover Shareable.
+            # QEMU rejects changing the disk 'shared' field and then the
+            # UI keeps showing the live path after a successful define.
+            pass
+        elif self._edited(EDIT_DISK) or share_edited or share_s in ("0", "1"):
             vals = self._addstorage.get_values()
             try:
                 share_w = bool(
