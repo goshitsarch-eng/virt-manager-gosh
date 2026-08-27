@@ -17,6 +17,24 @@ import tests.utils
 from . import utils
 
 _orig_press_key = dogtail.rawinput.pressKey
+_orig_point = dogtail.rawinput.point
+
+
+def _point_with_fullscreen_hover(x, y, *args, **kwargs):
+    try:
+        if y is not None and int(y) <= 8:
+            open("/tmp/vmm-a11y-fullscreen-hover-top", "w").write("1")
+        else:
+            try:
+                os.remove("/tmp/vmm-a11y-fullscreen-hover-top")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return _orig_point(x, y, *args, **kwargs)
+
+
+dogtail.rawinput.point = _point_with_fullscreen_hover
 
 
 def _press_key_with_filechooser(key, *args, **kwargs):

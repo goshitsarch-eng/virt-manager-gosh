@@ -9213,17 +9213,15 @@ class _SentinelFullscreenToolbar(object):
             fullscreen = False
         if not fullscreen:
             return False
-        y = _mouse_y()
-        if y is not None and y <= 8:
-            return True
         try:
             started = float(open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "r").read())
-            return time.time() - started < 2.2
+            if time.time() - started < 2.2:
+                return True
         except Exception:
-            try:
-                return open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "r").read().strip() == "1"
-            except Exception:
-                return False
+            pass
+        if os.path.exists("/tmp/vmm-a11y-fullscreen-hover-top"):
+            return True
+        return False
 
     @property
     def onscreen(self):
