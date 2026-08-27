@@ -2406,6 +2406,7 @@ def main():
     def details_controller_typed_model():
         from virtManager.details.details import EDIT_CONTROLLER_MODEL
         from virtManager.details.details import HW_LIST_COL_DEVICE
+        from virtManager.details.details import HW_LIST_COL_LABEL
         from virtManager.details.details import HW_LIST_COL_TYPE
         from virtManager.details.details import HW_LIST_TYPE_CONTROLLER
         from virtManager.lib import uiutil
