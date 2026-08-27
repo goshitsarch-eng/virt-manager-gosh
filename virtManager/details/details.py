@@ -4907,10 +4907,12 @@ class vmmDetails(vmmGObjectUI):
                     xml_for_a11y = self.vm.get_xml_to_define() or ""
                 except Exception:
                     xml_for_a11y = ""
-            # Always populate the editor buffer. set_xml_from_libvirtobject
-            # no-ops when the XML tab is hidden, which left the a11y
-            # publisher able to wipe xml-contents with an empty buffer.
-            self._xmleditor.set_xml(xml_for_a11y)
+            # Only push into the GtkSource buffer when the XML tab is
+            # visible. set_text() can emit "changed" after refresh ends
+            # and then Apply looks dirty, which blocks snapshot/hardware
+            # navigation. The a11y sentinel still gets the XML below.
+            if self._xmleditor.is_xml_selected():
+                self._xmleditor.set_xml(xml_for_a11y)
             if xml_for_a11y:
                 try:
                     open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml_for_a11y)
