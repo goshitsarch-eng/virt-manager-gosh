@@ -49,6 +49,11 @@ CSSDATA = """
     background-color: #000000;
 }
 
+/* GTK 3 ScrolledWindow shadow-type=in / etched-in */
+.vmm-scroll-shadow {
+    border: 1px solid alpha(@window_fg_color, 0.2);
+}
+
 /* Visually hide labels that exist only so AT-SPI sees GTK 3 button names */
 .vmm-sr-only {
     min-width: 1px;

@@ -883,6 +883,84 @@ def apply_gtk3_border_widths(builder, uifile):
         apply_gtk3_border_width(widget, width)
 
 
+# GTK 3 Frames used label-xalign=0. GTK 4 still has the property but
+# convert_ui_gtk4.py dropped it. GTK 3 ScrolledWindow shadow-type=in /
+# etched-in is gone; restore a 1px inset-like border.
+_GTK3_SCROLL_SHADOWS = {
+    "addhardware.ui": {"scrolledwindow1": "etched-in", "scrolledwindow2": "etched-in"},
+    "asyncjob.ui": {"details-box": "in"},
+    "clone.ui": {"storage-scroll": "in"},
+    "delete.ui": {"delete-storage-scroll": "etched-in"},
+    "details.ui": {
+        "scrolledwindow5": "in",
+        "scrolledwindow2": "in",
+        "scrolledwindow6": "etched-in",
+        "scrolledwindow3": "in",
+        "controller-device-scroll": "in",
+    },
+    "hostnets.ui": {"scrolledwindow7": "in"},
+    "hoststorage.ui": {"pool-scroll": "in", "vol-scroll": "in"},
+    "oslist.ui": {"os-scroll": "in"},
+    "snapshots.ui": {"scrolledwindow7": "in", "scrolledwindow8": "in"},
+    "snapshotsnew.ui": {"scrolledwindow1": "in"},
+    "xmleditor.ui": {"xml-scroll": "in"},
+}
+
+
+def apply_gtk3_frame_label_align(widget, xalign=0.0):
+    if widget is None:
+        return
+    try:
+        widget.set_property("label-xalign", float(xalign))
+        widget._vmm_gtk3_label_xalign = float(xalign)
+    except Exception:
+        pass
+
+
+def apply_gtk3_scroll_shadow(widget, shadow="in"):
+    if widget is None:
+        return
+    try:
+        widget.add_css_class("vmm-scroll-shadow")
+        widget._vmm_gtk3_shadow = shadow
+    except Exception:
+        pass
+
+
+def apply_gtk3_builder_chrome(builder, uifile):
+    """Restore GTK 3 frame label alignment and scrolled-window shadows."""
+    if builder is None:
+        return
+    getter = getattr(builder, "get_object", None)
+    if getter is None and hasattr(builder, "_builder"):
+        getter = builder._builder.get_object
+        objects = None
+        try:
+            objects = builder._builder.get_objects()
+        except Exception:
+            objects = []
+    else:
+        try:
+            objects = builder.get_objects()
+        except Exception:
+            objects = []
+    for obj in objects or []:
+        try:
+            if isinstance(obj, Gtk.Frame):
+                apply_gtk3_frame_label_align(obj, 0.0)
+        except Exception:
+            pass
+    if not uifile or getter is None:
+        return
+    mapping = _GTK3_SCROLL_SHADOWS.get(os.path.basename(str(uifile)), {})
+    for oid, shadow in mapping.items():
+        try:
+            widget = getter(oid)
+        except Exception:
+            widget = None
+        apply_gtk3_scroll_shadow(widget, shadow)
+
+
 def restore_password_input_purpose(widget):
     """GTK 3 visibility=False entries were password fields to IM/a11y."""
     if widget is None or not isinstance(widget, Gtk.Entry):
@@ -901,6 +979,11 @@ def restore_password_input_purpose(widget):
         return
     try:
         widget.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+    except Exception:
+        pass
+    try:
+        widget.set_invisible_char("●")
+        widget._vmm_gtk3_invisible_char = "●"
     except Exception:
         pass
 
@@ -8586,14 +8669,16 @@ def _patch_widget_methods():
 
     Gtk.Popover.set_relative_to = set_relative_to
 
-    def _entry_set_icon_from_icon_name(self, _pos, _name):
-        return None
+    if not hasattr(Gtk.Entry, "set_icon_from_icon_name"):
 
-    def _entry_set_icon_activatable(self, _pos, _val):
-        return None
+        def _entry_set_icon_from_icon_name(self, _pos, _name):
+            return None
 
-    Gtk.Entry.set_icon_from_icon_name = _entry_set_icon_from_icon_name
-    Gtk.Entry.set_icon_activatable = _entry_set_icon_activatable
+        def _entry_set_icon_activatable(self, _pos, _val):
+            return None
+
+        Gtk.Entry.set_icon_from_icon_name = _entry_set_icon_from_icon_name
+        Gtk.Entry.set_icon_activatable = _entry_set_icon_activatable
 
     orig_set_from_icon_name = Gtk.Image.set_from_icon_name
 
@@ -8696,7 +8781,9 @@ def _patch_widget_methods():
             return self.add_tick_callback(_tick)
         if signal == "button-press-event":
             gesture = Gtk.GestureClick()
-            gesture.set_button(0)
+            # virt-manager only uses this for GTK 3 context menus (button 3).
+            # Capturing every button steals VTE/X11 middle-click PRIMARY paste.
+            gesture.set_button(3)
 
             def _pressed(gest, _n, x, y):
                 button = gest.get_current_button()

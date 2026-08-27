@@ -19,7 +19,6 @@ REMOVE_PROPS = {
     "can-focus",
     "show-arrow",
     "is-important",
-    "label-xalign",
     "shadow-type",
     "layout-style",
     "has-separator",
@@ -146,6 +145,14 @@ def cleanup_xml(src: pathlib.Path, dest: pathlib.Path) -> None:
                         if mname not in have:
                             extra = ET.SubElement(obj, "property", {"name": mname})
                             extra.text = val
+            elif name == "shadow-type":
+                val = (prop.text or "").strip()
+                obj.remove(prop)
+                if val and val not in ("none", "None"):
+                    have = {p.get("name") for p in obj.findall("property")}
+                    if "css-classes" not in have:
+                        extra = ET.SubElement(obj, "property", {"name": "css-classes"})
+                        extra.text = "vmm-scroll-shadow"
             elif name in REMOVE_PROPS:
                 obj.remove(prop)
             elif name == "visible" and (prop.text or "").lower() in ("true", "1", "yes"):

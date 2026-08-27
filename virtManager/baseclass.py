@@ -56,6 +56,7 @@ class _VmmBuilder:
         from .lib import gtkcompat
 
         gtkcompat.apply_gtk3_border_widths(self._builder, uifile)
+        gtkcompat.apply_gtk3_builder_chrome(self._builder, uifile)
         for obj in self._builder.get_objects():
             gtkcompat.sync_builder_accessible(obj)
         return ret

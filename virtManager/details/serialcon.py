@@ -278,10 +278,9 @@ class vmmSerialConsole(vmmGObject):
         except Exception:
             pass
 
-        try:
-            self._vteterminal.connect("button-press-event", self._show_serial_rcpopup)
-        except Exception:
-            pass
+        # Do not connect button-press-event: the GTK 4 shim captures every
+        # button and steals VTE middle-click PRIMARY paste. Right-click is
+        # wired below; middle-click is explicit GTK 3 PRIMARY paste.
         try:
             click = Gtk.GestureClick()
             click.set_button(3)
@@ -289,6 +288,21 @@ class vmmSerialConsole(vmmGObject):
             self._vteterminal.add_controller(click)
         except Exception:
             pass
+        try:
+            mid = Gtk.GestureClick()
+            mid.set_button(2)
+            mid.connect("pressed", self._on_serial_middle_click)
+            self._vteterminal.add_controller(mid)
+        except Exception:
+            pass
+        try:
+            self._vteterminal.connect(
+                "selection-changed", self._serial_selection_to_primary
+            )
+        except Exception:
+            pass
+        self._vteterminal._vmm_gtk3_serial_primary = True
+        self._vmm_gtk3_serial_primary = True
         try:
             popover = Gtk.Popover()
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -528,6 +542,20 @@ class vmmSerialConsole(vmmGObject):
 
         self._show_serial_rcpopup(self._vteterminal, _Ev(x, y))
 
+    def _on_serial_middle_click(self, *_a):
+        self._serial_paste_primary()
+        return True
+
+    def _serial_selection_to_primary(self, *_a):
+        term = self._vteterminal
+        if term is None:
+            return
+        try:
+            if term.get_has_selection():
+                term.copy_primary()
+        except Exception:
+            pass
+
     def _show_serial_rcpopup(self, src, event):
         if getattr(event, "button", 3) != 3:
             return
@@ -565,10 +593,18 @@ class vmmSerialConsole(vmmGObject):
             except Exception:
                 pass
         try:
+            term.copy_primary()
+        except Exception:
+            pass
+        try:
             text = term.get_text_selected(Vte.Format.TEXT)
             if text:
                 try:
                     Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+                except Exception:
+                    pass
+                try:
+                    Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).set_text(text, -1)
                 except Exception:
                     pass
                 try:
@@ -593,6 +629,24 @@ class vmmSerialConsole(vmmGObject):
             pass
         try:
             clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+            text = clip.wait_for_text()
+            if text:
+                term.paste_text(text)
+        except Exception:
+            pass
+
+    def _serial_paste_primary(self):
+        """GTK 3 VTE middle-click pasted X11 PRIMARY."""
+        term = self._vteterminal
+        if term is None:
+            return
+        try:
+            term.paste_primary()
+            return
+        except Exception:
+            pass
+        try:
+            clip = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
             text = clip.wait_for_text()
             if text:
                 term.paste_text(text)

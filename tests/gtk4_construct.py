@@ -947,6 +947,23 @@ def main():
         auth = win._console.widget("console-auth-password")
         assert not auth.get_visibility()
         assert auth.get_input_purpose() == Gtk.InputPurpose.PASSWORD
+        try:
+            invis = auth.get_invisible_char()
+        except Exception:
+            invis = getattr(auth, "_vmm_gtk3_invisible_char", "")
+        assert invis in ("●", "\u25cf"), invis
+
+        details = getattr(win, "_details", None)
+        frame = details.widget("frame2") if details is not None else None
+        if frame is None:
+            frame = dlg.widget("frame5")
+        assert frame is not None
+        assert abs(float(frame.get_property("label-xalign")) - 0.0) < 0.01
+        assert getattr(frame, "_vmm_gtk3_label_xalign", None) == 0.0
+        sw = details.widget("scrolledwindow5") if details is not None else None
+        if sw is not None:
+            assert sw.has_css_class("vmm-scroll-shadow"), list(sw.get_css_classes())
+            assert getattr(sw, "_vmm_gtk3_shadow", None) == "in"
 
         pool = _first_pool(conn)
         assert pool is not None
@@ -1213,6 +1230,14 @@ def main():
         term = serial._vteterminal
         assert term is not None
         assert getattr(term, "_vmm_gtk3_serial_colors", False)
+        assert getattr(serial, "_vmm_gtk3_serial_primary", False)
+        assert getattr(term, "_vmm_gtk3_serial_primary", False)
+        from gi.repository import Gdk
+
+        Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).set_text("primary-paste", -1)
+        serial._serial_paste_primary()
+        serial._serial_copy_text(None)
+        serial._serial_selection_to_primary()
         parent = term.get_parent()
         assert parent is not None
         assert parent.has_css_class("vmm-serial-bg"), list(parent.get_css_classes())
@@ -1238,6 +1263,9 @@ def main():
 
         win = vmmManager.get_instance(None)
         win.show()
+        vmlist = win.widget("vm-list")
+        assert vmlist.get_search_column() == 1  # ROW_SORT_KEY
+        assert vmlist.get_enable_search()
         win.update_current_selection()
         for name in (
             "menu-view-guest-cpu",

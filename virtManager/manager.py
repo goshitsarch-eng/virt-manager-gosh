@@ -983,6 +983,11 @@ class vmmManager(vmmGObjectUI):
         vmlist.set_tooltip_column(ROW_HINT)
         vmlist.set_headers_visible(True)
         try:
+            vmlist.set_enable_search(True)
+            vmlist.set_search_column(ROW_SORT_KEY)
+        except Exception:
+            pass
+        try:
             vmlist.set_accessible_role(Gtk.AccessibleRole.TREE_GRID)
         except Exception:
             pass
