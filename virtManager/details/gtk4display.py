@@ -54,7 +54,9 @@ _VNC_MSG_CLIENT_QEMU = 255
 _VNC_QEMU_EXT_KEY = 0
 _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
+_VNC_SEC_TLS = 18
 _VNC_SEC_VENCRYPT = 19
+_VNC_SEC_SASL = 20
 _VNC_VENCRYPT_PLAIN = 256
 _VNC_VENCRYPT_TLSNONE = 257
 _VNC_VENCRYPT_TLSVNC = 258
@@ -62,6 +64,8 @@ _VNC_VENCRYPT_TLSPLAIN = 259
 _VNC_VENCRYPT_X509NONE = 260
 _VNC_VENCRYPT_X509VNC = 261
 _VNC_VENCRYPT_X509PLAIN = 262
+_VNC_VENCRYPT_TLSSASL = 263
+_VNC_VENCRYPT_X509SASL = 264
 _VNC_VENCRYPT_TLS = (
     _VNC_VENCRYPT_TLSNONE,
     _VNC_VENCRYPT_TLSVNC,
@@ -69,6 +73,8 @@ _VNC_VENCRYPT_TLS = (
     _VNC_VENCRYPT_X509NONE,
     _VNC_VENCRYPT_X509VNC,
     _VNC_VENCRYPT_X509PLAIN,
+    _VNC_VENCRYPT_TLSSASL,
+    _VNC_VENCRYPT_X509SASL,
 )
 _VNC_VENCRYPT_PLAIN_AUTH = (
     _VNC_VENCRYPT_PLAIN,
@@ -76,6 +82,9 @@ _VNC_VENCRYPT_PLAIN_AUTH = (
     _VNC_VENCRYPT_X509PLAIN,
 )
 _VNC_VENCRYPT_VNC_AUTH = (_VNC_VENCRYPT_TLSVNC, _VNC_VENCRYPT_X509VNC)
+_VNC_VENCRYPT_SASL_AUTH = (_VNC_VENCRYPT_TLSSASL, _VNC_VENCRYPT_X509SASL)
+_SASL_MAX_MECHLIST = 300
+_SASL_MAX_DATA = 1024 * 1024
 
 # Linux evdev codes used by SpiceClientGLib.inputs_key_press and QEMU
 # VNC extended key events. Gdk hardware keycodes on X11 are evdev + 8.
@@ -531,9 +540,10 @@ class VNCDisplay(_DisplayBase):
     """
     RFB/VNC client painted on a GTK 4 DrawingArea.
 
-    Supports None, VNC-auth, and VeNCrypt Plain; 32-bit pixels; and the
-    encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile, zlib,
-    Tight, ZRLE, DesktopSize, and cursor.
+    Supports None, VNC-auth, VeNCrypt (including SASL subtypes), RFB SASL
+    (PLAIN), and TLS; 32-bit pixels; and the encodings QEMU commonly
+    sends: raw, CopyRect, RRE, Hextile, zlib, Tight, ZRLE, DesktopSize,
+    and cursor.
     """
 
     def __init__(self, **kwargs):
@@ -719,6 +729,13 @@ class VNCDisplay(_DisplayBase):
             sock.sendall(bytes([_VNC_SEC_VENCRYPT]))
             sock = self._vencrypt(sock)
             self._sock = sock
+        elif _VNC_SEC_SASL in types:
+            sock.sendall(bytes([_VNC_SEC_SASL]))
+            self._vnc_sasl(sock)
+        elif _VNC_SEC_TLS in types:
+            sock.sendall(bytes([_VNC_SEC_TLS]))
+            sock = self._wrap_tls(sock, verify=bool(self._tls_ca_file()))
+            self._sock = sock
         elif _VNC_SEC_NONE in types:
             sock.sendall(bytes([_VNC_SEC_NONE]))
         else:
@@ -845,11 +862,67 @@ class VNCDisplay(_DisplayBase):
             _VNC_VENCRYPT_X509PLAIN,
             _VNC_VENCRYPT_X509VNC,
             _VNC_VENCRYPT_X509NONE,
+            _VNC_VENCRYPT_TLSSASL,
+            _VNC_VENCRYPT_X509SASL,
         )
         for cand in prefer:
             if cand in subtypes:
                 return cand
         return None
+
+    def _sasl_choose_mech(self, mechlist):
+        mechs = [m.strip() for m in str(mechlist or "").split(",") if m.strip()]
+        for cand in ("PLAIN", "DIGEST-MD5"):
+            if cand in mechs:
+                return cand
+        return None
+
+    def _sasl_plain_clientout(self):
+        user = (self._username or "").encode("utf-8")
+        pw = (self._password or "").encode("utf-8")
+        return b"\x00" + user + b"\x00" + pw
+
+    def _sasl_write_payload(self, sock, payload):
+        if payload is None:
+            sock.sendall(struct.pack("!I", 0))
+            return
+        sock.sendall(struct.pack("!I", len(payload) + 1) + payload + b"\x00")
+
+    def _sasl_read_server(self, sock):
+        slen = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        if slen > _SASL_MAX_DATA:
+            raise RuntimeError("SASL negotiation data too long: %s" % slen)
+        data = b""
+        if slen:
+            data = self._recv_n(sock, slen)
+            if data.endswith(b"\x00"):
+                data = data[:-1]
+        complete = self._recv_n(sock, 1)[0]
+        return data, complete
+
+    def _vnc_sasl(self, sock):
+        """RFB security type 20 / VeNCrypt *SASL. GtkVnc PLAIN wire format."""
+        mechlistlen = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        if mechlistlen > _SASL_MAX_MECHLIST:
+            raise RuntimeError("SASL mechlist too long")
+        mechlist = self._recv_n(sock, mechlistlen).decode("ascii", "replace")
+        chosen = self._sasl_choose_mech(mechlist)
+        if chosen is None:
+            raise RuntimeError("SASL mechanisms unsupported: %s" % mechlist)
+        self._need_vnc_creds(True)
+        if chosen != "PLAIN":
+            raise RuntimeError("SASL mechanism %s is not supported" % chosen)
+        clientout = self._sasl_plain_clientout()
+        sock.sendall(struct.pack("!I", len(chosen)) + chosen.encode("ascii"))
+        self._sasl_write_payload(sock, clientout)
+        _serverin, complete = self._sasl_read_server(sock)
+        # PLAIN finishes in one client start. If the server is not done,
+        # send an empty step like gtk-vnc's client-step loop.
+        if not complete:
+            self._sasl_write_payload(sock, None)
+            _serverin, complete = self._sasl_read_server(sock)
+        if not complete:
+            raise RuntimeError("SASL negotiation did not complete")
 
     def _tls_ca_file(self):
         return (
@@ -893,7 +966,7 @@ class VNCDisplay(_DisplayBase):
         sock.sendall(struct.pack("!II", len(user), len(pw)) + user + pw)
 
     def _vencrypt(self, sock):
-        # VeNCrypt 0.2: Plain, or TLS/X509 + None/VNC/Plain.
+        # VeNCrypt 0.2: Plain, TLS/X509 + None/VNC/Plain, or TLS/X509 + SASL.
         _maj, _min = self._recv_n(sock, 2)
         sock.sendall(b"\x00\x02")
         ack = self._recv_n(sock, 1)[0]
@@ -907,12 +980,19 @@ class VNCDisplay(_DisplayBase):
         if chosen is None:
             raise RuntimeError("VeNCrypt subtypes unsupported: %s" % subtypes)
         sock.sendall(struct.pack("!I", chosen))
+        # QEMU writes 1 to accept the subtype and 0 to reject (the
+        # version ack above is the opposite: 0 means version accepted).
+        suback = self._recv_n(sock, 1)[0]
+        if suback == 0:
+            raise RuntimeError("VeNCrypt subtype rejected")
         if chosen in _VNC_VENCRYPT_TLS:
             sock = self._wrap_tls(sock, verify=bool(self._tls_ca_file()))
         if chosen in _VNC_VENCRYPT_PLAIN_AUTH:
             self._send_plain_creds(sock)
         elif chosen in _VNC_VENCRYPT_VNC_AUTH:
             self._vnc_auth2(sock)
+        elif chosen in _VNC_VENCRYPT_SASL_AUTH:
+            self._vnc_sasl(sock)
         return sock
 
     def _vencrypt_plain(self, sock):

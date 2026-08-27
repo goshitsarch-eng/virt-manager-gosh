@@ -1011,6 +1011,33 @@ def main():
         assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
         assert disp._choose_vencrypt_subtype([258, 256]) == 256
         assert disp._choose_vencrypt_subtype([258]) == 258
+        assert disp._choose_vencrypt_subtype([263]) == 263
+        assert disp._choose_vencrypt_subtype([264, 263]) == 263
+        assert disp._sasl_choose_mech("GSSAPI,PLAIN") == "PLAIN"
+        assert disp._sasl_choose_mech("DIGEST-MD5") == "DIGEST-MD5"
+        assert disp._sasl_choose_mech("GSSAPI") is None
+        disp._username = "alice"
+        disp._password = "s3cret"
+        assert disp._sasl_plain_clientout() == b"\x00alice\x00s3cret"
+
+        class _SaslSock:
+            def __init__(self, data):
+                self.buf = data
+                self.sent = b""
+
+            def recv(self, n):
+                out, self.buf = self.buf[:n], self.buf[n:]
+                return out
+
+            def sendall(self, data):
+                self.sent += data
+
+        mech = b"PLAIN,GSSAPI"
+        start = st.pack("!I", len(mech)) + mech + st.pack("!I", 0) + b"\x01"
+        ssock = _SaslSock(start)
+        disp._vnc_sasl(ssock)
+        assert b"PLAIN" in ssock.sent
+        assert b"\x00alice\x00s3cret\x00" in ssock.sent
         disp.send_keys([97])
         disp.set_property("resize-guest", True)
         disp._apply_resize_guest(True)
