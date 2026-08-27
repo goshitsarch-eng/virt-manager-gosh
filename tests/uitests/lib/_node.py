@@ -1511,6 +1511,27 @@ class _SentinelClickButton(object):
                 ):
                     target = cand
                     break
+            if not target:
+                try:
+                    rows = [
+                        n
+                        for n in open("/tmp/vmm-a11y-hw-list.txt", "r")
+                        .read()
+                        .splitlines()
+                        if n
+                    ]
+                except Exception:
+                    rows = []
+                disks = [
+                    n
+                    for n in rows
+                    if any(tok in n for tok in ("Disk", "CDROM", "Floppy"))
+                ]
+                scsi = [n for n in disks if "SCSI" in n]
+                if scsi:
+                    target = scsi[-1]
+                elif disks:
+                    target = disks[-1]
             try:
                 if target:
                     open("/tmp/vmm-a11y-config-remove-target.txt", "w").write(target)
@@ -13827,6 +13848,21 @@ def _sentinel_hw_cell(name, roleName):
                 break
     if matched is None:
         return None
+    if matched not in (
+        "Overview",
+        "OS information",
+        "Performance",
+        "CPUs",
+        "Memory",
+        "Boot Options",
+    ):
+        try:
+            open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(matched)
+            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(matched)
+            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(matched)
+            open("/tmp/vmm-a11y-last-hw.txt", "w").write(matched)
+        except Exception:
+            pass
     selected = False
     try:
         selected = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == matched
