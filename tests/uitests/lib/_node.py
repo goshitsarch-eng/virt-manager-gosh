@@ -6094,7 +6094,11 @@ class _SentinelDeleteFinish(object):
                 alert = ""
             lowered = alert.lower()
             if "take effect" in lowered:
-                return
+                try:
+                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                        return
+                except Exception:
+                    pass
             if "are you sure" in lowered and (
                 "delete" in lowered or "storage" in lowered
             ):

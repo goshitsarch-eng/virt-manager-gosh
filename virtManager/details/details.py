@@ -3851,6 +3851,12 @@ class vmmDetails(vmmGObjectUI):
                 if want:
                     break
             labeled = self._hw_row_for_label(want)
+            if labeled is None and want:
+                try:
+                    self._repopulate_hw_list()
+                except Exception:
+                    pass
+                labeled = self._hw_row_for_label(want)
             if labeled is not None:
                 row = labeled
             if not row:
@@ -7087,7 +7093,18 @@ class vmmDetails(vmmGObjectUI):
             hw_entry = self._make_hw_list_entry(label, hwtype, icon, dev)
             hw_list_model.insert(insertAt, hw_entry)
 
-        srcxml = self.vm.get_xmlobj(inactive=not self.vm.is_active())
+        if self.vm.is_active():
+            try:
+                live_xml = self.vm._XMLDesc(getattr(self.vm, "_active_xml_flags", 0))
+                srcxml = self.vm._parseclass(
+                    self.vm.conn.get_backend(), parsexml=live_xml
+                )
+                self.vm._xmlobj = srcxml
+                self.vm._is_xml_valid = True
+            except Exception:
+                srcxml = self.vm.get_xmlobj()
+        else:
+            srcxml = self.vm.get_xmlobj(inactive=True)
         consoles = srcxml.devices.console
         serials = srcxml.devices.serial
         if serials and consoles and self.vm.serial_is_console_dup(serials[0]):
