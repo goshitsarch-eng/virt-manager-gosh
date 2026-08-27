@@ -644,6 +644,7 @@ def main():
         clip.set_text("primary-text", -1)
         assert clip._xclip_sel == "primary"
         win.resize(320, 240)
+        assert getattr(win, "_vmm_win_size", None) == (320, 240)
         assert win.get_size()[0] >= 1 and win.get_size()[1] >= 1
         win.resize(1, 1)
         win.close()
@@ -1012,6 +1013,32 @@ def main():
         assert disp._tls_ca_file() == "/tmp/vnc-ca.pem"
         disp._apply_server_cut_text(b"guest-clip")
         assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
+        # Extended clipboard: server caps then UTF-8 provide
+        import zlib as _zlib
+
+        sent = []
+
+        class _ClipSock:
+            def sendall(self, data):
+                sent.append(data)
+
+        disp._sock = _ClipSock()
+        disp._open = True
+        caps = st.pack("!I", gtk4display._CLIP_TEXT | gtk4display._CLIP_CAPS) + st.pack("!I", 0)
+        disp._apply_extended_cut_text(caps)
+        assert disp._ext_clip
+        assert sent and st.unpack("!Bxxxi", sent[0][:8])[1] < 0
+        sent.clear()
+        text = "café".encode("utf-8") + b"\x00"
+        inner = st.pack("!I", len(text)) + text
+        provide = st.pack("!I", gtk4display._CLIP_PROVIDE | gtk4display._CLIP_TEXT)
+        provide += _zlib.compress(inner)
+        disp._apply_extended_cut_text(provide)
+        assert open("/tmp/vmm-a11y-clipboard.txt").read() == "café"
+        disp._ext_clip = True
+        disp._clip_from_guest = False
+        disp._send_client_cut_text("naïve")
+        assert any(st.unpack("!Bxxxi", chunk[:8])[1] < 0 for chunk in sent if len(chunk) >= 8)
         assert disp._choose_vencrypt_subtype([258, 256]) == 256
         assert disp._choose_vencrypt_subtype([258]) == 258
         assert disp._choose_vencrypt_subtype([263]) == 263

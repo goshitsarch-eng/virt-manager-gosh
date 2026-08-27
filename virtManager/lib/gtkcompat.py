@@ -407,6 +407,24 @@ def _window_resize(window, width, height):
         window._vmm_win_size = None
         return
     window._vmm_win_size = (width, height)
+    # GTK 4 has no gtk_window_resize. Briefly pin the window size so a
+    # mapped window grows on Wayland (no XID / xdotool).
+    try:
+        from gi.repository import GLib
+
+        window.set_size_request(width, height)
+
+        def _unpin(_w=window, _width=width, _height=height):
+            try:
+                _w.set_size_request(-1, -1)
+                _w.set_default_size(_width, _height)
+            except Exception:
+                pass
+            return False
+
+        GLib.timeout_add(80, _unpin)
+    except Exception:
+        pass
     xid = _window_xid(window)
     if not xid:
         return

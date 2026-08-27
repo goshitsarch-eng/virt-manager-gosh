@@ -67,6 +67,14 @@ _VNC_ENC_DESKTOPNAME = -307
 _VNC_ENC_QEMU_EXT_KEY = -258
 _VNC_ENC_QEMU_AUDIO = -259
 _VNC_ENC_LED_STATE = -261
+# TigerVNC / gtk-vnc Extended Clipboard (0xC0A1E5CE)
+_VNC_ENC_EXT_CLIPBOARD = struct.unpack("!i", b"\xc0\xa1\xe5\xce")[0]
+_CLIP_TEXT = 1 << 0
+_CLIP_CAPS = 1 << 24
+_CLIP_REQUEST = 1 << 25
+_CLIP_PEEK = 1 << 26
+_CLIP_NOTIFY = 1 << 27
+_CLIP_PROVIDE = 1 << 28
 _VNC_MSG_CLIENT_QEMU = 255
 _VNC_QEMU_EXT_KEY = 0
 _VNC_QEMU_AUDIO = 1
@@ -1080,7 +1088,8 @@ class VNCDisplay(_DisplayBase):
     (PLAIN, DIGEST-MD5, Cyrus when libsasl2 plugins exist, and GSSAPI
     via libgssapi_krb5), and
     TLS; TightVNC security type 16 (tunnels, VNC/None/Unix/SASL/VeNCrypt
-    auth, extended ServerInit); 32-bit pixels; QEMU audio and LED state;
+    auth, extended ServerInit); TigerVNC UTF-8 extended clipboard;
+    32-bit pixels; QEMU audio and LED state;
     and the encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile,
     zlib, ZlibHex, Ultra, Tight, ZRLE, DesktopSize, and cursor.
     """
@@ -1116,6 +1125,9 @@ class VNCDisplay(_DisplayBase):
         self._tls_client_key = ""
         self._host = ""
         self._tight_sec = False
+        self._ext_clip = False
+        self._ext_clip_caps_sent = False
+        self._host_clip_text = ""
 
     def set_credential(self, cred, value):
         name = str(cred).upper()
@@ -1465,6 +1477,7 @@ class VNCDisplay(_DisplayBase):
             _VNC_ENC_EXTENDED_DESKTOPSIZE,
             _VNC_ENC_CURSOR,
             _VNC_ENC_XCURSOR,
+            _VNC_ENC_EXT_CLIPBOARD,
             0,  # raw first: Tight/ZRLE decode errors were dropping the session
             1,  # CopyRect
             2,  # RRE
@@ -1512,9 +1525,11 @@ class VNCDisplay(_DisplayBase):
                 # stream the first time the guest beeps (gtk-vnc).
                 GLib.idle_add(self._ring_bell)
             elif msg[0] == 3:
-                slen = struct.unpack("!xxxI", self._recv_n(sock, 7))[0]
-                text = self._recv_n(sock, slen)
-                self._apply_server_cut_text(text)
+                slen = struct.unpack("!xxxi", self._recv_n(sock, 7))[0]
+                if slen < 0:
+                    self._apply_extended_cut_text(self._recv_n(sock, -slen))
+                else:
+                    self._apply_server_cut_text(self._recv_n(sock, slen))
             elif msg[0] == 255:
                 self._read_qemu_server(sock)
         GLib.idle_add(self.emit, "vnc-disconnected")
@@ -1802,7 +1817,10 @@ class VNCDisplay(_DisplayBase):
         return self._vencrypt(sock)
 
     def _apply_server_cut_text(self, raw):
-        text = raw.decode("latin1", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
+        if isinstance(raw, (bytes, bytearray)):
+            text = raw.decode("utf-8") if self._looks_utf8(raw) else raw.decode("latin1", "replace")
+        else:
+            text = str(raw)
         self._clip_from_guest = True
         try:
             display = Gdk.Display.get_default()
@@ -1817,13 +1835,104 @@ class VNCDisplay(_DisplayBase):
             pass
         GLib.timeout_add(250, self._clear_vnc_clip_from_guest)
 
+    def _looks_utf8(self, raw):
+        if not raw:
+            return False
+        try:
+            raw.decode("utf-8")
+        except Exception:
+            return False
+        # Prefer UTF-8 when the payload is not 7-bit ASCII (gtk-vnc).
+        return any(b >= 0x80 for b in raw)
+
     def _clear_vnc_clip_from_guest(self):
         self._clip_from_guest = False
         return False
 
+    def _send_ext_cut(self, flags, extra=b""):
+        sock = self._sock
+        if not sock:
+            return
+        payload = struct.pack("!I", int(flags)) + (extra or b"")
+        sock.sendall(struct.pack("!Bxxxi", 6, -len(payload)) + payload)
+
+    def _send_ext_caps(self):
+        flags = _CLIP_TEXT | _CLIP_CAPS | _CLIP_REQUEST | _CLIP_NOTIFY | _CLIP_PROVIDE
+        self._send_ext_cut(flags, struct.pack("!I", 0))
+        self._ext_clip = True
+        self._ext_clip_caps_sent = True
+
+    def _utf8_clip_bytes(self, text):
+        text = (text or "").replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+        return text.encode("utf-8") + b"\x00"
+
+    def _send_ext_provide(self, text):
+        import zlib
+
+        raw = self._utf8_clip_bytes(text)
+        inner = struct.pack("!I", len(raw)) + raw
+        self._send_ext_cut(_CLIP_PROVIDE | _CLIP_TEXT, zlib.compress(inner))
+
+    def _apply_extended_cut_text(self, payload):
+        if not payload or len(payload) < 4:
+            return
+        flags = struct.unpack("!I", payload[:4])[0]
+        rest = payload[4:]
+        if flags & _CLIP_CAPS:
+            self._ext_clip = True
+            if not self._ext_clip_caps_sent:
+                try:
+                    self._send_ext_caps()
+                except Exception:
+                    pass
+            return
+        if flags & _CLIP_PEEK:
+            try:
+                self._send_ext_cut(_CLIP_NOTIFY | _CLIP_TEXT)
+            except Exception:
+                pass
+            return
+        if flags & _CLIP_REQUEST and flags & _CLIP_TEXT:
+            text = self._host_clip_text or ""
+            if text:
+                try:
+                    self._send_ext_provide(text)
+                except Exception:
+                    pass
+            return
+        if flags & _CLIP_NOTIFY and flags & _CLIP_TEXT:
+            try:
+                self._send_ext_cut(_CLIP_REQUEST | _CLIP_TEXT)
+            except Exception:
+                pass
+            return
+        if flags & _CLIP_PROVIDE and flags & _CLIP_TEXT:
+            import zlib
+
+            try:
+                data = zlib.decompress(rest)
+            except Exception:
+                data = rest
+            if len(data) < 4:
+                return
+            n = struct.unpack("!I", data[:4])[0]
+            raw = data[4 : 4 + n]
+            if raw.endswith(b"\x00"):
+                raw = raw[:-1]
+            text = raw.decode("utf-8", "replace").replace("\r\n", "\n")
+            self._apply_server_cut_text(text)
+
     def _send_client_cut_text(self, text):
         sock = self._sock
         if not sock or not self._open or self._clip_from_guest:
+            return
+        self._host_clip_text = text or ""
+        if self._ext_clip:
+            try:
+                self._send_ext_cut(_CLIP_NOTIFY | _CLIP_TEXT)
+                self._send_ext_provide(text)
+            except Exception:
+                pass
             return
         payload = (text or "").encode("latin1", "replace")
         try:

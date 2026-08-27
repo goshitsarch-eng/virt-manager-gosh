@@ -943,6 +943,21 @@ class vmmConsolePages(vmmGObjectUI):
         except Exception:
             pass
         self.topwin.resize(valw, valh)
+        # GTK 4: grow the viewer chrome the same way new windows do.
+        try:
+            scroll = self.widget("console-gfx-scroll")
+            scroll.set_size_request(w, h)
+
+            def _unpin(_scroll=scroll):
+                try:
+                    _scroll.set_size_request(-1, -1)
+                except Exception:
+                    pass
+                return False
+
+            GLib.timeout_add(100, _unpin)
+        except Exception:
+            pass
         try:
             open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (valw, valh))
         except Exception:
