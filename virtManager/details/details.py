@@ -3916,29 +3916,45 @@ class vmmDetails(vmmGObjectUI):
             or _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
         ):
             return None
-        dirty = self._a11y_dirty_hw_label()
-        if dirty:
-            row = self._hw_row_for_label(dirty)
+
+        def _disk_row(label):
+            if not label:
+                return None
+            row = self._hw_row_for_label(label)
             if row is not None and row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
+                return row
+            return None
+
+        for label in (
+            getattr(self, "_vmm_last_refreshed_hw", None),
+            getattr(self, "_vmm_dirty_hw", None),
+        ):
+            row = _disk_row(label)
+            if row is not None:
+                return row
+        for path in (
+            "/tmp/vmm-a11y-hw-clicked.txt",
+            "/tmp/vmm-a11y-hw-selected.txt",
+            "/tmp/vmm-a11y-last-hw.txt",
+        ):
+            try:
+                row = _disk_row(open(path, "r").read().strip())
+            except Exception:
+                row = None
+            if row is not None:
                 return row
         row = self._get_hw_row()
         if row is not None and row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
             return row
-        try:
-            for hwrow in self.widget("hw-list").get_model():
-                if hwrow[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
-                    return hwrow
-        except Exception:
-            pass
         return None
 
     def _a11y_dirty_hw_label(self):
         """Hardware row that currently has unapplied edits."""
         for val in (
-            getattr(self, "_vmm_dirty_hw", None),
             getattr(self, "_vmm_last_refreshed_hw", None),
+            getattr(self, "_vmm_dirty_hw", None),
         ):
-            if val:
+            if val and self._hw_row_for_label(val) is not None:
                 return val
         try:
             row = self._a11y_selected_hw_row()
