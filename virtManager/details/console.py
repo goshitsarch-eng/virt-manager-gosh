@@ -493,6 +493,19 @@ class vmmConsolePages(vmmGObjectUI):
         viewport.modify_bg(Gtk.StateType.NORMAL, Gdk.Color(0, 0, 0))
         gtkcompat.set_accessible_name(viewport, "console-gfx-viewport")
         try:
+            gtkcompat.set_accessible_name(self.widget("console-auth-password"), "Password:")
+            gtkcompat.set_accessible_name(self.widget("console-auth-username"), "Username:")
+            gtkcompat.set_accessible_name(self.widget("console-auth-login"), "Login")
+            gtkcompat.set_accessible_name(
+                self.widget("console-auth-remember"),
+                "Save this password in your keyring",
+            )
+            gtkcompat.set_accessible_name(
+                self.widget("console-connect-button"), "Connect to console"
+            )
+        except Exception:
+            pass
+        try:
             gtkcompat.expose_a11y_label(
                 "console-gfx-viewport",
                 "console-gfx-viewport",
@@ -543,6 +556,7 @@ class vmmConsolePages(vmmGObjectUI):
                     return False
                 try:
                     self._publish_gfx_viewport()
+                    self._publish_auth_state()
                 except Exception:
                     pass
                 try:
@@ -683,6 +697,59 @@ class vmmConsolePages(vmmGObjectUI):
                                     self.topwin.close()
                                 except Exception:
                                     pass
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-vmwindow-grab-focus"):
+                        os.remove("/tmp/vmm-a11y-vmwindow-grab-focus")
+                        self._pointer_is_grabbed = False
+                        self._enable_modifiers()
+                        self.emit("change-title")
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-console-auth-password.txt.set"
+                    if os.path.exists(path):
+                        text = open("/tmp/vmm-a11y-console-auth-password.txt", "r").read()
+                        os.remove(path)
+                        self.widget("console-auth-password").set_text(text)
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-console-auth-username.txt.set"
+                    if os.path.exists(path):
+                        text = open("/tmp/vmm-a11y-console-auth-username.txt", "r").read()
+                        os.remove(path)
+                        self.widget("console-auth-username").set_text(text)
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-console-auth-remember.txt.click"
+                    if os.path.exists(path):
+                        os.remove(path)
+                        want = False
+                        try:
+                            want = (
+                                open("/tmp/vmm-a11y-console-auth-remember.txt", "r")
+                                .read()
+                                .strip()
+                                == "1"
+                            )
+                        except Exception:
+                            want = not self.widget("console-auth-remember").get_active()
+                        self.widget("console-auth-remember").set_active(want)
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-login"):
+                        os.remove("/tmp/vmm-a11y-console-login")
+                        self._auth_login_cb(None)
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-connect-click"):
+                        os.remove("/tmp/vmm-a11y-console-connect-click")
+                        self._connect_button_clicked_cb(None)
                 except Exception:
                     pass
                 try:
@@ -893,6 +960,11 @@ class vmmConsolePages(vmmGObjectUI):
     def _close_viewer(self):
         self._leave_fullscreen()
         self._viewer_connect_clicked = False
+        self._pointer_is_grabbed = False
+        try:
+            self._enable_modifiers()
+        except Exception:
+            pass
 
         for serial in self._serial_consoles:
             serial.close()
@@ -977,18 +1049,50 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-auth-remember").set_sensitive(has_keyring)
         self.widget("console-auth-remember").set_active(remember)
 
+        self.widget("console-pages").set_current_page(_CONSOLE_PAGE_GRAPHICS)
         self.widget("console-gfx-pages").set_current_page(_GFX_PAGE_AUTH)
 
         if withUsername:
             self.widget("console-auth-username").grab_focus()
         else:
             self.widget("console-auth-password").grab_focus()
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+        except Exception:
+            pass
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
 
     def _publish_gfx_viewport(self):
         try:
             open("/tmp/vmm-a11y-console-gfx-viewport.txt", "w").write(
                 "1" if self._viewer_is_visible() else "0"
             )
+        except Exception:
+            pass
+
+    def _publish_auth_state(self):
+        try:
+            pages = self.widget("console-pages").get_current_page()
+            gfx = self.widget("console-gfx-pages").get_current_page()
+            auth_on = pages == _CONSOLE_PAGE_GRAPHICS and gfx == _GFX_PAGE_AUTH
+            connect_on = pages == _CONSOLE_PAGE_CONNECT
+            serial_on = pages == _CONSOLE_PAGE_SERIAL
+            open("/tmp/vmm-a11y-console-auth.txt", "w").write("1" if auth_on else "0")
+            open("/tmp/vmm-a11y-console-connect.txt", "w").write("1" if connect_on else "0")
+            open("/tmp/vmm-a11y-console-serial.txt", "w").write("1" if serial_on else "0")
+            if auth_on:
+                if not os.path.exists("/tmp/vmm-a11y-console-auth-password.txt.set"):
+                    open("/tmp/vmm-a11y-console-auth-password.txt", "w").write(
+                        self.widget("console-auth-password").get_text() or ""
+                    )
+                if not os.path.exists("/tmp/vmm-a11y-console-auth-username.txt.set"):
+                    open("/tmp/vmm-a11y-console-auth-username.txt", "w").write(
+                        self.widget("console-auth-username").get_text() or ""
+                    )
+                open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(
+                    "1" if self.widget("console-auth-remember").get_active() else "0"
+                )
         except Exception:
             pass
 
@@ -1027,10 +1131,21 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-gfx-pages").set_current_page(_GFX_PAGE_VIEWER)
         if self._viewer:
             self._viewer.console_grab_focus()
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+        except Exception:
+            pass
+        self._publish_auth_state()
         self._publish_gfx_viewport()
 
     def _activate_console_connect_page(self):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_CONNECT)
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+        except Exception:
+            pass
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
 
     def _viewer_is_visible(self):
         is_visible = self.widget("console-pages").is_visible()
@@ -1066,7 +1181,10 @@ class vmmConsolePages(vmmGObjectUI):
         except Exception:
             pass
         if self._viewer:
-            return
+            if self._viewer.console_is_open():
+                self._activate_gfx_viewer_page()
+                return
+            self._close_viewer()
         if errmsg:
             log.debug("No acceptable graphics to connect to")
             self._activate_gfx_unavailable_page(errmsg)
@@ -1277,6 +1395,12 @@ class vmmConsolePages(vmmGObjectUI):
         page_idx = self._serial_consoles.index(serial)
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_SERIAL)
         self.widget("serial-pages").set_current_page(page_idx)
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+        except Exception:
+            pass
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
 
     def _populate_console_menu(self):
         self._consolemenu.rebuild_menu(self.vm)
@@ -1330,15 +1454,12 @@ class vmmConsolePages(vmmGObjectUI):
         if serial_dev is not None:
             if cpage == _CONSOLE_PAGE_SERIAL:
                 return
-            self._viewer_connect_clicked = True
             self._console_menu_view_selected()
             return
 
-        # UNAVAILABLE, GRAPHICS error, or the manual Connect page: connect
-        # to the current default console. Console radio reinit sets
-        # _viewer_connect_clicked so a missing gsettings default still
-        # opens the viewer.
-        self._viewer_connect_clicked = True
+        # Respect per-VM autoconnect. A prior Connect click is cleared
+        # in _close_viewer when the guest stops, so a restart with
+        # Autoconnect off shows the Connect page again.
         self._toggle_first_console_menu_item()
 
     def _on_console_menu_toggled_cb(self, src):
@@ -1376,6 +1497,8 @@ class vmmConsolePages(vmmGObjectUI):
             src.get_nth_page(i).set_visible(i == newpage)
 
         # Dispatch the next bit in idle_add, so the UI size can change
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
         self.idle_emit("page-changed")
 
     ###########################

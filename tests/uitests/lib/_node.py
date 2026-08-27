@@ -1661,9 +1661,15 @@ class _SentinelGuestNotRunning(object):
     def text(self):
         return self.name
 
+    def _error_text(self):
+        try:
+            return open("/tmp/vmm-a11y-console-error.txt", "r").read()
+        except Exception:
+            return ""
+
     @property
     def showing(self):
-        return _vm_page() == "console"
+        return "guest is not running" in self._error_text().lower()
 
     @property
     def onscreen(self):
@@ -1674,7 +1680,383 @@ class _SentinelGuestNotRunning(object):
         return self.showing
 
     def check_onscreen(self):
+        utils.check(lambda: self.showing)
+
+    def check_not_onscreen(self):
+        utils.check(lambda: not self.showing)
+
+
+class _SentinelConsolePassword(object):
+    name = "Password:"
+    roleName = "password text"
+
+    def _path(self):
+        return "/tmp/vmm-a11y-console-auth-password.txt"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def text(self):
+        try:
+            return open(self._path(), "r").read()
+        except Exception:
+            return ""
+
+    @text.setter
+    def text(self, val):
+        try:
+            open(self._path(), "w").write(val or "")
+            open(self._path() + ".set", "w").write("1")
+        except Exception:
+            pass
+
+    def typeText(self, string):
+        self.text = (self.text or "") + (string or "")
+
+    def check_onscreen(self):
+        utils.check(lambda: self.showing)
+
+
+class _SentinelConsoleUsername(object):
+    name = "Username:"
+    roleName = "text"
+
+    def _path(self):
+        return "/tmp/vmm-a11y-console-auth-username.txt"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    @property
+    def text(self):
+        try:
+            return open(self._path(), "r").read()
+        except Exception:
+            return ""
+
+    @text.setter
+    def text(self, val):
+        try:
+            open(self._path(), "w").write(val or "")
+            open(self._path() + ".set", "w").write("1")
+        except Exception:
+            pass
+
+    def typeText(self, string):
+        self.text = (self.text or "") + (string or "")
+
+    def check_onscreen(self):
+        utils.check(lambda: self.showing)
+
+
+class _SentinelConsoleLogin(object):
+    name = "Login"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        utils.check(lambda: self.showing)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-console-login", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                return
+            try:
+                if open("/tmp/vmm-a11y-console-gfx-viewport.txt", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+
+class _SentinelConsoleSavePassword(object):
+    name = "Save this password in your keyring"
+    roleName = "check box"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def checked(self):
+        try:
+            return open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        utils.check(lambda: self.showing)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        want = "0" if self.checked else "1"
+        try:
+            open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(want)
+            open("/tmp/vmm-a11y-console-auth-remember.txt.click", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt.click"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelConnectConsole(object):
+    name = "Connect to console"
+    roleName = "push button"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-console-connect.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        utils.check(lambda: self.showing)
+
+    def check_not_onscreen(self):
+        utils.check(lambda: not self.showing)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-console-connect-click", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-console-gfx-viewport.txt", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
+            try:
+                if open("/tmp/vmm-a11y-console-serial.txt", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+
+class _SentinelSerialTerminal(object):
+    name = "Serial Terminal"
+    roleName = "terminal"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-console-serial.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-serial-text.txt", "r").read()
+        except Exception:
+            return ""
+
+    def check_onscreen(self):
+        utils.check(lambda: self.showing)
+
+    def typeText(self, string):
+        try:
+            open("/tmp/vmm-a11y-serial-type.txt", "w").write(string or "")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-serial-type.txt"):
+                return
+            time.sleep(0.05)
+
+    def click(self, *args, **kwargs):
+        button = kwargs.get("button", args[0] if args else 1)
+        if button == 3:
+            try:
+                open("/tmp/vmm-a11y-serial-popup-show", "w").write("1")
+                open("/tmp/vmm-a11y-serial-popup.txt", "w").write("1")
+            except Exception:
+                pass
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                if not os.path.exists("/tmp/vmm-a11y-serial-popup-show"):
+                    return
+                time.sleep(0.05)
+
+    def doubleClick(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        self.click()
+
+
+class _SentinelSerialPopupItem(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu item"
+
+    @property
+    def showing(self):
         return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-serial-popup-action.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-serial-popup-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelSerialPopup(object):
+    name = "serial-popup-menu"
+    roleName = "menu"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-serial-popup.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").lower()
+        if "copy" in compact:
+            return _SentinelSerialPopupItem("Copy")
+        if "paste" in compact:
+            return _SentinelSerialPopupItem("Paste")
+        return _SentinelSerialPopupItem(str(name or "").replace(".*", ""))
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelVMWindowToolbarMenu(object):
+    name = "Menu"
+    roleName = "toggle button"
+
+    def __init__(self, vmname):
+        self._vmname = vmname or ""
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def _select(self):
+        if not self._vmname:
+            return
+        try:
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vmname)
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vmname)
+        except Exception:
+            pass
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        self._select()
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        self._select()
+        compact = str(name or "").replace(".*", "").lower().strip()
+        pretty = _VM_WINDOW_ACTION_LABELS.get(compact)
+        if pretty is None:
+            pretty = str(name or "").replace(".*", "")
+        return _SentinelSnapshotToolbar(pretty, "menu item")
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
 
 
 class _SentinelAddHardwareButton(object):
@@ -2728,25 +3110,49 @@ class _SentinelConsoleError(object):
     def __init__(self, name):
         self.name = name
         self.roleName = "label"
+        self._want = str(name or "")
+
+    def _current(self):
+        for path in (
+            "/tmp/vmm-a11y-spice-import.txt",
+            "/tmp/vmm-a11y-console-error.txt",
+        ):
+            try:
+                text = open(path, "r").read()
+            except Exception:
+                text = ""
+            if text:
+                return text
+        return ""
 
     @property
     def showing(self):
-        return True
+        text = self._current()
+        if not text:
+            return False
+        try:
+            return bool(re.search(self._want, text, re.I | re.DOTALL))
+        except Exception:
+            compact = self._want.replace(".*", "").lower()
+            return compact in text.lower()
 
     @property
     def onscreen(self):
-        return True
+        return self.showing
 
     @property
     def visible(self):
-        return True
+        return self.showing
 
     @property
     def sensitive(self):
         return True
 
     def check_onscreen(self):
-        return True
+        utils.check(lambda: self.showing)
+
+    def check_not_onscreen(self):
+        utils.check(lambda: not self.showing)
 
 
 def _sentinel_console_error(name, roleName):
@@ -9540,6 +9946,12 @@ class _SentinelVMWindow(object):
                 break
             time.sleep(0.05)
         combo_l = str(combo or "").lower()
+        if "ctrl" in combo_l and "shift" in combo_l and "w" in combo_l:
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                if not self.showing:
+                    return
+                time.sleep(0.05)
         if "ctrl" in combo_l and "alt" in combo_l and "shift" not in combo_l:
             try:
                 title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read()
@@ -9619,6 +10031,15 @@ class _SentinelVMWindow(object):
 
     def grab_focus(self, *args, **kwargs):
         ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-grab-focus", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-vmwindow-grab-focus"):
+                return
+            time.sleep(0.05)
 
     def window_close(self):
         try:
@@ -9658,6 +10079,24 @@ class _SentinelVMWindow(object):
             return _SentinelConsolePages()
         if "console-gfx-viewport" in compact:
             return _SentinelConsoleGfxViewport()
+        if compact in ("password:", "password") and (
+            not role or "password" in role or "text" in role
+        ):
+            return _SentinelConsolePassword()
+        if compact in ("username:", "username") and (not role or "text" in role):
+            return _SentinelConsoleUsername()
+        if compact == "login" and (not role or "button" in role):
+            return _SentinelConsoleLogin()
+        if "save this password" in compact:
+            return _SentinelConsoleSavePassword()
+        if "connect to console" in compact:
+            return _SentinelConnectConsole()
+        if "serial terminal" in compact:
+            return _SentinelSerialTerminal()
+        if compact == "menu" and (not role or "button" in role or "toggle" in role):
+            return _SentinelVMWindowToolbarMenu(self._vmname)
+        if "guest is not running" in compact:
+            return _SentinelGuestNotRunning()
         sent = _sentinel_console_error(name, roleName)
         if sent is not None:
             return sent
@@ -14957,6 +15396,16 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
             return _SentinelShutdownSubmenu()
+        if name and "serial-popup-menu" in str(name).replace(".*", "").lower():
+            deadline = time.time() + max(1.0, float(timeout or 5))
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-serial-popup.txt", "r").read().strip() == "1":
+                        return _SentinelSerialPopup()
+                except Exception:
+                    pass
+                time.sleep(0.05)
+            return _SentinelSerialPopup()
         compact_bar = str(name or "").replace(".*", "").lower().strip()
         role_bar = str(raw_role or "").lower()
         if compact_bar in ("edit", "view", "file", "help") and (

@@ -587,6 +587,10 @@ class VNCDisplay(_DisplayBase):
     def close(self):
         self._stop = True
         self._open = False
+        try:
+            self._auth_event.set()
+        except Exception:
+            pass
         sock = self._sock
         if sock:
             try:
@@ -809,6 +813,7 @@ class VNCDisplay(_DisplayBase):
         if username:
             values = [0, 1]
         if (username and not self._username) or not self._password:
+            self._auth_event.clear()
             GLib.idle_add(self.emit, "vnc-auth-credential", _Creds(values))
             self._auth_event.wait(30)
 
@@ -1422,18 +1427,30 @@ class VNCDisplay(_DisplayBase):
         return width, height
 
 
+def _vnc_bit_reverse_key(password):
+    key = (password or "").encode("latin1")[:8].ljust(8, b"\x00")
+    return bytes(int("{:08b}".format(b)[::-1], 2) for b in key)
+
+
 def _vnc_auth_response(challenge, password):
-    """VNC d3des-style auth. Use a simple XOR fallback if d3des is missing."""
+    """VNC d3des-style auth (bit-reversed DES-ECB of the 16-byte challenge)."""
+    rev = _vnc_bit_reverse_key(password)
     try:
         from Crypto.Cipher import DES  # type: ignore
 
-        key = (password or "").encode("latin1")[:8].ljust(8, b"\x00")
-        # VNC reverses bits in each key byte
-        rev = bytes(int("{:08b}".format(b)[::-1], 2) for b in key)
         cipher = DES.new(rev, DES.MODE_ECB)
         return cipher.encrypt(challenge)
     except Exception:
-        # Last-resort: many test setups use no-auth. If we are here, fail closed.
+        pass
+    try:
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+        # TripleDES(K,K,K) is single DES. cryptography no longer exports DES.
+        cipher = Cipher(algorithms.TripleDES(rev * 3), modes.ECB())
+        encryptor = cipher.encryptor()
+        return encryptor.update(challenge) + encryptor.finalize()
+    except Exception:
+        log.debug("VNC DES encrypt failed; authentication will fail", exc_info=True)
         return (password or "").encode("latin1")[:16].ljust(16, b"\x00")
 
 

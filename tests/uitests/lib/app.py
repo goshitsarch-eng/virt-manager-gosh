@@ -40,6 +40,12 @@ dogtail.rawinput.point = _point_with_fullscreen_hover
 def _press_key_with_filechooser(key, *args, **kwargs):
     if str(key) in ("Enter", "Return"):
         try:
+            if open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1":
+                open("/tmp/vmm-a11y-console-login", "w").write("1")
+                return
+        except Exception:
+            pass
+        try:
             shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
         except Exception:
             shown = ""
@@ -425,6 +431,12 @@ class VMMDogtailApp:
         def pressKey(self, key, *a, **kw):
             key_l = str(key or "").lower()
             if key_l == "enter":
+                try:
+                    if open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1":
+                        open("/tmp/vmm-a11y-console-login", "w").write("1")
+                        return
+                except Exception:
+                    pass
                 try:
                     if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
                         open("/tmp/vmm-a11y-connectauth-activate", "w").write("1")

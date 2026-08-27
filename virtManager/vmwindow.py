@@ -197,6 +197,8 @@ class vmmVMWindow(vmmGObjectUI):
         self.activate_default_page()
         try:
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self.vm.get_name())
         except Exception:
             pass
 
@@ -243,6 +245,8 @@ class vmmVMWindow(vmmGObjectUI):
                     pass
         try:
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self.vm.get_name())
         except Exception:
             pass
         try:
@@ -384,6 +388,12 @@ class vmmVMWindow(vmmGObjectUI):
                         vmmenu.VMActionUI.save(self, self.vm)
                     elif action in ("Shut Down", "Shutdown"):
                         self.control_vm_shutdown(None)
+                    elif action in ("Force Off", "Destroy"):
+                        vmmenu.VMActionUI.destroy(self, self.vm)
+                    elif action in ("Reboot",):
+                        vmmenu.VMActionUI.reboot(self, self.vm)
+                    elif action in ("Force Reset", "Reset"):
+                        vmmenu.VMActionUI.reset(self, self.vm)
                 except Exception:
                     pass
                 return True

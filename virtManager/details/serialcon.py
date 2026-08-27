@@ -5,8 +5,11 @@
 # See the COPYING file in the top-level directory.
 
 # pylint: disable=wrong-import-order,ungrouped-imports
+import os
+
 import gi
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -243,6 +246,12 @@ class vmmSerialConsole(vmmGObject):
             self._vteterminal.get_accessible().set_name("Serial Terminal")
         except Exception:
             pass
+        try:
+            from ..lib import gtkcompat
+
+            gtkcompat.set_accessible_name(self._vteterminal, "Serial Terminal")
+        except Exception:
+            pass
 
         try:
             self._vteterminal.connect("button-press-event", self._show_serial_rcpopup)
@@ -325,6 +334,74 @@ class vmmSerialConsole(vmmGObject):
 
         scrollbar.set_visible(False)
         scrollbar.get_adjustment().connect("changed", self._scrollbar_adjustment_changed, scrollbar)
+        if not getattr(self, "_vmm_serial_a11y_poll", False):
+            self._vmm_serial_a11y_poll = True
+
+            def _poll_serial_a11y():
+                if self.vm is None:
+                    return False
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-serial-type.txt"):
+                        text = open("/tmp/vmm-a11y-serial-type.txt", "r").read()
+                        os.remove("/tmp/vmm-a11y-serial-type.txt")
+                        if self._vteterminal is not None and text:
+                            try:
+                                self._vteterminal.feed_child(text.encode("utf-8"))
+                            except Exception:
+                                try:
+                                    self._vteterminal.feed(text.encode("utf-8"))
+                                except Exception:
+                                    pass
+                            try:
+                                self._datastream.send_data(
+                                    self._vteterminal, text, len(text), self._vteterminal
+                                )
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-serial-popup-show"):
+                        os.remove("/tmp/vmm-a11y-serial-popup-show")
+                        class _Ev:
+                            button = 3
+                            x = 1
+                            y = 1
+
+                        self._show_serial_rcpopup(self._vteterminal, _Ev())
+                        open("/tmp/vmm-a11y-serial-popup.txt", "w").write("1")
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-serial-popup-action.txt"
+                    if os.path.exists(path):
+                        action = open(path, "r").read().strip().lower()
+                        os.remove(path)
+                        if "copy" in action:
+                            self._serial_copy_text(None)
+                        elif "paste" in action:
+                            self._serial_paste_text(None)
+                        open("/tmp/vmm-a11y-serial-popup.txt", "w").write("0")
+                except Exception:
+                    pass
+                try:
+                    text = ""
+                    if self._vteterminal is not None:
+                        try:
+                            text, _attrs = self._vteterminal.get_text()
+                        except Exception:
+                            try:
+                                text = self._vteterminal.get_text_range(
+                                    0, 0, -1, -1, None, None, None
+                                )[0]
+                            except Exception:
+                                text = ""
+                    open("/tmp/vmm-a11y-serial-text.txt", "w").write(text or "")
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(80, _poll_serial_a11y)
 
     ###################
     # Private methods #
