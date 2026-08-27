@@ -96,6 +96,10 @@ class vmmStorageBrowser(vmmGObjectUI):
             app = Gtk.Application.get_default()
             if app is not None:
                 app.add_window(self.topwin)
+            try:
+                os.remove("/tmp/vmm-a11y-choose-volume")
+            except Exception:
+                pass
             self._vmm_browse_hidden = False
             try:
                 self.topwin.present()
@@ -290,6 +294,14 @@ class vmmStorageBrowser(vmmGObjectUI):
             open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
         except Exception:
             pass
+        for leftover in (
+            "/tmp/vmm-a11y-choose-volume",
+            "/tmp/vmm-a11y-browse-cancel",
+        ):
+            try:
+                os.remove(leftover)
+            except Exception:
+                pass
         self._vmm_browse_hidden = True
         try:
             from .lib import gtkcompat
@@ -345,6 +357,10 @@ class vmmStorageBrowser(vmmGObjectUI):
     def _a11y_choose_volume(self):
         if getattr(self, "_vmm_browse_hidden", False):
             return
+        try:
+            os.remove("/tmp/vmm-a11y-choose-volume")
+        except Exception:
+            pass
 
         def _select_vol_by_name(want):
             if not want:
