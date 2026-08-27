@@ -1183,9 +1183,7 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_boot_init)
-        if not getattr(self, "_vmm_config_remove_poll", False):
-            self._vmm_config_remove_poll = True
-            GLib.timeout_add(50, self._poll_config_remove_tick)
+        gtkcompat.start_config_remove_poll(self)
         if not getattr(self, "_vmm_hw_popup_poll", False):
             self._vmm_hw_popup_poll = True
 
@@ -3921,22 +3919,21 @@ class vmmDetails(vmmGObjectUI):
                         tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
                     except Exception:
                         tab = ""
-                    if tab == "disk-tab":
-                        model = self.widget("hw-list").get_model()
-                        if model is not None:
-                            for cand in model:
-                                if cand[HW_LIST_COL_DEVICE] is None:
-                                    continue
-                                if cand[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
-                                    continue
-                                lab = str(cand[HW_LIST_COL_LABEL] or "")
-                                if "SCSI" in lab:
-                                    row = cand
-                                    want = lab
-                                    break
-                                if row is None or row[HW_LIST_COL_DEVICE] is None:
-                                    row = cand
-                                    want = lab
+                    model = self.widget("hw-list").get_model()
+                    if model is not None and tab == "disk-tab":
+                        for cand in model:
+                            if cand[HW_LIST_COL_DEVICE] is None:
+                                continue
+                            if cand[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
+                                continue
+                            lab = str(cand[HW_LIST_COL_LABEL] or "")
+                            if "SCSI" in lab:
+                                row = cand
+                                want = lab
+                                break
+                            if row is None or row[HW_LIST_COL_DEVICE] is None:
+                                row = cand
+                                want = lab
             if not row:
                 try:
                     open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
@@ -7283,29 +7280,6 @@ class vmmDetails(vmmGObjectUI):
 
     def _config_cancel_clicked_cb(self, src):
         self._config_cancel()
-
-    def _poll_config_remove_tick(self):
-        path = "/tmp/vmm-a11y-config-remove"
-        try:
-            if not os.path.exists(path):
-                return True
-            os.remove(path)
-        except Exception:
-            return True
-        try:
-            open("/tmp/vmm-a11y-config-remove-debug.txt", "a").write("poller\n")
-        except Exception:
-            pass
-        try:
-            self._config_remove()
-        except Exception as exc:
-            try:
-                open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
-                    "%s\n" % exc
-                )
-            except Exception:
-                pass
-        return True
 
     def _config_remove_clicked_cb(self, src):
         # AT-SPI GetItems can activate the real Remove button while

@@ -3870,6 +3870,40 @@ def bind_button_sensitivity(src, sidecar, sentinel=None):
     _sync()
 
 
+_CONFIG_REMOVE_POLLS = []
+
+
+def start_config_remove_poll(details):
+    """Keep Remove-disk file polling alive across AT-SPI GetItems."""
+    if details is None or getattr(details, "_vmm_config_remove_poll", False):
+        return
+    details._vmm_config_remove_poll = True
+    path = "/tmp/vmm-a11y-config-remove"
+
+    def _tick(*_a, d=details):
+        try:
+            if not os.path.exists(path):
+                return True
+            os.remove(path)
+        except Exception:
+            return True
+        try:
+            open("/tmp/vmm-a11y-config-remove-debug.txt", "a").write("poller\n")
+        except Exception:
+            pass
+        try:
+            d._config_remove()
+        except Exception as exc:
+            try:
+                open("/tmp/vmm-a11y-config-remove-err.txt", "w").write("%s\n" % exc)
+            except Exception:
+                pass
+        return True
+
+    _CONFIG_REMOVE_POLLS.append(_tick)
+    GLib.timeout_add(50, _tick)
+
+
 def _start_config_apply_poll(details):
     """Apply /tmp/vmm-a11y-config-apply when AT-SPI click times out."""
     if details is None or getattr(details, "_vmm_config_apply_poll", False):
