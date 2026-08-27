@@ -179,20 +179,27 @@ class vmmXMLEditor(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-xml-tab.txt"
                 try:
                     if not os.path.exists(path):
-                        # Add Hardware's XML page can leave xml-page=1
-                        # after the dialog closes. Republish once we own
-                        # the sentinels so details tabs become showing.
-                        if self._xml_a11y_owns_sentinels():
+                        # Only clear a leftover addhw XML page. A general
+                        # republish fights host/net/pool editors that share
+                        # the same xml-page sentinel.
+                        if (
+                            not getattr(self, "_vmm_a11y_owner", None)
+                            and self._curpage != _PAGE_XML
+                            and self._xml_a11y_owns_sentinels()
+                        ):
                             try:
-                                want_page = (
-                                    "1" if self._curpage == _PAGE_XML else "0"
-                                )
+                                addhw = open(
+                                    "/tmp/vmm-a11y-addhw-shown.txt", "r"
+                                ).read().strip()
+                            except Exception:
+                                addhw = "0"
+                            try:
                                 got = open(
                                     "/tmp/vmm-a11y-xml-page.txt", "r"
                                 ).read().strip()
                             except Exception:
                                 got = ""
-                            if got != want_page:
+                            if addhw != "1" and got == "1":
                                 self._publish_xml_a11y()
                         return True
                     if not self._xml_a11y_owns_sentinels():
