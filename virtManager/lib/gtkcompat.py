@@ -5945,6 +5945,7 @@ def _browse_local_window(
     box.append(scroll)
     chosen = [None]
     current = [folder]
+    parent_key = []
     select_folder = dialog_type == Gtk.FileChooserAction.SELECT_FOLDER
     is_save = dialog_type == Gtk.FileChooserAction.SAVE
     filter_ext = None
@@ -6188,6 +6189,12 @@ def _browse_local_window(
             win.destroy()
         except Exception:
             pass
+        if parent is not None:
+            for pkey in parent_key:
+                try:
+                    parent.remove_controller(pkey)
+                except Exception:
+                    pass
         if loop.is_running():
             loop.quit()
         return False
@@ -6268,6 +6275,22 @@ def _browse_local_window(
             return False
         return True
 
+    parent_key = []
+    if is_save and parent is not None:
+        try:
+            pkey = Gtk.EventControllerKey()
+
+            def _parent_save_key(_c, keyval, *_a):
+                if Gdk.keyval_name(keyval) in ("Return", "KP_Enter"):
+                    _open()
+                    return True
+                return False
+
+            pkey.connect("key-pressed", _parent_save_key)
+            parent.add_controller(pkey)
+            parent_key.append(pkey)
+        except Exception:
+            pass
     open_btn.connect("clicked", _open)
     try:
         open_btn.install_action("click", None, lambda *_a: _open())
@@ -6283,6 +6306,25 @@ def _browse_local_window(
             name_entry.grab_focus()
         except Exception:
             pass
+        try:
+            open("/tmp/vmm-a11y-filechooser-name.txt", "w").write(
+                name_entry.get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            wkey = Gtk.EventControllerKey()
+
+            def _win_save_key(_c, keyval, *_a):
+                if Gdk.keyval_name(keyval) in ("Return", "KP_Enter"):
+                    _open()
+                    return True
+                return False
+
+            wkey.connect("key-pressed", _win_save_key)
+            win.add_controller(wkey)
+        except Exception:
+            pass
     cancel_btn.connect("clicked", _close)
     win.connect("close-request", _close)
     _ensure_app_window(win)
@@ -6292,6 +6334,10 @@ def _browse_local_window(
         except Exception:
             pass
     win.set_visible(True)
+    try:
+        win.present()
+    except Exception:
+        pass
     _publish_filechooser()
     GLib.timeout_add(50, _poll_marker)
     loop.run()

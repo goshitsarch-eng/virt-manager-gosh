@@ -8020,6 +8020,22 @@ class _SentinelFileChooserCell(object):
             time.sleep(0.05)
 
 
+class _SentinelFileChooserName(object):
+    name = "Name"
+    roleName = "text"
+
+    @property
+    def text(self):
+        try:
+            return open("/tmp/vmm-a11y-filechooser-name.txt", "r").read()
+        except Exception:
+            return ""
+
+    @property
+    def showing(self):
+        return _filechooser_open()
+
+
 class _SentinelFileChooser(object):
     roleName = "file chooser"
 
@@ -8075,6 +8091,8 @@ class _SentinelFileChooser(object):
                 wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
                 wait_value="0",
             )
+        if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
+            return _SentinelFileChooserName()
         deadline = time.time() + max(0.1, float(timeout))
         while time.time() < deadline:
             try:
