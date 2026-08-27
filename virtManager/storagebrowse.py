@@ -177,6 +177,8 @@ class vmmStorageBrowser(vmmGObjectUI):
                 return None
 
             def _select_vol_tick():
+                if getattr(self, "_vmm_browse_hidden", False):
+                    return True
                 path = "/tmp/vmm-a11y-vol-select.txt"
                 try:
                     if not os.path.exists(path):
@@ -251,6 +253,8 @@ class vmmStorageBrowser(vmmGObjectUI):
             self._vmm_choose_poll = True
 
             def _poll_choose():
+                if getattr(self, "_vmm_browse_hidden", False):
+                    return True
                 path = "/tmp/vmm-a11y-choose-volume"
                 try:
                     if not os.path.exists(path):
@@ -335,6 +339,9 @@ class vmmStorageBrowser(vmmGObjectUI):
     ##############
 
     def _a11y_choose_volume(self):
+        if getattr(self, "_vmm_browse_hidden", False):
+            return
+
         def _select_vol_by_name(want):
             if not want:
                 return None

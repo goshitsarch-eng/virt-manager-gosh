@@ -1210,6 +1210,12 @@ def main():
         _pump(GLib, 0.9)
         shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
         assert shown == "0", "storage browser remounted after choose: %s" % shown
+        open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+        _pump(GLib, 0.2)
+        assert os.path.exists("/tmp/vmm-a11y-choose-volume"), (
+            "hidden storage browser consumed Choose Volume"
+        )
+        os.remove("/tmp/vmm-a11y-choose-volume")
 
     def clone_storage_dialog():
         from virtManager.clone import vmmCloneVM
