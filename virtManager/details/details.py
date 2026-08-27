@@ -1505,20 +1505,23 @@ class vmmDetails(vmmGObjectUI):
                     if not os.path.exists(cpath):
                         continue
                     try:
+                        try:
+                            requested = open(cpath, "r").read().strip()
+                        except Exception:
+                            requested = ""
                         os.remove(cpath)
                         w = self._addstorage.widget(wid)
                         pub = cpath.replace(".click", "")
-                        # Toggle the sentinel file, then force the
-                        # widget to match. After unapplied No the
-                        # checkbox can still be active because revert
-                        # does not set_active (that re-enables Apply).
-                        # Toggling the widget then unchecks Shareable
-                        # and Yes applies shareable=False.
+                        # Prefer the requested 0/1 so a concurrent XML
+                        # refresh cannot invert the click (start-VM race).
                         try:
                             live = open(pub, "r").read().strip()
                         except Exception:
                             live = "0"
-                        want = live != "1"
+                        if requested in ("0", "1"):
+                            want = requested == "1"
+                        else:
+                            want = live != "1"
                         w.set_active(want)
                         open(pub, "w").write("1" if want else "0")
                         # GTK 4 set_active may not emit the builder
