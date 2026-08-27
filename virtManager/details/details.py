@@ -3357,10 +3357,11 @@ class vmmDetails(vmmGObjectUI):
         self._refresh_vm_state()
         # GTK 4 ListStore cell updates can emit selection-changed and
         # wipe pending Shareable/cache edits (testDetailsMiscEdits).
-        # Still insert newly added devices so Customize → Add Hardware
-        # shows IDE Disk 2 while Apply is dirty from Copy host CPU.
+        # Customize-before-install still needs new Add Hardware rows
+        # (IDE Disk 2) while Apply is dirty from Copy host CPU.
         if apply_on:
-            self._repopulate_hw_list(add_missing_only=True)
+            if self.is_customize_dialog:
+                self._repopulate_hw_list(add_missing_only=True)
         else:
             self._repopulate_hw_list()
 
@@ -4311,7 +4312,11 @@ class vmmDetails(vmmGObjectUI):
                 pagetype = HW_LIST_TYPE_DISK
             if pagetype is HW_LIST_TYPE_DISK and dev is None:
                 pending = self._pending_disk_apply_row()
-                if pending is None and "disk" in (want or "").lower():
+                if (
+                    pending is None
+                    and self.is_customize_dialog
+                    and "disk" in (want or "").lower()
+                ):
                     try:
                         self._repopulate_hw_list()
                     except Exception:
