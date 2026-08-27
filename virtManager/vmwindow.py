@@ -326,6 +326,13 @@ class vmmVMWindow(vmmGObjectUI):
                     os.remove(path)
                 except Exception:
                     return True
+                if want in ("console", "snapshots"):
+                    try:
+                        if self._details.vmwindow_has_unapplied_changes():
+                            self._sync_toolbar_page_buttons(DETAILS_PAGE_DETAILS)
+                            return True
+                    except Exception:
+                        pass
                 mapping = {
                     "snapshots": self.widget("control-snapshots"),
                     "details": self.widget("control-vm-details"),
