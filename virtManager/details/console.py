@@ -1048,6 +1048,14 @@ class vmmConsolePages(vmmGObjectUI):
         has_keyring = vmmKeyring.get_instance().is_available()
         remember = bool(withPassword and pw) or (withUsername and username)
         remember = has_keyring and remember
+        try:
+            if os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt"):
+                remember = (
+                    open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip()
+                    == "1"
+                )
+        except Exception:
+            pass
         self.widget("console-auth-remember").set_sensitive(has_keyring)
         self.widget("console-auth-remember").set_active(remember)
 
@@ -1247,7 +1255,16 @@ class vmmConsolePages(vmmGObjectUI):
         if username.get_visible():
             self._viewer.console_set_username(username.get_text())
 
-        if self.widget("console-auth-remember").get_active():
+        remember = bool(self.widget("console-auth-remember").get_active())
+        try:
+            if os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt"):
+                remember = (
+                    open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip()
+                    == "1"
+                )
+        except Exception:
+            pass
+        if remember:
             vmmKeyring.get_instance().set_console_password(
                 self.vm, passwd.get_text(), username.get_text()
             )
