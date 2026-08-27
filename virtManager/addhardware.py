@@ -1580,18 +1580,28 @@ class vmmAddHardware(vmmGObjectUI):
         try:
             dev = self._build_device_page(page_num)
 
-            xml_sel = self._xmleditor.is_xml_selected()
-            if not xml_sel:
-                try:
-                    xml_sel = (
-                        open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
-                        == "1"
-                    )
-                except Exception:
-                    xml_sel = False
-            if check_xmleditor and xml_sel:
+            if check_xmleditor:
                 self._a11y_load_pending_xml()
-                dev = self._build_xmleditor_device(dev)
+                xml = ""
+                try:
+                    xml = self._xmleditor.get_xml() or ""
+                except Exception:
+                    xml = ""
+                xml_sel = self._xmleditor.is_xml_selected()
+                if not xml_sel:
+                    try:
+                        xml_sel = (
+                            open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+                            == "1"
+                        )
+                    except Exception:
+                        xml_sel = False
+                if xml.lstrip().startswith("<domain"):
+                    xml_sel = False
+                elif xml.strip() and xml != (self._xmleditor._srcxml or ""):
+                    xml_sel = True
+                if xml_sel:
+                    dev = self._build_xmleditor_device(dev)
 
             return dev
         except Exception as e:
@@ -2113,12 +2123,32 @@ class vmmAddHardware(vmmGObjectUI):
             pending = ""
         if not pending:
             return
+        # The VM details editor shares this file. Ignore a domain
+        # document so Finish validates the disk device XML.
+        if pending.lstrip().startswith("<domain"):
+            return
         try:
             os.remove("/tmp/vmm-a11y-xml.txt")
         except Exception:
             pass
         if (self._xmleditor.get_xml() or "") != pending:
             self._xmleditor._srcbuff.set_text(pending)
+
+    def _a11y_show_xml_page(self):
+        """Switch Add Hardware to the device XML page and publish it."""
+        try:
+            self._xmleditor_xml_requested_cb(self._xmleditor)
+        except Exception:
+            pass
+        try:
+            self._xmleditor.widget("xml-notebook").set_current_page(1)
+            self._xmleditor._curpage = 1
+        except Exception:
+            pass
+        try:
+            self._xmleditor._publish_xml_a11y()
+        except Exception:
+            pass
 
     def _a11y_finish(self):
         try:
@@ -2515,6 +2545,18 @@ class vmmAddHardware(vmmGObjectUI):
                 if os.path.exists(_ADDHW_CANCEL):
                     os.remove(_ADDHW_CANCEL)
                     self.close()
+            except Exception:
+                pass
+            try:
+                xmltab = "/tmp/vmm-a11y-xml-tab.txt"
+                if os.path.exists(xmltab):
+                    want = open(xmltab, "r").read().strip()
+                    if want == "XML":
+                        try:
+                            os.remove(xmltab)
+                        except Exception:
+                            pass
+                        self._a11y_show_xml_page()
             except Exception:
                 pass
             try:
