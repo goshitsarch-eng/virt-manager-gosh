@@ -1318,6 +1318,58 @@ def main():
         disp._bells = 0
         disp._ring_bell()
         assert disp._bells == 1
+        # RFB Bell is one byte. The old client ate 5 extra bytes and
+        # desynced the next framebuffer update.
+        class _CountSock:
+            def __init__(self, data):
+                self.buf = data
+                self.n = 0
+
+            def recv(self, n):
+                self.n += n
+                out, self.buf = self.buf[:n], self.buf[n:]
+                return out
+
+        leftover = b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 0, 0, 1, 1, 0) + b"\x11\x22\x33\x44"
+        csock = _CountSock(leftover)
+        disp._bells = 0
+        # simulate the fixed Bell arm: no extra recv
+        disp._ring_bell()
+        assert csock.n == 0
+        width, height = disp._read_fb_update(csock, 4, 4)
+        assert width == 4
+        # QEMU LED state: one payload byte after the rectangle header
+        disp._led_state = 0
+        led = (
+            b"\x00"
+            + st.pack("!H", 1)
+            + st.pack("!HHHHi", 0, 0, 1, 1, -261)
+            + bytes([gtk4display._VNC_LED_CAPS | gtk4display._VNC_LED_NUM])
+        )
+        disp._read_fb_update(FakeSock(led), 4, 4)
+        _pump(GLib, 0.05)
+        assert disp._led_state == (
+            gtk4display._VNC_LED_CAPS | gtk4display._VNC_LED_NUM
+        )
+        fmt = st.pack("!BBHBBI", 255, 1, 2, 3, 2, 48000)
+        en = st.pack("!BBH", 255, 1, 0)
+        class _Rec:
+            def __init__(self):
+                self.sent = b""
+
+            def sendall(self, data):
+                self.sent += data
+
+        rec = _Rec()
+        disp._enable_qemu_audio(rec)
+        assert rec.sent == fmt + en
+        audio = bytes([1]) + st.pack("!HI", 2, 4) + b"\x01\x02\x03\x04"
+        disp._audio_bytes = 0
+        disp._read_qemu_server(FakeSock(audio))
+        assert disp._audio_bytes == 4
+        begin = bytes([1]) + st.pack("!H", 1)
+        disp._read_qemu_server(FakeSock(begin))
+        assert disp._audio_playing
         sent = []
 
         class _Cap:
@@ -1480,6 +1532,17 @@ def main():
                         conn.recv(7)
                     elif msg[0] == 5:
                         conn.recv(5)
+                    elif msg[0] == 255:
+                        sub = conn.recv(1)
+                        if not sub:
+                            break
+                        if sub[0] == 1:
+                            kindb = conn.recv(2)
+                            if len(kindb) < 2:
+                                break
+                            kind = struct.unpack("!H", kindb)[0]
+                            if kind == 2:
+                                conn.recv(6)
             finally:
                 conn.close()
                 sock.close()

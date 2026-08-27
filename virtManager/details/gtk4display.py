@@ -56,8 +56,21 @@ _VNC_ENC_XCURSOR = -232
 _VNC_ENC_LASTRECT = -224
 _VNC_ENC_DESKTOPNAME = -307
 _VNC_ENC_QEMU_EXT_KEY = -258
+_VNC_ENC_QEMU_AUDIO = -259
+_VNC_ENC_LED_STATE = -261
 _VNC_MSG_CLIENT_QEMU = 255
 _VNC_QEMU_EXT_KEY = 0
+_VNC_QEMU_AUDIO = 1
+_VNC_QEMU_AUDIO_ENABLE = 0
+_VNC_QEMU_AUDIO_DISABLE = 1
+_VNC_QEMU_AUDIO_SET_FORMAT = 2
+_VNC_QEMU_AUDIO_END = 0
+_VNC_QEMU_AUDIO_BEGIN = 1
+_VNC_QEMU_AUDIO_DATA = 2
+_VNC_AUDIO_S16 = 3
+_VNC_LED_SCROLL = 1
+_VNC_LED_NUM = 2
+_VNC_LED_CAPS = 4
 _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
 _VNC_SEC_TLS = 18
@@ -1054,7 +1067,7 @@ class VNCDisplay(_DisplayBase):
     Supports None, VNC-auth, VeNCrypt (including SASL subtypes), RFB SASL
     (PLAIN, DIGEST-MD5, Cyrus when libsasl2 plugins exist, and GSSAPI
     via libgssapi_krb5), and
-    TLS; 32-bit pixels; and the encodings QEMU commonly sends: raw,
+    TLS; 32-bit pixels; QEMU audio and LED state; and the encodings QEMU commonly sends: raw,
     CopyRect, RRE, Hextile, zlib, Tight, ZRLE, DesktopSize, and cursor.
     """
 
@@ -1079,6 +1092,10 @@ class VNCDisplay(_DisplayBase):
         self._qemu_ext_key = False
         self._shared = True
         self._bells = 0
+        self._audio_bytes = 0
+        self._audio_playing = False
+        self._led_state = 0
+        self._pa = None
         self._tls_ca = ""
         self._tls_client_cert = ""
         self._tls_client_key = ""
@@ -1120,6 +1137,7 @@ class VNCDisplay(_DisplayBase):
             except Exception:
                 pass
         self._sock = None
+        self._close_audio()
 
     def set_shared_flag(self, val):
         self._shared = bool(val)
@@ -1135,6 +1153,141 @@ class VNCDisplay(_DisplayBase):
                 display.beep()
         except Exception:
             pass
+        return False
+
+    def _enable_qemu_audio(self, sock):
+        """gtk-vnc advertises QEMU audio then sets S16LE stereo 48 kHz."""
+        try:
+            sock.sendall(
+                struct.pack(
+                    "!BBHBBI",
+                    _VNC_MSG_CLIENT_QEMU,
+                    _VNC_QEMU_AUDIO,
+                    _VNC_QEMU_AUDIO_SET_FORMAT,
+                    _VNC_AUDIO_S16,
+                    2,
+                    48000,
+                )
+            )
+            sock.sendall(
+                struct.pack(
+                    "!BBH",
+                    _VNC_MSG_CLIENT_QEMU,
+                    _VNC_QEMU_AUDIO,
+                    _VNC_QEMU_AUDIO_ENABLE,
+                )
+            )
+        except Exception as exc:
+            log.debug("QEMU audio enable failed: %s", exc)
+
+    def _read_qemu_server(self, sock):
+        ntype = self._recv_n(sock, 1)[0]
+        if ntype != _VNC_QEMU_AUDIO:
+            return
+        subtype = struct.unpack("!H", self._recv_n(sock, 2))[0]
+        if subtype == _VNC_QEMU_AUDIO_DATA:
+            n = struct.unpack("!I", self._recv_n(sock, 4))[0]
+            if n > 1024 * 1024:
+                raise RuntimeError("QEMU audio message too large: %s" % n)
+            data = self._recv_n(sock, n)
+            self._audio_bytes = getattr(self, "_audio_bytes", 0) + n
+            GLib.idle_add(self._play_audio, data)
+        elif subtype == _VNC_QEMU_AUDIO_BEGIN:
+            self._audio_playing = True
+        elif subtype == _VNC_QEMU_AUDIO_END:
+            self._audio_playing = False
+
+    def _play_audio(self, data):
+        if not data:
+            return False
+        try:
+            player = self._pulse_player()
+            if player is not None:
+                err = ctypes.c_int(0)
+                player.write(data, err)
+        except Exception as exc:
+            log.debug("QEMU audio playback failed: %s", exc)
+        return False
+
+    def _pulse_player(self):
+        if getattr(self, "_pa", None) is not None:
+            return self._pa
+        name = ctypes.util.find_library("pulse-simple")
+        if not name:
+            return None
+
+        class _SampleSpec(ctypes.Structure):
+            _fields_ = [
+                ("format", ctypes.c_int),
+                ("rate", ctypes.c_uint32),
+                ("channels", ctypes.c_uint8),
+            ]
+
+        lib = ctypes.CDLL(name)
+        lib.pa_simple_new.restype = ctypes.c_void_p
+        lib.pa_simple_new.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.POINTER(_SampleSpec),
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        lib.pa_simple_write.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+        spec = _SampleSpec(3, 48000, 2)  # PA_SAMPLE_S16LE
+        err = ctypes.c_int(0)
+        handle = lib.pa_simple_new(
+            None,
+            b"virt-manager",
+            1,  # PA_STREAM_PLAYBACK
+            None,
+            b"vnc-audio",
+            ctypes.byref(spec),
+            None,
+            None,
+            ctypes.byref(err),
+        )
+        if not handle:
+            return None
+
+        class _Pulse:
+            def __init__(self, libobj, h):
+                self._lib = libobj
+                self._h = h
+
+            def write(self, payload, _err):
+                e = ctypes.c_int(0)
+                self._lib.pa_simple_write(self._h, payload, len(payload), ctypes.byref(e))
+
+            def close(self):
+                try:
+                    self._lib.pa_simple_free(self._h)
+                except Exception:
+                    pass
+                self._h = None
+
+        self._pa = _Pulse(lib, handle)
+        return self._pa
+
+    def _close_audio(self):
+        pa = getattr(self, "_pa", None)
+        if pa is not None:
+            try:
+                pa.close()
+            except Exception:
+                pass
+        self._pa = None
+
+    def _apply_led_state(self, led):
+        self._led_state = int(led or 0)
         return False
 
     def _apply_resize_guest(self, val):
@@ -1282,6 +1435,8 @@ class VNCDisplay(_DisplayBase):
         # SetEncodings: nEncodings is U16. Advertise common QEMU encodings.
         encodings = (
             _VNC_ENC_QEMU_EXT_KEY,
+            _VNC_ENC_QEMU_AUDIO,
+            _VNC_ENC_LED_STATE,
             _VNC_ENC_LASTRECT,
             _VNC_ENC_DESKTOPNAME,
             _VNC_ENC_DESKTOPSIZE,
@@ -1303,6 +1458,7 @@ class VNCDisplay(_DisplayBase):
         sock.sendall(struct.pack("!BBH", 2, 0, len(encodings)))
         for enc in encodings:
             sock.sendall(struct.pack("!i", enc))
+        self._enable_qemu_audio(sock)
         self._alloc_pixels(width, height)
         self._open = True
         GLib.idle_add(self.emit, "vnc-initialized")
@@ -1328,12 +1484,15 @@ class VNCDisplay(_DisplayBase):
                 n = struct.unpack("!H", self._recv_n(sock, 2))[0]
                 self._recv_n(sock, n * 6)
             elif msg[0] == 2:
-                self._recv_n(sock, 5)
+                # RFB Bell is a single byte. Extra reads desync the
+                # stream the first time the guest beeps (gtk-vnc).
                 GLib.idle_add(self._ring_bell)
             elif msg[0] == 3:
                 slen = struct.unpack("!xxxI", self._recv_n(sock, 7))[0]
                 text = self._recv_n(sock, slen)
                 self._apply_server_cut_text(text)
+            elif msg[0] == 255:
+                self._read_qemu_server(sock)
         GLib.idle_add(self.emit, "vnc-disconnected")
         self._open = False
 
@@ -2018,6 +2177,12 @@ class VNCDisplay(_DisplayBase):
                 continue
             if enc == _VNC_ENC_QEMU_EXT_KEY:
                 self._qemu_ext_key = True
+                continue
+            if enc == _VNC_ENC_QEMU_AUDIO:
+                continue
+            if enc == _VNC_ENC_LED_STATE:
+                led = self._recv_n(sock, 1)[0]
+                GLib.idle_add(self._apply_led_state, led)
                 continue
             if enc == _VNC_ENC_XCURSOR:
                 self._read_xcursor(sock, x, y, w, h)
