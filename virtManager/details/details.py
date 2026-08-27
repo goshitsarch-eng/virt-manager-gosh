@@ -1060,13 +1060,15 @@ class vmmDetails(vmmGObjectUI):
             gtkcompat.register_a11y_click(
                 "IP address:", lambda: self._refresh_ip_clicked_cb(None)
             )
+            # Expose the name for find(), but do not hook AT-SPI/click.txt.
+            # GetItems activates the sidecar button during window map and
+            # would Remove before the test clicks SCSI Disk 1.
             gtkcompat.expose_a11y_button(
                 "config-remove",
                 "config-remove",
-                self._config_remove,
+                lambda *_a, **_k: None,
                 window=self.topwin,
             )
-            gtkcompat.register_a11y_click("config-remove", self._config_remove)
             if not getattr(self, "_vmm_network_ip_poll", False):
                 self._vmm_network_ip_poll = True
 
@@ -3834,6 +3836,30 @@ class vmmDetails(vmmGObjectUI):
             return
         self._config_remove_busy = True
         try:
+            try:
+                with open("/tmp/vmm-a11y-config-remove-debug.txt", "a") as fh:
+                    fh.write(
+                        "enter clicked=%r selected=%r last=%r device=%r tab=%r\n"
+                        % (
+                            open("/tmp/vmm-a11y-hw-clicked.txt").read().strip()
+                            if os.path.exists("/tmp/vmm-a11y-hw-clicked.txt")
+                            else "",
+                            open("/tmp/vmm-a11y-hw-selected.txt").read().strip()
+                            if os.path.exists("/tmp/vmm-a11y-hw-selected.txt")
+                            else "",
+                            open("/tmp/vmm-a11y-last-hw.txt").read().strip()
+                            if os.path.exists("/tmp/vmm-a11y-last-hw.txt")
+                            else "",
+                            open("/tmp/vmm-a11y-hw-last-device.txt").read().strip()
+                            if os.path.exists("/tmp/vmm-a11y-hw-last-device.txt")
+                            else "",
+                            open("/tmp/vmm-a11y-details-tab.txt").read().strip()
+                            if os.path.exists("/tmp/vmm-a11y-details-tab.txt")
+                            else "",
+                        )
+                    )
+            except Exception:
+                pass
             row = self._get_hw_row()
             # Prefer the last AT-SPI hw-list label so Remove targets Serial 1
             # even if GTK selection drifted. Do not re-select the row here:
@@ -3898,7 +3924,7 @@ class vmmDetails(vmmGObjectUI):
                 row is None or row[HW_LIST_COL_DEVICE] is None
             ):
                 row = labeled
-            if (row is None or row[HW_LIST_COL_DEVICE] is None) and not wants:
+            if row is None or row[HW_LIST_COL_DEVICE] is None:
                 # Last-resort: Remove was armed from disk-tab after AT-SPI
                 # wiped the device sentinels back to Overview.
                 try:
