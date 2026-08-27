@@ -3173,15 +3173,12 @@ class vmmDetails(vmmGObjectUI):
             if _EDIT_SHARE in getattr(self._addstorage, "_active_edits", []):
                 dest = str(newrow[HW_LIST_COL_LABEL] or "")
                 dirty = getattr(self, "_vmm_dirty_hw", None)
-                if newrow[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK and (
-                    not dirty or dest == dirty or "Disk" in dest
+                if (
+                    newrow[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK
+                    and dirty
+                    and dest == dirty
                 ):
                     self._oldhwkey = newrow[HW_LIST_COL_KEY]
-                    try:
-                        self._vmm_last_refreshed_hw = dest
-                        self._vmm_dirty_hw = dest
-                    except Exception:
-                        pass
                     return
         except Exception:
             pass
@@ -4184,7 +4181,6 @@ class vmmDetails(vmmGObjectUI):
                         self._oldhwkey = row[HW_LIST_COL_KEY]
                     except Exception:
                         pass
-                    self._vmm_last_refreshed_hw = dirty
             if not dirty:
                 dirty = getattr(self, "_vmm_last_refreshed_hw", None)
             if dirty:
