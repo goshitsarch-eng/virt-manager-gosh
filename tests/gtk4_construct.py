@@ -2896,11 +2896,11 @@ def main():
         details._enable_apply(EDIT_DISK_PATH)
         details._config_apply()
         _pump(GLib, 0.3)
-        details._refresh_page_body(details._hw_row_for_label("Floppy 2"))
+        details._refresh_page()
         _pump(GLib, 0.1)
         assert not details.widget("config-apply").get_sensitive(), (
-            "Floppy 2 apply must not leave Apply armed, pending=%r"
-            % (details._pending_media_path(),)
+            "Floppy 2 apply must not leave Apply armed, pending=%r edits=%r"
+            % (details._pending_media_path(), getattr(details, "_active_edits", None))
         )
         inactive = vmobj.get_xmlobj(inactive=True)
         floppy_paths = [

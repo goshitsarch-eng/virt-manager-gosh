@@ -3303,6 +3303,7 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
             self._vmm_pending_media_path = None
+            self._vmm_apply_just_succeeded = False
             try:
                 os.remove("/tmp/vmm-a11y-media-browse.txt")
             except Exception:
@@ -4426,6 +4427,12 @@ class vmmDetails(vmmGObjectUI):
         self._vmm_user_controller_edit = True
 
     def _enable_apply(self, edittype):
+        if (
+            edittype == EDIT_DISK_PATH
+            and getattr(self, "_vmm_apply_just_succeeded", False)
+            and self._pending_media_path() is None
+        ):
+            return
         if getattr(self, "_ui_refreshing", False):
             if edittype == EDIT_CONTROLLER_MODEL and (
                 getattr(self, "_vmm_user_controller_edit", False)
@@ -6151,8 +6158,8 @@ class vmmDetails(vmmGObjectUI):
     def _clear_post_apply_refresh(self):
         """Drop Apply re-armed by combo/entry 'changed' after a successful apply."""
         if getattr(self, "_vmm_apply_just_succeeded", False):
-            self._vmm_apply_just_succeeded = False
             if getattr(self, "_vmm_user_controller_edit", False):
+                self._vmm_apply_just_succeeded = False
                 return False
             typed = ""
             try:
