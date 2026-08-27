@@ -466,10 +466,19 @@ class AccelGroup:
     def __init__(self):
         self._shortcuts = []
         self._controller = None
+        self._extra_controllers = []
         self._window = None
 
     def add_shortcut(self, trigger, callback):
         self._shortcuts.append((trigger, callback))
+
+    def add_controller(self, controller):
+        if controller is None:
+            return
+        extras = list(self._extra_controllers or [])
+        if controller not in extras:
+            extras.append(controller)
+        self._extra_controllers = extras
 
 # GTK 3 .ui accelerators stripped by convert_ui_gtk4.py
 _BUILDER_WINDOW_ACCELS = {
@@ -492,6 +501,17 @@ def accel_groups_from_object(obj):
     return list(getattr(obj, "_vmm_accel_groups", None) or [])
 
 
+def _attach_accel_controllers(window, group):
+    for extra in list(getattr(group, "_extra_controllers", None) or []):
+        if extra is None or getattr(extra, "_vmm_accel_attached", False):
+            continue
+        try:
+            window.add_controller(extra)
+            extra._vmm_accel_attached = True
+        except Exception:
+            extra._vmm_accel_attached = False
+
+
 def _accel_group_enable(window, group):
     if group is None or window is None:
         return
@@ -499,41 +519,50 @@ def _accel_group_enable(window, group):
     if group not in groups:
         groups.append(group)
     window._vmm_accel_groups = groups
-    if getattr(group, "_controller", None) is not None:
-        return
-    sc = Gtk.ShortcutController()
-    try:
-        sc.set_scope(Gtk.ShortcutScope.GLOBAL)
-    except Exception:
-        pass
-    for trigger_str, callback in list(getattr(group, "_shortcuts", None) or []):
-        trigger = Gtk.ShortcutTrigger.parse_string(trigger_str)
-        if trigger is None:
-            continue
-
-        def _run(*_a, cb=callback):
-            try:
-                return bool(cb())
-            except Exception:
-                return False
-
-        sc.add_shortcut(Gtk.Shortcut.new(trigger, Gtk.CallbackAction.new(_run)))
-    window.add_controller(sc)
-    group._controller = sc
     group._window = window
+    if getattr(group, "_controller", None) is None:
+        sc = Gtk.ShortcutController()
+        try:
+            sc.set_scope(Gtk.ShortcutScope.GLOBAL)
+        except Exception:
+            pass
+        for trigger_str, callback in list(getattr(group, "_shortcuts", None) or []):
+            trigger = Gtk.ShortcutTrigger.parse_string(trigger_str)
+            if trigger is None:
+                continue
+
+            def _run(*_a, cb=callback):
+                try:
+                    return bool(cb())
+                except Exception:
+                    return False
+
+            sc.add_shortcut(Gtk.Shortcut.new(trigger, Gtk.CallbackAction.new(_run)))
+        window.add_controller(sc)
+        group._controller = sc
+    _attach_accel_controllers(window, group)
 
 
 def _accel_group_disable(window, group):
     if group is None:
         return
+    target = window or getattr(group, "_window", None)
     sc = getattr(group, "_controller", None)
-    if sc is None:
-        return
-    try:
-        (window or getattr(group, "_window", None)).remove_controller(sc)
-    except Exception:
-        pass
+    if sc is not None and target is not None:
+        try:
+            target.remove_controller(sc)
+        except Exception:
+            pass
     group._controller = None
+    for extra in list(getattr(group, "_extra_controllers", None) or []):
+        if extra is None:
+            continue
+        if target is not None:
+            try:
+                target.remove_controller(extra)
+            except Exception:
+                pass
+        extra._vmm_accel_attached = False
 
 
 def _activate_builder_item(item):
@@ -563,9 +592,43 @@ def _menubar_accel_active():
     return bool(val)
 
 
-def _open_first_menubar_menu(window, builder=None):
-    if not _menubar_accel_active():
-        return False
+def _mnemonics_enabled():
+    return bool(_GTK_SETTINGS_OVERRIDES.get("gtk-enable-mnemonics", True))
+
+
+def _widget_children(widget):
+    items = []
+    if widget is None:
+        return items
+    if hasattr(widget, "get_first_child"):
+        try:
+            child = widget.get_first_child()
+        except Exception:
+            child = None
+        while child is not None:
+            items.append(child)
+            try:
+                child = (
+                    child.get_next_sibling()
+                    if hasattr(child, "get_next_sibling")
+                    else None
+                )
+            except Exception:
+                child = None
+        if items:
+            return items
+    listed = list(getattr(widget, "_items", None) or [])
+    if listed:
+        return listed
+    if hasattr(widget, "get_children"):
+        try:
+            return list(widget.get_children() or [])
+        except Exception:
+            pass
+    return items
+
+
+def _find_window_menubar(window, builder=None):
     bar = None
     if builder is not None:
         for name in ("details-menubar", "menubar1", "menubar"):
@@ -574,38 +637,308 @@ def _open_first_menubar_menu(window, builder=None):
             except Exception:
                 bar = None
             if bar is not None:
+                return bar
+    if window is None or not hasattr(window, "get_first_child"):
+        return None
+
+    def _walk(widget, depth=0):
+        if widget is None or depth > 8:
+            return None
+        if isinstance(widget, MenuBar):
+            return widget
+        for child in _widget_children(widget):
+            found = _walk(child, depth + 1)
+            if found is not None:
+                return found
+        return None
+
+    try:
+        return _walk(window.get_child())
+    except Exception:
+        return None
+
+
+def _item_uses_underline(item):
+    if item is None:
+        return False
+    for attr in ("use_underline", "get_use_underline"):
+        try:
+            val = getattr(item, attr)
+            if callable(val):
+                val = val()
+            return bool(val)
+        except Exception:
+            continue
+    child = getattr(item, "_label_widget", None)
+    if child is not None and hasattr(child, "get_use_underline"):
+        try:
+            return bool(child.get_use_underline())
+        except Exception:
+            pass
+    return True
+
+
+def _mnemonic_keyval_from_text(text):
+    if not text:
+        return 0
+    i = 0
+    s = str(text)
+    while i < len(s):
+        if s[i] == "_":
+            if i + 1 < len(s) and s[i + 1] == "_":
+                i += 2
+                continue
+            if i + 1 < len(s):
+                try:
+                    return int(Gdk.unicode_to_keyval(ord(s[i + 1])))
+                except Exception:
+                    return 0
+            break
+        i += 1
+    return 0
+
+
+def _item_mnemonic_keyval(item):
+    if item is None or isinstance(item, SeparatorMenuItem):
+        return 0
+    if not _item_uses_underline(item):
+        return 0
+    for cand in (
+        getattr(item, "_label_widget", None),
+        item.get_child() if hasattr(item, "get_child") else None,
+        item,
+    ):
+        if cand is None or not hasattr(cand, "get_mnemonic_keyval"):
+            continue
+        try:
+            kv = int(cand.get_mnemonic_keyval() or 0)
+        except Exception:
+            kv = 0
+        void = int(getattr(Gdk, "KEY_VoidSymbol", 0xFFFFFF) or 0xFFFFFF)
+        if kv and kv != void:
+            return kv
+    text = getattr(item, "label", None) or ""
+    if "_" not in str(text or "") and hasattr(item, "get_label"):
+        try:
+            text = item.get_label() or ""
+        except Exception:
+            text = ""
+    return _mnemonic_keyval_from_text(text)
+
+
+def _keyvals_match(left, right):
+    if not left or not right:
+        return False
+    try:
+        return int(Gdk.keyval_to_lower(left)) == int(Gdk.keyval_to_lower(right))
+    except Exception:
+        return int(left) == int(right)
+
+
+def _item_submenu(item):
+    if item is None:
+        return None
+    sub = getattr(item, "_submenu", None)
+    if sub is not None:
+        return sub
+    if hasattr(item, "get_submenu"):
+        try:
+            return item.get_submenu()
+        except Exception:
+            return None
+    return None
+
+
+def _activate_menu_widget(item):
+    if item is None:
+        return False
+    try:
+        if hasattr(item, "get_sensitive") and not item.get_sensitive():
+            return False
+    except Exception:
+        pass
+    submenu = _item_submenu(item)
+    if submenu is not None:
+        bar = item._menubar_parent() if hasattr(item, "_menubar_parent") else None
+        if bar is not None:
+            opened = getattr(bar, "_vmm_open_item", None)
+            if opened is not None and opened is not item:
+                old = _item_submenu(opened)
+                if old is not None:
+                    try:
+                        old.popdown()
+                    except Exception:
+                        pass
+            bar._vmm_open_item = item
+        try:
+            submenu.popup_at_widget(item)
+            return True
+        except Exception:
+            try:
+                submenu.popup()
+                return True
+            except Exception:
+                return False
+    return _activate_builder_item(item)
+
+
+def _deepest_open_menu(bar):
+    if bar is None:
+        return None
+    opened = getattr(bar, "_vmm_open_item", None)
+    menu = _item_submenu(opened) if opened is not None else None
+    if menu is None:
+        return None
+    deepest = menu
+    seen = set()
+    while deepest is not None and id(deepest) not in seen:
+        seen.add(id(deepest))
+        nested = None
+        for child in _widget_children(deepest):
+            sub = _item_submenu(child)
+            if sub is not None and getattr(sub, "_opened", False):
+                nested = sub
                 break
+        if nested is None:
+            break
+        deepest = nested
+    return deepest
+
+
+def _popdown_menubar(bar):
     if bar is None:
         return False
-    items = list(getattr(bar, "_items", None) or [])
-    if not items and hasattr(bar, "get_first_child"):
-        child = bar.get_first_child()
-        while child is not None:
-            items.append(child)
-            child = child.get_next_sibling() if hasattr(child, "get_next_sibling") else None
+    closed = False
+    menu = _deepest_open_menu(bar)
+    seen = set()
+    while menu is not None and id(menu) not in seen:
+        seen.add(id(menu))
+        try:
+            menu.popdown()
+            closed = True
+        except Exception:
+            break
+        parent = getattr(menu, "_parent_widget", None)
+        menu = getattr(parent, "_vmm_menu", None) if parent is not None else None
+    opened = getattr(bar, "_vmm_open_item", None)
+    if opened is not None:
+        sub = _item_submenu(opened)
+        if sub is not None:
+            try:
+                sub.popdown()
+                closed = True
+            except Exception:
+                pass
+        bar._vmm_open_item = None
+    return closed
+
+
+def popdown_window_menus(window, builder=None):
+    """Close an open menubar menu. Escape uses this before closing a window."""
+    return _popdown_menubar(_find_window_menubar(window, builder))
+
+
+def _cycle_menubar(bar, delta):
+    items = [child for child in _widget_children(bar) if _item_submenu(child) is not None]
     if not items:
         return False
-    first = items[0]
-    submenu = getattr(first, "_submenu", None)
-    if submenu is None:
+    opened = getattr(bar, "_vmm_open_item", None)
+    try:
+        idx = items.index(opened)
+    except ValueError:
+        idx = 0
+    return _activate_menu_widget(items[(idx + int(delta)) % len(items)])
+
+
+def _lookup_mnemonic_item(items, keyval):
+    for child in items or []:
+        if _keyvals_match(_item_mnemonic_keyval(child), keyval):
+            return child
+    return None
+
+
+def handle_menubar_key(window, builder, keyval, alt=False):
+    """Activate a GTK 3 menubar/submenu mnemonic. Returns True if handled."""
+    bar = _find_window_menubar(window, builder)
+    if bar is None:
+        return False
+    open_menu = _deepest_open_menu(bar)
+    if open_menu is not None:
+        match = _lookup_mnemonic_item(_widget_children(open_menu), keyval)
+        if match is not None:
+            return _activate_menu_widget(match)
+    if alt:
+        match = _lookup_mnemonic_item(_widget_children(bar), keyval)
+        if match is not None:
+            return _activate_menu_widget(match)
+    return False
+
+
+def _on_window_menubar_key(window, builder, keyval, state):
+    state = int(state or 0)
+    ctrl = bool(state & int(Gdk.ModifierType.CONTROL_MASK))
+    super_mask = int(getattr(Gdk.ModifierType, "SUPER_MASK", 0) or 0)
+    if ctrl or (super_mask and state & super_mask):
+        return False
+    alt = bool(state & int(Gdk.ModifierType.ALT_MASK))
+    name = Gdk.keyval_name(keyval) or ""
+    bar = _find_window_menubar(window, builder)
+    open_item = getattr(bar, "_vmm_open_item", None) if bar is not None else None
+    open_menu = _deepest_open_menu(bar) if bar is not None else None
+
+    if name == "Escape" and (open_menu is not None or open_item is not None):
+        return _popdown_menubar(bar)
+    if name in ("Left", "Right", "KP_Left", "KP_Right") and open_item is not None:
+        return _cycle_menubar(bar, -1 if "Left" in name else 1)
+    if alt:
+        if not _mnemonics_enabled():
+            return False
+        return handle_menubar_key(window, builder, keyval, alt=True)
+    if open_menu is None:
+        return False
+    if not Gdk.keyval_to_unicode(keyval):
+        return False
+    return handle_menubar_key(window, builder, keyval, alt=False)
+
+
+def _install_menubar_mnemonic_controller(group, window, builder):
+    if getattr(group, "_vmm_mnemonic_controller", None) is not None:
+        return
+    ctl = Gtk.EventControllerKey()
+    try:
+        ctl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    except Exception:
+        pass
+
+    def _on_key(_c, keyval, _keycode, state):
         try:
-            first.activate()
+            return bool(_on_window_menubar_key(window, builder, keyval, state))
         except Exception:
             return False
-        return True
-    try:
-        submenu.popup_at_widget(first)
-        bar._vmm_open_item = first
-    except Exception:
+
+    ctl.connect("key-pressed", _on_key)
+    group._vmm_mnemonic_controller = ctl
+    group.add_controller(ctl)
+
+
+def _open_first_menubar_menu(window, builder=None):
+    if not _menubar_accel_active():
         return False
-    return True
+    bar = _find_window_menubar(window, builder)
+    if bar is None:
+        return False
+    items = _widget_children(bar)
+    if not items:
+        return False
+    return _activate_menu_widget(items[0])
 
 
 def install_window_accelerators(builder, window, windowname=None):
     """
     Reinstall the GTK 3 File->Close / Quit accelerators as GTK 4 shortcuts
     so Ctrl+W / Ctrl+Shift+W still close windows, and so console grab can
-    detach them via remove_accel_group().
+    detach them via remove_accel_group(). Menubar F10 / Alt+letter live on
+    the same group so guest grab still receives those keys.
     """
     if window is None or builder is None:
         return None
@@ -625,25 +958,8 @@ def install_window_accelerators(builder, window, windowname=None):
             if item is None:
                 continue
             group.add_shortcut(trigger, lambda it=item: _activate_builder_item(it))
-    try:
-        f10 = Gtk.ShortcutTrigger.parse_string("F10")
-        if f10 is not None:
-            sc = Gtk.ShortcutController()
-            try:
-                sc.set_scope(Gtk.ShortcutScope.GLOBAL)
-            except Exception:
-                pass
-            sc.add_shortcut(
-                Gtk.Shortcut.new(
-                    f10,
-                    Gtk.CallbackAction.new(
-                        lambda *_a: _open_first_menubar_menu(window, builder)
-                    ),
-                )
-            )
-            window.add_controller(sc)
-    except Exception:
-        pass
+    group.add_shortcut("F10", lambda: _open_first_menubar_menu(window, builder))
+    _install_menubar_mnemonic_controller(group, window, builder)
     window._vmm_accel_groups = [group]
     window._vmm_accels_installed = True
     _accel_group_enable(window, group)

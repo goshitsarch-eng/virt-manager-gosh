@@ -697,6 +697,125 @@ def main():
                 vol_open = False
         assert vol_open, "volume-list right-click did not open Copy Volume Path"
 
+    def gtk3_menubar_mnemonics():
+        """GTK 3 Alt+letter menubar/submenu mnemonics and F10 on AccelGroup."""
+        from gi.repository import Gdk
+        from gi.repository import Gtk
+
+        from virtManager.host import vmmHost
+        from virtManager.lib import gtkcompat
+        from virtManager.manager import vmmManager
+        from virtManager.vmwindow import vmmVMWindow
+
+        mgr = vmmManager.get_instance(None)
+        mgr.show()
+        _pump(GLib, 0.05)
+        bar = mgr.widget("menubar1")
+        file_item = mgr.widget("menuitem4")
+        edit_item = mgr.widget("menuitem5")
+        close_item = mgr.widget("menu_file_close")
+        assert bar is not None and file_item is not None
+        assert gtkcompat._item_mnemonic_keyval(file_item)
+        assert gtkcompat._keyvals_match(
+            gtkcompat._item_mnemonic_keyval(file_item), Gdk.KEY_f
+        )
+
+        groups = Gtk.accel_groups_from_object(mgr.topwin)
+        assert groups, "manager window has no AccelGroup"
+        group = groups[0]
+        triggers = [str(t) for t, _cb in list(getattr(group, "_shortcuts", None) or [])]
+        assert "F10" in triggers, "F10 must live on AccelGroup so grab can detach it"
+        assert getattr(group, "_vmm_mnemonic_controller", None) is not None
+        extras = list(getattr(group, "_extra_controllers", None) or [])
+        assert group._vmm_mnemonic_controller in extras
+
+        assert gtkcompat.handle_menubar_key(mgr.topwin, mgr.builder, Gdk.KEY_f, alt=True)
+        _pump(GLib, 0.05)
+        assert getattr(bar, "_vmm_open_item", None) is file_item
+        file_menu = gtkcompat._item_submenu(file_item)
+        assert file_menu is not None and getattr(file_menu, "_opened", False)
+
+        match = gtkcompat._lookup_mnemonic_item(
+            gtkcompat._widget_children(file_menu), Gdk.KEY_c
+        )
+        assert match is close_item, "File menu mnemonic C should be Close"
+
+        activated = []
+        orig_activate = gtkcompat._activate_menu_widget
+
+        def _spy(item):
+            activated.append(item)
+            if item is close_item:
+                return True
+            return orig_activate(item)
+
+        gtkcompat._activate_menu_widget = _spy
+        try:
+            assert gtkcompat.handle_menubar_key(
+                mgr.topwin, mgr.builder, Gdk.KEY_c, alt=False
+            )
+            assert activated and activated[0] is close_item
+            assert gtkcompat.handle_menubar_key(
+                mgr.topwin, mgr.builder, Gdk.KEY_e, alt=True
+            )
+        finally:
+            gtkcompat._activate_menu_widget = orig_activate
+        _pump(GLib, 0.05)
+        assert getattr(bar, "_vmm_open_item", None) is edit_item
+
+        assert gtkcompat.handle_menubar_key(
+            mgr.topwin, mgr.builder, Gdk.KEY_Right, alt=False
+        ) or gtkcompat._on_window_menubar_key(
+            mgr.topwin, mgr.builder, Gdk.KEY_Right, 0
+        )
+        _pump(GLib, 0.05)
+        assert getattr(bar, "_vmm_open_item", None) is not edit_item
+
+        assert gtkcompat._on_window_menubar_key(
+            mgr.topwin, mgr.builder, Gdk.KEY_Escape, 0
+        )
+        _pump(GLib, 0.05)
+        assert getattr(bar, "_vmm_open_item", None) is None
+
+        settings = Gtk.Settings.get_default()
+        settings.set_property("gtk-enable-mnemonics", False)
+        try:
+            assert not gtkcompat._on_window_menubar_key(
+                mgr.topwin,
+                mgr.builder,
+                Gdk.KEY_f,
+                int(Gdk.ModifierType.ALT_MASK),
+            ), "Alt+F must no-op while console grab disables mnemonics"
+        finally:
+            settings.set_property("gtk-enable-mnemonics", True)
+
+        gtkcompat._accel_group_disable(mgr.topwin, group)
+        assert group._controller is None
+        assert not getattr(group._vmm_mnemonic_controller, "_vmm_accel_attached", False)
+        gtkcompat._accel_group_enable(mgr.topwin, group)
+        assert group._controller is not None
+        assert getattr(group._vmm_mnemonic_controller, "_vmm_accel_attached", False)
+
+        vwin = vmmVMWindow.get_instance(None, vm)
+        vwin.show()
+        _pump(GLib, 0.05)
+        view_item = vwin.widget("view2")
+        assert view_item is not None
+        assert gtkcompat.handle_menubar_key(vwin.topwin, vwin.builder, Gdk.KEY_v, alt=True)
+        _pump(GLib, 0.05)
+        vbar = vwin.widget("details-menubar")
+        assert getattr(vbar, "_vmm_open_item", None) is view_item
+        gtkcompat.popdown_window_menus(vwin.topwin, vwin.builder)
+
+        hwin = vmmHost.show_instance(None, conn)
+        if hwin is None:
+            hwin = vmmHost._instances[conn.get_uri()]
+        assert gtkcompat.handle_menubar_key(hwin.topwin, hwin.builder, Gdk.KEY_f, alt=True)
+        _pump(GLib, 0.05)
+        hbar = hwin.widget("menubar1")
+        assert getattr(hbar, "_vmm_open_item", None) is not None
+        gtkcompat.popdown_window_menus(hwin.topwin, hwin.builder)
+
     def error_dialogs():
         from virtManager.error import vmmErrorDialog
 
@@ -3610,6 +3729,7 @@ def main():
         ("host_pages", host_pages),
         ("vm_lifecycle_menus", vm_lifecycle_menus),
         ("gtk3_context_menus_and_window_size", gtk3_context_menus_and_window_size),
+        ("gtk3_menubar_mnemonics", gtk3_menubar_mnemonics),
         ("error_dialogs", error_dialogs),
         ("cli_windows", cli_windows),
         ("xmleditor_pages", xmleditor_pages),

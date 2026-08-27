@@ -489,6 +489,15 @@ class vmmGObjectUI(vmmGObject):
         def close_on_escape(_controller, keyval, _keycode, state):
             name = Gdk.keyval_name(keyval) or ""
             if name == "Escape":
+                try:
+                    from .lib import gtkcompat
+
+                    if gtkcompat.popdown_window_menus(
+                        self.topwin, getattr(self, "builder", None)
+                    ):
+                        return True
+                except Exception:
+                    pass
                 self.close()
                 return True
             # Xvfb has no window manager, so Alt+F4 must be handled here.
