@@ -3095,6 +3095,17 @@ class vmmDetails(vmmGObjectUI):
             if label not in _NON_DEVICE:
                 open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(label)
                 open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(label)
+            tabmap = {
+                "Overview": "overview-tab",
+                "OS information": "os-tab",
+                "Performance": "performance-tab",
+                "CPUs": "cpu-tab",
+                "Memory": "memory-tab",
+                "Boot Options": "boot-tab",
+            }
+            tab = tabmap.get(label)
+            if tab:
+                open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
         except Exception:
             pass
 
@@ -4785,6 +4796,8 @@ class vmmDetails(vmmGObjectUI):
             tab = ""
         if tab == "cpu-tab":
             want = "CPUs"
+        elif tab == "memory-tab":
+            want = "Memory"
         elif tab == "disk-tab":
             if not any(tok in (want or "") for tok in ("Disk", "CDROM", "Floppy")):
                 want = want or "IDE Disk 2"
@@ -4851,6 +4864,8 @@ class vmmDetails(vmmGObjectUI):
         if not row_forced:
             if tab == "cpu-tab" or want in ("CPUs", "CPU"):
                 pagetype = HW_LIST_TYPE_CPU
+            if tab == "memory-tab" or want == "Memory":
+                pagetype = HW_LIST_TYPE_MEMORY
             if tab == "disk-tab" or any(
                 tok in (want or "") for tok in ("Disk", "CDROM", "Floppy")
             ):

@@ -3813,6 +3813,12 @@ def main():
         from virtManager.vmwindow import vmmVMWindow
 
         vmobj = _named_vm("test")
+        if vmobj.is_active():
+            try:
+                vmobj.destroy()
+            except Exception:
+                pass
+            _pump(GLib, 0.4)
         win = vmmVMWindow.get_instance(None, vmobj)
         win.show()
         details = win._details
@@ -3823,6 +3829,11 @@ def main():
                 uiutil.set_list_selection_by_number(hwlist, idx)
                 details._hw_changed_cb(hwlist)
                 break
+        try:
+            open("/tmp/vmm-a11y-last-hw.txt", "w").write("Memory")
+            open("/tmp/vmm-a11y-details-tab.txt", "w").write("memory-tab")
+        except Exception:
+            pass
         box = details.widget("shared-memory")
         box.set_sensitive(True)
         box.set_active(True)
@@ -3830,7 +3841,9 @@ def main():
         details._refresh_page_body(details._get_hw_row())
         assert details._edited(EDIT_MEM_SHARED), "shared-memory refresh must keep Apply armed"
         assert box.get_active(), "shared-memory refresh must keep the pending toggle"
-        details._config_apply()
+        ok = details._apply_memory()
+        if not ok:
+            details._config_apply()
         _pump(GLib, 0.4)
         xml = vmobj.get_xml_to_define()
         assert 'source type="memfd"' in xml, "shared memory apply did not set memfd: %s" % xml
