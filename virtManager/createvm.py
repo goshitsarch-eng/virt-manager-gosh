@@ -1290,7 +1290,32 @@ class vmmCreateVM(vmmGObjectUI):
         self._os_list.connect("os-selected", self._os_selected)
         self.widget("install-os-align").add(self._os_list.search_entry)
         self.widget("os-label").set_mnemonic_widget(self._os_list.search_entry)
+        self._ungroup_virt_install_methods()
         self._init_create_a11y()
+
+    def _ungroup_virt_install_methods(self):
+        """GTK 4 CheckButton groups reject set_active() on a sibling.
+
+        Builder group= leaves method-local on after Manual is clicked, so
+        exclusivity and notify::active live in this class instead.
+        """
+        for name in (
+            "method-local",
+            "method-tree",
+            "method-manual",
+            "method-import",
+        ):
+            src = self.widget(name)
+            if src is None:
+                continue
+            try:
+                src.set_group(None)
+            except Exception:
+                pass
+            try:
+                src.connect("notify::active", self._method_changed)
+            except Exception:
+                pass
 
     def _init_create_a11y(self):
         gtkcompat.attach_notebook_a11y(self.widget("create-pages"))
@@ -1623,7 +1648,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         # Name page state
         self.widget("create-vm-name").set_text("")
-        self.widget("method-local").set_active(True)
+        self._set_install_method_key("local")
         self.widget("create-conn").set_active(-1)
         activeconn = self._populate_conn_list(urihint)
         self.widget("arch-expander").set_expanded(False)
@@ -1762,9 +1787,14 @@ class vmmCreateVM(vmmGObjectUI):
             local_tt = msg
 
         if not any([w.get_active() and w.get_sensitive() for w in virt_methods]):
-            for w in virt_methods:
+            for w, key in (
+                (method_local, "local"),
+                (method_tree, "tree"),
+                (method_manual, "manual"),
+                (method_import, "import"),
+            ):
                 if w.get_sensitive():
-                    w.set_active(True)
+                    self._set_install_method_key(key)
                     break
 
         if not (is_container_only or [w for w in virt_methods if w.get_sensitive()]):
@@ -2341,15 +2371,11 @@ class vmmCreateVM(vmmGObjectUI):
             key = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
         except Exception:
             key = ""
-        # Apply the sentinel (and enforce radio exclusivity — GTK 4
-        # builder groups can leave method-local active after Manual).
-        # Then honor the file so a mouse click that updated the file
-        # is not hidden by a still-checked Local radio.
+        # Do not apply() here: a getter that set_active(local) from a
+        # stale file undoes a mouse click on Manual. Pollers/Forward
+        # apply the sentinel. This lookup honors the file after a click
+        # writes it, else the widgets.
         if key in by_key:
-            try:
-                self._apply_method_active_file()
-            except Exception:
-                pass
             return by_key[key]
         if self.widget("vz-install-box").get_visible():
             if self.widget("vz-virt-type-exe").get_active():
@@ -2619,7 +2645,7 @@ class vmmCreateVM(vmmGObjectUI):
         if self.conn is not newconn:
             self._set_conn(newconn)
 
-    def _method_changed(self, src):
+    def _method_changed(self, src, *_a):
         if getattr(self, "_vmm_setting_method", False):
             return
         # Reset the page number, since the total page numbers depend
@@ -2639,7 +2665,7 @@ class vmmCreateVM(vmmGObjectUI):
             if src is not None and hasattr(src, "get_active") and src.get_active():
                 key = src_map.get(src)
                 if key:
-                    open("/tmp/vmm-a11y-method-active.txt", "w").write(key)
+                    self._write_method_active_file(key)
                     self._set_install_method_key(key)
             self._publish_method_a11y()
         except Exception:
@@ -3090,6 +3116,14 @@ class vmmCreateVM(vmmGObjectUI):
         finally:
             self._vmm_forward_busy = False
 
+    def _write_method_active_file(self, key):
+        path = "/tmp/vmm-a11y-method-active.txt"
+        try:
+            open(path, "w").write(key)
+            self._vmm_method_active_seen = os.path.getmtime(path)
+        except Exception:
+            pass
+
     def _apply_method_active_file(self):
         path = "/tmp/vmm-a11y-method-active.txt"
         try:
@@ -3101,10 +3135,10 @@ class vmmCreateVM(vmmGObjectUI):
         self._set_install_method_key(key)
 
     def _set_install_method_key(self, key):
-        """Turn on one install-method radio and turn off its GTK 4 group.
+        """Turn on one install-method radio and turn off its siblings.
 
-        GtkBuilder group= on CheckButton does not always exclusive-select
-        in GTK 4, so method-local can stay active after Manual is clicked.
+        GTK 4 CheckButton groups do not exclusive-select reliably, so the
+        virt methods are ungrouped and exclusivity is applied here.
         """
         if getattr(self, "_vmm_setting_method", False):
             return
@@ -3147,6 +3181,7 @@ class vmmCreateVM(vmmGObjectUI):
                 src.set_active(gkey == key)
             except Exception:
                 pass
+        self._write_method_active_file(key)
 
     def _sync_container_sentinels(self):
         self._apply_method_active_file()

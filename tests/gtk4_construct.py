@@ -1604,6 +1604,7 @@ def main():
 
     def createvm_finish():
         import virtinst
+        from virtManager.createvm import INSTALL_PAGE_MANUAL
         from virtManager.createvm import PAGE_FINISH
         from virtManager.createvm import PAGE_NAME
         from virtManager.createvm import vmmCreateVM
@@ -1625,10 +1626,19 @@ def main():
         dlg.err.val_err = _val_err
         dlg.err.show_err = _show_err
         dlg.widget("method-manual").set_active(True)
-        # _get_config_install_page prefers this sentinel over widgets so
-        # show()'s published "local" does not keep the wizard on ISO.
-        open("/tmp/vmm-a11y-method-active.txt", "w").write("manual")
-        dlg._method_changed(dlg.widget("method-manual"))
+        _pump(GLib, 0.05)
+        assert dlg._get_config_install_page() == INSTALL_PAGE_MANUAL, (
+            "Manual click did not select manual install: inst=%s file=%s "
+            "local=%s manual=%s"
+            % (
+                dlg._get_config_install_page(),
+                open("/tmp/vmm-a11y-method-active.txt").read()
+                if os.path.exists("/tmp/vmm-a11y-method-active.txt")
+                else "",
+                dlg.widget("method-local").get_active(),
+                dlg.widget("method-manual").get_active(),
+            )
+        )
         dlg._set_install_page()
         dlg.widget("create-pages").set_current_page(PAGE_NAME)
         dlg._page_changed(None, None, PAGE_NAME)
