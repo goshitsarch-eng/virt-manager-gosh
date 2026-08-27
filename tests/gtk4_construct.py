@@ -1192,8 +1192,7 @@ def main():
 
         dlg = vmmAddHardware(vm)
         editor = dlg._xmleditor
-        editor.widget("xml-notebook").set_current_page(1)
-        editor._after_page_changed_cb(editor.widget("xml-notebook"), None)
+        editor._goto_xml_page(1)
         nb = editor.widget("xml-notebook")
         assert nb.get_nth_page(1).get_visible()
         hidden = 0
@@ -1202,7 +1201,6 @@ def main():
             if page is not None and not page.get_visible():
                 hidden += 1
         assert hidden >= 1, "GTK 3 XML editor hid the inactive Details/XML tab"
-        editor.widget("xml-notebook").set_current_page(0)
         editor.reset_state()
         assert editor.widget("xml-notebook").get_nth_page(0).get_visible()
 

@@ -275,13 +275,22 @@ class vmmXMLEditor(vmmGObjectUI):
     # Internal helpers #
     ####################
 
+    def _goto_xml_page(self, pagenum):
+        """GTK 4 will not switch a notebook to a hidden child."""
+        notebook = self.widget("xml-notebook")
+        try:
+            page = notebook.get_nth_page(pagenum)
+            if page is not None:
+                page.set_visible(True)
+        except Exception:
+            pass
+        notebook.set_current_page(pagenum)
+        gtkcompat.hide_inactive_notebook_pages(notebook, pagenum, self.topwin)
+
     def _reselect_page(self, pagenum):
         # Setting _curpage first will shortcircuit our page changed callback
         self._curpage = pagenum
-        self.widget("xml-notebook").set_current_page(pagenum)
-        gtkcompat.hide_inactive_notebook_pages(
-            self.widget("xml-notebook"), pagenum, self.topwin
-        )
+        self._goto_xml_page(pagenum)
 
     def _reset_xml(self):
         self.set_xml("")
@@ -329,11 +338,8 @@ class vmmXMLEditor(vmmGObjectUI):
         their own reset_state
         """
         self._reset_xml()
-        ret = self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
-        gtkcompat.hide_inactive_notebook_pages(
-            self.widget("xml-notebook"), _PAGE_DETAILS, self.topwin
-        )
-        return ret
+        self._goto_xml_page(_PAGE_DETAILS)
+        return self.widget("xml-notebook").get_current_page()
 
     def get_xml(self):
         """
@@ -502,6 +508,12 @@ class vmmXMLEditor(vmmGObjectUI):
 
     def _after_page_changed_cb(self, notebook, gparam):
         self._curpage = notebook.get_current_page()
+        try:
+            page = notebook.get_nth_page(self._curpage)
+            if page is not None:
+                page.set_visible(True)
+        except Exception:
+            pass
         gtkcompat.hide_inactive_notebook_pages(
             notebook, self._curpage, self.topwin
         )
