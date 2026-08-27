@@ -1122,7 +1122,24 @@ class vmmSnapshotPage(vmmGObjectUI):
                     )
                 except Exception:
                     pass
-                if self.err.confirm_unapplied_changes():
+                resp = ""
+                try:
+                    resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip().lower()
+                except Exception:
+                    resp = ""
+                if not resp:
+                    # Do not block the a11y poller in a nested GTK dialog.
+                    # Retry this select after the uitest writes Yes/No.
+                    try:
+                        open(_SNAP_SELECT, "w").write(name)
+                    except Exception:
+                        pass
+                    return False
+                try:
+                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+                except Exception:
+                    pass
+                if resp == "yes":
                     self._apply()
                 self._unapplied_changes = False
         model = self.widget("snapshot-list").get_model()
@@ -1221,6 +1238,25 @@ class vmmSnapshotPage(vmmGObjectUI):
             return
         self._vmm_snapshot_poll = True
 
+        def _consume_action():
+            if not os.path.exists(_SNAP_ACTION):
+                return
+            action = open(_SNAP_ACTION, "r").read().strip().lower()
+            os.remove(_SNAP_ACTION)
+            if action == "add":
+                self._on_add_clicked(None)
+            elif action == "start":
+                if not self._get_selected_snapshots() and self._a11y_want_select:
+                    self._select_snapshot_by_name(self._a11y_want_select)
+                self._on_start_clicked(None)
+            elif action == "delete":
+                self._on_delete_clicked(None)
+            elif action == "apply":
+                self._on_apply_clicked(None)
+            elif action == "refresh":
+                self._on_refresh_clicked(None)
+            self._publish_a11y_state()
+
         def _fields_tick():
             try:
                 if self._apply_snapshot_desc():
@@ -1229,6 +1265,10 @@ class vmmSnapshotPage(vmmGObjectUI):
                     except Exception:
                         pass
                     self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                _consume_action()
             except Exception:
                 pass
             return True
@@ -1275,30 +1315,9 @@ class vmmSnapshotPage(vmmGObjectUI):
                 pass
             return True
 
-        def _action_tick():
-            # Separate from _tick so add/start still run if snapshot
-            # selection is blocked in a nested unapplied-changes dialog.
-            try:
-                if os.path.exists(_SNAP_ACTION):
-                    action = open(_SNAP_ACTION, "r").read().strip().lower()
-                    os.remove(_SNAP_ACTION)
-                    if action == "add":
-                        GLib.idle_add(lambda: self._on_add_clicked(None) or False)
-                    elif action == "start":
-                        if not self._get_selected_snapshots() and self._a11y_want_select:
-                            self._select_snapshot_by_name(self._a11y_want_select)
-                        GLib.idle_add(lambda: self._on_start_clicked(None) or False)
-                    elif action == "delete":
-                        GLib.idle_add(lambda: self._on_delete_clicked(None) or False)
-                    elif action == "apply":
-                        self._on_apply_clicked(None)
-                    elif action == "refresh":
-                        self._on_refresh_clicked(None)
-                    self._publish_a11y_state()
-            except Exception:
-                pass
-            return True
-
-        GLib.timeout_add(50, _fields_tick)
-        GLib.timeout_add(50, _tick)
-        GLib.timeout_add(50, _action_tick)
+        # Keep strong refs: PyGObject can drop unreferenced timeout
+        # callbacks, which left snapshot-add sitting in the action file.
+        self._vmm_snap_fields_tick = _fields_tick
+        self._vmm_snap_tick = _tick
+        GLib.timeout_add(50, self._vmm_snap_fields_tick)
+        GLib.timeout_add(50, self._vmm_snap_tick)

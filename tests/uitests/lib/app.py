@@ -510,6 +510,11 @@ class VMMDogtailApp:
                         _node._write_hw_details_tab(nxt)
                     except Exception:
                         pass
+                    deadline = time.time() + 2.0
+                    while time.time() < deadline:
+                        if not os.path.exists("/tmp/vmm-a11y-hw-select-index.txt"):
+                            break
+                        time.sleep(0.05)
                     return
                 which = ""
                 try:

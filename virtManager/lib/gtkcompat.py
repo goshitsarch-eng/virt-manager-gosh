@@ -4909,7 +4909,8 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
 
     if not getattr(treeview, "_vmm_hw_select_poll", False):
         treeview._vmm_hw_select_poll = True
-        GLib.timeout_add(50, _poll_hw_select)
+        treeview._vmm_hw_select_poll_cb = _poll_hw_select
+        GLib.timeout_add(50, treeview._vmm_hw_select_poll_cb)
 
     treeview.connect("notify::model", _on_model)
     model = treeview.get_model()
