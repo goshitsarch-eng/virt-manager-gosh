@@ -1631,13 +1631,22 @@ def main():
         dlg._forward_clicked_impl()
         osobj = virtinst.OSDB.lookup_os("generic")
         assert osobj is not None
+        dlg._remember_create_os(osobj)
         dlg._os_list.select_os(osobj)
-        assert dlg._os_list.get_selected_os() is not None
+        assert dlg._resolve_create_os() is not None
         dlg._forward_clicked_impl()
         dlg._forward_clicked_impl()
         dlg.widget("enable-storage").set_active(False)
         dlg._forward_clicked_impl()
-        assert dlg.widget("create-pages").get_current_page() == PAGE_FINISH, errs
+        assert dlg.widget("create-pages").get_current_page() == PAGE_FINISH, (
+            "page=%s goto=%s inst=%s errs=%s"
+            % (
+                dlg.widget("create-pages").get_current_page(),
+                getattr(dlg, "_vmm_goto_page", None),
+                dlg._get_config_install_page(),
+                errs,
+            )
+        )
         dlg.widget("create-vm-name").set_text("gtk4-created-vm")
         dlg._gdata.name = "gtk4-created-vm"
         # testdriver predictable MAC 00:11:22:33:44:55 is already assigned

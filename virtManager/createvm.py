@@ -865,7 +865,7 @@ class vmmCreateVM(vmmGObjectUI):
         log.debug("Validation Error: %s", msg)
         return False
 
-    def _publish_method_a11y(self):
+    def _publish_method_a11y(self, force_widget=False):
         virt = (
             ("method-local", "local"),
             ("method-tree", "tree"),
@@ -915,21 +915,26 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
         if active:
-            try:
-                existing = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
-            except Exception:
-                existing = ""
-            if existing in (
-                "local",
-                "tree",
-                "manual",
-                "import",
-                "app",
-                "os",
-                "container",
-                "hvm",
-            ):
-                active = existing
+            # Periodic publishes must not clobber a uitest-written method
+            # before the radio is updated. A real radio change calls
+            # _publish_method_a11y(force_widget=True) so Manual/Import/etc.
+            # are not stuck on the initial "local" from show().
+            if not force_widget:
+                try:
+                    existing = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
+                except Exception:
+                    existing = ""
+                if existing in (
+                    "local",
+                    "tree",
+                    "manual",
+                    "import",
+                    "app",
+                    "os",
+                    "container",
+                    "hvm",
+                ):
+                    active = existing
             try:
                 open("/tmp/vmm-a11y-method-active.txt", "w").write(active)
             except Exception:
@@ -2638,7 +2643,7 @@ class vmmCreateVM(vmmGObjectUI):
         # on the chosen install method
         self._set_page_num_text(0)
         try:
-            self._publish_method_a11y()
+            self._publish_method_a11y(force_widget=True)
         except Exception:
             pass
 
@@ -2675,7 +2680,7 @@ class vmmCreateVM(vmmGObjectUI):
         else:
             self._change_caps("exe")
         try:
-            self._publish_method_a11y()
+            self._publish_method_a11y(force_widget=True)
         except Exception:
             pass
 
