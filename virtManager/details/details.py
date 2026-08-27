@@ -1939,19 +1939,9 @@ class vmmDetails(vmmGObjectUI):
                         if row is not None:
                             self._vmm_pending_hw_nav = None
                             self._vmm_last_refreshed_hw = hw
-                            idx = self._hw_index_for_row(row)
-                            gtk_row = self._get_hw_row()
-                            gtk_label = (
-                                str(gtk_row[HW_LIST_COL_LABEL] or "")
-                                if gtk_row is not None
-                                else ""
-                            )
                             self._ui_refreshing = True
                             try:
-                                if idx is not None and gtk_label != hw:
-                                    self._set_hw_selection(idx)
-                                else:
-                                    self._refresh_page_body(row)
+                                self._refresh_page_body(row)
                             finally:
                                 self._ui_refreshing = False
                             self._publish_details_device_fields()
