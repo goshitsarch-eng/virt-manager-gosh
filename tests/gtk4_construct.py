@@ -2937,6 +2937,12 @@ def main():
         assert not details.widget("config-apply").get_sensitive(), (
             "switching to IDE CDROM 1 must not keep Floppy 2 media pending"
         )
+        if not vmobj.is_active():
+            try:
+                vmobj.startup()
+            except Exception:
+                pass
+            _pump(GLib, 0.4)
 
     def details_media_hotplug_deferred():
         from virtManager.details.details import EDIT_DISK_PATH
@@ -2947,6 +2953,12 @@ def main():
         from virtManager.vmwindow import vmmVMWindow
 
         vmobj = _named_vm("test-many-devices")
+        if not vmobj.is_active():
+            try:
+                vmobj.startup()
+            except Exception:
+                pass
+            _pump(GLib, 0.4)
         assert vmobj.is_active(), "test-many-devices must be running"
         orig = bool(getattr(vmobj.config.CLITestOptions, "test_update_device_fail", False))
         vmobj.config.CLITestOptions.test_update_device_fail = True
