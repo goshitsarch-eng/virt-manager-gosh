@@ -2142,6 +2142,18 @@ def main():
 
         err.val_err = _val_err
 
+        def _show_err(text1=None, *a, **k):
+            # Deferred hotplug and define errors use a modal show_err.
+            # Construct has no user to dismiss it; a leftover mapped
+            # dialog also nests loop.run() in a later test.
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(str(text1 or ""))
+            except Exception:
+                pass
+            return False
+
+        err.show_err = _show_err
+
     def snapshot_create():
         from virtManager.details.snapshots import vmmSnapshotNew
 

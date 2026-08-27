@@ -3164,6 +3164,21 @@ class vmmDetails(vmmGObjectUI):
             self._disable_apply()
             return False
 
+        # Leftover EDIT_DISK_PATH after a successful apply is not a
+        # real unapplied edit. Prompting here opens a nested modal
+        # that hangs same-process construct walks. Do not invent a
+        # pending path from the destination row's combo here.
+        if (
+            EDIT_DISK_PATH in getattr(self, "_active_edits", [])
+            and getattr(self, "_vmm_apply_just_succeeded", False)
+            and self._pending_media_path() is None
+        ):
+            try:
+                self._disable_apply()
+            except Exception:
+                pass
+            return False
+
         if not row:
             # Don't-warn must abandon even when the source row object
             # is a testdriver/xmlobj copy that is not in hw-list.
@@ -4437,12 +4452,13 @@ class vmmDetails(vmmGObjectUI):
         self._vmm_user_controller_edit = True
 
     def _enable_apply(self, edittype):
-        if (
-            edittype == EDIT_DISK_PATH
-            and getattr(self, "_vmm_apply_just_succeeded", False)
-            and self._pending_media_path() is None
-        ):
-            return
+        if edittype == EDIT_DISK_PATH:
+            pending = self._sync_pending_media_from_combo()
+            if (
+                getattr(self, "_vmm_apply_just_succeeded", False)
+                and pending is None
+            ):
+                return
         if getattr(self, "_ui_refreshing", False):
             if edittype == EDIT_CONTROLLER_MODEL and (
                 getattr(self, "_vmm_user_controller_edit", False)
@@ -5402,6 +5418,8 @@ class vmmDetails(vmmGObjectUI):
             return False
 
         pending_media = self._pending_media_path()
+        if pending_media is None:
+            pending_media = self._sync_pending_media_from_combo()
         path = None
         if self._edited(EDIT_DISK_PATH) or pending_media is not None:
             path = self._mediacombo.get_path()
@@ -5818,6 +5836,67 @@ class vmmDetails(vmmGObjectUI):
 
         return self._change_config(self.vm.define_tpm, kwargs, devobj=devobj)
 
+    def _current_disk_xml_path(self):
+        """Live path when the VM is running, otherwise inactive source."""
+        try:
+            row = self._get_hw_row()
+            disk = row[HW_LIST_COL_DEVICE] if row is not None else None
+            if disk is None:
+                return ""
+            path = (disk.get_source_path() or "").strip()
+            if self.vm is not None and self.vm.is_active():
+                live = self._live_disk_for(disk)
+                if live is not None:
+                    path = (live.get_source_path() or "").strip()
+            return path
+        except Exception:
+            return ""
+
+    def _last_applied_media_path_for_current_disk(self):
+        """Last successful define path, but only for this disk target."""
+        try:
+            row = self._get_hw_row()
+            disk = row[HW_LIST_COL_DEVICE] if row is not None else None
+            tgt = getattr(disk, "target", None) if disk is not None else None
+            last_tgt = getattr(self, "_vmm_last_disk_target", None)
+            if last_tgt is not None and tgt is not None and last_tgt != tgt:
+                return ""
+            return str(
+                (getattr(self, "_vmm_last_disk_kwargs", None) or {}).get("path")
+                or ""
+            ).strip()
+        except Exception:
+            return ""
+
+    def _sync_pending_media_from_combo(self):
+        """Treat a newly displayed combo path as a real media edit.
+
+        Official uitests write the a11y .set file; construct/API uses
+        set_path() + _enable_apply(EDIT_DISK_PATH). After a successful
+        apply, _vmm_apply_just_succeeded used to ignore that sequence,
+        and a delayed refresh idle wiped EDIT_DISK_PATH because
+        _pending_media_path() was still None.
+        """
+        pending = self._pending_media_path()
+        if pending is not None:
+            return pending
+        try:
+            combo_path = (self._mediacombo.get_path() or "").strip()
+            combo_path = (
+                self._mediacombo._path_from_display(combo_path) or combo_path
+            ).strip()
+        except Exception:
+            combo_path = ""
+        if not combo_path:
+            return None
+        last = self._last_applied_media_path_for_current_disk()
+        xml_path = self._current_disk_xml_path()
+        if combo_path == last or combo_path == xml_path:
+            return None
+        self._vmm_pending_media_path = combo_path
+        self._vmm_apply_just_succeeded = False
+        return combo_path
+
     def _pending_media_path(self):
         """A11y media path the user typed that refresh must not drop.
 
@@ -6188,6 +6267,8 @@ class vmmDetails(vmmGObjectUI):
                 return False
             if self._pending_media_path() is not None:
                 return False
+            if self._sync_pending_media_from_combo() is not None:
+                return False
             self._disable_apply()
         return False
 
@@ -6215,6 +6296,8 @@ class vmmDetails(vmmGObjectUI):
                     return self._clear_post_apply_refresh()
                 if self._active_edits == [EDIT_DISK_PATH]:
                     if self._pending_media_path() is not None:
+                        return False
+                    if self._sync_pending_media_from_combo() is not None:
                         return False
                     self._disable_apply()
                 elif self._active_edits == [EDIT_XML]:
