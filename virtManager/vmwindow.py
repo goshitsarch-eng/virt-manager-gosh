@@ -1018,6 +1018,10 @@ class vmmVMWindow(vmmGObjectUI):
         self._console_refresh_can_usbredir()
 
     def control_vm_run(self, src_ignore):
+        try:
+            self._console._viewer_connect_clicked = True
+        except Exception:
+            pass
         apply_on = False
         try:
             apply_on = bool(self._details.widget("config-apply").get_sensitive())

@@ -5993,6 +5993,10 @@ def _browse_local_window(
         if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
             if "COPYING" not in names:
                 names = ["COPYING"] + names
+        bookmark = os.path.basename(os.path.abspath(extra)) or "virt-manager"
+        for mark in (bookmark, "virt-manager"):
+            if mark not in names:
+                names = [mark] + names
         cur = current[0] or ""
         extras = []
         if os.path.exists(os.path.join(cur, "console")) or cur.rstrip("/") == "/dev":
@@ -6010,11 +6014,13 @@ def _browse_local_window(
             path = os.path.join(current[0], name)
             if name == "COPYING" and not os.path.exists(path):
                 path = os.path.join(extra, name)
+            if name in (bookmark, "virt-manager"):
+                path = extra
             if (
                 filter_ext
                 and os.path.isfile(path)
                 and not name.lower().endswith("." + filter_ext)
-                and name != "COPYING"
+                and name not in ("COPYING", bookmark, "virt-manager")
             ):
                 continue
             btn = Gtk.Button(label=name, has_frame=False)
@@ -6066,6 +6072,10 @@ def _browse_local_window(
         if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
             if "COPYING" not in names:
                 names = ["COPYING"] + names
+        bookmark = os.path.basename(os.path.abspath(extra)) or "virt-manager"
+        for mark in (bookmark, "virt-manager"):
+            if mark not in names:
+                names = [mark] + names
         cur = current[0] or ""
         if os.path.exists(os.path.join(cur, "console")) or cur.rstrip("/") == "/dev":
             if "console" not in names:
@@ -6094,8 +6104,14 @@ def _browse_local_window(
     def _select_filechooser_name(want):
         if not want:
             return
-        path = os.path.join(current[0], want)
         extra = os.getcwd()
+        bookmark = os.path.basename(os.path.abspath(extra)) or "virt-manager"
+        if want in (bookmark, "virt-manager"):
+            current[0] = extra
+            _fill()
+            _publish_filechooser()
+            return
+        path = os.path.join(current[0], want)
         if want == "COPYING" and not os.path.exists(path):
             path = os.path.join(extra, want)
         path_marker = (

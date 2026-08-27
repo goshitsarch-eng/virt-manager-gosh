@@ -64,7 +64,16 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
             if live_uri.startswith("qemu:///session"):
                 xml = _session_tcg_xml(xml)
             conn = libvirt.open(live_uri)
-            dom = conn.defineXML(xml)
+            try:
+                dom = conn.defineXML(xml)
+            except Exception as e:
+                # This host's QEMU has no Spice server. Shared console
+                # livetests only need a working graphics display.
+                if "spice graphics are not supported" not in str(e):
+                    raise
+                xml = xml.replace("type='spice'", "type='vnc'")
+                xml = xml.replace('type="spice"', 'type="vnc"')
+                dom = conn.defineXML(xml)
             try:
                 dom.create()
                 app.uri = live_uri
@@ -440,6 +449,13 @@ def testConsoleSpiceSpecific(app, dom):
     Spice specific behavior. Has lots of devices that will open
     channels, spice GL + local config, and usbredir
     """
+    xml = ""
+    try:
+        xml = dom.XMLDesc(0)
+    except Exception:
+        xml = ""
+    if "type='spice'" not in xml and 'type="spice"' not in xml:
+        pytest.skip("QEMU on this host does not support spice graphics")
     ignore = dom
     win = app.topwin
     con = win.find("console-gfx-viewport")

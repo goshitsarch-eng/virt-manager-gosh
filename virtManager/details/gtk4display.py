@@ -2011,47 +2011,37 @@ class UsbDeviceWidget(Gtk.Box):
         self._choose_iso()
 
     def _choose_iso(self):
-        dialog = Gtk.FileDialog()
-        try:
-            dialog.set_title(_("Select CDROM / ISO image"))
-        except Exception:
-            pass
+        from virtManager.lib import gtkcompat
+
         parent = self.get_root()
-
-        def _done(dlg, result):
-            path = None
-            try:
-                fobj = dlg.open_finish(result)
-                path = fobj.get_path() if fobj is not None else None
-            except Exception:
-                path = None
-            if not path:
-                self._toggling = True
-                if self._spice_cd is not None:
-                    self._spice_cd.set_active(False)
-                self._toggling = False
-                return
-            try:
-                ok = self._manager.create_shared_cd_device(path)
-            except Exception as exc:
-                self.emit("connect-failed", None, str(exc))
-                ok = False
-            if not ok:
-                self._toggling = True
-                if self._spice_cd is not None:
-                    self._spice_cd.set_active(False)
-                self._toggling = False
-            else:
-                GLib.idle_add(self._refresh)
-
         try:
-            dialog.open(parent, None, _done)
+            path = gtkcompat.browse_local(
+                parent,
+                _("Select CDROM / ISO image"),
+                _type=("iso", _("ISO files")),
+                dialog_type=Gtk.FileChooserAction.OPEN,
+            )
         except Exception as exc:
             self.emit("connect-failed", None, str(exc))
+            path = None
+        if not path:
             self._toggling = True
             if self._spice_cd is not None:
                 self._spice_cd.set_active(False)
             self._toggling = False
+            return
+        try:
+            ok = self._manager.create_shared_cd_device(path)
+        except Exception as exc:
+            self.emit("connect-failed", None, str(exc))
+            ok = False
+        if not ok:
+            self._toggling = True
+            if self._spice_cd is not None:
+                self._spice_cd.set_active(False)
+            self._toggling = False
+        else:
+            GLib.idle_add(self._refresh)
 
     def _disconnect_shared_cds(self):
         if not self._manager:
