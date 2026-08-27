@@ -1839,8 +1839,8 @@ class _SentinelConsoleSavePassword(object):
         ignore = (args, kwargs)
         want = "0" if self.checked else "1"
         try:
-            open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(want)
             open("/tmp/vmm-a11y-console-auth-remember.txt.click", "w").write("1")
+            open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(want)
         except Exception:
             pass
         deadline = time.time() + 3.0

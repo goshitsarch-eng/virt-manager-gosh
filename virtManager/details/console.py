@@ -1100,9 +1100,10 @@ class vmmConsolePages(vmmGObjectUI):
                     open("/tmp/vmm-a11y-console-auth-username.txt", "w").write(
                         self.widget("console-auth-username").get_text() or ""
                     )
-                open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(
-                    "1" if self.widget("console-auth-remember").get_active() else "0"
-                )
+                if not os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt.click"):
+                    open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(
+                        "1" if self.widget("console-auth-remember").get_active() else "0"
+                    )
         except Exception:
             pass
 
