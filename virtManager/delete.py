@@ -251,30 +251,12 @@ class _vmmDeleteBase(vmmGObjectUI):
         def _tick():
             if not getattr(self, "_vmm_delete_a11y_poll", False):
                 return False
-            if self.vm is None:
-                return True
-            try:
-                if not (self.topwin.get_visible() or self.topwin.get_mapped()):
-                    return True
-            except Exception:
-                return True
-            shown = True
             try:
                 path = "/tmp/vmm-a11y-delete-finish"
                 if os.path.exists(path):
-                    if self.vm is None and not shown:
+                    if self.vm is None:
                         return True
                     os.remove(path)
-                    try:
-                        open("/tmp/vmm-a11y-delete-debug.txt", "a").write(
-                            "finish shown=%s vm=%s\n"
-                            % (
-                                shown,
-                                getattr(self.vm, "get_name", lambda: None)(),
-                            )
-                        )
-                    except Exception:
-                        pass
                     self._finish()
                     return True
             except Exception as exc:
@@ -293,7 +275,12 @@ class _vmmDeleteBase(vmmGObjectUI):
                     return True
             except Exception:
                 pass
-            if not shown:
+            if self.vm is None:
+                return True
+            try:
+                if not (self.topwin.get_visible() or self.topwin.get_mapped()):
+                    return True
+            except Exception:
                 return True
             try:
                 want = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip()
