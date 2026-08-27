@@ -2966,6 +2966,17 @@ class _SentinelAddhwTab(object):
 
     @property
     def showing(self):
+        try:
+            addhw = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip()
+        except Exception:
+            addhw = "0"
+        try:
+            xml_page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+        except Exception:
+            xml_page = "0"
+        # Details XML page hides the hardware form tabs.
+        if addhw != "1" and xml_page == "1":
+            return False
         current = self._current()
         if current == self.name:
             return True
