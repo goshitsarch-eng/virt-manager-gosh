@@ -2375,6 +2375,42 @@ def main():
             details._active_edits = []
             details._addstorage._active_edits = []
 
+    def details_empty_bridge():
+        from virtManager.details.details import EDIT_NET_SOURCE
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-many-devices")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        nics = list(vmobj.xmlobj.devices.interface)
+        assert nics, "test-many-devices has no NICs"
+        combo = details.netlist.widget("net-source")
+        model = combo.get_model()
+        picked = False
+        for idx, row in enumerate(model):
+            label = str(row[0] or "").lower()
+            if "bridge device" in label:
+                combo.set_active(idx)
+                picked = True
+                break
+        assert picked, "Bridge device source row missing"
+        details.netlist.widget("net-manual-source").set_text("")
+        try:
+            open("/tmp/vmm-a11y-net-device.txt", "w").write("fakedev12")
+            open("/tmp/vmm-a11y-net-source.txt", "w").write("Bridge device...")
+        except Exception:
+            pass
+        details._active_edits = [EDIT_NET_SOURCE]
+        details.widget("config-apply").set_sensitive(True)
+        ok = details._apply_network(nics[0])
+        assert ok is False, "empty bridge source must fail apply"
+        try:
+            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        except Exception:
+            alert = ""
+        assert "Error changing VM configuration" in alert, alert
+
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
         from virtManager.lib import uiutil
@@ -2856,6 +2892,7 @@ def main():
         ("vnc_tight_handshake", vnc_tight_handshake),
         ("vnc_ra2_handshake", vnc_ra2_handshake),
         ("disk_shareable_live_deferred", disk_shareable_live_deferred),
+        ("details_empty_bridge", details_empty_bridge),
         ("inspection_os_page", inspection_os_page),
         ("inspection_perform_path", inspection_perform_path),
         ("createvm_wizard_nav", createvm_wizard_nav),

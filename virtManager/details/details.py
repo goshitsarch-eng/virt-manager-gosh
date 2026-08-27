@@ -5271,17 +5271,25 @@ class vmmDetails(vmmGObjectUI):
                 kwargs["mode"],
                 kwargs["portgroup"],
             ) = self.netlist.get_network_selection()
-            for dpath in (
-                "/tmp/vmm-a11y-net-device.txt.set",
-                "/tmp/vmm-a11y-net-device.txt",
-            ):
-                if os.path.exists(dpath):
-                    try:
-                        src = open(dpath, "r").read().strip() or None
-                        kwargs["source"] = src
-                    except Exception:
-                        pass
-                    break
+            # Prefer a pending .set, then the widget. Do not fall back
+            # to net-device.txt: that file is the last published value
+            # (fakedev12) and would skip the empty-bridge validation
+            # (testDetailsEditDiskNet).
+            if os.path.exists("/tmp/vmm-a11y-net-device.txt.set"):
+                try:
+                    kwargs["source"] = (
+                        open("/tmp/vmm-a11y-net-device.txt.set", "r").read().strip()
+                        or None
+                    )
+                except Exception:
+                    pass
+            else:
+                try:
+                    kwargs["source"] = (
+                        self.netlist.widget("net-manual-source").get_text() or ""
+                    ).strip() or None
+                except Exception:
+                    pass
             if not kwargs["ntype"]:
                 try:
                     label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
