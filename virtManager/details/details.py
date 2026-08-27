@@ -1984,15 +1984,6 @@ class vmmDetails(vmmGObjectUI):
                             )
                             live = ""
                             if not skip:
-                                widget_off = False
-                                try:
-                                    widget_off = not bool(
-                                        self._addstorage.widget(
-                                            "disk-shareable"
-                                        ).get_active()
-                                    )
-                                except Exception:
-                                    widget_off = False
                                 pending_share = _EDIT_SHARE in getattr(
                                     self._addstorage, "_active_edits", []
                                 )
@@ -2022,7 +2013,7 @@ class vmmDetails(vmmGObjectUI):
                                         )
                                     except Exception:
                                         apply_on = False
-                                skip = widget_off or pending_share or (
+                                skip = pending_share or (
                                     live == "0" and apply_on
                                 )
                             if not skip and live != "1":
