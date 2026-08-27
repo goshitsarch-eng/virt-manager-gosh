@@ -3707,6 +3707,8 @@ class _SentinelDetailsSpin(object):
         want = text if text is not None else ""
         try:
             open(self._path + ".set", "w").write(want)
+            if "vsock-cid" in (self._path or ""):
+                open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write(want)
         except Exception:
             pass
         deadline = time.time() + 5.0

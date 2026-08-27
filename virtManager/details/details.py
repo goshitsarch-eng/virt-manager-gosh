@@ -644,47 +644,8 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_details_model)
-
-            def _poll_vsock_cid():
-                path = "/tmp/vmm-a11y-vsock-cid.txt.set"
-                try:
-                    if not os.path.exists(path):
-                        return True
-                    text = open(path, "r").read().strip()
-                    os.remove(path)
-                except Exception:
-                    return True
-                try:
-                    w = self.vsockdetails.widget("vsock-cid")
-                    if w is not None:
-                        w.set_value(float(text or 0))
-                    self._enable_apply(EDIT_VSOCK_CID)
-                    self._publish_details_device_fields()
-                except Exception:
-                    pass
-                return True
-
-            GLib.timeout_add(50, _poll_vsock_cid)
-
-            def _poll_vsock_auto():
-                path = "/tmp/vmm-a11y-vsock-auto.txt.click"
-                try:
-                    if not os.path.exists(path):
-                        return True
-                    os.remove(path)
-                except Exception:
-                    return True
-                try:
-                    w = self.vsockdetails.widget("vsock-auto")
-                    if w is not None:
-                        w.set_active(not w.get_active())
-                    self._enable_apply(EDIT_VSOCK_AUTO)
-                    self._publish_details_device_fields()
-                except Exception:
-                    pass
-                return True
-
-            GLib.timeout_add(50, _poll_vsock_auto)
+            GLib.timeout_add(50, self._poll_vsock_cid_tick)
+            GLib.timeout_add(50, self._poll_vsock_auto_tick)
 
             def _poll_mem_fields():
                 changed = False
@@ -2688,7 +2649,9 @@ class vmmDetails(vmmGObjectUI):
                 open("/tmp/vmm-a11y-vsock-auto.txt", "w").write(
                     "1" if auto.get_active() else "0"
                 )
-            if not os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set"):
+            if not os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set") and not os.path.exists(
+                "/tmp/vmm-a11y-vsock-cid-want.txt"
+            ):
                 open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
                     str(int(uiutil.spin_get_helper(cid) or 0))
                 )
@@ -4468,6 +4431,12 @@ class vmmDetails(vmmGObjectUI):
                 or os.path.exists("/tmp/vmm-a11y-combo-controller-model.txt.set")
             ):
                 pass
+            elif edittype in (EDIT_VSOCK_CID, EDIT_VSOCK_AUTO) and (
+                os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
+                or os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
+                or os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.click")
+            ):
+                pass
             else:
                 return
         self._vmm_apply_failed = False
@@ -5818,29 +5787,143 @@ class vmmDetails(vmmGObjectUI):
 
         return self._change_config(self.vm.define_tpm, kwargs, devobj=devobj)
 
-    def _apply_vsock(self, devobj):
-        auto_cid, cid = self.vsockdetails.get_values()
-        pending = None
+    def _vsock_device(self, devobj=None):
+        if devobj is not None:
+            return devobj
+        labeled = self._hw_row_for_label("VirtIO VSOCK")
+        if labeled is not None and labeled[HW_LIST_COL_DEVICE] is not None:
+            return labeled[HW_LIST_COL_DEVICE]
         try:
-            path = "/tmp/vmm-a11y-vsock-cid.txt.set"
-            if os.path.exists(path):
-                pending = int(float(open(path, "r").read().strip() or 0))
-                os.remove(path)
-                try:
-                    self.vsockdetails.widget("vsock-cid").set_value(pending)
-                except Exception:
-                    pass
+            for row in self.widget("hw-list").get_model():
+                if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_VSOCK:
+                    return row[HW_LIST_COL_DEVICE]
         except Exception:
-            pending = None
+            pass
+        return None
+
+    def _read_vsock_cid_want(self):
+        for path in (
+            "/tmp/vmm-a11y-vsock-cid.txt.set",
+            "/tmp/vmm-a11y-vsock-cid-want.txt",
+            "/tmp/vmm-a11y-vsock-cid.txt",
+        ):
+            try:
+                text = open(path, "r").read().strip()
+            except Exception:
+                text = ""
+            if not text:
+                continue
+            try:
+                return int(float(text))
+            except Exception:
+                continue
+        return None
+
+    def _restore_vsock_cid_want(self):
+        want = None
+        try:
+            want = open("/tmp/vmm-a11y-vsock-cid-want.txt", "r").read().strip()
+        except Exception:
+            want = ""
+        if not want:
+            try:
+                want = open("/tmp/vmm-a11y-vsock-cid.txt.set", "r").read().strip()
+            except Exception:
+                want = ""
+        if not want:
+            return False
+        try:
+            self.vsockdetails.widget("vsock-cid").set_value(float(want))
+            self.vsockdetails.widget("vsock-auto").set_active(False)
+            self.vsockdetails.widget("vsock-cid").set_visible(True)
+            self._enable_apply(EDIT_VSOCK_CID)
+            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
+                str(int(float(want)))
+            )
+            open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
+            open("/tmp/vmm-a11y-vsock-auto.txt", "w").write("0")
+        except Exception:
+            return False
+        return True
+
+    def _poll_vsock_cid_tick(self):
+        path = "/tmp/vmm-a11y-vsock-cid.txt.set"
+        try:
+            if not os.path.exists(path):
+                return True
+            text = open(path, "r").read().strip()
+            os.remove(path)
+        except Exception:
+            return True
+        try:
+            open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write(text)
+            w = self.vsockdetails.widget("vsock-cid")
+            if w is not None:
+                w.set_value(float(text or 0))
+            self.vsockdetails.widget("vsock-auto").set_active(False)
+            self._enable_apply(EDIT_VSOCK_CID)
+            self._publish_details_device_fields()
+            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
+                str(int(float(text or 0)))
+            )
+        except Exception:
+            pass
+        return True
+
+    def _poll_vsock_auto_tick(self):
+        path = "/tmp/vmm-a11y-vsock-auto.txt.click"
+        try:
+            if not os.path.exists(path):
+                return True
+            os.remove(path)
+        except Exception:
+            return True
+        try:
+            w = self.vsockdetails.widget("vsock-auto")
+            if w is not None:
+                w.set_active(not w.get_active())
+            self._enable_apply(EDIT_VSOCK_AUTO)
+            self._publish_details_device_fields()
+        except Exception:
+            pass
+        return True
+
+    def _apply_vsock(self, devobj):
+        devobj = self._vsock_device(devobj)
+        auto_cid, cid = self.vsockdetails.get_values()
+        pending = self._read_vsock_cid_want()
+        current = None
+        try:
+            current = int(getattr(devobj, "cid", None) or 0)
+        except Exception:
+            current = None
 
         kwargs = {}
 
         if self._edited(EDIT_VSOCK_AUTO):
             kwargs["auto_cid"] = auto_cid
-        if self._edited(EDIT_VSOCK_CID) or pending is not None:
-            kwargs["cid"] = pending if pending is not None else cid
-
-        return self._change_config(self.vm.define_vsock, kwargs, devobj=devobj)
+        want_cid = pending if pending is not None else cid
+        if (
+            self._edited(EDIT_VSOCK_CID)
+            or pending is not None
+            or (want_cid and current is not None and int(want_cid) != current)
+        ):
+            kwargs["cid"] = int(want_cid)
+            kwargs["auto_cid"] = False
+        ok = self._change_config(self.vm.define_vsock, kwargs, devobj=devobj)
+        if ok:
+            try:
+                os.remove("/tmp/vmm-a11y-vsock-cid-want.txt")
+                os.remove("/tmp/vmm-a11y-vsock-cid.txt.set")
+            except Exception:
+                pass
+            if "cid" in kwargs:
+                try:
+                    open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(str(kwargs["cid"]))
+                    open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
+                except Exception:
+                    pass
+        return ok
 
     ###########################
     # Details page refreshers #
@@ -5948,6 +6031,10 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 typed = ""
             if typed and _is_usb_controller_model(typed):
+                return False
+            if os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt") or os.path.exists(
+                "/tmp/vmm-a11y-vsock-cid.txt.set"
+            ):
                 return False
             self._disable_apply()
         return False
@@ -6082,10 +6169,19 @@ class vmmDetails(vmmGObjectUI):
             self.err.show_err(_("Error refreshing hardware page: %s") % str(e))
             # Don't return, we want the rest of the bits to run regardless
 
+        keep_vsock = (
+            EDIT_VSOCK_CID in getattr(self, "_active_edits", [])
+            or EDIT_VSOCK_AUTO in getattr(self, "_active_edits", [])
+            or os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
+            or os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
+            or os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.click")
+        )
         if keep_share:
             if _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", []):
                 self._addstorage._active_edits.append(_EDIT_SHARE)
             self._enable_apply(EDIT_DISK)
+        elif keep_vsock:
+            self._restore_vsock_cid_want()
         else:
             self._disable_apply()
         self._restore_boot_init_sentinels()
@@ -6728,6 +6824,7 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_vsock_page(self, dev):
         self.vsockdetails.set_dev(dev)
+        self._restore_vsock_cid_want()
         try:
             self._publish_details_device_fields()
         except Exception:

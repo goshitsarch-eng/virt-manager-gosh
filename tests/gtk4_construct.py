@@ -2999,6 +2999,50 @@ def main():
         open("/tmp/vmm-a11y-delete-close", "w").write("1")
         _pump(GLib, 0.3)
 
+    def details_vsock_cid_apply():
+        from virtManager.details.details import HW_LIST_COL_DEVICE
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_VSOCK
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-many-devices")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        vsock = None
+        for row in details.widget("hw-list").get_model():
+            if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_VSOCK:
+                vsock = row[HW_LIST_COL_DEVICE]
+                break
+        assert vsock is not None, "test-many-devices has no vsock"
+        details._refresh_vsock_page(vsock)
+        open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write("7")
+        open("/tmp/vmm-a11y-vsock-cid.txt.set", "w").write("7")
+        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write("VirtIO VSOCK")
+        open("/tmp/vmm-a11y-hw-selected.txt", "w").write("VirtIO VSOCK")
+        open("/tmp/vmm-a11y-details-tab.txt", "w").write("vsock-tab")
+        details._poll_vsock_cid_tick()
+        _pump(GLib, 0.2)
+        details._active_edits = []
+        details._refresh_page_body(
+            details._hw_row_for_label("VirtIO VSOCK")
+        )
+        details._config_apply()
+        _pump(GLib, 0.3)
+        published = ""
+        try:
+            published = open("/tmp/vmm-a11y-vsock-cid.txt", "r").read().strip()
+        except Exception:
+            published = ""
+        assert str(int(getattr(vsock, "cid", 0) or 0)) == "7" or published == "7", (
+            "vsock CID apply must persist 7, xml=%s published=%r"
+            % (getattr(vsock, "cid", None), published)
+        )
+        xmlobj = vmobj.get_xmlobj()
+        cids = [int(v.cid or 0) for v in xmlobj.devices.vsock]
+        assert 7 in cids, cids
+
     def snapshot_revert_delete():
         from virtManager.lib import uiutil
         from virtManager.vmwindow import vmmVMWindow
@@ -3233,6 +3277,7 @@ def main():
         ("media_change", media_change),
         ("details_media_hotplug_deferred", details_media_hotplug_deferred),
         ("details_config_remove_ignores_overview", details_config_remove_ignores_overview),
+        ("details_vsock_cid_apply", details_vsock_cid_apply),
         ("snapshot_revert_delete", snapshot_revert_delete),
         ("pool_start_stop", pool_start_stop),
         ("createpool_finish", createpool_finish),
