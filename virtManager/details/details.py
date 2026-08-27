@@ -4680,6 +4680,9 @@ class vmmDetails(vmmGObjectUI):
                         os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
                     except Exception:
                         pass
+                elif success and last.get("shareable") is False and self.vm.is_active():
+                    self._addstorage.widget("disk-shareable").set_active(True)
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
             except Exception:
                 pass
         return success
@@ -5101,10 +5104,13 @@ class vmmDetails(vmmGObjectUI):
                         open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
                         open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
                     elif not self.vm.is_active():
-                        # Live apply of False still shows the running XML
-                        # (shareable=True) until shutdown.
                         open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
                         os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                    else:
+                        # Hotplug of shareable=False is deferred. GTK 3
+                        # keeps the running XML (checked) until shutdown.
+                        self._addstorage.widget("disk-shareable").set_active(True)
+                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
                 except Exception:
                     pass
         else:
@@ -6143,12 +6149,8 @@ class vmmDetails(vmmGObjectUI):
                     # ("changes will take effect after the next guest
                     # shutdown"). GTK 3 keeps showing the running XML
                     # until the guest actually stops.
-                    live_w = bool(
-                        self._addstorage.widget("disk-shareable").get_active()
-                    )
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
-                        "1" if live_w else "0"
-                    )
+                    self._addstorage.widget("disk-shareable").set_active(True)
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
                 else:
                     self._addstorage.widget("disk-shareable").set_active(False)
                     open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
