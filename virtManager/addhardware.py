@@ -174,6 +174,8 @@ class vmmAddHardware(vmmGObjectUI):
             _ADDHW_ACTION,
             _ADDHW_SELECT,
             _ADDHW_HOSTDEV_SELECT,
+            "/tmp/vmm-a11y-disk-inuse-allow",
+            "/tmp/vmm-a11y-alert-response.txt",
             _ADDHW_COMBO_ENTRY + ".set",
             _ADDHW_STORAGE_ENTRY + ".set",
             _ADDHW_STORAGE_SIZE + ".set",

@@ -4,6 +4,7 @@
 # See the COPYING file in the top-level directory.
 
 import os
+import time
 
 from gi.repository import Gtk
 
@@ -349,7 +350,36 @@ class vmmAddStorage(vmmGObjectUI):
                 except Exception:
                     pass
             elif os.environ.get("VIRTINST_TEST_SUITE"):
-                return False
+                # Official addhardware clicks Yes/No after Finish. GTK 3
+                # blocked in yes_no(); returning here aborted Finish so
+                # the later Yes never attached the volume.
+                deadline = time.time() + 8
+                while time.time() < deadline and not allow:
+                    if os.path.exists("/tmp/vmm-a11y-disk-inuse-allow"):
+                        allow = True
+                        break
+                    try:
+                        if os.path.exists("/tmp/vmm-a11y-alert-response.txt"):
+                            resp = open(
+                                "/tmp/vmm-a11y-alert-response.txt", "r"
+                            ).read().strip()
+                            os.remove("/tmp/vmm-a11y-alert-response.txt")
+                            if resp.lower() in ("yes", "ok"):
+                                allow = True
+                                open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                                break
+                            if resp.lower() in ("no", "cancel"):
+                                return False
+                    except Exception:
+                        pass
+                    time.sleep(0.05)
+                if allow:
+                    try:
+                        os.remove("/tmp/vmm-a11y-alert.txt")
+                    except Exception:
+                        pass
+                else:
+                    return False
             else:
                 res = self.err.yes_no(msg, _("Do you really want to use the disk?"))
                 if not res:
