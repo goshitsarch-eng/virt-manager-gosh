@@ -239,6 +239,10 @@ class vmmAddHardware(vmmGObjectUI):
         except Exception:
             pass
         try:
+            open("/tmp/vmm-a11y-xml-page.txt", "w").write("0")
+        except Exception:
+            pass
+        try:
             os.remove(_ADDHW_OPEN)
         except Exception:
             pass
@@ -2105,6 +2109,11 @@ class vmmAddHardware(vmmGObjectUI):
             open(_ADDHW_SHOWN, "w").write("1" if visible else "0")
         except Exception:
             pass
+        if not visible:
+            try:
+                open("/tmp/vmm-a11y-xml-page.txt", "w").write("0")
+            except Exception:
+                pass
         try:
             if visible:
                 open(_ADDHW_OPEN, "w").write("1")

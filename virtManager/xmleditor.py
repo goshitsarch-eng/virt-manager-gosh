@@ -179,6 +179,21 @@ class vmmXMLEditor(vmmGObjectUI):
                 path = "/tmp/vmm-a11y-xml-tab.txt"
                 try:
                     if not os.path.exists(path):
+                        # Add Hardware's XML page can leave xml-page=1
+                        # after the dialog closes. Republish once we own
+                        # the sentinels so details tabs become showing.
+                        if self._xml_a11y_owns_sentinels():
+                            try:
+                                want_page = (
+                                    "1" if self._curpage == _PAGE_XML else "0"
+                                )
+                                got = open(
+                                    "/tmp/vmm-a11y-xml-page.txt", "r"
+                                ).read().strip()
+                            except Exception:
+                                got = ""
+                            if got != want_page:
+                                self._publish_xml_a11y()
                         return True
                     if not self._xml_a11y_owns_sentinels():
                         return True
@@ -240,7 +255,8 @@ class vmmXMLEditor(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_xml_tab)
+            self._vmm_xml_tab_poll_cb = _poll_xml_tab
+            GLib.timeout_add(50, self._vmm_xml_tab_poll_cb)
 
     ####################
     # Internal helpers #
