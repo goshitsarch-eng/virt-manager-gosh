@@ -598,9 +598,23 @@ class vmmVMWindow(vmmGObjectUI):
             apply_on = bool(self._details.widget("config-apply").get_sensitive())
         except Exception:
             apply_on = False
-        # Wizard leftover files (net-device, name) can mark Apply without
-        # a user edit. Begin Installation should not be blocked then.
-        if apply_on and edits:
+        name_pending = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        if name_pending:
+            try:
+                self._details._restore_overview_sentinels()
+            except Exception:
+                pass
+            try:
+                apply_on = bool(self._details.widget("config-apply").get_sensitive())
+            except Exception:
+                apply_on = False
+            try:
+                edits = list(getattr(self._details, "_active_edits", []) or [])
+            except Exception:
+                pass
+        # Wizard leftover files (net-device, create-name) can mark Apply
+        # without a user edit. A real Overview name edit must still confirm.
+        if (apply_on and edits) or name_pending:
             try:
                 open("/tmp/vmm-a11y-alert.txt", "w").write(
                     "There are unapplied changes. Would you like to apply them now?"

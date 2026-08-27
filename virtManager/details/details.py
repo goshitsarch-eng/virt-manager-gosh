@@ -6389,6 +6389,8 @@ class vmmDetails(vmmGObjectUI):
                 return False
             if self._sync_pending_media_from_combo() is not None:
                 return False
+            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                return False
             self._disable_apply()
         return False
 
