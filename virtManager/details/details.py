@@ -3150,10 +3150,22 @@ class vmmDetails(vmmGObjectUI):
                 return True
             self._vmm_confirming_unapplied = False
         if getattr(self.err, "_in_prompt", False):
-            if _unapplied_dialog_up():
+            if _unapplied_dialog_up() and getattr(
+                self, "_vmm_confirming_unapplied", False
+            ):
                 return True
+            # Leftover mapped dialog / _in_prompt from a previous
+            # action is not an active confirm. Hide it so hardware
+            # navigation cannot livelock.
             try:
                 self.err._in_prompt = False
+            except Exception:
+                pass
+            try:
+                cache = getattr(self.err, "_warn_dialogs", None) or {}
+                for dlg in list(cache.values()):
+                    if dlg.get_mapped() or dlg.get_visible():
+                        dlg.hide()
             except Exception:
                 pass
 
@@ -3267,6 +3279,15 @@ class vmmDetails(vmmGObjectUI):
         ) or getattr(self, "_vmm_confirming_unapplied", False):
             return
 
+        if getattr(self, "_vmm_hw_change_busy", False):
+            return
+        self._vmm_hw_change_busy = True
+        try:
+            self._hw_changed_cb_apply(newrow, model)
+        finally:
+            self._vmm_hw_change_busy = False
+
+    def _hw_changed_cb_apply(self, newrow, model):
         try:
             self._vmm_pending_hw_nav = str(newrow[HW_LIST_COL_LABEL] or "")
         except Exception:
@@ -3280,11 +3301,31 @@ class vmmDetails(vmmGObjectUI):
         if oldhwrow is None:
             oldhwrow = self._pending_disk_apply_row()
 
-        self._vmm_unapplied_nav = True
+        just_applied = getattr(self, "_vmm_apply_just_succeeded", False)
+        real_pending = False
         try:
-            failed = self._has_unapplied_changes(oldhwrow)
-        finally:
-            self._vmm_unapplied_nav = False
+            real_pending = (
+                self._pending_media_path() is not None
+                or _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
+            )
+        except Exception:
+            real_pending = False
+        if just_applied and not real_pending:
+            # Refresh after a successful apply can re-arm Apply via
+            # combo/entry "changed". Auto-confirming that again
+            # (_config_apply → repopulate → changed) livelocks the
+            # hardware list in the same-process construct suite.
+            try:
+                self._disable_apply()
+            except Exception:
+                pass
+            failed = False
+        else:
+            self._vmm_unapplied_nav = True
+            try:
+                failed = self._has_unapplied_changes(oldhwrow)
+            finally:
+                self._vmm_unapplied_nav = False
         if failed:
             # Unapplied changes, and syncing them failed
             pageidx = 0

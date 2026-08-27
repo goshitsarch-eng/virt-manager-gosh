@@ -70,6 +70,48 @@ def _clear_a11y_sentinels():
             pass
 
 
+def _reset_open_ui():
+    """Drop leftover Apply / mapped dialogs between same-process tests."""
+    try:
+        from virtManager.vmwindow import vmmVMWindow
+    except Exception:
+        return
+    instances = getattr(vmmVMWindow, "_instances", None) or {}
+    for win in list(instances.values()):
+        details = getattr(win, "_details", None)
+        if details is None:
+            continue
+        try:
+            details._disable_apply()
+        except Exception:
+            pass
+        try:
+            details._vmm_apply_just_succeeded = False
+            details._vmm_confirming_unapplied = False
+            details._vmm_unapplied_nav = False
+            details._vmm_hw_change_busy = False
+            details._config_remove_busy = False
+        except Exception:
+            pass
+        err = getattr(details, "err", None)
+        if err is None:
+            continue
+        try:
+            err._in_prompt = False
+        except Exception:
+            pass
+        try:
+            cache = getattr(err, "_warn_dialogs", None) or {}
+            for dlg in list(cache.values()):
+                try:
+                    if dlg.get_mapped() or dlg.get_visible():
+                        dlg.hide()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+
 def _pump(GLib, seconds=0.05):
     ctx = GLib.MainContext.default()
     end = time.monotonic() + seconds
@@ -197,6 +239,7 @@ def main():
         signal.alarm(int(timeout))
         try:
             _clear_a11y_sentinels()
+            _reset_open_ui()
             fn()
             _pump(GLib, 0.05)
             results.append((name, True, None))
@@ -213,6 +256,10 @@ def main():
             _PUMP_DEADLINE = None
             signal.alarm(0)
             signal.signal(signal.SIGALRM, old)
+            try:
+                _reset_open_ui()
+            except Exception:
+                pass
 
     def manager():
         from virtManager.manager import vmmManager
