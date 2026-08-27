@@ -81,12 +81,56 @@ def set_list_selection_by_number(widget, rownum):
     """
     Helper to set list selection from the passed row number
     """
-    path = str(rownum)
     selection = widget.get_selection()
+    model = widget.get_model()
+    try:
+        rownum = int(rownum)
+    except Exception:
+        rownum = 0
 
-    selection.unselect_all()
-    widget.set_cursor(path)
-    selection.select_path(path)
+    # GTK 4 set_cursor/select_path need a TreePath. A bare "3" string
+    # often leaves the previous row selected (Floppy 2 after a CDROM click).
+    _iter = None
+    if model is not None:
+        try:
+            _iter = model.iter_nth_child(None, rownum)
+        except Exception:
+            _iter = None
+    if _iter is not None:
+        try:
+            selection.unselect_all()
+        except Exception:
+            pass
+        try:
+            path = model.get_path(_iter)
+            widget.set_cursor(path)
+        except Exception:
+            try:
+                widget.set_cursor(Gtk.TreePath.new_from_indices([rownum]))
+            except Exception:
+                pass
+        try:
+            selection.select_iter(_iter)
+        except Exception:
+            try:
+                selection.select_path(model.get_path(_iter))
+            except Exception:
+                pass
+        return
+
+    path = str(rownum)
+    try:
+        selection.unselect_all()
+    except Exception:
+        pass
+    try:
+        widget.set_cursor(path)
+    except Exception:
+        pass
+    try:
+        selection.select_path(path)
+    except Exception:
+        pass
 
 
 def set_list_selection(widget, value, column=0):

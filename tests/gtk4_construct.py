@@ -91,6 +91,11 @@ def _reset_open_ui():
             details._vmm_unapplied_nav = False
             details._vmm_hw_change_busy = False
             details._config_remove_busy = False
+            details._vmm_pending_media_path = None
+        except Exception:
+            pass
+        try:
+            details._addstorage._active_edits = []
         except Exception:
             pass
         err = getattr(details, "err", None)
@@ -120,6 +125,24 @@ def _reset_open_ui():
             except Exception:
                 pass
             vmmDeleteDialog._instance = None
+    except Exception:
+        pass
+    try:
+        from gi.repository import Gtk
+
+        app = Gtk.Application.get_default()
+        if app is not None:
+            for win in list(app.get_windows()):
+                title = ""
+                try:
+                    title = win.get_title() or ""
+                except Exception:
+                    title = ""
+                if title in ("Delete", "Remove Disk", "Remove Disk Device"):
+                    try:
+                        win.hide()
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -2213,6 +2236,15 @@ def main():
 
         err.show_err = _show_err
 
+        def _show_info(text1=None, *a, **k):
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(str(text1 or ""))
+            except Exception:
+                pass
+            return False
+
+        err.show_info = _show_info
+
     def snapshot_create():
         from virtManager.details.snapshots import vmmSnapshotNew
 
@@ -2992,8 +3024,13 @@ def main():
         try:
             row = details.widget("hw-list").get_model()[cdrom1[0]]
             details._refresh_disk_page(row[HW_LIST_COL_DEVICE])
+            details._pin_hw_context("IDE CDROM 1", row)
         except Exception:
             details._refresh_disk_page(cdrom1[1])
+            try:
+                details._pin_hw_context("IDE CDROM 1")
+            except Exception:
+                pass
         details._mediacombo.reset_state(is_floppy=False)
         _pump(GLib, 0.2)
         labels = []
@@ -3135,7 +3172,6 @@ def main():
         details._hw_changed_cb(hwlist)
         for path, text in (
             ("/tmp/vmm-a11y-hw-selected.txt", "Overview"),
-            ("/tmp/vmm-a11y-hw-select.txt", "Overview"),
             ("/tmp/vmm-a11y-last-hw.txt", "Overview"),
             ("/tmp/vmm-a11y-hw-clicked.txt", label),
             ("/tmp/vmm-a11y-hw-last-device.txt", label),

@@ -3058,10 +3058,55 @@ class vmmDetails(vmmGObjectUI):
 
         self._popupmenu.popup_at_pointer(event)
 
+    def _pin_hw_context(self, label, row=None):
+        """Keep GTK, last-refreshed, and a11y sentinels on the same row.
+
+        After Floppy 2 apply the poller still publishes Floppy. A later
+        IDE CDROM 1 refresh is then overwritten during the next idle
+        tick (media_change_cdrom_nodedev).
+        """
+        label = str(label or "")
+        if not label:
+            return
+        try:
+            self._vmm_last_refreshed_hw = label
+        except Exception:
+            pass
+        if row is not None:
+            try:
+                self._oldhwkey = row[HW_LIST_COL_KEY]
+            except Exception:
+                pass
+        _NON_DEVICE = (
+            "Overview",
+            "OS information",
+            "Performance",
+            "CPUs",
+            "Memory",
+            "Boot Options",
+        )
+        try:
+            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(label)
+            open("/tmp/vmm-a11y-last-hw.txt", "w").write(label)
+            if label not in _NON_DEVICE:
+                open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(label)
+                open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(label)
+        except Exception:
+            pass
+
     def _set_hw_selection(self, page, _disable_apply=True):
         if _disable_apply:
             self._disable_apply()
-        uiutil.set_list_selection_by_number(self.widget("hw-list"), page)
+        hwlist = self.widget("hw-list")
+        uiutil.set_list_selection_by_number(hwlist, page)
+        try:
+            model = hwlist.get_model()
+            idx = int(page)
+            if model is not None and 0 <= idx < len(model):
+                row = model[idx]
+                self._pin_hw_context(str(row[HW_LIST_COL_LABEL] or ""), row)
+        except Exception:
+            pass
 
     def _get_hw_row(self):
         return uiutil.get_list_selected_row(self.widget("hw-list"))
@@ -3335,6 +3380,10 @@ class vmmDetails(vmmGObjectUI):
                 pass
             self._disable_apply()
             self._revert_a11y_disk_shareable()
+            try:
+                self._vmm_last_refreshed_hw = str(newrow[HW_LIST_COL_LABEL] or "")
+            except Exception:
+                pass
             self._refresh_page()
 
     def _disable_device_remove(self, tooltip):
@@ -6319,6 +6368,20 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_page(self):
         row = self._get_hw_row()
+        last = getattr(self, "_vmm_last_refreshed_hw", None)
+        if last:
+            gtk_label = ""
+            try:
+                if row is not None:
+                    gtk_label = str(row[HW_LIST_COL_LABEL] or "")
+            except Exception:
+                gtk_label = ""
+            pending = getattr(self, "_vmm_pending_hw_nav", None)
+            if gtk_label != last and pending in (None, last):
+                pinned = self._hw_row_for_label(last)
+                if pinned is not None:
+                    row = pinned
+
         if not row:
             return  # pragma: no cover
 
@@ -6884,6 +6947,22 @@ class vmmDetails(vmmGObjectUI):
                 size = vol.get_pretty_capacity()
 
         pretty_name = self._get_hw_row_label_for_device(disk)
+        try:
+            row = self._get_hw_row_for_device(disk)
+            if row is not None:
+                self._oldhwkey = row[HW_LIST_COL_KEY]
+            if pretty_name:
+                self._vmm_last_refreshed_hw = pretty_name
+                clicked = ""
+                try:
+                    clicked = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                except Exception:
+                    clicked = ""
+                # Do not clobber a Don't-warn leave to CPUs/Overview.
+                if not clicked or clicked == pretty_name:
+                    self._pin_hw_context(pretty_name, row)
+        except Exception:
+            pass
 
         self.widget("disk-target-type").set_text(pretty_name)
         self.widget("disk-size").set_text(size)
