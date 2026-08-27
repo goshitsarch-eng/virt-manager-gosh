@@ -33,6 +33,13 @@ class vmmOSList(vmmGObjectUI):
         self.search_entry = self.widget("os-name")
         self.search_entry.set_placeholder_text(_("Type to start searching..."))
         try:
+            pos = Gtk.EntryIconPosition.PRIMARY
+            self.search_entry.set_icon_from_icon_name(pos, "edit-find-symbolic")
+            self.search_entry.set_icon_activatable(pos, False)
+            self.search_entry._vmm_gtk3_search_icon = True
+        except Exception:
+            pass
+        try:
             self.search_entry.connect(
                 "changed", lambda *_a: self.refresh_a11y()
             )

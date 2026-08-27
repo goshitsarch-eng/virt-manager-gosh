@@ -472,6 +472,8 @@ def main():
 
         widget = vmmOSList()
         assert widget.search_entry is not None
+        if hasattr(widget.search_entry, "set_icon_from_icon_name"):
+            assert getattr(widget.search_entry, "_vmm_gtk3_search_icon", False)
 
     def snapshots_new():
         from virtManager.details.snapshots import vmmSnapshotNew
@@ -1327,6 +1329,12 @@ def main():
         media.set_path("/tmp/gtk4-test.iso")
         media.get_path()
         media.show_clear_icon()
+        assert getattr(media._entry, "_vmm_gtk3_clear_icon", False)
+        try:
+            icon = media._entry.get_icon_name(Gtk.EntryIconPosition.SECONDARY)
+        except Exception:
+            icon = ""
+        assert icon == "edit-clear-symbolic", icon
         media.reset_state(is_floppy=True)
 
     def host_storage_nets():

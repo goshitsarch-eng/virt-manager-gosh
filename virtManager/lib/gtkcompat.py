@@ -8807,10 +8807,13 @@ def _patch_widget_methods():
             return id(controller)
         if signal == "icon-press":
 
-            def _icon(*_a):
-                callback(self, Gtk.EntryIconPosition.SECONDARY, _FakeEvent(), *args)
+            def _icon(entry, icon_pos, *_rest):
+                callback(entry, icon_pos, _FakeEvent(), *args)
 
-            return orig_connect(self, "activate", _icon)
+            try:
+                return orig_connect(self, "icon-press", _icon)
+            except (TypeError, RuntimeError):
+                return orig_connect(self, "activate", _icon)
         if signal in ("focus-in-event", "focus-out-event"):
             controller = Gtk.EventControllerFocus()
             evname = "enter" if signal == "focus-in-event" else "leave"
