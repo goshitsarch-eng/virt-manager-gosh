@@ -3739,6 +3739,21 @@ class vmmDetails(vmmGObjectUI):
                 os.remove(path)
             except Exception:
                 pass
+        # Prefer the hardware-list sentinel when GTK selection lagged
+        # (Shareable cancel on IDE Disk 1 after a failed cache apply).
+        row = None
+        try:
+            row = self._a11y_selected_hw_row()
+        except Exception:
+            row = None
+        if row is not None:
+            self._ui_refreshing = True
+            try:
+                self._refresh_page_body(row)
+            finally:
+                self._ui_refreshing = False
+            self._disable_apply()
+            return
         self._refresh_page()
 
     def _load_a11y_xml_editor(self):
