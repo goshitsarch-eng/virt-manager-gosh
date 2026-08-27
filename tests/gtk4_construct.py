@@ -274,7 +274,7 @@ def main():
         "details_many_devices": 20,
         "cli_windows": 90,
         "createvm_finish": 90,
-        "createvm_arm_import_finish": 90,
+        "createvm_import_finish_empty_name": 90,
         "inspection_os_page": 90,
     }
 
@@ -3706,20 +3706,16 @@ def main():
         found = _wait_named_vm("gtk4-created-vm", timeout=12)
         assert found is not None, "createvm finish did not define gtk4-created-vm: %s" % errs
 
-    def createvm_arm_import_finish():
-        """Import an in-use volume on armv7l and Finish from Memory."""
-        import tests
+    def createvm_import_finish_empty_name():
+        """Import an in-use volume and Finish from Memory with an empty Name."""
         import virtinst
         from virtManager.createvm import PAGE_INSTALL
         from virtManager.createvm import PAGE_MEM
         from virtManager.createvm import PAGE_NAME
         from virtManager.createvm import vmmCreateVM
-        from virtManager.lib import uiutil
 
-        uri = tests.utils.URIs.kvm_armv7l_nodomcaps
-        armconn = _open_conn(GLib, uri)
         dlg = vmmCreateVM()
-        dlg.show(None, uri)
+        dlg.show(None, conn.get_uri())
         errs = []
 
         def _val_err(*a, **k):
@@ -3734,12 +3730,6 @@ def main():
         dlg.err.chkbox_helper = lambda *a, **k: True
         dlg.err.val_err = _val_err
         dlg.err.show_err = _show_err
-        dlg.widget("arch-expander").set_expanded(True)
-        _pump(GLib, 0.05)
-        try:
-            uiutil.set_list_selection(dlg.widget("machine"), "virt")
-        except Exception:
-            pass
         dlg._set_install_method_key("import")
         dlg._set_install_page()
         assert dlg._validate(PAGE_NAME) is True, errs
@@ -3755,26 +3745,19 @@ def main():
         dlg._remember_create_os(osobj)
         dlg._os_list.select_os(osobj)
         assert dlg._validate(PAGE_INSTALL) is True, "install validate: %s" % errs
+        want_name = dlg._gdata.name
+        assert want_name, "install validate did not generate a guest name"
         dlg._goto_create_page(PAGE_MEM)
         assert dlg._validate(PAGE_MEM) is True, errs
-        # Official uitest Finish lands here; empty Name leftovers must not abort.
+        # Official testNewVMArmKernel Finish lands here; empty Name
+        # leftovers must not abort validation.
         try:
             open("/tmp/vmm-a11y-create-name.txt", "w").write("")
         except Exception:
             pass
         dlg.widget("create-vm-name").set_text("")
         dlg._finish_clicked_impl()
-        found = None
-        deadline = time.monotonic() + 12
-        while time.monotonic() < deadline:
-            armconn.schedule_priority_tick(pollvm=True, force=True)
-            _pump(GLib, 0.2)
-            for cand in armconn.list_vms():
-                if cand.get_name() == "vm1":
-                    found = cand
-                    break
-            if found is not None:
-                break
+        found = _wait_named_vm(want_name, timeout=12)
         debug = ""
         alert = ""
         try:
@@ -3786,8 +3769,8 @@ def main():
         except Exception:
             pass
         assert found is not None, (
-            "arm import finish did not define vm1: %s debug=%s alert=%s"
-            % (errs, debug, alert)
+            "import finish did not define %s: %s debug=%s alert=%s"
+            % (want_name, errs, debug, alert)
         )
         try:
             dlg.close()
@@ -4470,7 +4453,7 @@ def main():
         ("systray_menu_popup", systray_menu_popup),
         ("addhardware_finish_sound", addhardware_finish_sound),
         ("createvm_finish", createvm_finish),
-        ("createvm_arm_import_finish", createvm_arm_import_finish),
+        ("createvm_import_finish_empty_name", createvm_import_finish_empty_name),
         ("details_apply_xml", details_apply_xml),
         ("media_change", media_change),
         ("media_change_cdrom_nodedev", media_change_cdrom_nodedev),
