@@ -2638,12 +2638,17 @@ class vmmCreateVM(vmmGObjectUI):
             self._set_conn(newconn)
 
     def _method_changed(self, src):
-        ignore = src
         # Reset the page number, since the total page numbers depend
         # on the chosen install method
         self._set_page_num_text(0)
         try:
-            self._publish_method_a11y(force_widget=True)
+            # Only force-publish when a radio is turned ON. An a11y click
+            # on the already-selected Local button can toggle it off and
+            # activate Import; that must not replace method-active=local.
+            if src is not None and hasattr(src, "get_active") and src.get_active():
+                self._publish_method_a11y(force_widget=True)
+            else:
+                self._publish_method_a11y()
         except Exception:
             pass
 
