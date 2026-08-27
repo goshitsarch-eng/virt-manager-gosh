@@ -473,7 +473,18 @@ class vmmConsolePages(vmmGObjectUI):
         # the viewer black. But when scaling is enabled, the viewer widget is
         # constrained. This change makes sure the non-VM portions in that case
         # are also colored black, rather than the default theme window color.
-        self.widget("console-gfx-viewport").modify_bg(Gtk.StateType.NORMAL, Gdk.Color(0, 0, 0))
+        viewport = self.widget("console-gfx-viewport")
+        viewport.modify_bg(Gtk.StateType.NORMAL, Gdk.Color(0, 0, 0))
+        gtkcompat.set_accessible_name(viewport, "console-gfx-viewport")
+        try:
+            gtkcompat.expose_a11y_label(
+                "console-gfx-viewport",
+                "console-gfx-viewport",
+                "console-gfx-viewport",
+                window=self.topwin,
+            )
+        except Exception:
+            pass
 
         self.widget("console-pages").set_show_tabs(False)
         self.widget("serial-pages").set_show_tabs(False)
@@ -514,6 +525,10 @@ class vmmConsolePages(vmmGObjectUI):
             def _poll_console_select():
                 if self.vm is None:
                     return False
+                try:
+                    self._publish_gfx_viewport()
+                except Exception:
+                    pass
                 try:
                     if os.path.exists("/tmp/vmm-a11y-console-reinit.txt"):
                         os.remove("/tmp/vmm-a11y-console-reinit.txt")
@@ -739,6 +754,7 @@ class vmmConsolePages(vmmGObjectUI):
                     pass
             except Exception:
                 pass
+        self._publish_gfx_viewport()
 
     def _activate_vm_unavailable_page(self, msg):
         """
@@ -789,11 +805,20 @@ class vmmConsolePages(vmmGObjectUI):
         else:
             self.widget("console-auth-password").grab_focus()
 
+    def _publish_gfx_viewport(self):
+        try:
+            open("/tmp/vmm-a11y-console-gfx-viewport.txt", "w").write(
+                "1" if self._viewer_is_visible() else "0"
+            )
+        except Exception:
+            pass
+
     def _activate_gfx_viewer_page(self):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_GRAPHICS)
         self.widget("console-gfx-pages").set_current_page(_GFX_PAGE_VIEWER)
         if self._viewer:
             self._viewer.console_grab_focus()
+        self._publish_gfx_viewport()
 
     def _activate_console_connect_page(self):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_CONNECT)

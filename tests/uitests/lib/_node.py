@@ -2772,6 +2772,36 @@ def _sentinel_console_error(name, roleName):
     return None
 
 
+class _SentinelConsoleGfxViewport(object):
+    name = "console-gfx-viewport"
+    roleName = "viewport"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-console-gfx-viewport.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-console-click.txt", "w").write("1")
+        except Exception:
+            pass
+
+
 class _SentinelConsolePages(object):
     name = "console-pages"
     roleName = "page tab list"
@@ -9061,6 +9091,8 @@ class _SentinelVMWindow(object):
             return _SentinelHWList()
         if "console-pages" in compact:
             return _SentinelConsolePages()
+        if "console-gfx-viewport" in compact:
+            return _SentinelConsoleGfxViewport()
         sent = _sentinel_console_error(name, roleName)
         if sent is not None:
             return sent
