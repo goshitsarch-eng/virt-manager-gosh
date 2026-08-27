@@ -3833,6 +3833,31 @@ class vmmDetails(vmmGObjectUI):
         self._disable_apply()
 
     def _remove_disk(self, disk):
+        def _same_disk(other):
+            if other is disk:
+                return True
+            try:
+                return (
+                    other is not None
+                    and other.target == disk.target
+                    and other.get_source_path() == disk.get_source_path()
+                )
+            except Exception:
+                return False
+
+        for dlg in reversed(list(getattr(vmmDeleteStorage, "_live", []) or [])):
+            if not isinstance(dlg, vmmDeleteStorage):
+                continue
+            if dlg.vm is not None and dlg.vm is not self.vm:
+                continue
+            if not _same_disk(getattr(dlg, "disk", None)):
+                continue
+            try:
+                if dlg.topwin.get_visible() or dlg.topwin.get_mapped():
+                    dlg.show(self.topwin, self.vm)
+                    return
+            except Exception:
+                continue
         dialog = vmmDeleteStorage(disk)
         dialog.show(self.topwin, self.vm)
 

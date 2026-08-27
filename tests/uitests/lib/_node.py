@@ -1542,6 +1542,7 @@ class _SentinelClickButton(object):
             except Exception:
                 pass
             deadline = time.time() + 8.0
+            last_retry = time.time()
             while time.time() < deadline:
                 try:
                     if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
@@ -1557,30 +1558,36 @@ class _SentinelClickButton(object):
                     or "remove this device" in alert
                 ):
                     return
-                if not target:
+                # Retry only if the poller consumed the command and the
+                # dialog never appeared. Rewriting every 50ms rebuilds
+                # Remove Disk and wipes "Delete associated".
+                if time.time() - last_retry >= 1.0:
+                    if not target:
+                        try:
+                            target = open(
+                                "/tmp/vmm-a11y-hw-last-device.txt", "r"
+                            ).read().strip()
+                        except Exception:
+                            target = ""
+                        if target in (
+                            "Overview",
+                            "OS information",
+                            "Performance",
+                            "CPUs",
+                            "Memory",
+                            "Boot Options",
+                        ):
+                            target = ""
                     try:
-                        target = open(
-                            "/tmp/vmm-a11y-hw-last-device.txt", "r"
-                        ).read().strip()
+                        if not os.path.exists("/tmp/vmm-a11y-config-remove"):
+                            if target:
+                                open(
+                                    "/tmp/vmm-a11y-config-remove-target.txt", "w"
+                                ).write(target)
+                            open("/tmp/vmm-a11y-config-remove", "w").write("1")
                     except Exception:
-                        target = ""
-                    if target in (
-                        "Overview",
-                        "OS information",
-                        "Performance",
-                        "CPUs",
-                        "Memory",
-                        "Boot Options",
-                    ):
-                        target = ""
-                try:
-                    if target:
-                        open("/tmp/vmm-a11y-config-remove-target.txt", "w").write(
-                            target
-                        )
-                    open("/tmp/vmm-a11y-config-remove", "w").write("1")
-                except Exception:
-                    pass
+                        pass
+                    last_retry = time.time()
                 time.sleep(0.05)
         if self.name == "config-cancel":
             deadline = time.time() + 3.0

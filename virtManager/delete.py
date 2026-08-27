@@ -73,10 +73,21 @@ class _vmmDeleteBase(vmmGObjectUI):
 
     def show(self, parent, vm):
         log.debug("Showing delete wizard")
+        already_visible = False
+        try:
+            already_visible = bool(
+                self.vm is vm
+                and (self.topwin.get_visible() or self.topwin.get_mapped())
+            )
+        except Exception:
+            already_visible = False
         self._set_vm(vm)
         if self not in _vmmDeleteBase._live:
             _vmmDeleteBase._live.append(self)
-        self._reset_state()
+        # A second config-remove must not wipe "Delete associated" after
+        # the uitest has already checked it on the open Remove Disk dialog.
+        if not already_visible:
+            self._reset_state()
         self.topwin.set_transient_for(parent)
         try:
             title = self._a11y_window_title()

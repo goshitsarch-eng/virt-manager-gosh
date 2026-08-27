@@ -3884,6 +3884,17 @@ def start_config_remove_poll(details):
         try:
             if not os.path.exists(path):
                 return True
+            # A leftover retry must not rebuild Remove Disk after the
+            # user has already toggled "Delete associated".
+            try:
+                shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip()
+                title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+            except Exception:
+                shown = ""
+                title = ""
+            if shown == "1" and "Remove" in title:
+                os.remove(path)
+                return True
             os.remove(path)
         except Exception:
             return True
