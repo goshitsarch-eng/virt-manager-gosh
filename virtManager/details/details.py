@@ -4048,6 +4048,16 @@ class vmmDetails(vmmGObjectUI):
     def _os_list_name_selected_cb(self, src, osobj):
         if getattr(self, "_ui_refreshing", False):
             return
+        try:
+            current = self.vm.xmlobj.osinfo if self.vm is not None else None
+            if (
+                osobj is not None
+                and current is not None
+                and getattr(osobj, "name", None) == getattr(current, "name", None)
+            ):
+                return
+        except Exception:
+            pass
         self._enable_apply(EDIT_OS_NAME)
 
     def _curmem_changed_cb(self, src):
@@ -6454,7 +6464,12 @@ class vmmDetails(vmmGObjectUI):
                     open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
             except Exception:
                 pass
-            self._os_list.select_os(self.vm.xmlobj.osinfo)
+            was_refreshing = getattr(self, "_ui_refreshing", False)
+            self._ui_refreshing = True
+            try:
+                self._os_list.select_os(self.vm.xmlobj.osinfo)
+            finally:
+                self._ui_refreshing = was_refreshing
 
         inspection_supported = self.config.inspection_supported()
         uiutil.set_grid_row_visible(

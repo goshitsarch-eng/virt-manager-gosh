@@ -1997,6 +1997,7 @@ def main():
         win.show()
         win.activate_config_page()
         details = win._details
+        _auto_confirm(details)
         hwlist = details.widget("hw-list")
         os_idx = None
         for idx, row in enumerate(hwlist.get_model()):
@@ -2031,6 +2032,7 @@ def main():
         ewin.show()
         ewin.activate_config_page()
         edetails = ewin._details
+        _auto_confirm(edetails)
         ehw = edetails.widget("hw-list")
         eidx = None
         for idx, row in enumerate(ehw.get_model()):
