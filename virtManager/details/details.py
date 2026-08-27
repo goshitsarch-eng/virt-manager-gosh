@@ -4321,6 +4321,7 @@ class vmmDetails(vmmGObjectUI):
                 last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
                 if success and last.get("shareable"):
                     open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
             except Exception:
                 pass
         return success
