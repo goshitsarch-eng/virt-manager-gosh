@@ -129,6 +129,15 @@ class vmmAddStorage(vmmGObjectUI):
 
     @staticmethod
     def check_path_search(src, conn, path):
+        # Testdriver volumes like /pool-dir/default-vol are not host paths.
+        # VIRTINST_TEST_SUITE makes qemu-privileged DAC search report them
+        # as broken; GTK 3 official uitests did not set that env on the
+        # virt-manager child, so this prompt never appeared for New VM import.
+        if path:
+            host_path = os.path.abspath(path)
+            parent = os.path.dirname(host_path)
+            if not os.path.exists(host_path) and parent and not os.path.exists(parent):
+                return
         skip_paths = src.config.get_perms_fix_ignore() or []
         searchdata = virtinst.DeviceDisk.check_path_search(conn.get_backend(), path)
 
