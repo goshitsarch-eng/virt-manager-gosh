@@ -773,6 +773,7 @@ class vmmVMWindow(vmmGObjectUI):
         gtkcompat.ensure_button_accessible_name(
             self.widget("control-shutdown")._button, "Shut Down"
         )
+        self.widget("control-shutdown")._sync_tooltip()
 
         topmenu = self.widget("details-vm-menu")
         submenu = topmenu.get_submenu() or self.widget("virtual_machine1_menu")

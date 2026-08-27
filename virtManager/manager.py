@@ -417,6 +417,13 @@ class vmmManager(vmmGObjectUI):
             except Exception:
                 pass
             self.prev_position = None
+        elif not vis and not getattr(self, "_vmm_centered_once", False):
+            # GTK 3 manager.ui gravity=center
+            self._vmm_centered_once = True
+            try:
+                gtkcompat._window_center_on_display(self.topwin)
+            except Exception:
+                pass
         if vis:
             return
 
@@ -633,6 +640,7 @@ class vmmManager(vmmGObjectUI):
         gtkcompat.ensure_button_accessible_name(
             self.widget("vm-shutdown")._button, "Shut Down"
         )
+        self.widget("vm-shutdown")._sync_tooltip()
         if not getattr(self, "_vmm_toolbar_poll", False):
             self._vmm_toolbar_poll = True
 

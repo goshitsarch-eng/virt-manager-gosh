@@ -324,6 +324,17 @@ def main():
         win = vmmManager()
         win.show()
         assert win.topwin is not None
+        _pump(GLib, 0.05)
+        shut = win.widget("vm-shutdown")
+        shut._sync_tooltip()
+        tip = (
+            shut._button.get_tooltip_text()
+            or getattr(shut._button, "_vmm_tooltip", None)
+            or shut.get_tooltip_text()
+            or getattr(shut, "_vmm_tooltip", None)
+        )
+        assert tip and "Shut down" in tip, tip
+        assert getattr(win, "_vmm_centered_once", False)
 
     def createconn():
         from virtManager.createconn import vmmCreateConn
@@ -1206,7 +1217,13 @@ def main():
         win.resize(320, 240)
         assert getattr(win, "_vmm_win_size", None) == (320, 240)
         assert win.get_size()[0] >= 1 and win.get_size()[1] >= 1
+        mtb = gtkcompat.MenuToolButton()
+        mtb.set_tooltip_text("Shut down the virtual machine")
+        mtb._sync_tooltip()
+        assert mtb._button.get_tooltip_text() == "Shut down the virtual machine"
+        assert mtb._menu_button.get_tooltip_text() == "Shut down the virtual machine"
         win.present()
+        assert gtkcompat._window_center_on_display(win) in (True, False)
         xid = gtkcompat._window_xid(win)
         if xid:
             assert gtkcompat._x11_resize_window(xid, 320, 240) in (True, False)

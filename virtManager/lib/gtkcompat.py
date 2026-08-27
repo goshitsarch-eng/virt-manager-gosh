@@ -844,6 +844,55 @@ def _center_window_on_parent(window):
         pass
 
 
+def _window_center_on_display(window):
+    """GTK 3 manager.ui gravity=center: first map is monitor-centered."""
+    if window is None:
+        return False
+    try:
+        display = None
+        try:
+            display = window.get_display()
+        except Exception:
+            display = None
+        if display is None:
+            display = Gdk.Display.get_default()
+        if display is None:
+            return False
+        monitor = None
+        try:
+            surface = window.get_surface()
+            if surface is not None:
+                monitor = display.get_monitor_at_surface(surface)
+        except Exception:
+            monitor = None
+        if monitor is None:
+            try:
+                monitors = display.get_monitors()
+                if monitors is not None and monitors.get_n_items() > 0:
+                    monitor = monitors.get_item(0)
+            except Exception:
+                monitor = None
+        if monitor is None:
+            return False
+        geo = monitor.get_geometry()
+        ww, wh = _window_get_size(window)
+        if ww <= 1 or wh <= 1:
+            try:
+                defaults = window.get_default_size()
+                ww = max(int(defaults[0] or 0), ww)
+                wh = max(int(defaults[1] or 0), wh)
+            except Exception:
+                pass
+        if ww <= 1 or wh <= 1:
+            return False
+        x = int(geo.x + max(0, (int(geo.width) - ww) // 2))
+        y = int(geo.y + max(0, (int(geo.height) - wh) // 2))
+        _window_move(window, x, y)
+        return True
+    except Exception:
+        return False
+
+
 def _window_is_live(window):
     if window is None or getattr(window, "_vmm_hints_dead", False):
         return False
@@ -8737,11 +8786,43 @@ class MenuToolButton(Gtk.Box):
         self._menu = None
         self.connect("notify::label", self._sync_label)
         self.connect("notify::icon-name", self._sync_icon)
+        self.connect("notify::tooltip-text", self._sync_tooltip)
+        self.connect("notify::has-tooltip", self._sync_tooltip)
         self._button.connect(
             "clicked",
             lambda *_a: GLib.idle_add(lambda: self.emit("clicked") or False),
         )
         self._menu_button.connect("toggled", self._on_menu_toggled)
+        GLib.idle_add(self._sync_tooltip)
+
+    def _sync_tooltip(self, *_args):
+        """GTK 3 showed tooltip-text on the whole MenuToolButton."""
+        tip = None
+        try:
+            tip = Gtk.Widget.get_tooltip_text(self)
+        except Exception:
+            tip = None
+        if not tip:
+            tip = getattr(self, "_vmm_tooltip", None)
+        if not tip:
+            return False
+        self._vmm_tooltip = tip
+        for child in (self._button, self._menu_button):
+            try:
+                child.set_tooltip_text(tip)
+                child.set_has_tooltip(True)
+            except Exception:
+                pass
+        return False
+
+    def set_tooltip_text(self, text):
+        try:
+            Gtk.Widget.set_tooltip_text(self, text)
+        except Exception:
+            pass
+        if text:
+            self._vmm_tooltip = text
+        self._sync_tooltip()
 
     def _sync_label(self, *_args):
         self._button.set_label(self.label)
