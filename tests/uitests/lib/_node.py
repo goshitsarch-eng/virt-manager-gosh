@@ -3588,6 +3588,12 @@ class _SentinelDetailsCheck(object):
     def checked(self):
         if "disk-shareable" in (self._path or ""):
             try:
+                live = open(self._path, "r").read().strip()
+                if live in ("0", "1"):
+                    return live == "1"
+            except Exception:
+                pass
+            try:
                 if (
                     open("/tmp/vmm-a11y-disk-shareable-applied.txt", "r")
                     .read()
@@ -3597,6 +3603,7 @@ class _SentinelDetailsCheck(object):
                     return True
             except Exception:
                 pass
+            return False
         try:
             return open(self._path, "r").read().strip() == "1"
         except Exception:

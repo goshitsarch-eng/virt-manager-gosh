@@ -362,10 +362,23 @@ class vmmAddStorage(vmmGObjectUI):
         self.widget("disk-serial").set_text(serial or "")
         self.widget("disk-readonly").set_active(ro)
         self.widget("disk-readonly").set_sensitive(not disk.is_cdrom())
-        self.widget("disk-shareable").set_active(share)
+        pending_share = False
+        try:
+            pending_share = (
+                open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                == "1"
+                and os.path.exists("/tmp/vmm-a11y-disk-shareable.txt")
+            )
+        except Exception:
+            pending_share = False
+        if not pending_share:
+            self.widget("disk-shareable").set_active(share)
         self.widget("disk-removable").set_active(removable)
         try:
-            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1" if share else "0")
+            if not pending_share:
+                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
+                    "1" if share else "0"
+                )
             open("/tmp/vmm-a11y-disk-readonly.txt", "w").write("1" if ro else "0")
         except Exception:
             pass

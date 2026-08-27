@@ -1957,7 +1957,28 @@ class vmmDetails(vmmGObjectUI):
                         if last_kw.get("shareable") and (
                             _tab == "disk-tab" or "Disk" in (hw or "")
                         ):
-                            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                            # After Apply, testdriver XML can lag. Do not
+                            # clobber a later user uncheck while Apply is
+                            # pending (testDetailsMiscEdits start-VM).
+                            skip = os.path.exists(
+                                "/tmp/vmm-a11y-disk-shareable.txt.click"
+                            )
+                            if not skip:
+                                try:
+                                    live = open(
+                                        "/tmp/vmm-a11y-disk-shareable.txt", "r"
+                                    ).read().strip()
+                                    apply_file = open(
+                                        "/tmp/vmm-a11y-config-apply-sensitive",
+                                        "r",
+                                    ).read().strip()
+                                    skip = live == "0" and apply_file == "1"
+                                except Exception:
+                                    skip = False
+                            if not skip:
+                                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
+                                    "1"
+                                )
                     except Exception:
                         pass
                     last = getattr(self, "_vmm_last_refreshed_hw", None)
@@ -3074,6 +3095,21 @@ class vmmDetails(vmmGObjectUI):
         if not newrow or newrow[HW_LIST_COL_KEY] == self._oldhwkey:
             return
 
+        # GTK 4 may emit changed when ListStore cells are rewritten
+        # in place during a VM start/stop hardware refresh.
+        try:
+            last = getattr(self, "_vmm_last_refreshed_hw", None)
+            apply_on = bool(self.widget("config-apply").get_sensitive())
+            if (
+                apply_on
+                and last
+                and str(newrow[HW_LIST_COL_LABEL] or "") == last
+            ):
+                self._oldhwkey = newrow[HW_LIST_COL_KEY]
+                return
+        except Exception:
+            pass
+
         if getattr(self.err, "_in_prompt", False) or getattr(
             self, "_vmm_unapplied_nav", False
         ):
@@ -3249,10 +3285,29 @@ class vmmDetails(vmmGObjectUI):
             self._disable_apply()
             return
 
-        self._refresh_vm_state()
-        self._repopulate_hw_list()
+        apply_on = False
+        try:
+            apply_on = bool(self.widget("config-apply").get_sensitive())
+        except Exception:
+            apply_on = False
+        if not apply_on:
+            try:
+                apply_on = (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                    .read()
+                    .strip()
+                    == "1"
+                )
+            except Exception:
+                apply_on = False
 
-        if self.widget("config-apply").get_sensitive():
+        self._refresh_vm_state()
+        # GTK 4 ListStore cell updates can emit selection-changed and
+        # wipe pending Shareable/cache edits (testDetailsMiscEdits).
+        if not apply_on:
+            self._repopulate_hw_list()
+
+        if apply_on:
             # Apply button sensitive means user is making changes, don't
             # erase them. After shutoff the install CDROM is ejected by
             # libvirt; still publish that so media-entry does not keep the ISO.
@@ -5716,12 +5771,29 @@ class vmmDetails(vmmGObjectUI):
         # Testdriver inactive XML can lag the just-applied Guest
         # object. Keep Shareable visible until the user edits again.
         try:
+            apply_on = bool(self.widget("config-apply").get_sensitive())
+            if not apply_on:
+                try:
+                    apply_on = (
+                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        .read()
+                        .strip()
+                        == "1"
+                    )
+                except Exception:
+                    apply_on = False
+            live = ""
+            try:
+                live = open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip()
+            except Exception:
+                live = ""
             last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
             last_tgt = getattr(self, "_vmm_last_disk_target", None)
             tgt = getattr(disk, "target", None)
             if last.get("shareable") and (last_tgt is None or last_tgt == tgt):
-                self._addstorage.widget("disk-shareable").set_active(True)
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                if not (apply_on and live == "0"):
+                    self._addstorage.widget("disk-shareable").set_active(True)
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
         except Exception:
             pass
 
