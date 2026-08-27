@@ -706,21 +706,29 @@ class VNCDisplay(_DisplayBase):
         sock.sendall(b"RFB 003.008\n")
         ntypes = self._recv_n(sock, 1)[0]
         types = self._recv_n(sock, ntypes)
-        if _VNC_SEC_NONE in types:
-            sock.sendall(bytes([_VNC_SEC_NONE]))
-        elif _VNC_SEC_VNC in types:
+        try:
+            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                "vnc-sec-types %s\n" % list(types)
+            )
+        except Exception:
+            pass
+        if _VNC_SEC_VNC in types:
             sock.sendall(bytes([_VNC_SEC_VNC]))
             self._vnc_auth2(sock)
         elif _VNC_SEC_VENCRYPT in types:
             sock.sendall(bytes([_VNC_SEC_VENCRYPT]))
             sock = self._vencrypt(sock)
             self._sock = sock
+        elif _VNC_SEC_NONE in types:
+            sock.sendall(bytes([_VNC_SEC_NONE]))
         else:
             raise RuntimeError("Unsupported VNC security types: %s" % list(types))
         result = struct.unpack("!I", self._recv_n(sock, 4))[0]
         if result != 0:
             GLib.idle_add(self.emit, "vnc-auth-failure", "VNC authentication failed")
-            raise RuntimeError("VNC authentication failed")
+            # Do not raise: the except path emits vnc-disconnected, which
+            # cleans up the viewer before vnc-auth-failure is delivered.
+            return
         sock.sendall(struct.pack("!B", 1 if getattr(self, "_shared", True) else 0))
         width, height, _ppf = struct.unpack("!HH16s", self._recv_n(sock, 20))
         namelen = struct.unpack("!I", self._recv_n(sock, 4))[0]
@@ -813,6 +821,12 @@ class VNCDisplay(_DisplayBase):
         if username:
             values = [0, 1]
         if (username and not self._username) or not self._password:
+            try:
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                    "vnc-need-creds username=%s\n" % username
+                )
+            except Exception:
+                pass
             self._auth_event.clear()
             GLib.idle_add(self.emit, "vnc-auth-credential", _Creds(values))
             self._auth_event.wait(30)

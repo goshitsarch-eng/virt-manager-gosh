@@ -1736,9 +1736,9 @@ class vmmDomain(vmmLibvirtObject):
 
     def get_console_autoconnect(self):
         ret = self.config.get_pervm(self.get_uuid(), "/autoconnect")
-        if ret == -1:
+        if ret is None or ret == -1:
             return self.config.get_console_autoconnect()
-        return ret
+        return bool(ret)
 
     def set_details_window_size(self, w, h):
         self.config.set_pervm(self.get_uuid(), "/vm-window-size", (w, h))

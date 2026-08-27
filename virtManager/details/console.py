@@ -471,7 +471,9 @@ class vmmConsolePages(vmmGObjectUI):
 
         # Initialize display widget
         self._viewer = None
-        self._viewer_connect_clicked = False
+        # First console show connects even if gsettings autoconnect is unset.
+        # Guest-stop _close_viewer() clears this so Autoconnect-off is honored.
+        self._viewer_connect_clicked = True
         self._in_fullscreen = False
 
         # Fullscreen toolbar
@@ -1192,6 +1194,13 @@ class vmmConsolePages(vmmGObjectUI):
             return
 
         if not self.vm.get_console_autoconnect() and not self._viewer_connect_clicked:
+            try:
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                    "init-viewer connect-page auto=%s clicked=%s\n"
+                    % (self.vm.get_console_autoconnect(), self._viewer_connect_clicked)
+                )
+            except Exception:
+                pass
             self._activate_console_connect_page()
             return
 
@@ -1213,8 +1222,20 @@ class vmmConsolePages(vmmGObjectUI):
             self._connect_viewer_signals()
 
             self._viewer.console_open()
+            try:
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                    "viewer-open class=%s\n" % viewer_class.__name__
+                )
+            except Exception:
+                pass
         except Exception as e:
             log.exception("Error connecting to graphical console")
+            try:
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                    "viewer-open-err %s\n" % e
+                )
+            except Exception:
+                pass
             self._activate_gfx_unavailable_page(_("Error connecting to graphical console:\n%s") % e)
 
     def _set_credentials(self, src_ignore=None):
@@ -1277,6 +1298,9 @@ class vmmConsolePages(vmmGObjectUI):
             # _refresh_vm_state if needed)
             self._activate_vm_unavailable_page(errmsg)
 
+        # Reconnect even if per-VM autoconnect is off; the user already
+        # asked to open the console and we need the password page again.
+        self._viewer_connect_clicked = True
         self._refresh_vm_state()
 
     def _viewer_need_auth_cb(self, _src, withPassword, withUsername):
