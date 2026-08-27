@@ -1117,6 +1117,29 @@ class _SentinelEntry(object):
                     os.remove("/tmp/vmm-a11y-details-media-entry.txt.set")
                 except Exception:
                     pass
+                # Wait for the New VM media poller to apply the path and
+                # finish detect. Forward immediately after set_text used
+                # to succeed only because the details .set wait took 3s.
+                deadline = time.time() + 5.0
+                while time.time() < deadline:
+                    try:
+                        set_gone = not os.path.exists(
+                            "/tmp/vmm-a11y-media-entry.txt.set"
+                        )
+                    except Exception:
+                        set_gone = True
+                    try:
+                        osname = open(
+                            "/tmp/vmm-a11y-oslist-entry.txt", "r"
+                        ).read().strip()
+                    except Exception:
+                        osname = ""
+                    if set_gone and osname and osname not in (
+                        "Detecting...",
+                        "Waiting for install media / source",
+                    ):
+                        break
+                    time.sleep(0.05)
             path = value
             vm_open = False
             try:
