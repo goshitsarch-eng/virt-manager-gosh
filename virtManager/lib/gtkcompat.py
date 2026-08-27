@@ -4081,7 +4081,9 @@ def expose_storagebrowse_window(browser):
     """Findable storage browser with pool/volume rows."""
     if browser is None:
         return None
-    browser._vmm_browse_hidden = False
+    if getattr(browser, "_vmm_browse_hidden", False):
+        hide_storagebrowse_window(browser)
+        return getattr(browser, "_vmm_browse_win", None)
     win = getattr(browser, "_vmm_browse_win", None)
     slist = getattr(browser, "storagelist", None)
 
@@ -4274,7 +4276,12 @@ def expose_storagebrowse_window(browser):
         ensure_activate_clicked(choose)
         set_accessible_name(choose, "Choose Volume")
 
-        def _choose(*_a, lst=slist):
+        def _choose(*_a, br=browser, lst=slist):
+            try:
+                br._a11y_choose_volume()
+                return
+            except Exception:
+                pass
             try:
                 lst.widget("choose-volume").emit("clicked")
             except Exception:

@@ -66,6 +66,7 @@ class vmmStorageBrowser(vmmGObjectUI):
         self._first_run = False
         self._finish_cb = None
         self._browse_reason = None
+        self._vmm_browse_hidden = True
 
         self.storagelist = vmmHostStorage(
             self.conn, self.builder, self.topwin, self._vol_sensitive_cb
@@ -95,6 +96,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             app = Gtk.Application.get_default()
             if app is not None:
                 app.add_window(self.topwin)
+            self._vmm_browse_hidden = False
             gtkcompat.expose_storagebrowse_window(self)
             try:
                 open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
@@ -125,6 +127,8 @@ class vmmStorageBrowser(vmmGObjectUI):
                 gtkcompat.expose_storagebrowse_window(self)
 
             def _select_pool():
+                if getattr(self, "_vmm_browse_hidden", False):
+                    return
                 try:
                     want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
                 except Exception:
@@ -414,6 +418,8 @@ class vmmStorageBrowser(vmmGObjectUI):
 
     def _volume_chosen(self, src, volume):
         ignore = src
+        if volume is None:
+            return
         log.debug("Chosen volume XML:\n%s", volume.xmlobj.get_xml())
         self._finish(volume.get_target_path())
 
@@ -491,16 +497,18 @@ class vmmStorageBrowser(vmmGObjectUI):
                     open("/tmp/vmm-a11y-boot-%s.txt" % target, "w").write(path)
         except Exception:
             pass
-        if self._finish_cb:
-            self._finish_cb(self, path)
-        parent = None
         try:
-            parent = self.topwin.get_transient_for()
-        except Exception:
-            pass
-        self.close()
-        if parent is not None:
+            if self._finish_cb:
+                self._finish_cb(self, path)
+        finally:
+            parent = None
             try:
-                parent.present()
+                parent = self.topwin.get_transient_for()
             except Exception:
                 pass
+            self.close()
+            if parent is not None:
+                try:
+                    parent.present()
+                except Exception:
+                    pass

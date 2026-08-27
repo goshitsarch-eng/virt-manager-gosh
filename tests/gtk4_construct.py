@@ -1191,6 +1191,24 @@ def main():
             dlg.set_browse_reason(reason)
             _pump(GLib, 0.01)
         dlg.show(None)
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "1", shown
+        dlg.storagelist.emit("volume-chosen", None)
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "1", "None volume must not close the browser"
+        finished = []
+
+        def _cb(_src, path):
+            finished.append(path)
+
+        dlg.set_finish_cb(_cb)
+        dlg._finish("/pool-dir/iso-vol")
+        assert finished == ["/pool-dir/iso-vol"]
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "0", shown
+        _pump(GLib, 0.9)
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "0", "storage browser remounted after choose: %s" % shown
 
     def clone_storage_dialog():
         from virtManager.clone import vmmCloneVM
