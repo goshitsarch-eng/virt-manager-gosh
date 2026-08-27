@@ -1982,6 +1982,7 @@ class vmmDetails(vmmGObjectUI):
                             skip = os.path.exists(
                                 "/tmp/vmm-a11y-disk-shareable.txt.click"
                             )
+                            live = ""
                             if not skip:
                                 widget_off = False
                                 try:
