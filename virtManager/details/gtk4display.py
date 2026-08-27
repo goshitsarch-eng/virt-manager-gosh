@@ -39,6 +39,9 @@ _BUTTON_BITS = {1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32, 7: 64}
 _SPICE_CLIP_UTF8 = 1
 _SPICE_CLIP_SELECTION = 0
 _SPICE_CLIP_PRIMARY = 1
+# spice-protocol SpiceMouseMode bits (spice-gtk uses the same values)
+_SPICE_MOUSE_MODE_SERVER = 1
+_SPICE_MOUSE_MODE_CLIENT = 2
 _VNC_ENC_CORRE = 4
 _VNC_ENC_TIGHTPNG = 20
 # QEMU RFB client message + encoding for guest resize
@@ -2112,6 +2115,9 @@ class SpiceDisplay(_DisplayBase):
         self._buttons = 0
         self._open = True
         self._clip_from_guest = False
+        self._mouse_mode = _SPICE_MOUSE_MODE_CLIENT
+        self._rel_x = None
+        self._rel_y = None
         self._bind_session_channels()
         try:
             drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
@@ -2123,6 +2129,12 @@ class SpiceDisplay(_DisplayBase):
     def attach_channels(self, display_channel, inputs_channel):
         self._channel = display_channel
         self._inputs = inputs_channel
+        if inputs_channel is not None:
+            try:
+                inputs_channel.connect("notify::key-modifiers", self._on_key_modifiers)
+            except (TypeError, RuntimeError):
+                pass
+            self._sync_key_locks()
         if display_channel is not None:
             display_channel.connect("notify::width", self._on_primary)
             try:
@@ -2166,6 +2178,11 @@ class SpiceDisplay(_DisplayBase):
             and self._inputs is None
         ):
             self._inputs = channel
+            try:
+                channel.connect("notify::key-modifiers", self._on_key_modifiers)
+            except (TypeError, RuntimeError):
+                pass
+            self._sync_key_locks()
         if SpiceClientGLib is not None and isinstance(
             channel, SpiceClientGLib.CursorChannel
         ):
@@ -2202,6 +2219,16 @@ class SpiceDisplay(_DisplayBase):
             except (TypeError, RuntimeError):
                 pass
         self._bind_gdk_clipboard()
+        try:
+            channel.connect("notify::mouse-mode", self._on_mouse_mode)
+        except (TypeError, RuntimeError):
+            pass
+        self._sync_mouse_mode()
+        if SpiceClientGLib is not None:
+            try:
+                SpiceClientGLib.main_request_mouse_mode(channel, _SPICE_MOUSE_MODE_CLIENT)
+            except Exception:
+                pass
         if self.resize_guest:
             self._push_monitor_config()
 
@@ -2388,16 +2415,95 @@ class SpiceDisplay(_DisplayBase):
         except Exception as exc:
             log.debug("spice resize-guest failed: %s", exc)
 
+    def _on_mouse_mode(self, *_args):
+        self._sync_mouse_mode()
+
+    def _sync_mouse_mode(self):
+        mode = _SPICE_MOUSE_MODE_CLIENT
+        if self._main is not None:
+            try:
+                mode = int(self._main.get_property("mouse-mode") or 0)
+            except Exception:
+                mode = _SPICE_MOUSE_MODE_CLIENT
+        if mode & _SPICE_MOUSE_MODE_CLIENT:
+            self._mouse_mode = _SPICE_MOUSE_MODE_CLIENT
+        elif mode & _SPICE_MOUSE_MODE_SERVER:
+            self._mouse_mode = _SPICE_MOUSE_MODE_SERVER
+        else:
+            self._mouse_mode = _SPICE_MOUSE_MODE_CLIENT
+        self._rel_x = None
+        self._rel_y = None
+        # spice-gtk grabs the pointer in server (relative) mode so
+        # motion events are deltas rather than leaving the widget.
+        if self._mouse_mode == _SPICE_MOUSE_MODE_SERVER and self._pointer_grab:
+            if not self._grabbed_pointer:
+                self._grabbed_pointer = True
+                self.emit("vnc-pointer-grab")
+                self.emit("mouse-grab", True)
+
+    def _is_server_mouse(self):
+        return self._mouse_mode == _SPICE_MOUSE_MODE_SERVER
+
+    def _host_key_locks(self, state=0):
+        locks = 0
+        if SpiceClientGLib is None:
+            return 0
+        try:
+            caps = int(SpiceClientGLib.InputsLock.CAPS_LOCK)
+            num = int(SpiceClientGLib.InputsLock.NUM_LOCK)
+            scroll = int(SpiceClientGLib.InputsLock.SCROLL_LOCK)
+        except Exception:
+            caps, num, scroll = 1, 2, 4
+        modifiers = int(state or 0)
+        if not modifiers:
+            try:
+                display = Gdk.Display.get_default()
+                seat = display.get_default_seat() if display is not None else None
+                keyboard = seat.get_keyboard() if seat is not None else None
+                if keyboard is not None and hasattr(keyboard, "get_modifier_state"):
+                    modifiers = int(keyboard.get_modifier_state())
+            except Exception:
+                modifiers = 0
+        if modifiers & int(Gdk.ModifierType.LOCK_MASK):
+            locks |= caps
+        if modifiers & int(Gdk.ModifierType.MOD2_MASK):
+            locks |= num
+        if modifiers & int(getattr(Gdk.ModifierType, "MOD3_MASK", 0) or 0):
+            locks |= scroll
+        return locks
+
+    def _sync_key_locks(self, state=0):
+        if not self._inputs or SpiceClientGLib is None:
+            return
+        try:
+            SpiceClientGLib.inputs_set_key_locks(self._inputs, self._host_key_locks(state))
+        except Exception:
+            pass
+
+    def _on_key_modifiers(self, *_args):
+        return None
+
     def _send_pointer(self, x, y, button, pressed=False):
         if button:
             self._update_buttons(button, pressed)
         if not self._inputs or SpiceClientGLib is None:
             return
-        x, y = self._scale_pointer(x, y)
         try:
             if button and pressed:
                 SpiceClientGLib.inputs_button_press(self._inputs, int(button), self._buttons)
-            SpiceClientGLib.inputs_position(self._inputs, int(x), int(y), 0, self._buttons)
+            if self._is_server_mouse():
+                if self._rel_x is None:
+                    dx = dy = 0
+                else:
+                    dx = int(x - self._rel_x)
+                    dy = int(y - self._rel_y)
+                self._rel_x, self._rel_y = x, y
+                SpiceClientGLib.inputs_motion(self._inputs, dx, dy, self._buttons)
+            else:
+                abs_x, abs_y = self._scale_pointer(x, y)
+                SpiceClientGLib.inputs_position(
+                    self._inputs, int(abs_x), int(abs_y), 0, self._buttons
+                )
             if button and not pressed:
                 SpiceClientGLib.inputs_button_release(self._inputs, int(button), self._buttons)
         except Exception:
@@ -2615,6 +2721,14 @@ class SpiceDisplay(_DisplayBase):
             progress.finish_error(str(exc))
             log.debug("spice file transfer failed: %s", exc)
             return False
+
+    def _on_key_pressed(self, controller, keyval, keycode, state):
+        self._sync_key_locks(state)
+        return super()._on_key_pressed(controller, keyval, keycode, state)
+
+    def _on_key_released(self, controller, keyval, keycode, state):
+        self._sync_key_locks(state)
+        return super()._on_key_released(controller, keyval, keycode, state)
 
     def _spice_scancode(self, keyval, keycode):
         return _linux_scancode(keyval, keycode)

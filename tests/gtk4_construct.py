@@ -1127,6 +1127,53 @@ def main():
         xfer.finish_error("nope")
         spice = gtk4display.SpiceDisplay(None)
         assert spice._on_file_drop(None, [], 0, 0) is False
+        from gi.repository import Gdk
+        motion = []
+        position = []
+        press = []
+        orig_motion = gtk4display.SpiceClientGLib.inputs_motion
+        orig_position = gtk4display.SpiceClientGLib.inputs_position
+        orig_press = gtk4display.SpiceClientGLib.inputs_button_press
+        orig_release = gtk4display.SpiceClientGLib.inputs_button_release
+        orig_locks = gtk4display.SpiceClientGLib.inputs_set_key_locks
+        gtk4display.SpiceClientGLib.inputs_motion = (
+            lambda ch, dx, dy, buttons: motion.append((dx, dy, buttons))
+        )
+        gtk4display.SpiceClientGLib.inputs_position = (
+            lambda ch, x, y, display, buttons: position.append((x, y, display, buttons))
+        )
+        gtk4display.SpiceClientGLib.inputs_button_press = (
+            lambda ch, button, buttons: press.append(("down", button, buttons))
+        )
+        gtk4display.SpiceClientGLib.inputs_button_release = (
+            lambda ch, button, buttons: press.append(("up", button, buttons))
+        )
+        locks = []
+        gtk4display.SpiceClientGLib.inputs_set_key_locks = (
+            lambda ch, value: locks.append(value)
+        )
+        try:
+            spice._inputs = object()
+            spice._fb_size = (100, 100)
+            spice._mouse_mode = gtk4display._SPICE_MOUSE_MODE_CLIENT
+            spice._send_pointer(10, 10, 0, False)
+            assert position and not motion, (position, motion)
+            spice._mouse_mode = gtk4display._SPICE_MOUSE_MODE_SERVER
+            spice._rel_x = spice._rel_y = None
+            spice._send_pointer(10, 10, 0, False)
+            spice._send_pointer(16, 13, 1, True)
+            assert motion, "server mouse mode must send inputs_motion"
+            assert motion[-1][0] == 6 and motion[-1][1] == 3, motion
+            assert any(item[0] == "down" for item in press), press
+            spice._sync_key_locks(int(Gdk.ModifierType.LOCK_MASK))
+            assert locks, "caps lock must be sent to the guest"
+            assert locks[-1] & int(gtk4display.SpiceClientGLib.InputsLock.CAPS_LOCK)
+        finally:
+            gtk4display.SpiceClientGLib.inputs_motion = orig_motion
+            gtk4display.SpiceClientGLib.inputs_position = orig_position
+            gtk4display.SpiceClientGLib.inputs_button_press = orig_press
+            gtk4display.SpiceClientGLib.inputs_button_release = orig_release
+            gtk4display.SpiceClientGLib.inputs_set_key_locks = orig_locks
 
         class FakeSock:
             def __init__(self, data):

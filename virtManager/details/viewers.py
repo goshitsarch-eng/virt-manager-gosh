@@ -626,8 +626,17 @@ class SpiceViewer(Viewer):
         self._spice_session = SpiceClientGLib.Session()
         if hasattr(SpiceClientGLib, "set_session_option"):
             SpiceClientGLib.set_session_option(self._spice_session)
+        for prop, val in (
+            ("enable-audio", True),
+            ("enable-smartcard", True),
+            ("enable-usbredir", True),
+        ):
+            try:
+                self._spice_session.set_property(prop, val)
+            except Exception:
+                pass
         try:
-            self._spice_session.set_property("enable-audio", True)
+            self._spice_session.set_property("gl-scanout", True)
         except Exception:
             pass
         for prop, envname in (
