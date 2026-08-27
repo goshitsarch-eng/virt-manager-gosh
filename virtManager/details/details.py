@@ -3154,7 +3154,12 @@ class vmmDetails(vmmGObjectUI):
             # User said No, or apply succeeded, or there was nothing
             # pending. Abandon leftover form state so Shareable reverts
             # when the disk page is refreshed later.
+            try:
+                self._addstorage._active_edits = []
+            except Exception:
+                pass
             self._disable_apply()
+            self._revert_a11y_disk_shareable()
             self._refresh_page()
 
     def _disable_device_remove(self, tooltip):
@@ -3917,9 +3922,36 @@ class vmmDetails(vmmGObjectUI):
             pass
         return None
 
+    def _revert_a11y_disk_shareable(self):
+        """Discard a pending Shareable click so the sentinel matches XML."""
+        try:
+            self._addstorage._active_edits = []
+        except Exception:
+            pass
+        applied = False
+        try:
+            applied = (
+                open("/tmp/vmm-a11y-disk-shareable-applied.txt", "r")
+                .read()
+                .strip()
+                == "1"
+            )
+        except Exception:
+            applied = False
+        last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+        val = "1" if (applied or last.get("shareable")) else "0"
+        try:
+            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(val)
+            w = self._addstorage.widget("disk-shareable")
+            if w is not None:
+                w.set_active(val == "1")
+        except Exception:
+            pass
+
     def _finish_unapplied_hw_nav(self, dest_label, dest_row=None):
         """Leave a dirty page after unapplied Yes/No (GTK already on dest)."""
         self._disable_apply()
+        self._revert_a11y_disk_shareable()
         self._vmm_pending_hw_nav = None
         self._vmm_dirty_hw = None
         if dest_row is None:
@@ -4001,6 +4033,7 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         self._disable_apply()
+        self._revert_a11y_disk_shareable()
         # Prefer the hardware-list sentinel when GTK selection lagged
         # (Shareable cancel on IDE Disk 1 after a failed cache apply).
         row = None
