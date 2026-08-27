@@ -4136,7 +4136,11 @@ class vmmDetails(vmmGObjectUI):
                     pass
             return False
 
-        GLib.idle_add(_do_show)
+        # Show now, like createvm/addhardware/clone. An unpinned
+        # idle_add(_do_show) is collected before it runs, so the
+        # Choose Volume poller never starts.
+        self._vmm_browse_show_cb = _do_show
+        _do_show()
 
     def _inspection_refresh_clicked_cb(self, src):
         from ..lib import inspection as inspmod
@@ -4335,6 +4339,24 @@ class vmmDetails(vmmGObjectUI):
     def _disk_source_browse_clicked_cb(self, src):
         row = self._get_hw_row()
         disk = row[HW_LIST_COL_DEVICE] if row else None
+        if disk is None or not hasattr(disk, "is_floppy"):
+            for path in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-selected.txt",
+                "/tmp/vmm-a11y-hw-last-device.txt",
+            ):
+                try:
+                    want = open(path, "r").read().strip()
+                except Exception:
+                    want = ""
+                if not want:
+                    continue
+                labeled = self._hw_row_for_label(want)
+                if labeled is None or labeled[HW_LIST_COL_DEVICE] is None:
+                    continue
+                row = labeled
+                disk = labeled[HW_LIST_COL_DEVICE]
+                break
         if disk is None or not hasattr(disk, "is_floppy"):
             return
         if disk.is_floppy():

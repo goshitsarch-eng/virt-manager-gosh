@@ -3427,6 +3427,20 @@ def main():
             details._enable_apply(EDIT_DISK_PATH)
             found = True
         assert found
+        details._disk_source_browse_clicked_cb(None)
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "1", "details Browse must show the storage browser: %s" % shown
+        browser = details.storage_browser
+        assert browser is not None
+        assert getattr(browser, "_vmm_choose_poll_cb", None) is not None
+        open("/tmp/vmm-a11y-vol-select.txt", "w").write("iso-vol")
+        open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+        _pump(GLib, 0.25)
+        assert not os.path.exists("/tmp/vmm-a11y-choose-volume"), (
+            "details Browse choose poller did not consume Choose Volume"
+        )
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "0", "storage browser stayed open after Choose Volume: %s" % shown
 
     def media_change_cdrom_nodedev():
         from virtManager.details.details import EDIT_DISK_PATH

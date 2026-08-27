@@ -2044,7 +2044,8 @@ def _start_a11y_click_poll():
                     pass
         return True
 
-    GLib.timeout_add(50, _tick)
+    _A11Y_CLICK_POLL["tick"] = _tick
+    GLib.timeout_add(50, _A11Y_CLICK_POLL["tick"])
     start_add_conn_poll()
     start_conn_action_poll()
 
@@ -2098,7 +2099,8 @@ def start_conn_action_poll():
             pass
         return True
 
-    GLib.timeout_add(50, _tick)
+    _CONN_ACTION_POLL["tick"] = _tick
+    GLib.timeout_add(50, _CONN_ACTION_POLL["tick"])
 
 
 def start_add_conn_poll():
@@ -2152,7 +2154,8 @@ def start_add_conn_poll():
             _mark_open(uri)
         return True
 
-    GLib.timeout_add(50, _tick)
+    _ADD_CONN_POLL["tick"] = _tick
+    GLib.timeout_add(50, _ADD_CONN_POLL["tick"])
 
 
 def _a11y_sidecar_box(window=None):
@@ -4298,8 +4301,15 @@ def expose_storagebrowse_window(browser):
             win.set_visible(True)
             _rebuild()
             try:
-                GLib.timeout_add(200, lambda: _rebuild() or False)
-                GLib.timeout_add(800, lambda: _rebuild() or False)
+                def _rebuild_later(_br=browser):
+                    if getattr(_br, "_vmm_browse_hidden", False):
+                        return False
+                    _rebuild()
+                    return False
+
+                browser._vmm_rebuild_later_cb = _rebuild_later
+                GLib.timeout_add(200, browser._vmm_rebuild_later_cb)
+                GLib.timeout_add(800, browser._vmm_rebuild_later_cb)
             except Exception:
                 pass
             return win
