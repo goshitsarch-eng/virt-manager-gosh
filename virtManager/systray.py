@@ -311,9 +311,12 @@ class _SystrayStatusIcon(_Systray):  # pragma: no cover
         self._menu = None
         self._visible = False
         self._docked = False
+        self._standalone = False
 
     def is_embedded(self):
-        return self._visible
+        # Docked in _NET_SYSTEM_TRAY, or the explicit standalone icon
+        # used when no tray manager exists (GTK 3 StatusIcon fallback).
+        return bool(self._visible and (self._docked or self._standalone))
 
     def set_menu(self, menu):
         _ensure_show_manager_item(menu)
@@ -335,8 +338,10 @@ class _SystrayStatusIcon(_Systray):  # pragma: no cover
             return
         if _xembed_dock_xid(xid):
             self._docked = True
+            self._standalone = False
             return
         # No tray manager: restore a findable standalone icon window
+        self._standalone = True
         try:
             self._window.set_decorated(True)
             self._window.set_default_size(48, 48)
@@ -466,6 +471,7 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         self._reg_id = 0
         self._menu_reg_id = 0
         self._revision = 1
+        self._registered = False
         self._items = {0: None}
         self._children = {0: []}
         self._window = Gtk.Window()
@@ -539,6 +545,7 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
                 None,
             )
             watcher.RegisterStatusNotifierItem("(s)", name)
+            self._registered = True
         except Exception:
             try:
                 watcher = Gio.DBusProxy.new_sync(
@@ -551,6 +558,7 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
                     None,
                 )
                 watcher.RegisterStatusNotifierItem("(s)", name)
+                self._registered = True
             except Exception:
                 log.debug("No StatusNotifierWatcher to register with")
 
@@ -709,7 +717,10 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
             invocation.return_value(GLib.Variant("(ai)", (errors,)))
             return
         if method == "AboutToShow":
-            invocation.return_value(GLib.Variant("(b)", (False,)))
+            self._rebuild_items()
+            self._revision += 1
+            self._emit_layout()
+            invocation.return_value(GLib.Variant("(b)", (True,)))
             return
         if method == "AboutToShowGroup":
             invocation.return_value(GLib.Variant("(aiai)", ([], [])))
@@ -726,7 +737,7 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         return values.get(name)
 
     def is_embedded(self):
-        return self._status == "Active" and self._bus is not None
+        return self._status == "Active" and self._registered
 
     def set_menu(self, menu):
         _ensure_show_manager_item(menu)

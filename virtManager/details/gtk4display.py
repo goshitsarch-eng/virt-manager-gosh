@@ -1480,6 +1480,7 @@ class SpiceDisplay(_DisplayBase):
         self._channel = None
         self._inputs = None
         self._main = None
+        self._cursor_channel = None
         self._buttons = 0
         self._open = True
         self._clip_from_guest = False
@@ -1508,6 +1509,14 @@ class SpiceDisplay(_DisplayBase):
                 display_channel.connect("display-mark", self._on_invalidate)
             except TypeError:
                 pass
+            try:
+                display_channel.connect("notify::gl-scanout", self._on_invalidate)
+            except TypeError:
+                pass
+            try:
+                display_channel.connect("gl-scanout", self._on_invalidate)
+            except TypeError:
+                pass
             self._refresh_primary()
         self._bind_session_channels()
 
@@ -1529,6 +1538,10 @@ class SpiceDisplay(_DisplayBase):
             and self._inputs is None
         ):
             self._inputs = channel
+        if SpiceClientGLib is not None and isinstance(
+            channel, SpiceClientGLib.CursorChannel
+        ):
+            self.attach_cursor_channel(channel)
 
     def _find_main_channel(self):
         if self._main is not None:
@@ -1573,8 +1586,144 @@ class SpiceDisplay(_DisplayBase):
     def _on_invalidate(self, *_args):
         self._refresh_primary()
 
+    def attach_cursor_channel(self, channel):
+        """Follow SpiceClientGLib CursorChannel like SpiceClientGtk."""
+        if self._cursor_channel is channel:
+            return
+        if self._cursor_channel is not None:
+            for handler in (
+                self._on_cursor_set,
+                self._on_cursor_hide,
+                self._on_cursor_reset,
+                self._on_cursor_move,
+            ):
+                try:
+                    self._cursor_channel.disconnect_by_func(handler)
+                except Exception:
+                    pass
+        self._cursor_channel = channel
+        if channel is None:
+            return
+        for sig, handler in (
+            ("cursor-set", self._on_cursor_set),
+            ("cursor-hide", self._on_cursor_hide),
+            ("cursor-reset", self._on_cursor_reset),
+            ("cursor-move", self._on_cursor_move),
+        ):
+            try:
+                channel.connect(sig, handler)
+            except (TypeError, RuntimeError):
+                pass
+
+    def _on_cursor_set(self, _channel, *args):
+        for arg in args:
+            if hasattr(arg, "width") and hasattr(arg, "data"):
+                self._apply_spice_cursor_shape(arg)
+                return
+        if len(args) >= 5:
+            width, height, hotx, hoty, data = args[:5]
+            shape = type(
+                "_CursorShape",
+                (),
+                {
+                    "width": width,
+                    "height": height,
+                    "hot_spot_x": hotx,
+                    "hot_spot_y": hoty,
+                    "data": data,
+                },
+            )()
+            self._apply_spice_cursor_shape(shape)
+
+    def _on_cursor_hide(self, *_args):
+        self._cursor_surface = None
+        self._cursor_pixels = None
+        try:
+            self.set_cursor(Gdk.Cursor.new_from_name("none"))
+        except Exception:
+            try:
+                self.set_cursor(None)
+            except Exception:
+                pass
+        self.queue_draw()
+
+    def _on_cursor_reset(self, *_args):
+        self._cursor_surface = None
+        self._cursor_pixels = None
+        try:
+            self.set_cursor(None)
+        except Exception:
+            pass
+        self.queue_draw()
+
+    def _on_cursor_move(self, _channel, *args):
+        if len(args) >= 2:
+            self._last_x, self._last_y = args[0], args[1]
+            self.queue_draw()
+
+    def _apply_spice_cursor_shape(self, shape):
+        width = int(getattr(shape, "width", 0) or 0)
+        height = int(getattr(shape, "height", 0) or 0)
+        data = getattr(shape, "data", None)
+        if width <= 0 or height <= 0 or data is None or cairo is None:
+            self._on_cursor_hide()
+            return
+        try:
+            pixels = bytearray(data)
+        except Exception:
+            self._on_cursor_hide()
+            return
+        need = width * height * 4
+        if len(pixels) < need:
+            pixels.extend(b"\x00" * (need - len(pixels)))
+        self._cursor_pixels = pixels
+        self._cursor_hot = (
+            int(getattr(shape, "hot_spot_x", 0) or 0),
+            int(getattr(shape, "hot_spot_y", 0) or 0),
+        )
+        try:
+            self._cursor_surface = cairo.ImageSurface.create_for_data(
+                memoryview(pixels), cairo.FORMAT_ARGB32, width, height, width * 4
+            )
+        except Exception:
+            self._cursor_surface = None
+        try:
+            self.set_cursor(Gdk.Cursor.new_from_name("none"))
+        except Exception:
+            pass
+        self.queue_draw()
+
+    def _try_gl_scanout(self):
+        """Paint Spice GL scanout (gtk-spice GL guests) when available."""
+        if not self._channel or SpiceClientGLib is None:
+            return False
+        scanout = None
+        try:
+            if hasattr(self._channel, "get_gl_scanout"):
+                scanout = self._channel.get_gl_scanout()
+            elif hasattr(SpiceClientGLib, "display_get_gl_scanout"):
+                scanout = SpiceClientGLib.display_get_gl_scanout(self._channel)
+        except Exception:
+            return False
+        if not scanout or not getattr(scanout, "width", 0):
+            return False
+        surface = _cairo_from_gl_scanout(scanout)
+        if surface is None:
+            return False
+        self._set_framebuffer(surface, int(scanout.width), int(scanout.height))
+        try:
+            if hasattr(self._channel, "gl_draw_done"):
+                self._channel.gl_draw_done()
+            elif hasattr(SpiceClientGLib, "display_gl_draw_done"):
+                SpiceClientGLib.display_gl_draw_done(self._channel)
+        except Exception:
+            pass
+        return True
+
     def _refresh_primary(self):
         if not self._channel or SpiceClientGLib is None:
+            return
+        if self._try_gl_scanout():
             return
         primary = SpiceClientGLib.DisplayPrimary()
         try:
@@ -1805,9 +1954,52 @@ class SpiceDisplay(_DisplayBase):
 
     def close(self):
         self._open = False
+        self.attach_cursor_channel(None)
         self._channel = None
         self._inputs = None
         self._main = None
+
+
+def _cairo_from_gl_scanout(scanout):
+    """Import a Spice GL dmabuf scanout into a cairo surface."""
+    if cairo is None or GdkPixbuf is None:
+        return None
+    try:
+        fd = int(getattr(scanout, "fd", -1))
+        width = int(getattr(scanout, "width", 0) or 0)
+        height = int(getattr(scanout, "height", 0) or 0)
+        stride = int(getattr(scanout, "stride", 0) or width * 4)
+        fourcc = int(getattr(scanout, "format", 0) or 0)
+    except Exception:
+        return None
+    if fd < 0 or width <= 0 or height <= 0:
+        return None
+    try:
+        builder = Gdk.DmabufTextureBuilder.new()
+        display = Gdk.Display.get_default()
+        if display is not None:
+            builder.set_display(display)
+        builder.set_width(width)
+        builder.set_height(height)
+        builder.set_fourcc(fourcc)
+        builder.set_n_planes(1)
+        builder.set_fd(0, fd)
+        builder.set_stride(0, stride)
+        modifier = int(getattr(scanout, "modifier", 0) or 0)
+        if hasattr(builder, "set_modifier"):
+            try:
+                builder.set_modifier(modifier)
+            except Exception:
+                pass
+        texture = builder.build()
+        buf = bytearray(width * height * 4)
+        texture.download(buf, width * 4)
+        return cairo.ImageSurface.create_for_data(
+            memoryview(buf), cairo.FORMAT_ARGB32, width, height, width * 4
+        )
+    except Exception as exc:
+        log.debug("Failed to import spice GL scanout: %s", exc)
+        return None
 
 
 def _cairo_from_spice_primary(primary):

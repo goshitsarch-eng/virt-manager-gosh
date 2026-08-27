@@ -259,6 +259,21 @@ def main():
 
         win = vmmVMWindow(vm)
         win.show()
+        orig = win._console
+
+        class _EmptyConsole:
+            def vmwindow_viewer_get_pixbuf(self):
+                return None
+
+        win._console = _EmptyConsole()
+        try:
+            win._take_screenshot()
+            raised = False
+        except RuntimeError as exc:
+            raised = "screenshot" in str(exc).lower()
+        finally:
+            win._console = orig
+        assert raised, "empty guest display must fail Take Screenshot"
 
     def addhardware():
         from virtManager.addhardware import vmmAddHardware
@@ -1135,6 +1150,29 @@ def main():
         assert spice._gdk_clipboard(0) is not None
         assert spice._gdk_clipboard(1) is not None
         spice._on_spice_clip_data(None, 1, 1, b"primary-from-guest")
+        spice.attach_cursor_channel(None)
+        shape = type(
+            "_CursorShape",
+            (),
+            {
+                "width": 2,
+                "height": 2,
+                "hot_spot_x": 1,
+                "hot_spot_y": 0,
+                "data": b"\xff\x00\x00\xff" * 4,
+            },
+        )()
+        spice._apply_spice_cursor_shape(shape)
+        assert spice._cursor_surface is not None
+        assert spice._cursor_hot == (1, 0)
+        spice._on_cursor_hide()
+        spice._on_cursor_reset()
+        spice._on_cursor_move(None, 4, 5)
+        assert spice._last_x == 4 and spice._last_y == 5
+        assert spice._try_gl_scanout() is False
+        fake_scanout = type("_Scanout", (), {"fd": -1, "width": 0, "height": 0, "stride": 0, "format": 0})()
+        assert gtk4display._cairo_from_gl_scanout(fake_scanout) is None
+        assert spice.get_pixbuf() is None
         spice.close()
         usb = gtk4display.UsbDeviceWidget.new(None)
         assert usb is not None
@@ -1570,6 +1608,26 @@ def main():
         assert clicked == ["quit"]
         sni.hide()
         assert sni._status == "Passive"
+        sni._status = "Active"
+        sni._registered = False
+        assert not sni.is_embedded()
+        sni._registered = True
+        assert sni.is_embedded()
+        sni.hide()
+        assert not sni.is_embedded()
+
+        icon = systraymod._SystrayStatusIcon()
+        assert not icon.is_embedded()
+        icon._visible = True
+        icon._standalone = True
+        assert icon.is_embedded()
+        icon._standalone = False
+        icon._docked = False
+        assert not icon.is_embedded()
+        icon._docked = True
+        assert icon.is_embedded()
+        icon.hide()
+        assert not icon.is_embedded()
 
     def addhardware_finish_sound():
         from virtManager.addhardware import PAGE_SOUND

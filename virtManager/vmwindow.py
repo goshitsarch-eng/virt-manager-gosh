@@ -1147,10 +1147,7 @@ class vmmVMWindow(vmmGObjectUI):
         except Exception:
             image = None
         if image is None:
-            from gi.repository import GdkPixbuf
-
-            image = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 16, 16)
-            image.fill(0x224466FF)
+            raise RuntimeError(_("Unable to capture a screenshot of the guest display"))
 
         metadata = {
             "tEXt::Hypervisor URI": self.vm.conn.get_uri(),

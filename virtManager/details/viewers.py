@@ -766,6 +766,10 @@ class SpiceViewer(Viewer):
             if isinstance(self._display, gtk4display.SpiceDisplay):
                 self._display.attach_channels(getattr(self._display, "_channel", None), channel)
 
+        elif isinstance(channel, SpiceClientGLib.CursorChannel):
+            if isinstance(self._display, gtk4display.SpiceDisplay):
+                self._display.attach_cursor_channel(channel)
+
         elif (
             type(channel) in [SpiceClientGLib.PlaybackChannel, SpiceClientGLib.RecordChannel]
             and not self._audio
