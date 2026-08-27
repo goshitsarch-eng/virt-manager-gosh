@@ -6766,9 +6766,8 @@ class vmmDetails(vmmGObjectUI):
             deferred_false = (
                 last.get("shareable") is False
                 and (last_tgt is None or last_tgt == tgt)
-                and not pending_share
             )
-            if deferred_false and self.vm.is_active():
+            if deferred_false and self.vm.is_active() and not pending_share:
                 # Hotplug of shareable=False is deferred
                 # ("changes will take effect after the next guest
                 # shutdown"). GTK 3 keeps showing the running XML
@@ -6776,7 +6775,10 @@ class vmmDetails(vmmGObjectUI):
                 # Apply-sensitive flag skip this live value.
                 self._addstorage.widget("disk-shareable").set_active(True)
                 open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-            elif deferred_false:
+            elif deferred_false and not self.vm.is_active():
+                # After shutdown the deferred apply is visible. A
+                # set_active(True) on the live path can leave
+                # _EDIT_SHARE armed; do not keep the live checkbox.
                 self._addstorage.widget("disk-shareable").set_active(False)
                 open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
                 try:
