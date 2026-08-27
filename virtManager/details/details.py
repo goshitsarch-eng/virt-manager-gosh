@@ -3047,6 +3047,15 @@ class vmmDetails(vmmGObjectUI):
         if not apply_on:
             return False
 
+        if row is not None:
+            try:
+                if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
+                    pending = self._pending_disk_apply_row()
+                    if pending is not None:
+                        row = pending
+            except Exception:
+                pass
+
         # A confirm is already running. Do not treat this as "No" or
         # the hardware-list callback will disable Apply mid-prompt.
         if getattr(self.err, "_in_prompt", False):
@@ -4237,6 +4246,12 @@ class vmmDetails(vmmGObjectUI):
                 )
             ):
                 pagetype = HW_LIST_TYPE_DISK
+            if pagetype is HW_LIST_TYPE_DISK and dev is None:
+                pending = self._pending_disk_apply_row()
+                if pending is not None:
+                    row = pending
+                    dev = pending[HW_LIST_COL_DEVICE]
+                    want = str(pending[HW_LIST_COL_LABEL] or want)
             if (
                 self._edited(EDIT_XML)
                 and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
@@ -4791,17 +4806,16 @@ class vmmDetails(vmmGObjectUI):
         return self._change_config(self.vm.define_boot, kwargs)
 
     def _apply_disk(self, devobj):
-        if devobj is None:
-            return False
         kwargs = {}
         typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
-        try:
-            combo = self._addstorage.widget("disk-cache")
-            child = combo.get_child() if combo is not None else None
-            if child is not None and hasattr(child, "get_text"):
-                typed = (child.get_text() or "").strip() or typed
-        except Exception:
-            pass
+        if not typed:
+            try:
+                combo = self._addstorage.widget("disk-cache")
+                child = combo.get_child() if combo is not None else None
+                if child is not None and hasattr(child, "get_text"):
+                    typed = (child.get_text() or "").strip()
+            except Exception:
+                pass
         if typed and typed.lower() not in ("hypervisor default",):
             known = set(virtinst.DeviceDisk.CACHE_MODES)
             if typed not in known:
@@ -4813,6 +4827,13 @@ class vmmDetails(vmmGObjectUI):
                 )
                 return False
             kwargs["cache"] = typed
+
+        if devobj is None:
+            pending = self._pending_disk_apply_row()
+            if pending is not None:
+                devobj = pending[HW_LIST_COL_DEVICE]
+        if devobj is None:
+            return False
 
         if self._edited(EDIT_DISK_PATH):
             path = self._mediacombo.get_path()
