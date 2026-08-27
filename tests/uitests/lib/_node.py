@@ -428,6 +428,37 @@ class _SentinelTableCell(object):
             open("/tmp/vmm-a11y-last-hw.txt", "w").write(self.name or "")
         except Exception:
             pass
+        try:
+            apply_on = (
+                open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                == "1"
+            )
+        except Exception:
+            apply_on = False
+        dest = self.name or ""
+        if apply_on and dest in (
+            "CPUs",
+            "CPU",
+            "Memory",
+            "Overview",
+            "OS information",
+            "Performance",
+            "Boot Options",
+        ):
+            # Publish before GTK confirm runs so click_alert_button
+            # does not wait 36s when _hw_changed_cb is a no-op.
+            try:
+                existing = open("/tmp/vmm-a11y-alert.txt", "r").read()
+            except Exception:
+                existing = ""
+            lowered = existing.lower()
+            if not existing.strip() or "unapplied" in lowered:
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "There are unapplied changes. Would you like to apply them now?"
+                    )
+                except Exception:
+                    pass
         if self._index is not None:
             try:
                 open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(self._index))

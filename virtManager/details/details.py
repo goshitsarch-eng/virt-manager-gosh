@@ -1904,6 +1904,48 @@ class vmmDetails(vmmGObjectUI):
                                 if gtk_row is not None
                                 else ""
                             )
+                            dirty = self._a11y_dirty_hw_label()
+                            # Sentinel moved to another page while GTK is
+                            # already there (Shareable on IDE Disk 1, then
+                            # CPUs after a prior CPUs click). _hw_changed_cb
+                            # will no-op because _oldhwkey already matches.
+                            if (
+                                hw
+                                and dirty
+                                and hw != dirty
+                                and gtk_label == hw
+                                and not getattr(self, "_vmm_unapplied_nav", False)
+                                and not getattr(self.err, "_in_prompt", False)
+                            ):
+                                self._vmm_unapplied_nav = True
+                                try:
+                                    dirty_row = self._hw_row_for_label(dirty)
+                                    if dirty_row is not None:
+                                        failed = self._has_unapplied_changes(
+                                            dirty_row
+                                        )
+                                        if failed:
+                                            try:
+                                                open(
+                                                    "/tmp/vmm-a11y-hw-clicked.txt",
+                                                    "w",
+                                                ).write(dirty)
+                                                open(
+                                                    "/tmp/vmm-a11y-hw-selected.txt",
+                                                    "w",
+                                                ).write(dirty)
+                                                open(
+                                                    "/tmp/vmm-a11y-last-hw.txt",
+                                                    "w",
+                                                ).write(dirty)
+                                            except Exception:
+                                                pass
+                                            self._vmm_pending_hw_nav = None
+                                            return True
+                                        self._finish_unapplied_hw_nav(hw)
+                                        return True
+                                finally:
+                                    self._vmm_unapplied_nav = False
                             pending = getattr(self, "_vmm_pending_hw_nav", None)
                             if gtk_label == last or (gtk_label and gtk_label != hw):
                                 if pending == hw:
@@ -2976,6 +3018,10 @@ class vmmDetails(vmmGObjectUI):
             self._set_hw_selection(pageidx, _disable_apply=False)
         else:
             self._oldhwkey = newrow[HW_LIST_COL_KEY]
+            # User said No, or apply succeeded, or there was nothing
+            # pending. Abandon leftover form state so Shareable reverts
+            # when the disk page is refreshed later.
+            self._disable_apply()
             self._refresh_page()
 
     def _disable_device_remove(self, tooltip):
@@ -3703,9 +3749,55 @@ class vmmDetails(vmmGObjectUI):
     # Details/Hardware config changes (apply button) #
     ##################################################
 
+    def _a11y_dirty_hw_label(self):
+        """Hardware row that currently has unapplied edits."""
+        for val in (
+            getattr(self, "_vmm_dirty_hw", None),
+            getattr(self, "_vmm_last_refreshed_hw", None),
+        ):
+            if val:
+                return val
+        try:
+            row = self._a11y_selected_hw_row()
+            if row is not None:
+                return str(row[HW_LIST_COL_LABEL] or "") or None
+        except Exception:
+            pass
+        return None
+
+    def _finish_unapplied_hw_nav(self, dest_label, dest_row=None):
+        """Leave a dirty page after unapplied Yes/No (GTK already on dest)."""
+        self._disable_apply()
+        self._vmm_pending_hw_nav = None
+        self._vmm_dirty_hw = None
+        if dest_row is None:
+            dest_row = self._hw_row_for_label(dest_label)
+        gtk_row = self._get_hw_row()
+        gtk_label = ""
+        try:
+            if gtk_row is not None:
+                gtk_label = str(gtk_row[HW_LIST_COL_LABEL] or "")
+        except Exception:
+            gtk_label = ""
+        self._vmm_last_refreshed_hw = dest_label
+        if gtk_label == dest_label:
+            if dest_row is not None:
+                try:
+                    self._oldhwkey = dest_row[HW_LIST_COL_KEY]
+                except Exception:
+                    pass
+            self._refresh_page()
+            return
+        idx = self._hw_index_for_row(dest_row) if dest_row is not None else None
+        if idx is not None:
+            self._set_hw_selection(idx, _disable_apply=False)
+        else:
+            self._refresh_page()
+
     def _disable_apply(self):
         self._active_edits = []
         self._vmm_apply_failed = False
+        self._vmm_dirty_hw = None
         self.widget("config-apply").set_sensitive(False)
         self.widget("config-cancel").set_sensitive(False)
         self._xmleditor.details_changed = False
@@ -3726,6 +3818,16 @@ class vmmDetails(vmmGObjectUI):
             self._active_edits.append(edittype)
         if edittype != EDIT_XML:
             self._xmleditor.details_changed = True
+        try:
+            dirty = getattr(self, "_vmm_last_refreshed_hw", None)
+            if not dirty:
+                arow = self._a11y_selected_hw_row()
+                if arow is not None:
+                    dirty = str(arow[HW_LIST_COL_LABEL] or "")
+            if dirty:
+                self._vmm_dirty_hw = dirty
+        except Exception:
+            pass
 
     def _config_cancel(self, ignore=None):
         # Remove current changes and deactivate 'apply' button
@@ -3752,6 +3854,10 @@ class vmmDetails(vmmGObjectUI):
                 self._refresh_page_body(row)
             finally:
                 self._ui_refreshing = False
+            try:
+                self._vmm_last_refreshed_hw = str(row[HW_LIST_COL_LABEL] or "")
+            except Exception:
+                pass
             self._disable_apply()
             return
         self._refresh_page()
@@ -4898,6 +5004,10 @@ class vmmDetails(vmmGObjectUI):
         if not row:
             return  # pragma: no cover
 
+        try:
+            self._vmm_last_refreshed_hw = str(row[HW_LIST_COL_LABEL] or "")
+        except Exception:
+            pass
         self._ui_refreshing = True
         try:
             self._refresh_page_body(row)

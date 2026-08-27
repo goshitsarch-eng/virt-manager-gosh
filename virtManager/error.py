@@ -256,6 +256,21 @@ class vmmErrorDialog(vmmGObject):
         """
         Helper function for confirming whether to apply unapplied changes
         """
+        # A nested error after Yes can leave _in_prompt set if the
+        # previous chkbox_helper never reached finally (or a poller
+        # re-entered). Do not skip a new prompt when no dialog is up.
+        if getattr(self, "_in_prompt", False):
+            mapped = False
+            try:
+                cache = getattr(self, "_warn_dialogs", None) or {}
+                for dlg in cache.values():
+                    if dlg.get_mapped() or dlg.get_visible():
+                        mapped = True
+                        break
+            except Exception:
+                mapped = False
+            if not mapped:
+                self._in_prompt = False
         return self.chkbox_helper(
             self.config.get_confirm_unapplied,
             self.config.set_confirm_unapplied,
