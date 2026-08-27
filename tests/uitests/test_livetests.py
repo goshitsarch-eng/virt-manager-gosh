@@ -93,14 +93,28 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
             try:
                 dom = conn.defineXML(xml)
             except Exception as e:
+                err = str(e)
                 # This host's QEMU has no Spice server. Shared console
                 # livetests only need a working graphics display.
-                if "spice graphics are not supported" not in str(e):
+                if "spice graphics are not supported" in err:
+                    if "spice-specific" in vmname:
+                        pytest.skip("QEMU on this host does not support spice graphics")
+                    xml = _spice_to_vnc_xml(xml)
+                    dom = conn.defineXML(xml)
+                elif "TPM version" in err:
+                    xml = re.sub(r"[ \t]*<tpm[\s\S]*?</tpm>\s*", "", xml)
+                    try:
+                        dom = conn.defineXML(xml)
+                    except Exception as e2:
+                        if "firmware-efi" in vmname:
+                            pytest.skip(
+                                "QEMU on this host cannot define EFI firmware: %s" % e2
+                            )
+                        raise
+                elif "firmware-efi" in vmname:
+                    pytest.skip("QEMU on this host cannot define EFI firmware: %s" % e)
+                else:
                     raise
-                if "spice-specific" in vmname:
-                    pytest.skip("QEMU on this host does not support spice graphics")
-                xml = _spice_to_vnc_xml(xml)
-                dom = conn.defineXML(xml)
             try:
                 dom.create()
                 app.uri = live_uri
