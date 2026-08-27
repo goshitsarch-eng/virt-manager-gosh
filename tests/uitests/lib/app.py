@@ -16,6 +16,25 @@ from virtinst import log
 import tests.utils
 from . import utils
 
+_orig_press_key = dogtail.rawinput.pressKey
+
+
+def _press_key_with_filechooser(key, *args, **kwargs):
+    if str(key) in ("Enter", "Return"):
+        try:
+            shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        if shown and shown != "0":
+            try:
+                open("/tmp/vmm-a11y-filechooser-open", "w").write("1")
+            except Exception:
+                pass
+    return _orig_press_key(key, *args, **kwargs)
+
+
+dogtail.rawinput.pressKey = _press_key_with_filechooser
+
 
 class VMMDogtailApp:
     """

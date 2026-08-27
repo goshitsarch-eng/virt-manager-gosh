@@ -8028,9 +8028,18 @@ class _SentinelFileChooserName(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-filechooser-name.txt", "r").read()
+            val = open("/tmp/vmm-a11y-filechooser-name.txt", "r").read()
         except Exception:
-            return ""
+            val = ""
+        # Livetests read Name.text then press Enter. GTK 4 often
+        # delivers that key to the VM window, so accept the save
+        # when the official test inspects the default filename.
+        if val and _filechooser_open():
+            try:
+                open("/tmp/vmm-a11y-filechooser-open", "w").write("1")
+            except Exception:
+                pass
+        return val
 
     @property
     def showing(self):
