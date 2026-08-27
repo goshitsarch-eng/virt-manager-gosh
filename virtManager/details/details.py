@@ -4107,16 +4107,6 @@ class vmmDetails(vmmGObjectUI):
 
     def _finish_unapplied_hw_nav(self, dest_label, dest_row=None):
         """Leave a dirty page after unapplied Yes/No (GTK already on dest)."""
-        try:
-            dirty = getattr(self, "_vmm_dirty_hw", None)
-            if (
-                _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
-                and dirty
-                and dest_label == dirty
-            ):
-                return
-        except Exception:
-            pass
         self._disable_apply()
         self._revert_a11y_disk_shareable()
         self._vmm_pending_hw_nav = None
