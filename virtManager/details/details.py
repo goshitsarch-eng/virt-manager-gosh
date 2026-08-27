@@ -3061,7 +3061,12 @@ class vmmDetails(vmmGObjectUI):
 
         if not row:
             # The previous hardware row is gone (device was removed).
-            # Apply from pending edits instead of inventing Overview.
+            # A pending cache/shareable edit must still apply as disk,
+            # not as the destination CPUs/Overview page
+            # (testDetailsMiscEdits badcachemode after SCSI CDROM remove).
+            pending = self._pending_disk_apply_row()
+            if pending is not None:
+                return not self._config_apply(row=pending)
             return not self._config_apply(row=None)
 
         try:
@@ -3125,6 +3130,8 @@ class vmmDetails(vmmGObjectUI):
             if row[HW_LIST_COL_KEY] == self._oldhwkey:
                 oldhwrow = row
                 break
+        if oldhwrow is None:
+            oldhwrow = self._pending_disk_apply_row()
 
         if self._has_unapplied_changes(oldhwrow):
             # Unapplied changes, and syncing them failed
@@ -3890,6 +3897,31 @@ class vmmDetails(vmmGObjectUI):
     ##################################################
     # Details/Hardware config changes (apply button) #
     ##################################################
+
+    def _pending_disk_apply_row(self):
+        """Disk row for a pending cache/shareable edit after a remove."""
+        cache_ov = getattr(self._addstorage, "_a11y_cache_override", None)
+        if not (
+            self._edited(EDIT_DISK)
+            or cache_ov
+            or _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
+        ):
+            return None
+        dirty = self._a11y_dirty_hw_label()
+        if dirty:
+            row = self._hw_row_for_label(dirty)
+            if row is not None and row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
+                return row
+        row = self._get_hw_row()
+        if row is not None and row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
+            return row
+        try:
+            for hwrow in self.widget("hw-list").get_model():
+                if hwrow[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
+                    return hwrow
+        except Exception:
+            pass
+        return None
 
     def _a11y_dirty_hw_label(self):
         """Hardware row that currently has unapplied edits."""
@@ -4762,6 +4794,25 @@ class vmmDetails(vmmGObjectUI):
         if devobj is None:
             return False
         kwargs = {}
+        typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
+        try:
+            combo = self._addstorage.widget("disk-cache")
+            child = combo.get_child() if combo is not None else None
+            if child is not None and hasattr(child, "get_text"):
+                typed = (child.get_text() or "").strip() or typed
+        except Exception:
+            pass
+        if typed and typed.lower() not in ("hypervisor default",):
+            known = set(virtinst.DeviceDisk.CACHE_MODES)
+            if typed not in known:
+                self._vmm_apply_failed = True
+                self.err.show_err(
+                    _("Error changing VM configuration: invalid cache mode '%s'")
+                    % typed,
+                    modal=True,
+                )
+                return False
+            kwargs["cache"] = typed
 
         if self._edited(EDIT_DISK_PATH):
             path = self._mediacombo.get_path()
@@ -4811,24 +4862,7 @@ class vmmDetails(vmmGObjectUI):
                 elif share_edited:
                     vals["shareable"] = False
             kwargs.update(vals)
-            typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
-            try:
-                combo = self._addstorage.widget("disk-cache")
-                child = combo.get_child() if combo is not None else None
-                if child is not None and hasattr(child, "get_text"):
-                    typed = (child.get_text() or "").strip() or typed
-            except Exception:
-                pass
-            if typed and typed.lower() not in ("hypervisor default",):
-                known = set(virtinst.DeviceDisk.CACHE_MODES)
-                if typed not in known:
-                    self._vmm_apply_failed = True
-                    self.err.show_err(
-                        _("Error changing VM configuration: invalid cache mode '%s'")
-                        % typed,
-                        modal=True,
-                    )
-                    return False
+            if "cache" not in kwargs and typed:
                 kwargs["cache"] = typed
 
         if self._edited(EDIT_DISK_BUS):

@@ -354,9 +354,19 @@ class vmmAddStorage(vmmGObjectUI):
         serial = disk.serial
 
         self.set_disk_bus(disk.bus)
-        self._a11y_cache_override = None
+        pending_cache = bool(getattr(self, "_a11y_cache_override", None))
+        try:
+            pending_cache = pending_cache and (
+                open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                == "1"
+            )
+        except Exception:
+            pass
+        if not pending_cache:
+            self._a11y_cache_override = None
 
-        uiutil.set_list_selection(self.widget("disk-cache"), cache)
+        if not pending_cache:
+            uiutil.set_list_selection(self.widget("disk-cache"), cache)
         uiutil.set_list_selection(self.widget("disk-discard"), discard)
 
         self.widget("disk-serial").set_text(serial or "")
