@@ -358,7 +358,10 @@ class vmmConfig:
 
     # Confirmation preferences
     def get_confirm_forcepoweroff(self):
-        return self.conf.get("/confirm/forcepoweroff")
+        val = self.conf.get("/confirm/forcepoweroff")
+        if val is None:
+            return True
+        return bool(val)
 
     def get_confirm_poweroff(self):
         return self.conf.get("/confirm/poweroff")
