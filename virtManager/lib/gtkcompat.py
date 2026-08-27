@@ -6336,6 +6336,123 @@ def choose_alert(parent, heading, body="", responses=None, extra_child=None, def
     return result[0]
 
 
+def _use_test_file_browser():
+    """Official uitests and construct need the AT-SPI list browser."""
+    if os.environ.get("VIRTINST_TEST_SUITE"):
+        return True
+    return _a11y_runtime_enabled()
+
+
+def _path_needs_overwrite_confirm(path, confirm_overwrite):
+    return bool(confirm_overwrite and path and os.path.exists(path))
+
+
+def _ask_overwrite(parent, path):
+    name = os.path.basename(path or "") or path
+    appearance = None
+    try:
+        appearance = Adw.ResponseAppearance.DESTRUCTIVE
+    except Exception:
+        appearance = None
+    resp = choose_alert(
+        parent,
+        "Replace existing file?",
+        'The file "%s" already exists. Replace it?' % name,
+        responses=[
+            ("cancel", "_Cancel", None),
+            ("replace", "_Replace", appearance),
+        ],
+        default="cancel",
+    )
+    return resp == "replace"
+
+
+def _confirm_overwrite_or_test(parent, path):
+    if os.environ.get("VIRTINST_TEST_SUITE") and os.environ.get(
+        "VMM_FORCE_OVERWRITE_CONFIRM", ""
+    ).strip().lower() not in ("1", "true", "yes"):
+        return True
+    return _ask_overwrite(parent, path)
+
+
+def _file_filter_from_type(_type):
+    if not _type:
+        return None
+    pattern = _type
+    name = None
+    if isinstance(_type, (tuple, list)):
+        pattern = _type[0]
+        name = _type[1] if len(_type) > 1 else None
+    filt = Gtk.FileFilter()
+    filt.add_pattern("*." + str(pattern).lstrip("."))
+    if name:
+        filt.set_name(name)
+    return filt
+
+
+def _browse_local_native(
+    parent,
+    dialog_name,
+    folder,
+    dialog_type,
+    choose_label,
+    default_name,
+    _type,
+    confirm_overwrite=False,
+):
+    """GTK 4 FileDialog: native bookmarks, portal, and overwrite UX."""
+    dialog = Gtk.FileDialog()
+    if dialog_name:
+        dialog.set_title(dialog_name)
+    if choose_label:
+        try:
+            dialog.set_accept_label(str(choose_label).replace("_", "", 1))
+        except Exception:
+            pass
+    if folder and os.path.isdir(folder):
+        try:
+            dialog.set_initial_folder(Gio.File.new_for_path(folder))
+        except Exception:
+            pass
+    if default_name:
+        try:
+            dialog.set_initial_name(default_name)
+        except Exception:
+            pass
+    filt = _file_filter_from_type(_type)
+    if filt is not None:
+        try:
+            dialog.set_default_filter(filt)
+        except Exception:
+            pass
+
+    result = [None]
+    loop = GLib.MainLoop()
+
+    def _done(dlg, async_result, finisher):
+        try:
+            gfile = finisher(async_result)
+            if gfile is not None:
+                result[0] = gfile.get_path()
+        except Exception:
+            result[0] = None
+        loop.quit()
+
+    if dialog_type == Gtk.FileChooserAction.SAVE:
+        dialog.save(parent, None, lambda d, r: _done(d, r, dialog.save_finish))
+    elif dialog_type == Gtk.FileChooserAction.SELECT_FOLDER:
+        dialog.select_folder(
+            parent, None, lambda d, r: _done(d, r, dialog.select_folder_finish)
+        )
+    else:
+        dialog.open(parent, None, lambda d, r: _done(d, r, dialog.open_finish))
+    loop.run()
+    if _path_needs_overwrite_confirm(result[0], confirm_overwrite):
+        if not _confirm_overwrite_or_test(parent, result[0]):
+            return None
+    return result[0]
+
+
 def browse_local(
     parent,
     dialog_name,
@@ -6350,7 +6467,18 @@ def browse_local(
         dialog_type = Gtk.FileChooserAction.OPEN
 
     folder = start_folder if start_folder and os.path.isdir(start_folder) else os.getcwd()
-    return _browse_local_window(
+    if _use_test_file_browser():
+        return _browse_local_window(
+            parent,
+            dialog_name,
+            folder,
+            dialog_type,
+            choose_label,
+            default_name,
+            _type,
+            confirm_overwrite,
+        )
+    return _browse_local_native(
         parent,
         dialog_name,
         folder,
@@ -6729,7 +6857,9 @@ def _browse_local_window(
                 open("/tmp/vmm-a11y-storage-entry.txt", "w").write(result[0])
             except Exception:
                 pass
-        ignore = confirm_overwrite
+        if _path_needs_overwrite_confirm(result[0], confirm_overwrite):
+            if not _confirm_overwrite_or_test(win, result[0]):
+                return False
         _close()
         _present_owner()
         return False

@@ -336,8 +336,18 @@ def main():
         dlg.show(None)
         win = dlg._dialog
         assert win is not None
+        from virtManager.about import _gpl2_text
+
+        assert "GNU GENERAL PUBLIC LICENSE" in _gpl2_text()
+        lic = dlg._show_license(win)
+        assert lic is not None
+        buf = lic.get_child().get_first_child().get_child().get_buffer()
+        assert "GNU GENERAL PUBLIC LICENSE" in buf.get_text(
+            buf.get_start_iter(), buf.get_end_iter(), False
+        )
         dlg.close()
         assert dlg._dialog is None
+        assert dlg._license_win is None
 
     def createvm():
         from virtManager.createvm import vmmCreateVM
@@ -1280,6 +1290,10 @@ def main():
         except Exception:
             listing = []
         assert ".." in listing, "file chooser must offer parent-directory navigation"
+        assert gtkcompat._use_test_file_browser()
+        assert gtkcompat._path_needs_overwrite_confirm("/etc/passwd", True)
+        assert not gtkcompat._path_needs_overwrite_confirm("/tmp/no-such-vmm-file", True)
+        assert hasattr(gtkcompat, "_browse_local_native")
 
     def vm_lifecycle_actions():
         from virtManager import vmmenu
@@ -1388,6 +1402,13 @@ def main():
         assert disp._tls_ca_file() == "/tmp/vnc-ca.pem"
         disp._apply_server_cut_text(b"guest-clip")
         assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
+        disp._bind_host_clipboard()
+        from gi.repository import Gdk
+
+        display = Gdk.Display.get_default()
+        assert hasattr(display, "get_primary_clipboard")
+        primary = display.get_primary_clipboard()
+        assert primary is not None
         ct, tag = gtk4display._aes_eax_encrypt(b"\x11" * 16, b"\x22" * 16, b"\x00\x04", b"ping")
         assert gtk4display._aes_eax_decrypt(b"\x11" * 16, b"\x22" * 16, b"\x00\x04", ct, tag) == b"ping"
         send256, recv256 = gtk4display._ra2_session_keys(b"S" * 16, b"C" * 16, sha256=True)

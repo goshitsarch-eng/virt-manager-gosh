@@ -4,6 +4,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gdk
 from gi.repository import Gio
 from gi.repository import Gtk
@@ -33,6 +35,26 @@ _GPL2 = (
 )
 
 
+def _gpl2_text():
+    """Full GPLv2 text, matching GTK 3 AboutDialog license-type=gpl-2-0."""
+    candidates = (
+        os.path.join(os.path.dirname(__file__), "..", "COPYING"),
+        "/usr/share/common-licenses/GPL-2",
+        "/usr/share/licenses/common-licenses/GPL-2",
+    )
+    for path in candidates:
+        try:
+            text = open(os.path.abspath(path), "r", encoding="utf-8").read()
+        except Exception:
+            continue
+        if "GNU GENERAL PUBLIC LICENSE" in text:
+            return text
+    return (
+        "GNU General Public License, version 2 or later\n"
+        "https://www.gnu.org/licenses/old-licenses/gpl-2.0.html\n"
+    )
+
+
 class vmmAbout(vmmGObject):
     @classmethod
     def show_instance(cls, parentobj):
@@ -47,6 +69,7 @@ class vmmAbout(vmmGObject):
         vmmGObject.__init__(self)
         self._cleanup_on_app_close()
         self._dialog = None
+        self._license_win = None
 
     def show(self, parent):
         log.debug("Showing about")
@@ -123,6 +146,15 @@ class vmmAbout(vmmGObject):
         if credits and credits.strip() and credits != "translator-credits":
             _label(credits, "translator-credits")
         _label(_GPL2, "License")
+        license_btn = Gtk.Button(label="_License")
+        try:
+            license_btn.set_use_underline(True)
+        except Exception:
+            pass
+        license_btn.set_halign(Gtk.Align.START)
+        gtkcompat.set_accessible_name(license_btn, "License")
+        license_btn.connect("clicked", lambda *_a: self._show_license(dialog))
+        box.append(license_btn)
         dialog.set_child(box)
 
         def _hide(*_a):
@@ -163,8 +195,78 @@ class vmmAbout(vmmGObject):
         except Exception:
             pass
 
+    def _show_license(self, parent=None):
+        """GTK 3 AboutDialog license-type opened the full GPLv2 text."""
+        if self._license_win is not None:
+            try:
+                self._license_win.present()
+                return self._license_win
+            except Exception:
+                self._license_win = None
+        win = Gtk.Window()
+        win.set_title("License")
+        win.set_modal(True)
+        win.set_default_size(580, 480)
+        if parent is not None:
+            try:
+                win.set_transient_for(parent)
+            except Exception:
+                pass
+        try:
+            win.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+        except Exception:
+            pass
+        gtkcompat.set_accessible_name(win, "License")
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_margin_top(8)
+        box.set_margin_bottom(8)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_vexpand(True)
+        view = Gtk.TextView()
+        view.set_editable(False)
+        view.set_cursor_visible(False)
+        view.set_wrap_mode(Gtk.WrapMode.WORD)
+        view.get_buffer().set_text(_gpl2_text())
+        gtkcompat.set_accessible_name(view, "License text")
+        scroll.set_child(view)
+        box.append(scroll)
+        close_btn = Gtk.Button(label="_Close")
+        try:
+            close_btn.set_use_underline(True)
+        except Exception:
+            pass
+        close_btn.set_halign(Gtk.Align.END)
+        gtkcompat.set_accessible_name(close_btn, "Close")
+
+        def _close(*_a):
+            try:
+                win.close()
+                win.destroy()
+            except Exception:
+                pass
+            if self._license_win is win:
+                self._license_win = None
+            return True
+
+        close_btn.connect("clicked", _close)
+        win.connect("close-request", _close)
+        box.append(close_btn)
+        win.set_child(box)
+        self._license_win = win
+        win.present()
+        return win
+
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing about")
+        if self._license_win is not None:
+            try:
+                self._license_win.close()
+                self._license_win.destroy()
+            except Exception:
+                pass
+            self._license_win = None
         if self._dialog:
             try:
                 open("/tmp/vmm-a11y-about-shown.txt", "w").write("0")

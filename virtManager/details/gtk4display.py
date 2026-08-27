@@ -2098,8 +2098,13 @@ class VNCDisplay(_DisplayBase):
 
     def _bind_host_clipboard(self):
         try:
-            clip = Gdk.Display.get_default().get_clipboard()
+            display = Gdk.Display.get_default()
+            clip = display.get_clipboard()
             clip.connect("changed", self._on_host_clip_changed)
+            # GTK 3 gtk-vnc also forwarded X11 PRIMARY (middle-click paste).
+            if hasattr(display, "get_primary_clipboard"):
+                primary = display.get_primary_clipboard()
+                primary.connect("changed", self._on_host_clip_changed)
         except Exception:
             pass
 
