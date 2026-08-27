@@ -19,7 +19,10 @@ os.chdir(TOPDIR)
 
 os.environ.setdefault("GSETTINGS_BACKEND", "memory")
 os.environ.setdefault("VIRTINST_TEST_SUITE", "1")
-os.environ.setdefault("GTK_A11Y", "atspi")
+# Construct maps every dialog in one process. AT-SPI GetItems
+# wedges Gtk.Button() after a few dozen windows (details_refresh
+# on test-many-devices). Uitests still use GTK_A11Y=atspi.
+os.environ.setdefault("GTK_A11Y", "none")
 
 
 def _init_gtk():
@@ -147,7 +150,15 @@ def main():
     pool = _first_pool(conn)
     results = []
 
-    def _run(name, fn, timeout=45):
+    _SURFACE_TIMEOUTS = {
+        "details_refresh": 120,
+        "details_hw_pages": 90,
+        "addhardware_pages": 90,
+    }
+
+    def _run(name, fn, timeout=None):
+        if timeout is None:
+            timeout = _SURFACE_TIMEOUTS.get(name, 45)
         class _Timeout(Exception):
             pass
 
