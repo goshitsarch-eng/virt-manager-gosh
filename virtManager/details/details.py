@@ -3942,9 +3942,6 @@ class vmmDetails(vmmGObjectUI):
         val = "1" if (applied or last.get("shareable")) else "0"
         try:
             open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(val)
-            w = self._addstorage.widget("disk-shareable")
-            if w is not None:
-                w.set_active(val == "1")
         except Exception:
             pass
 
@@ -4821,10 +4818,10 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 share_w = None
-            if share_edited:
+            if share_edited or share_s == "1":
                 if share_s == "1" or share_w is True:
                     vals["shareable"] = True
-                elif share_s == "0" or share_w is False:
+                elif share_edited:
                     vals["shareable"] = False
             kwargs.update(vals)
             typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
