@@ -4028,10 +4028,14 @@ class vmmDetails(vmmGObjectUI):
             pass
 
     def _clear_shareable_user_override(self):
-        try:
-            os.remove(_SHAREABLE_USER)
-        except Exception:
-            pass
+        for path in (
+            _SHAREABLE_USER,
+            "/tmp/vmm-a11y-disk-shareable.txt.click",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
 
     def _revert_a11y_disk_shareable(self):
         """Discard a pending Shareable click so the sentinel matches XML."""

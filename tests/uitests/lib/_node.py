@@ -3689,7 +3689,6 @@ class _SentinelDetailsCheck(object):
             open(self._path, "w").write(want)
             if "disk-shareable" in (self._path or ""):
                 open("/tmp/vmm-a11y-disk-shareable-user.txt", "w").write(want)
-                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
         except Exception:
             pass
         if "cpu-copy-host" in (self._path or ""):
