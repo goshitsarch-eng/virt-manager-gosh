@@ -589,11 +589,13 @@ class vmmSerialConsole(vmmGObject):
         except Exception:
             has_sel = False
         self._serial_copy.set_sensitive(has_sel)
+        # GTK 3 used popup_at_pointer so Copy/Paste appear at the click.
         try:
-            self._serial_popup.popup_at_widget(src)
+            self._serial_popup._parent_widget = src
+            self._serial_popup.popup_at_pointer(event)
         except Exception:
             try:
-                self._serial_popup.popup_at_pointer(event)
+                self._serial_popup.popup_at_widget(src)
             except Exception:
                 pass
 

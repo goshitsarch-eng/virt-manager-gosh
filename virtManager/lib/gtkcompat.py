@@ -358,6 +358,14 @@ def _window_move(window, x, y):
         open("/tmp/vmm-a11y-manager-xid.txt", "w").write(hex(int(xid)))
     except Exception:
         pass
+    _x11_move_window(xid, want[0], want[1])
+    try:
+        got = _xdotool_geometry(xid)
+        if abs(got[0] - want[0]) <= 2 and abs(got[1] - want[1]) <= 2:
+            window._vmm_win_pos = got[:2]
+            return
+    except Exception:
+        pass
     try:
         import subprocess
         import time
@@ -386,6 +394,201 @@ def _window_move(window, x, y):
         window._vmm_win_pos = want
     except Exception:
         pass
+
+
+def _x11_move_window(xid, x, y):
+    """XMoveWindow is the GTK 3 gtk_window_move path without xdotool."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return False
+        x11.XMoveWindow.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        x11.XMoveWindow(dpy, int(xid), int(x), int(y))
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        return True
+    except Exception:
+        return False
+
+
+def _x11_translate_to_root(xid, x, y):
+    """Map window-relative coords to the X root window."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return None
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        root = x11.XDefaultRootWindow(dpy)
+        dest_x = ctypes.c_int()
+        dest_y = ctypes.c_int()
+        child = ctypes.c_ulong()
+        x11.XTranslateCoordinates.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_ulong),
+        ]
+        x11.XTranslateCoordinates.restype = ctypes.c_int
+        ok = x11.XTranslateCoordinates(
+            dpy,
+            int(xid),
+            root,
+            int(x),
+            int(y),
+            ctypes.byref(dest_x),
+            ctypes.byref(dest_y),
+            ctypes.byref(child),
+        )
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        if not ok:
+            return None
+        return (int(dest_x.value), int(dest_y.value))
+    except Exception:
+        return None
+
+
+def _x11_query_pointer():
+    """Root-relative pointer position via XQueryPointer."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return None
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        root = x11.XDefaultRootWindow(dpy)
+        root_ret = ctypes.c_ulong()
+        child = ctypes.c_ulong()
+        root_x = ctypes.c_int()
+        root_y = ctypes.c_int()
+        win_x = ctypes.c_int()
+        win_y = ctypes.c_int()
+        mask = ctypes.c_uint()
+        x11.XQueryPointer.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_uint),
+        ]
+        x11.XQueryPointer.restype = ctypes.c_int
+        ok = x11.XQueryPointer(
+            dpy,
+            root,
+            ctypes.byref(root_ret),
+            ctypes.byref(child),
+            ctypes.byref(root_x),
+            ctypes.byref(root_y),
+            ctypes.byref(win_x),
+            ctypes.byref(win_y),
+            ctypes.byref(mask),
+        )
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        if not ok:
+            return None
+        return (int(root_x.value), int(root_y.value))
+    except Exception:
+        return None
+
+
+def _widget_root_origin(widget):
+    """Root-relative origin of a GTK 4 widget (GTK 3 gdk_window_get_origin)."""
+    if widget is None:
+        return None
+    native = None
+    try:
+        native = widget.get_native() if hasattr(widget, "get_native") else None
+    except Exception:
+        native = None
+    wx = wy = 0
+    if native is not None and native is not widget:
+        try:
+            nx, ny = widget.translate_coordinates(native, 0.0, 0.0)
+            if nx is not None and ny is not None:
+                wx, wy = int(nx), int(ny)
+        except Exception:
+            pass
+    xid = _window_xid(native or widget)
+    if xid:
+        root = _x11_translate_to_root(xid, wx, wy)
+        if root is not None:
+            return root
+    stored = getattr(native or widget, "_vmm_win_pos", None)
+    if stored:
+        return (int(stored[0]) + wx, int(stored[1]) + wy)
+    return (wx, wy)
+
+
+def _surface_or_widget_root(obj):
+    if obj is None:
+        return (0, 0)
+    if hasattr(obj, "get_xid"):
+        try:
+            xid = obj.get_xid()
+        except Exception:
+            xid = None
+        if xid:
+            return _x11_translate_to_root(int(xid), 0, 0) or (0, 0)
+    origin = _widget_root_origin(obj)
+    return origin if origin is not None else (0, 0)
+
+
+def _menu_anchor_root(event=None, widget=None):
+    """Where GTK 3 popup_at_pointer would place a menu."""
+    if event is not None:
+        xr = getattr(event, "x_root", None)
+        yr = getattr(event, "y_root", None)
+        if xr is not None and yr is not None:
+            return (int(xr), int(yr))
+    # Live clicks: the pointer is still at the button. Do not add
+    # event.x/y to a parent window origin — those coords are relative
+    # to the treeview, not the toplevel.
+    pos = _x11_query_pointer()
+    if pos is not None:
+        return pos
+    if event is not None and widget is not None and hasattr(event, "x"):
+        origin = _widget_root_origin(widget)
+        if origin is not None:
+            return (origin[0] + int(event.x or 0), origin[1] + int(event.y or 0))
+    return None
 
 
 def _x11_resize_window(xid, width, height):
@@ -8202,6 +8405,17 @@ class Menu(Gtk.Box):
             self._popover.present()
         except Exception:
             pass
+        self._place_opened_menu()
+
+    def _place_opened_menu(self):
+        """GTK 3 popup_at_pointer/widget/rect placed the menu at the click."""
+        pos = getattr(self, "_vmm_popup_pos", None)
+        if not pos or self._popover is None:
+            return
+        try:
+            _window_move(self._popover, int(pos[0]), int(pos[1]))
+        except Exception:
+            pass
 
     def popdown(self, *_args, **_kwargs):
         self._opened = False
@@ -8223,17 +8437,32 @@ class Menu(Gtk.Box):
                     pass
 
     def popup_at_pointer(self, event=None):
-        ignore = event
+        self._vmm_popup_pos = _menu_anchor_root(event=event, widget=self._parent_widget)
         self.popup()
 
     def popup_at_widget(self, widget):
         self._ensure_popover(widget)
+        origin = _widget_root_origin(widget)
+        if origin is not None:
+            height = 0
+            try:
+                height = int(widget.get_height() or 0)
+            except Exception:
+                height = 0
+            self._vmm_popup_pos = (origin[0], origin[1] + height)
         self.popup()
 
-    def popup_at_rect(self, _window, rect, _g1=None, _g2=None, _event=None):
+    def popup_at_rect(self, window, rect, _g1=None, _g2=None, _event=None):
         self._ensure_popover(self._parent_widget)
-        if self._popover:
-            self._popover.set_pointing_to(rect)
+        rx = int(getattr(rect, "x", 0) or 0)
+        ry = int(getattr(rect, "y", 0) or 0)
+        origin = _surface_or_widget_root(window)
+        self._vmm_popup_pos = (origin[0] + rx, origin[1] + ry)
+        if self._popover is not None:
+            try:
+                self._popover.set_pointing_to(rect)
+            except Exception:
+                pass
         self.popup()
 
     def get_accessible(self):

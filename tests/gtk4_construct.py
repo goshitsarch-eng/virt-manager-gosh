@@ -682,6 +682,8 @@ def main():
             except Exception:
                 opened = False
         assert opened, "right-click did not open the VM or connection menu"
+        menu = mgr.vmmenu if getattr(mgr.vmmenu, "_opened", False) else mgr.connmenu
+        assert getattr(menu, "_vmm_popup_pos", None), "context menu must be placed at the pointer"
 
         mgr.topwin.set_default_size(960, 640)
         _pump(GLib, 0.15)
@@ -1087,6 +1089,9 @@ def main():
         assert near in (True, False)
         toolbar.timed_revealer.force_reveal(True)
         toolbar._on_send_key_button_clicked_cb(toolbar._send_key_button)
+        assert getattr(toolbar._keycombo_menu, "_vmm_popup_pos", None), (
+            "Send Key menu must use popup_at_rect placement"
+        )
         toolbar.cleanup()
         con = win._console
         closed = []
@@ -1201,6 +1206,10 @@ def main():
         xid = gtkcompat._window_xid(win)
         if xid:
             assert gtkcompat._x11_resize_window(xid, 320, 240) in (True, False)
+            assert gtkcompat._x11_move_window(xid, 40, 40) in (True, False)
+            assert gtkcompat._x11_query_pointer() is None or len(gtkcompat._x11_query_pointer()) == 2
+            win.move(40, 40)
+            assert getattr(win, "_vmm_win_pos", None) == (40, 40)
         win.resize(1, 1)
         win.close()
 

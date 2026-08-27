@@ -208,7 +208,34 @@ class vmmOverlayToolbar:
         self.timed_revealer = _TimedRevealer(self._toolbar)
 
     def _on_send_key_button_clicked_cb(self, src):
-        self._keycombo_menu.popup_at_widget(src)
+        # GTK 3 opened this at the bottom of the fullscreen toolbar window.
+        rect = Gdk.Rectangle()
+        rect.x = 0
+        rect.y = 0
+        target = self._toolbar if self._toolbar is not None else src
+        native = None
+        try:
+            native = target.get_native()
+            tx, ty = target.translate_coordinates(native, 0.0, 0.0)
+            rect.x = int(tx or 0)
+            rect.y = int((ty or 0) + (target.get_height() or 0))
+        except Exception:
+            try:
+                rect.y = int(target.get_height() or 0)
+            except Exception:
+                rect.y = 0
+        surface = None
+        try:
+            surface = native.get_surface() if native is not None else None
+        except Exception:
+            surface = None
+        self._keycombo_menu.popup_at_rect(
+            surface or target,
+            rect,
+            Gdk.Gravity.NORTH_WEST,
+            Gdk.Gravity.NORTH_WEST,
+            None,
+        )
 
     def cleanup(self):
         self._keycombo_menu.destroy()
@@ -489,6 +516,14 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-overlay").add_overlay(
             self._overlay_toolbar_fullscreen.timed_revealer.get_overlay_widget()
         )
+        self._fs_pointer_y = None
+        try:
+            motion = Gtk.EventControllerMotion()
+            motion.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            motion.connect("motion", self._on_fullscreen_pointer_motion)
+            self.topwin.add_controller(motion)
+        except Exception:
+            pass
 
         # When the gtk-vnc and spice-gtk widgets are in non-scaling mode, we
         # make them fill the whole window, and they paint the non-VM areas of
@@ -1172,16 +1207,36 @@ class vmmConsolePages(vmmGObjectUI):
         except Exception:
             pass
 
+    def _on_fullscreen_pointer_motion(self, _c, _x, y):
+        self._fs_pointer_y = y
+        if self._in_fullscreen and int(y) <= 8:
+            try:
+                self._overlay_toolbar_fullscreen.timed_revealer._handle_pointer(True)
+            except Exception:
+                pass
+
     def _pointer_near_top(self):
+        y = getattr(self, "_fs_pointer_y", None)
+        if y is not None:
+            return int(y) <= 8
         try:
             display = Gdk.Display.get_default()
             surface = self.topwin.get_surface() if self.topwin is not None else None
             seat = display.get_default_seat() if display is not None else None
             pointer = seat.get_pointer() if seat is not None else None
             if surface is not None and pointer is not None:
-                found, _x, y, _mask = surface.get_device_position(pointer)
+                found, _x, pos_y, _mask = surface.get_device_position(pointer)
                 if found:
-                    return int(y) <= 8
+                    return int(pos_y) <= 8
+        except Exception:
+            pass
+        try:
+            pos = gtkcompat._x11_query_pointer()
+            origin = gtkcompat._widget_root_origin(self.topwin)
+            if pos is not None and origin is not None:
+                return int(pos[1] - origin[1]) <= 8
+            if pos is not None:
+                return int(pos[1]) <= 8
         except Exception:
             pass
         try:
