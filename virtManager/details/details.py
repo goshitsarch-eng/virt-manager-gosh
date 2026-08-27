@@ -3438,6 +3438,29 @@ class vmmDetails(vmmGObjectUI):
                 return labeled
         return row
 
+    def _publish_inactive_media_path(self, inactive_path):
+        try:
+            self._mediacombo.set_path(inactive_path)
+        except Exception:
+            pass
+        pretty = inactive_path
+        try:
+            pretty = (
+                self._mediacombo._pretty_label_for_path(inactive_path) or inactive_path
+            )
+        except Exception:
+            pretty = inactive_path
+        for path, val in (
+            ("/tmp/vmm-a11y-details-media-entry.txt", pretty or inactive_path),
+            ("/tmp/vmm-a11y-details-media-path.txt", inactive_path),
+            ("/tmp/vmm-a11y-disk-source-path.txt", inactive_path),
+            ("/tmp/vmm-a11y-media-entry.txt", inactive_path),
+        ):
+            try:
+                open(path, "w").write(val or "")
+            except Exception:
+                pass
+
     def _sync_inactive_cdrom_media(self, guest=None):
         """Publish empty media-entry when the selected CDROM is ejected."""
         if self.vm is None or self.vm.is_active():
@@ -3446,7 +3469,21 @@ class vmmDetails(vmmGObjectUI):
             row = self._a11y_selected_hw_row()
             current = row[HW_LIST_COL_DEVICE] if row else None
             if current is None or not getattr(current, "is_cdrom", lambda: False)():
-                return
+                current = None
+                last_tgt = getattr(self, "_vmm_last_disk_target", None)
+                if last_tgt:
+                    if guest is None:
+                        guest = self._inactive_guest_xml()
+                    for disk in guest.devices.disk:
+                        if getattr(disk, "target", None) == last_tgt:
+                            current = disk
+                            break
+                if current is None:
+                    last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+                    last_path = last.get("path")
+                    if last_path:
+                        self._publish_inactive_media_path(last_path)
+                    return
             # A pending media edit or storage-browser path must not be
             # wiped just because the selected CDROM is still ejected.
             try:
@@ -3479,28 +3516,7 @@ class vmmDetails(vmmGObjectUI):
             # empty running disk must not hide a just-applied ISO path
             # (testMediaHotplug deferred apply).
             if inactive_path:
-                try:
-                    self._mediacombo.set_path(inactive_path)
-                except Exception:
-                    pass
-                pretty = inactive_path
-                try:
-                    pretty = (
-                        self._mediacombo._pretty_label_for_path(inactive_path)
-                        or inactive_path
-                    )
-                except Exception:
-                    pretty = inactive_path
-                for path, val in (
-                    ("/tmp/vmm-a11y-details-media-entry.txt", pretty or inactive_path),
-                    ("/tmp/vmm-a11y-details-media-path.txt", inactive_path),
-                    ("/tmp/vmm-a11y-disk-source-path.txt", inactive_path),
-                    ("/tmp/vmm-a11y-media-entry.txt", inactive_path),
-                ):
-                    try:
-                        open(path, "w").write(val or "")
-                    except Exception:
-                        pass
+                self._publish_inactive_media_path(inactive_path)
                 return
             ejected = inactive_path == "" or (
                 inactive_path is None and not current.get_source_path()
@@ -7071,40 +7087,41 @@ class vmmDetails(vmmGObjectUI):
             hw_entry = self._make_hw_list_entry(label, hwtype, icon, dev)
             hw_list_model.insert(insertAt, hw_entry)
 
-        consoles = self.vm.xmlobj.devices.console
-        serials = self.vm.xmlobj.devices.serial
+        srcxml = self.vm.get_xmlobj(inactive=not self.vm.is_active())
+        consoles = srcxml.devices.console
+        serials = srcxml.devices.serial
         if serials and consoles and self.vm.serial_is_console_dup(serials[0]):
             consoles.pop(0)
 
-        disks = self.vm.xmlobj.devices.disk
+        disks = srcxml.devices.disk
         for dev, _disk_bus_index in _calculate_disk_bus_index(disks):
             update_hwlist(HW_LIST_TYPE_DISK, dev, _disk_bus_index)
-        for dev in self.vm.xmlobj.devices.interface:
+        for dev in srcxml.devices.interface:
             update_hwlist(HW_LIST_TYPE_NIC, dev)
-        for dev in self.vm.xmlobj.devices.input:
+        for dev in srcxml.devices.input:
             update_hwlist(HW_LIST_TYPE_INPUT, dev)
-        for dev in self.vm.xmlobj.devices.graphics:
+        for dev in srcxml.devices.graphics:
             update_hwlist(HW_LIST_TYPE_GRAPHICS, dev)
-        for dev in self.vm.xmlobj.devices.sound:
+        for dev in srcxml.devices.sound:
             update_hwlist(HW_LIST_TYPE_SOUND, dev)
         for dev in serials:
             update_hwlist(HW_LIST_TYPE_CHAR, dev)
-        for dev in self.vm.xmlobj.devices.parallel:
+        for dev in srcxml.devices.parallel:
             update_hwlist(HW_LIST_TYPE_CHAR, dev)
         for dev in consoles:
             update_hwlist(HW_LIST_TYPE_CHAR, dev)
-        for dev in self.vm.xmlobj.devices.channel:
+        for dev in srcxml.devices.channel:
             update_hwlist(HW_LIST_TYPE_CHAR, dev)
-        for dev in self.vm.xmlobj.devices.hostdev:
+        for dev in srcxml.devices.hostdev:
             update_hwlist(HW_LIST_TYPE_HOSTDEV, dev)
-        for dev in self.vm.xmlobj.devices.redirdev:
+        for dev in srcxml.devices.redirdev:
             update_hwlist(HW_LIST_TYPE_REDIRDEV, dev)
-        for dev in self.vm.xmlobj.devices.video:
+        for dev in srcxml.devices.video:
             update_hwlist(HW_LIST_TYPE_VIDEO, dev)
-        for dev in self.vm.xmlobj.devices.watchdog:
+        for dev in srcxml.devices.watchdog:
             update_hwlist(HW_LIST_TYPE_WATCHDOG, dev)
 
-        for dev in self.vm.xmlobj.devices.controller:
+        for dev in srcxml.devices.controller:
             # skip USB2 ICH9 companion controllers
             if dev.model in ["ich9-uhci1", "ich9-uhci2", "ich9-uhci3"]:
                 continue
@@ -7116,17 +7133,17 @@ class vmmDetails(vmmGObjectUI):
 
             update_hwlist(HW_LIST_TYPE_CONTROLLER, dev)
 
-        for dev in self.vm.xmlobj.devices.filesystem:
+        for dev in srcxml.devices.filesystem:
             update_hwlist(HW_LIST_TYPE_FILESYSTEM, dev)
-        for dev in self.vm.xmlobj.devices.smartcard:
+        for dev in srcxml.devices.smartcard:
             update_hwlist(HW_LIST_TYPE_SMARTCARD, dev)
-        for dev in self.vm.xmlobj.devices.tpm:
+        for dev in srcxml.devices.tpm:
             update_hwlist(HW_LIST_TYPE_TPM, dev)
-        for dev in self.vm.xmlobj.devices.rng:
+        for dev in srcxml.devices.rng:
             update_hwlist(HW_LIST_TYPE_RNG, dev)
-        for dev in self.vm.xmlobj.devices.panic:
+        for dev in srcxml.devices.panic:
             update_hwlist(HW_LIST_TYPE_PANIC, dev)
-        for dev in self.vm.xmlobj.devices.vsock:
+        for dev in srcxml.devices.vsock:
             update_hwlist(HW_LIST_TYPE_VSOCK, dev)
 
         if add_missing_only:
