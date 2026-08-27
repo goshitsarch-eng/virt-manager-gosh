@@ -546,13 +546,34 @@ class vmmSerialConsole(vmmGObject):
         self._serial_paste_primary()
         return True
 
+    def _vte_primary_safe(self, term):
+        """VTE paste_primary/copy_primary segfault if the widget has no root."""
+        if term is None:
+            return False
+        try:
+            return term.get_root() is not None
+        except Exception:
+            return False
+
     def _serial_selection_to_primary(self, *_a):
         term = self._vteterminal
         if term is None:
             return
         try:
-            if term.get_has_selection():
+            if not term.get_has_selection():
+                return
+        except Exception:
+            return
+        if self._vte_primary_safe(term):
+            try:
                 term.copy_primary()
+                return
+            except Exception:
+                pass
+        try:
+            text = term.get_text_selected(Vte.Format.TEXT)
+            if text:
+                Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).set_text(text, -1)
         except Exception:
             pass
 
@@ -592,10 +613,11 @@ class vmmSerialConsole(vmmGObject):
                 term.copy_clipboard()
             except Exception:
                 pass
-        try:
-            term.copy_primary()
-        except Exception:
-            pass
+        if self._vte_primary_safe(term):
+            try:
+                term.copy_primary()
+            except Exception:
+                pass
         try:
             text = term.get_text_selected(Vte.Format.TEXT)
             if text:
@@ -640,11 +662,12 @@ class vmmSerialConsole(vmmGObject):
         term = self._vteterminal
         if term is None:
             return
-        try:
-            term.paste_primary()
-            return
-        except Exception:
-            pass
+        if self._vte_primary_safe(term):
+            try:
+                term.paste_primary()
+                return
+            except Exception:
+                pass
         try:
             clip = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
             text = clip.wait_for_text()
