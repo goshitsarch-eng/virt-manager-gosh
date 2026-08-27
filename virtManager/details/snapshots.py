@@ -1273,6 +1273,11 @@ class vmmSnapshotPage(vmmGObjectUI):
                     self._publish_a11y_state()
             except Exception:
                 pass
+            return True
+
+        def _action_tick():
+            # Separate from _tick so add/start still run if snapshot
+            # selection is blocked in a nested unapplied-changes dialog.
             try:
                 if os.path.exists(_SNAP_ACTION):
                     action = open(_SNAP_ACTION, "r").read().strip().lower()
@@ -1296,3 +1301,4 @@ class vmmSnapshotPage(vmmGObjectUI):
 
         GLib.timeout_add(50, _fields_tick)
         GLib.timeout_add(50, _tick)
+        GLib.timeout_add(50, _action_tick)

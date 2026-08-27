@@ -763,10 +763,14 @@ class VMMDogtailApp:
             try:
                 utils.check(lambda: _alert_text() != stored, timeout=3)
             except Exception:
-                try:
-                    os.remove("/tmp/vmm-a11y-alert-response.txt")
-                except Exception:
-                    pass
+                # Unapplied-change confirms are answered from a GLib
+                # poller. Removing the response on timeout leaves the
+                # nested dialog running and blocks snapshot-add.
+                if "unapplied" not in (stored or "").lower():
+                    try:
+                        os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    except Exception:
+                        pass
             # Do not clobber a replacement alert (apply error after Yes).
             # Re-read: an empty snapshot can race with the next dialog write.
             try:
