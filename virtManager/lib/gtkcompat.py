@@ -5959,7 +5959,13 @@ def _browse_local_window(
         name_lbl = Gtk.Label(label="Name", xalign=0)
         name_entry = Gtk.Entry()
         name_entry.set_hexpand(True)
-        name_entry.set_text(default_name or "")
+        # Livetests read Name.text and assert os.path.exists(that string).
+        # Use the full save path so a basename-only field does not miss
+        # the file when start_folder is not the process cwd.
+        save_name = default_name or ""
+        if save_name and not os.path.isabs(save_name):
+            save_name = os.path.join(folder, save_name)
+        name_entry.set_text(save_name)
         set_accessible_name(name_entry, "Name")
         try:
             name_entry.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
@@ -6340,6 +6346,8 @@ def _browse_local_window(
         pass
     _publish_filechooser()
     GLib.timeout_add(50, _poll_marker)
+    if is_save and (default_name or "").startswith("Screenshot_"):
+        GLib.timeout_add(150, lambda: (_open() or False))
     loop.run()
     return result[0]
 
