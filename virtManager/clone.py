@@ -244,7 +244,9 @@ class vmmCloneVM(vmmGObjectUI):
             return
         log.debug("Showing clone wizard")
         try:
-            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+            # Do not publish shown=1 until _reset_state finishes. An early
+            # Clone click is deleted with clone-finish below.
+            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("0")
         except Exception:
             pass
         for path in (
