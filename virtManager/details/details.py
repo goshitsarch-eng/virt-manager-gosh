@@ -6369,20 +6369,6 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_page(self):
         row = self._get_hw_row()
-        last = getattr(self, "_vmm_last_refreshed_hw", None)
-        if last:
-            gtk_label = ""
-            try:
-                if row is not None:
-                    gtk_label = str(row[HW_LIST_COL_LABEL] or "")
-            except Exception:
-                gtk_label = ""
-            pending = getattr(self, "_vmm_pending_hw_nav", None)
-            if gtk_label != last and pending in (None, last):
-                pinned = self._hw_row_for_label(last)
-                if pinned is not None:
-                    row = pinned
-
         if not row:
             return  # pragma: no cover
 

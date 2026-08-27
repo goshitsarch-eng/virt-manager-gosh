@@ -169,13 +169,15 @@ class _vmmDeleteBase(vmmGObjectUI):
             return False
 
     def _dialog_visible(self):
+        if self.vm is None:
+            return False
         try:
             return bool(self.topwin.get_mapped() or self.topwin.get_visible())
         except Exception:
-            return False
+            return bool(self.vm is not None)
 
     def _publish_a11y_state(self):
-        if not self._dialog_visible():
+        if self.vm is None:
             return
         try:
             chk = self.widget("delete-remove-storage")
@@ -219,14 +221,9 @@ class _vmmDeleteBase(vmmGObjectUI):
         def _tick():
             if not getattr(self, "_vmm_delete_a11y_poll", False):
                 return False
-            try:
-                visible = self._dialog_visible()
-            except Exception:
-                visible = False
-            try:
-                shown = visible
-            except Exception:
-                shown = False
+            if self.vm is None:
+                return True
+            shown = True
             try:
                 path = "/tmp/vmm-a11y-delete-finish"
                 if os.path.exists(path):
