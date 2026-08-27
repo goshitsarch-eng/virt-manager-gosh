@@ -427,6 +427,15 @@ class _SentinelTableCell(object):
             # Overview). Remove/apply must use this click-only label.
             open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(self.name or "")
             open("/tmp/vmm-a11y-last-hw.txt", "w").write(self.name or "")
+            if (self.name or "") not in (
+                "Overview",
+                "OS information",
+                "Performance",
+                "CPUs",
+                "Memory",
+                "Boot Options",
+            ):
+                open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(self.name or "")
         except Exception:
             pass
         try:
@@ -1483,6 +1492,7 @@ class _SentinelClickButton(object):
         if self.name == "config-remove":
             target = ""
             for path in (
+                "/tmp/vmm-a11y-hw-last-device.txt",
                 "/tmp/vmm-a11y-hw-clicked.txt",
                 "/tmp/vmm-a11y-hw-selected.txt",
                 "/tmp/vmm-a11y-last-hw.txt",

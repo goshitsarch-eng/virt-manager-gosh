@@ -4542,13 +4542,43 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 # GTK 4 get_selected() often still names Overview after
                 # select_iter. Publish the requested label so Remove/Apply
                 # keep targeting SCSI Disk 1 / Serial 1 / etc.
+                _NON_DEVICE = (
+                    "Overview",
+                    "OS information",
+                    "Performance",
+                    "CPUs",
+                    "Memory",
+                    "Boot Options",
+                )
                 label = want or published
                 if published and published != want and published == "Overview":
                     label = want
                 try:
+                    prev = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                except Exception:
+                    prev = ""
+                try:
+                    pending_sel = open(
+                        "/tmp/vmm-a11y-hw-select.txt", "r"
+                    ).read().strip()
+                except Exception:
+                    pending_sel = ""
+                # AT-SPI GetItems can activate the Overview sidecar row
+                # after a device click. Do not wipe SCSI Disk 1 / Serial 1.
+                if (
+                    label in _NON_DEVICE
+                    and prev
+                    and prev not in _NON_DEVICE
+                    and pending_sel != "Overview"
+                    and want in _NON_DEVICE
+                ):
+                    label = prev
+                try:
                     open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(label)
                     open("/tmp/vmm-a11y-hw-selected.txt", "w").write(label)
                     open("/tmp/vmm-a11y-last-hw.txt", "w").write(label)
+                    if label not in _NON_DEVICE:
+                        open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(label)
                 except Exception:
                     pass
             _sync_row_selected()
@@ -4771,6 +4801,15 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                     if not same_unique:
                         selected = pending
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
+            if selected and selected not in (
+                "Overview",
+                "OS information",
+                "Performance",
+                "CPUs",
+                "Memory",
+                "Boot Options",
+            ):
+                open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(selected)
         except Exception:
             pass
         selected_idx = -1

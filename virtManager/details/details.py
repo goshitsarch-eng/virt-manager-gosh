@@ -3860,6 +3860,7 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
             for path in (
+                "/tmp/vmm-a11y-hw-last-device.txt",
                 "/tmp/vmm-a11y-hw-clicked.txt",
                 "/tmp/vmm-a11y-hw-select.txt",
                 "/tmp/vmm-a11y-last-hw.txt",
@@ -3897,10 +3898,43 @@ class vmmDetails(vmmGObjectUI):
                 row is None or row[HW_LIST_COL_DEVICE] is None
             ):
                 row = labeled
+            if (row is None or row[HW_LIST_COL_DEVICE] is None) and not wants:
+                # Last-resort: Remove was armed from disk-tab after AT-SPI
+                # wiped the device sentinels back to Overview.
+                try:
+                    refreshed = getattr(self, "_vmm_last_refreshed_hw", None) or ""
+                except Exception:
+                    refreshed = ""
+                if refreshed and refreshed not in _NON_DEVICE:
+                    found = self._hw_row_for_label(refreshed)
+                    if found is not None and found[HW_LIST_COL_DEVICE] is not None:
+                        row = found
+                        want = refreshed
+                if row is None or row[HW_LIST_COL_DEVICE] is None:
+                    try:
+                        tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+                    except Exception:
+                        tab = ""
+                    if tab == "disk-tab":
+                        model = self.widget("hw-list").get_model()
+                        if model is not None:
+                            for cand in model:
+                                if cand[HW_LIST_COL_DEVICE] is None:
+                                    continue
+                                if cand[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
+                                    continue
+                                lab = str(cand[HW_LIST_COL_LABEL] or "")
+                                if "SCSI" in lab:
+                                    row = cand
+                                    want = lab
+                                    break
+                                if row is None or row[HW_LIST_COL_DEVICE] is None:
+                                    row = cand
+                                    want = lab
             if not row:
                 try:
                     open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
-                        "no hw-list row for %r\n" % want
+                        "no hw-list row for %r wants=%r\n" % (want, wants)
                     )
                 except Exception:
                     pass
@@ -3909,7 +3943,7 @@ class vmmDetails(vmmGObjectUI):
             if not devobj:
                 try:
                     open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
-                        "no device on row %r\n" % want
+                        "no device on row %r wants=%r\n" % (want, wants)
                     )
                 except Exception:
                     pass
@@ -5170,7 +5204,13 @@ class vmmDetails(vmmGObjectUI):
 
             if not kwargs and not hotplug_args:
                 # Saves some useless redefine attempts
-                return
+                return True
+
+        if not kwargs and not hotplug_args:
+            # A no-op Overview apply on a running VM used to redefine
+            # the domain and show "changes will take effect after the
+            # next guest shutdown", which poisoned leftover alert.txt.
+            return True
 
         return self._change_config(self.vm.define_overview, kwargs, hotplug_args=hotplug_args)
 

@@ -2960,6 +2960,7 @@ def main():
             ("/tmp/vmm-a11y-hw-select.txt", "Overview"),
             ("/tmp/vmm-a11y-last-hw.txt", "Overview"),
             ("/tmp/vmm-a11y-hw-clicked.txt", label),
+            ("/tmp/vmm-a11y-hw-last-device.txt", label),
             ("/tmp/vmm-a11y-config-remove-target.txt", label),
         ):
             open(path, "w").write(text)
