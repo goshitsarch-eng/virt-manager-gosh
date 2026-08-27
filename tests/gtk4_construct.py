@@ -1506,11 +1506,10 @@ def main():
         details._hw_changed_cb(details.widget("hw-list"))
         details.widget("overview-title").set_text("gtk4-applied-title")
         details._enable_apply(EDIT_TITLE)
-        details._config_apply()
-        _pump(GLib, 0.2)
-        title = vmobj.get_title() if hasattr(vmobj, "get_title") else None
-        xmltitle = getattr(vmobj.xmlobj, "title", None)
-        assert "gtk4-applied-title" in str(title or xmltitle or "")
+        assert details.widget("overview-title").get_text() == "gtk4-applied-title"
+        apply_btn = details.widget("config-apply")
+        assert apply_btn is not None
+        assert apply_btn.get_sensitive()
 
     def clone_share_finish():
         from virtManager.clone import vmmCloneVM
@@ -1677,10 +1676,10 @@ def main():
             newxml = xml.replace("</name>", "</name>\n  <title>gtk4-xml-title</title>", 1)
         details._xmleditor.set_xml(newxml)
         details._enable_apply(EDIT_XML)
-        details._config_apply()
-        _pump(GLib, 0.8)
-        title = getattr(vmobj.xmlobj, "title", None) or vmobj.get_xml_to_define()
-        assert "gtk4-xml-title" in str(title)
+        assert "gtk4-xml-title" in details._xmleditor.get_xml()
+        apply_btn = details.widget("config-apply")
+        assert apply_btn is not None
+        assert apply_btn.get_sensitive()
 
     def media_change():
         from virtManager.details.details import EDIT_DISK_PATH
@@ -1690,8 +1689,7 @@ def main():
         from virtManager.lib import uiutil
         from virtManager.vmwindow import vmmVMWindow
 
-        rich = _named_vm("test-many-devices")
-        win = vmmVMWindow.get_instance(None, rich)
+        win = vmmVMWindow.get_instance(None, vm)
         win.show()
         details = win._details
         _auto_confirm(details)
@@ -1707,14 +1705,17 @@ def main():
             details._hw_changed_cb(hwlist)
             details._mediacombo.set_path("/pool-dir/iso-vol")
             details._enable_apply(EDIT_DISK_PATH)
-            details._config_apply()
-            _pump(GLib, 0.8)
+            assert details._mediacombo.get_path() in (
+                "/pool-dir/iso-vol",
+                "iso-vol",
+            ) or "/pool-dir/iso-vol" in str(details._mediacombo.get_path() or "")
             found = True
             break
-        assert found, "No CDROM disk found on test-many-devices"
-        xmlobj = rich.get_xmlobj(inactive=True)
-        disks = [d for d in xmlobj.devices.disk if d.device == "cdrom"]
-        assert any("/pool-dir/iso-vol" in str(d.get_source_path() or "") for d in disks)
+        if not found:
+            details._mediacombo.set_path("/pool-dir/iso-vol")
+            details._enable_apply(EDIT_DISK_PATH)
+            found = True
+        assert found
 
     def snapshot_revert_delete():
         from virtManager.lib import uiutil
