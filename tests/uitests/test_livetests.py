@@ -89,7 +89,12 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
                 live_uri = "qemu:///session"
             if live_uri.startswith("qemu:///session"):
                 xml = _session_tcg_xml(xml)
-            conn = libvirt.open(live_uri)
+            try:
+                conn = libvirt.open(live_uri)
+            except Exception as e:
+                if live_uri.startswith("lxc"):
+                    pytest.skip("LXC libvirt driver is not available: %s" % e)
+                raise
             try:
                 dom = conn.defineXML(xml)
             except Exception as e:
