@@ -3868,7 +3868,11 @@ class vmmDetails(vmmGObjectUI):
                 if labeled is None and found is not None:
                     labeled = found
                     want = cand
-            if labeled is not None:
+            if labeled is not None and labeled[HW_LIST_COL_DEVICE] is not None:
+                row = labeled
+            elif labeled is not None and (
+                row is None or row[HW_LIST_COL_DEVICE] is None
+            ):
                 row = labeled
             if not row:
                 try:
