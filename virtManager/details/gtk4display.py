@@ -743,20 +743,20 @@ class VNCDisplay(_DisplayBase):
             _VNC_ENC_QEMU_EXT_KEY,
             _VNC_ENC_LASTRECT,
             _VNC_ENC_DESKTOPNAME,
-            _VNC_ENC_ZRLE,
-            _VNC_ENC_TIGHT,
-            _VNC_ENC_TRLE,
-            6,  # zlib
-            5,  # hextile
-            _VNC_ENC_CORRE,
-            2,  # RRE
-            1,  # CopyRect
-            _VNC_ENC_TIGHTPNG,
-            0,  # raw
             _VNC_ENC_DESKTOPSIZE,
             _VNC_ENC_EXTENDED_DESKTOPSIZE,
             _VNC_ENC_CURSOR,
             _VNC_ENC_XCURSOR,
+            0,  # raw first: Tight/ZRLE decode errors were dropping the session
+            1,  # CopyRect
+            2,  # RRE
+            5,  # hextile
+            6,  # zlib
+            _VNC_ENC_CORRE,
+            _VNC_ENC_TRLE,
+            _VNC_ENC_ZRLE,
+            _VNC_ENC_TIGHT,
+            _VNC_ENC_TIGHTPNG,
         )
         self._qemu_ext_key = True
         sock.sendall(struct.pack("!BBH", 2, 0, len(encodings)))
@@ -776,7 +776,12 @@ class VNCDisplay(_DisplayBase):
             if not msg:
                 break
             if msg[0] == 0:
-                width, height = self._read_fb_update(sock, width, height)
+                try:
+                    width, height = self._read_fb_update(sock, width, height)
+                except Exception as exc:
+                    log.debug("VNC framebuffer update failed: %s", exc, exc_info=True)
+                    self._request_update(sock, width, height)
+                    continue
             elif msg[0] == 1:
                 self._recv_n(sock, 3)
                 n = struct.unpack("!H", self._recv_n(sock, 2))[0]
