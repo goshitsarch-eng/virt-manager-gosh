@@ -5980,7 +5980,19 @@ class vmmDetails(vmmGObjectUI):
             last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
             last_tgt = getattr(self, "_vmm_last_disk_target", None)
             tgt = getattr(disk, "target", None)
-            if last.get("shareable") and (last_tgt is None or last_tgt == tgt):
+            applied = False
+            try:
+                applied = (
+                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "r")
+                    .read()
+                    .strip()
+                    == "1"
+                )
+            except Exception:
+                applied = False
+            if (last.get("shareable") or applied) and (
+                last_tgt is None or last_tgt == tgt
+            ):
                 if not (apply_on and live == "0"):
                     self._addstorage.widget("disk-shareable").set_active(True)
                     open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")

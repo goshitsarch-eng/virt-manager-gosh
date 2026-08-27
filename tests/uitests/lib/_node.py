@@ -460,6 +460,10 @@ class _SentinelTableCell(object):
                     )
                 except Exception:
                     pass
+            try:
+                os.remove("/tmp/vmm-a11y-unapplied-prompt.txt")
+            except Exception:
+                pass
         if self._index is not None:
             try:
                 open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(self._index))
@@ -484,6 +488,34 @@ class _SentinelTableCell(object):
             except Exception:
                 pass
             time.sleep(0.05)
+        # Don't-warn returns immediately from _select_hw(CPUs) if the
+        # CPU tab is already showing. Wait for the app to abandon or
+        # show a confirm so the next _select_hw does not overwrite
+        # this click before Apply is cleared.
+        if apply_on and dest in (
+            "CPUs",
+            "CPU",
+            "Memory",
+            "Overview",
+            "OS information",
+            "Performance",
+            "Boot Options",
+        ):
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                try:
+                    if (
+                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        .read()
+                        .strip()
+                        != "1"
+                    ):
+                        break
+                except Exception:
+                    break
+                if os.path.exists("/tmp/vmm-a11y-unapplied-prompt.txt"):
+                    break
+                time.sleep(0.05)
         if "NIC" in (self.name or ""):
             deadline = time.time() + 5.0
             while time.time() < deadline:

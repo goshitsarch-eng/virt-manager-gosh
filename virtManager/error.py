@@ -271,13 +271,25 @@ class vmmErrorDialog(vmmGObject):
                 mapped = False
             if not mapped:
                 self._in_prompt = False
-        return self.chkbox_helper(
-            self.config.get_confirm_unapplied,
-            self.config.set_confirm_unapplied,
-            text1=(_("There are unapplied changes. Would you like to apply them now?")),
-            chktext=_("Don't warn me again."),
-            default=False,
-        )
+        if not self.config.get_confirm_unapplied():
+            return False
+        try:
+            open("/tmp/vmm-a11y-unapplied-prompt.txt", "w").write("1")
+        except Exception:
+            pass
+        try:
+            return self.chkbox_helper(
+                self.config.get_confirm_unapplied,
+                self.config.set_confirm_unapplied,
+                text1=(_("There are unapplied changes. Would you like to apply them now?")),
+                chktext=_("Don't warn me again."),
+                default=False,
+            )
+        finally:
+            try:
+                os.remove("/tmp/vmm-a11y-unapplied-prompt.txt")
+            except Exception:
+                pass
 
     ##########################################
     # One shot dialog with a checkbox prompt #
