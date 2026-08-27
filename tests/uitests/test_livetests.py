@@ -488,9 +488,12 @@ def testVNCSpecific(app, dom):
 
         has_resize = hasattr(GtkVnc.Display, "set_allow_resize")
     except Exception:
-        from virtManager.details import gtk4display
-
-        has_resize = hasattr(gtk4display.VNCDisplay, "set_allow_resize")
+        # gtk4display is GTK 4-only. Importing it here registers GTypes
+        # against the uitest process (GTK 3 / dogtail) and fails.
+        srcpath = os.path.join(
+            os.path.dirname(__file__), "..", "..", "virtManager", "details", "gtk4display.py"
+        )
+        has_resize = "def set_allow_resize" in open(srcpath).read()
     if not has_resize:
         pytest.skip("VNC resize-guest is not available")
 
