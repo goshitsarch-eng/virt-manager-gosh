@@ -3922,7 +3922,7 @@ class UsbDeviceWidget(Gtk.Box):
     def _append_spice_cd(self, sensitive=True):
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         label = Gtk.Label(label=_("SPICE CD"), xalign=0, hexpand=True)
-        btn = Gtk.CheckButton(label=_("SPICE CD"))
+        btn = Gtk.CheckButton()
         btn.set_name("SPICE CD")
         try:
             btn.update_property([Gtk.AccessibleProperty.LABEL], ["SPICE CD"])
