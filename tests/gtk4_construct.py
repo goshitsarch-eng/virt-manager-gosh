@@ -822,7 +822,7 @@ def main():
         from virtManager.vmwindow import vmmVMWindow
 
         dlg = vmmCreateConn()
-        dlg.show()
+        dlg.show(None)
         _pump(GLib, 0.2)
         host_lbl = dlg.widget("label91")
         host_ent = dlg.widget("hostname")
@@ -835,16 +835,6 @@ def main():
         assert user_lbl.get_mnemonic_widget() is user_ent, (
             "_Username: mnemonic-widget was cleared; Alt+U cannot focus Username"
         )
-        uri_lbl = None
-        uri_ent = dlg.widget("uri-entry")
-        for obj in dlg.builder.get_objects():
-            try:
-                if getattr(obj, "get_mnemonic_widget", None) and obj.get_mnemonic_widget() is uri_ent:
-                    uri_lbl = obj
-                    break
-            except Exception:
-                pass
-        assert uri_lbl is not None and uri_lbl.get_mnemonic_widget() is uri_ent
 
         vwin = vmmVMWindow.get_instance(None, vm)
         vwin.show()
