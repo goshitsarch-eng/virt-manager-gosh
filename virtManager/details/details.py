@@ -1552,6 +1552,7 @@ class vmmDetails(vmmGObjectUI):
                             pass
                         self._addstorage._a11y_cache_override = text
                         self._addstorage._change_cb(1)
+                        self._enable_apply(EDIT_DISK)
                 except Exception:
                     pass
                 nset = "/tmp/vmm-a11y-net-device.txt.set"
@@ -4836,6 +4837,12 @@ class vmmDetails(vmmGObjectUI):
             known = set(virtinst.DeviceDisk.CACHE_MODES)
             if typed not in known:
                 self._vmm_apply_failed = True
+                # Do not reuse this invalid value on the next Shareable
+                # Apply (testDetailsMiscEdits Yes after badcachemode).
+                try:
+                    self._addstorage._a11y_cache_override = None
+                except Exception:
+                    pass
                 self.err.show_err(
                     _("Error changing VM configuration: invalid cache mode '%s'")
                     % typed,
