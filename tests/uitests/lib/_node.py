@@ -3683,8 +3683,13 @@ class _SentinelDetailsCheck(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         before = self.checked
+        want = "0" if before else "1"
         try:
-            open(self._path + ".click", "w").write("0" if before else "1")
+            open(self._path + ".click", "w").write(want)
+            open(self._path, "w").write(want)
+            if "disk-shareable" in (self._path or ""):
+                open("/tmp/vmm-a11y-disk-shareable-user.txt", "w").write(want)
+                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
         except Exception:
             pass
         if "cpu-copy-host" in (self._path or ""):
