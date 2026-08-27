@@ -1022,17 +1022,11 @@ class vmmCreateVM(vmmGObjectUI):
                 wid = mapping.get(key)
                 if wid:
                     try:
-                        for other in mapping.values():
-                            src = self.widget(other)
-                            if src is None:
-                                continue
-                            if other == wid:
-                                src.set_active(True)
-                            else:
-                                try:
-                                    src.set_active(False)
-                                except Exception:
-                                    pass
+                        # Only turn the requested radio on. set_active(False)
+                        # on a GTK 4 group member can select a sibling.
+                        src = self.widget(wid)
+                        if src is not None:
+                            src.set_active(True)
                     except Exception:
                         pass
                 try:
@@ -2350,10 +2344,6 @@ class vmmCreateVM(vmmGObjectUI):
         return uiutil.get_list_selection(self.widget("machine"), check_visible=True)
 
     def _get_config_install_page(self):
-        try:
-            key = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
-        except Exception:
-            key = ""
         by_key = {
             "local": INSTALL_PAGE_ISO,
             "tree": INSTALL_PAGE_URL,
@@ -2363,8 +2353,19 @@ class vmmCreateVM(vmmGObjectUI):
             "os": INSTALL_PAGE_CONTAINER_OS,
             "container": INSTALL_PAGE_VZ_TEMPLATE,
         }
+        try:
+            key = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
+        except Exception:
+            key = ""
+        # Apply a pending uitest/user sentinel first, then trust widgets.
+        # File-only lookup ignored a real Manual click after show() wrote
+        # "local". Applying then reading keeps both the sentinel contract
+        # and a mouse click.
         if key in by_key:
-            return by_key[key]
+            try:
+                self._apply_method_active_file()
+            except Exception:
+                pass
         if self.widget("vz-install-box").get_visible():
             if self.widget("vz-virt-type-exe").get_active():
                 return INSTALL_PAGE_VZ_TEMPLATE
@@ -2382,6 +2383,7 @@ class vmmCreateVM(vmmGObjectUI):
                 return INSTALL_PAGE_CONTAINER_APP
             if self.widget("method-container-os").get_active():
                 return INSTALL_PAGE_CONTAINER_OS
+        return by_key.get(key)
 
     def _is_container_install(self):
         return self._get_config_install_page() in [
@@ -2633,11 +2635,24 @@ class vmmCreateVM(vmmGObjectUI):
             self._set_conn(newconn)
 
     def _method_changed(self, src):
-        ignore = src
         # Reset the page number, since the total page numbers depend
         # on the chosen install method
         self._set_page_num_text(0)
         try:
+            src_map = {
+                self.widget("method-local"): "local",
+                self.widget("method-tree"): "tree",
+                self.widget("method-manual"): "manual",
+                self.widget("method-import"): "import",
+                self.widget("method-container-app"): "app",
+                self.widget("method-container-os"): "os",
+                self.widget("vz-virt-type-exe"): "container",
+                self.widget("vz-virt-type-hvm"): "hvm",
+            }
+            if src is not None and hasattr(src, "get_active") and src.get_active():
+                key = src_map.get(src)
+                if key:
+                    open("/tmp/vmm-a11y-method-active.txt", "w").write(key)
             self._publish_method_a11y()
         except Exception:
             pass
