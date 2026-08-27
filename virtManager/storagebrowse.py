@@ -297,6 +297,8 @@ class vmmStorageBrowser(vmmGObjectUI):
         for leftover in (
             "/tmp/vmm-a11y-choose-volume",
             "/tmp/vmm-a11y-browse-cancel",
+            "/tmp/vmm-a11y-pool-select.txt",
+            "/tmp/vmm-a11y-vol-select.txt",
         ):
             try:
                 os.remove(leftover)
@@ -538,6 +540,26 @@ class vmmStorageBrowser(vmmGObjectUI):
             except Exception:
                 pass
             self.close()
+            def _stay_closed():
+                if getattr(self, "_vmm_browse_hidden", False):
+                    try:
+                        open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+                    except Exception:
+                        pass
+                    try:
+                        from .lib import gtkcompat
+
+                        gtkcompat.hide_storagebrowse_window(self)
+                    except Exception:
+                        pass
+                return False
+
+            try:
+                self._vmm_stay_closed_cb = _stay_closed
+                GLib.idle_add(self._vmm_stay_closed_cb)
+                GLib.timeout_add(250, self._vmm_stay_closed_cb)
+            except Exception:
+                pass
             if parent is not None:
                 try:
                     parent.present()

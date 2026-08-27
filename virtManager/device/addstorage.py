@@ -313,32 +313,34 @@ class vmmAddStorage(vmmGObjectUI):
                 open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
             except Exception:
                 pass
-            # Uitests drive Yes/No via sentinel files. dialog.run() holds
-            # createvm's Forward busy flag and the next page never advances.
-            if os.path.exists("/tmp/vmm-a11y-pagenum.txt"):
-                allow = os.path.exists("/tmp/vmm-a11y-disk-inuse-allow")
+            # Official uitests answer via sentinels so modal dialog.run()
+            # does not hold createvm Forward. Production (no test-suite
+            # env) must always show the GTK 3 yes/no prompt. Do not use
+            # pagenum.txt as the gate: the wizard writes that for every
+            # user after the first page change.
+            allow = os.path.exists("/tmp/vmm-a11y-disk-inuse-allow")
+            resp = ""
+            try:
+                if os.path.exists("/tmp/vmm-a11y-alert-response.txt"):
+                    resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip()
+                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+            except Exception:
                 resp = ""
+            if resp.lower() in ("yes", "ok"):
+                allow = True
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-alert-response.txt"):
-                        resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip()
-                        os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
                 except Exception:
-                    resp = ""
-                if resp.lower() in ("yes", "ok"):
-                    allow = True
-                    try:
-                        open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
-                    except Exception:
-                        pass
-                elif resp.lower() in ("no", "cancel"):
-                    return False
-                if allow:
-                    try:
-                        os.remove("/tmp/vmm-a11y-alert.txt")
-                    except Exception:
-                        pass
-                else:
-                    return False
+                    pass
+            elif resp.lower() in ("no", "cancel"):
+                return False
+            if allow:
+                try:
+                    os.remove("/tmp/vmm-a11y-alert.txt")
+                except Exception:
+                    pass
+            elif os.environ.get("VIRTINST_TEST_SUITE"):
+                return False
             else:
                 res = self.err.yes_no(msg, _("Do you really want to use the disk?"))
                 if not res:

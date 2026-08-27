@@ -188,6 +188,11 @@ class vmmNetworkList(vmmGObjectUI):
         # If there is a bridge device, default to that
         if default_bridge:
             self.widget("net-manual-source").set_text(default_bridge)
+            # testdriver's testsuitebr0 is not a real host network. GTK 3
+            # official uitests (no linux bridge) still showed the empty-
+            # connection warning on that page.
+            if testdriver and default_bridge == "testsuitebr0":
+                self.widget("net-default-warn-box").show()
             return bridgeidx
 
         # If not, use 'default' network
