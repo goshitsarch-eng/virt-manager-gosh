@@ -125,6 +125,7 @@
                       <object class="GtkEntry" id="console-auth-password">
                         <property name="focusable">1</property>
                         <property name="visibility">0</property>
+                        <property name="input-purpose">password</property>
                         <signal name="activate" handler="on_console_auth_password_activate" swapped="no" />
                         <layout>
                           <property name="column">1</property>

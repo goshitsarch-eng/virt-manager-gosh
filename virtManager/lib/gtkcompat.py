@@ -455,6 +455,317 @@ def _window_resize(window, width, height):
         pass
 
 
+# GTK 3 .ui type-hint=dialog windows. Customize-before-install uses the
+# same hint from Python (vmmVMWindow.set_type_hint).
+_GTK3_DIALOG_WINDOWS = frozenset(
+    (
+        "vmm-about",
+        "vmm-add-hardware",
+        "vmm-progress",
+        "vmm-change-storage",
+        "vmm-clone",
+        "connectauth",
+        "vmm-open-connection",
+        "vmm-create-net",
+        "vmm-create-pool",
+        "vmm-create",
+        "vmm-create-vol",
+        "vmm-delete",
+        "vmm-migrate",
+        "vmm-preferences",
+        "snapshot-new",
+        "vmm-storage-browse",
+    )
+)
+_GTK3_CENTER_ON_PARENT = frozenset(
+    ("vmm-progress", "vmm-change-storage", "vmm-delete")
+)
+_GTK3_SKIP_TASKBAR = frozenset(("vmm-progress",))
+_GTK3_URGENCY = frozenset(("vmm-progress",))
+
+
+def theme_insensitive_color(widget=None):
+    """GTK 3 StyleContext insensitive_fg_color, for disconnected-row text."""
+    ctx = None
+    if widget is not None and hasattr(widget, "get_style_context"):
+        try:
+            ctx = widget.get_style_context()
+        except Exception:
+            ctx = None
+    if ctx is not None:
+        for name in (
+            "insensitive_fg_color",
+            "theme_unfocused_fg_color",
+        ):
+            try:
+                found, color = ctx.lookup_color(name)
+            except Exception:
+                found, color = False, None
+            if found and color is not None:
+                try:
+                    return "rgb(%d,%d,%d)" % (
+                        int(float(color.red) * 255),
+                        int(float(color.green) * 255),
+                        int(float(color.blue) * 255),
+                    )
+                except Exception:
+                    continue
+        fg = bg = None
+        for name in ("theme_fg_color", "window_fg_color"):
+            try:
+                found, color = ctx.lookup_color(name)
+            except Exception:
+                found, color = False, None
+            if found and color is not None:
+                fg = color
+                break
+        for name in ("theme_bg_color", "window_bg_color"):
+            try:
+                found, color = ctx.lookup_color(name)
+            except Exception:
+                found, color = False, None
+            if found and color is not None:
+                bg = color
+                break
+        if fg is not None:
+            try:
+                br = float(bg.red) if bg is not None else 1.0
+                gg = float(bg.green) if bg is not None else 1.0
+                bb = float(bg.blue) if bg is not None else 1.0
+                r = float(fg.red) * 0.55 + br * 0.45
+                g = float(fg.green) * 0.55 + gg * 0.45
+                b = float(fg.blue) * 0.55 + bb * 0.45
+                return "rgb(%d,%d,%d)" % (int(r * 255), int(g * 255), int(b * 255))
+            except Exception:
+                pass
+    try:
+        if Adw is not None and Adw.StyleManager.get_default().get_dark():
+            return "rgb(154,153,150)"
+    except Exception:
+        pass
+    return "rgb(154,153,150)"
+
+
+def _x11_surface(window):
+    try:
+        surface = window.get_surface()
+    except Exception:
+        return None
+    if surface is None:
+        return None
+    if hasattr(surface, "set_skip_taskbar_hint") or hasattr(surface, "get_xid"):
+        return surface
+    return None
+
+
+def _x11_set_window_type_dialog(xid):
+    """Set _NET_WM_WINDOW_TYPE_DIALOG so dialogs group like GTK 3."""
+    try:
+        import ctypes
+        from ctypes import c_char_p, c_int, c_ulong, c_void_p
+
+        xlib = ctypes.CDLL("libX11.so.6")
+        xlib.XOpenDisplay.restype = c_void_p
+        xlib.XOpenDisplay.argtypes = [c_char_p]
+        dpy = xlib.XOpenDisplay(None)
+        if not dpy:
+            return False
+        try:
+            xlib.XInternAtom.restype = c_ulong
+            xlib.XInternAtom.argtypes = [c_void_p, c_char_p, c_int]
+            xlib.XChangeProperty.argtypes = [
+                c_void_p,
+                c_ulong,
+                c_ulong,
+                c_ulong,
+                c_int,
+                c_int,
+                c_void_p,
+                c_int,
+            ]
+            type_atom = xlib.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE", 0)
+            value_atom = xlib.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_DIALOG", 0)
+            XA_ATOM = 4
+            data = (c_ulong * 1)(value_atom)
+            xlib.XChangeProperty(
+                dpy, c_ulong(int(xid)), type_atom, XA_ATOM, 32, 0, data, 1
+            )
+            xlib.XFlush(dpy)
+        finally:
+            xlib.XCloseDisplay(dpy)
+        return True
+    except Exception:
+        return False
+
+
+def _center_window_on_parent(window):
+    parent = None
+    try:
+        parent = window.get_transient_for()
+    except Exception:
+        parent = None
+    if parent is None:
+        return
+    try:
+        px, py = _window_get_position(parent)
+        pw, ph = _window_get_size(parent)
+        ww, wh = _window_get_size(window)
+        if ww <= 1 or wh <= 1:
+            ww = max(int(window.get_width() or 0), 1)
+            wh = max(int(window.get_height() or 0), 1)
+        if pw <= 1 or ph <= 1:
+            return
+        _window_move(window, px + max(0, (pw - ww) // 2), py + max(0, (ph - wh) // 2))
+    except Exception:
+        pass
+
+
+def _apply_x11_window_hints(window):
+    surface = _x11_surface(window)
+    if surface is None:
+        return False
+    applied = False
+    try:
+        if getattr(window, "_vmm_skip_taskbar", False) and hasattr(
+            surface, "set_skip_taskbar_hint"
+        ):
+            surface.set_skip_taskbar_hint(True)
+            applied = True
+        if getattr(window, "_vmm_skip_pager", False) and hasattr(
+            surface, "set_skip_pager_hint"
+        ):
+            surface.set_skip_pager_hint(True)
+            applied = True
+        if getattr(window, "_vmm_urgency_hint", False) and hasattr(
+            surface, "set_urgency_hint"
+        ):
+            surface.set_urgency_hint(True)
+            applied = True
+    except Exception:
+        pass
+    if getattr(window, "_vmm_window_type_dialog", False):
+        try:
+            xid = surface.get_xid() if hasattr(surface, "get_xid") else None
+        except Exception:
+            xid = None
+        if xid:
+            applied = _x11_set_window_type_dialog(xid) or applied
+    return applied
+
+
+def apply_gtk3_window_hints(
+    window,
+    dialog=False,
+    skip_taskbar=False,
+    skip_pager=False,
+    urgency=False,
+    center_on_parent=False,
+):
+    """Restore GTK 3 type-hint / skip-taskbar / urgency / center-on-parent."""
+    if window is None:
+        return
+    if dialog:
+        window._vmm_window_type_dialog = True
+    if skip_taskbar:
+        window._vmm_skip_taskbar = True
+    if skip_pager:
+        window._vmm_skip_pager = True
+    if urgency:
+        window._vmm_urgency_hint = True
+    if center_on_parent:
+        window._vmm_center_on_parent = True
+
+    def _apply(*_a):
+        _apply_x11_window_hints(window)
+        if getattr(window, "_vmm_center_on_parent", False):
+            try:
+                if window.get_mapped():
+                    _center_window_on_parent(window)
+            except Exception:
+                pass
+        return False
+
+    if not getattr(window, "_vmm_hints_connected", False):
+        window._vmm_hints_connected = True
+        try:
+            window.connect("realize", lambda *_a: GLib.idle_add(_apply))
+        except Exception:
+            pass
+        try:
+            window.connect("map", lambda *_a: GLib.idle_add(_apply))
+        except Exception:
+            pass
+    try:
+        if window.get_realized():
+            GLib.idle_add(_apply)
+    except Exception:
+        GLib.idle_add(_apply)
+
+
+def apply_gtk3_dialog_from_name(window, windowname):
+    """Apply the GTK 3 .ui window hints that gtk4-builder-tool stripped."""
+    if window is None or not windowname:
+        return
+    apply_gtk3_window_hints(
+        window,
+        dialog=windowname in _GTK3_DIALOG_WINDOWS,
+        skip_taskbar=windowname in _GTK3_SKIP_TASKBAR,
+        urgency=windowname in _GTK3_URGENCY,
+        center_on_parent=windowname in _GTK3_CENTER_ON_PARENT,
+    )
+
+
+def restore_button_icon_name(button, icon_name, accessible_name=None):
+    """GTK 3 GtkButton image= sibling, rebuilt as icon+label child."""
+    if button is None or not icon_name:
+        return
+    if getattr(button, "_vmm_icon_child", False):
+        return
+    label = None
+    try:
+        label = button.get_label()
+    except Exception:
+        label = None
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    box.set_halign(Gtk.Align.CENTER)
+    box.append(Gtk.Image.new_from_icon_name(icon_name))
+    if label:
+        box.append(Gtk.Label(label=label, use_underline=True))
+    try:
+        button.set_label(None)
+    except Exception:
+        pass
+    button.set_child(box)
+    button._vmm_icon_child = True
+    name = accessible_name
+    if not name and label:
+        name = label.replace("_", "", 1)
+    if name:
+        ensure_button_accessible_name(button, name)
+
+
+def restore_password_input_purpose(widget):
+    """GTK 3 visibility=False entries were password fields to IM/a11y."""
+    if widget is None or not isinstance(widget, Gtk.Entry):
+        return
+    try:
+        if widget.get_visibility():
+            return
+    except Exception:
+        return
+    try:
+        purpose = widget.get_input_purpose()
+    except Exception:
+        purpose = None
+    free = getattr(Gtk.InputPurpose, "FREE_FORM", None)
+    if purpose not in (None, free):
+        return
+    try:
+        widget.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+    except Exception:
+        pass
+
+
 # GTK 4 dropped gtk-menu-bar-accel / gtk-enable-mnemonics. Console grab
 # disables those settings so guest Ctrl+Shift+W / F10 / Alt+F reach the VM.
 _GTK_SETTINGS_OVERRIDES = {}
@@ -6025,6 +6336,7 @@ def sync_builder_accessible(widget):
     if isinstance(widget, Gtk.Label):
         GLib.idle_add(lambda: apply_mnemonic_accessible_name(widget) or False)
     if isinstance(widget, Gtk.Entry):
+        restore_password_input_purpose(widget)
         GLib.idle_add(lambda: attach_entry_a11y_value(widget) or False)
 
 
@@ -8069,10 +8381,27 @@ def _patch_widget_methods():
 
     Gtk.Window.resize = resize
 
-    def set_type_hint(self, *_args):
+    def set_type_hint(self, hint=None, *_args):
+        dialog = False
+        try:
+            dialog_hint = getattr(Gdk.WindowTypeHint, "DIALOG", 1)
+            dialog = hint in (dialog_hint, 1, "dialog", "DIALOG")
+        except Exception:
+            dialog = bool(hint)
+        if dialog:
+            apply_gtk3_window_hints(self, dialog=True)
         return None
 
     Gtk.Window.set_type_hint = set_type_hint
+
+    def set_skip_taskbar_hint(self, val=True):
+        apply_gtk3_window_hints(self, skip_taskbar=bool(val))
+
+    def set_urgency_hint(self, val=True):
+        apply_gtk3_window_hints(self, urgency=bool(val))
+
+    Gtk.Window.set_skip_taskbar_hint = set_skip_taskbar_hint
+    Gtk.Window.set_urgency_hint = set_urgency_hint
 
     def add_accel_group(self, group, *_args):
         _accel_group_enable(self, group)

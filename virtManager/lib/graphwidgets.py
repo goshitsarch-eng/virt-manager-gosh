@@ -22,6 +22,18 @@ class _RGB:
     blue = 1.0
 
 
+def _adw_base_rgb():
+    """libadwaita window background when StyleContext named colors are missing."""
+    try:
+        from gi.repository import Adw
+
+        if Adw.StyleManager.get_default().get_dark():
+            return 0.18, 0.18, 0.18
+    except Exception:
+        pass
+    return 1.0, 1.0, 1.0
+
+
 def _theme_base_rgb(widget=None):
     """GTK 3 used theme_base_color so sparklines match light/dark themes."""
     ctx = None
@@ -30,8 +42,6 @@ def _theme_base_rgb(widget=None):
             ctx = widget.get_style_context()
         except Exception:
             ctx = None
-    if ctx is None:
-        return 1.0, 1.0, 1.0
     names = (
         "theme_base_color",
         "theme_bg_color",
@@ -49,7 +59,7 @@ def _theme_base_rgb(widget=None):
                     return float(color.red), float(color.green), float(color.blue)
                 except Exception:
                     continue
-    return 1.0, 1.0, 1.0
+    return _adw_base_rgb()
 
 
 BASECOLOR = _RGB()

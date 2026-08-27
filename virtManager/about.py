@@ -94,6 +94,7 @@ class vmmAbout(vmmGObject):
                 dialog.set_application(app)
         dialog.set_accessible_role(Gtk.AccessibleRole.DIALOG)
         gtkcompat.set_accessible_name(dialog, "About")
+        gtkcompat.apply_gtk3_window_hints(dialog, dialog=True)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_margin_top(18)
@@ -218,6 +219,7 @@ class vmmAbout(vmmGObject):
         except Exception:
             pass
         gtkcompat.set_accessible_name(win, "License")
+        gtkcompat.apply_gtk3_window_hints(win, dialog=True)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_margin_top(8)
         box.set_margin_bottom(8)

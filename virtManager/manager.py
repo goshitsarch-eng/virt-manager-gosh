@@ -1525,7 +1525,11 @@ class vmmManager(vmmGObjectUI):
     def _build_conn_color(self, conn):
         color = None
         if conn.is_disconnected():
-            color = self.config.color_insensitive
+            from .lib import gtkcompat
+
+            color = gtkcompat.theme_insensitive_color(self.widget("vm-list"))
+            if not color:
+                color = self.config.color_insensitive
         return color
 
     def _build_vm_markup(self, name, status):

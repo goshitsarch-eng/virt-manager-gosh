@@ -165,6 +165,12 @@ class vmmCreateVolume(vmmGObjectUI):
         for fmt in ["raw", "qcow2"]:
             format_model.append([fmt, fmt])
 
+        from .lib import gtkcompat
+
+        gtkcompat.restore_button_icon_name(
+            self.widget("vol-create"), "document-new", "Finish"
+        )
+
     def _reset_state(self):
         self._xmleditor.reset_state()
 

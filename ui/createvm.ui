@@ -1003,6 +1003,7 @@ connections is not yet supported.&lt;/small&gt;</property>
                                                     <property name="hexpand">1</property>
                                                     <property name="focusable">1</property>
                                                     <property name="visibility">0</property>
+                                                    <property name="input-purpose">password</property>
                                                     </object>
                                                 </child>
                                               </object>

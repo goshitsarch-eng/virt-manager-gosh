@@ -165,6 +165,13 @@ class vmmAsyncJob(vmmGObjectUI):
         """
         vmmGObjectUI.__init__(self, "asyncjob.ui", "vmm-progress")
         self.topwin.set_transient_for(parent)
+        gtkcompat.apply_gtk3_window_hints(
+            self.topwin,
+            dialog=True,
+            skip_taskbar=True,
+            urgency=True,
+            center_on_parent=True,
+        )
 
         self.show_progress = bool(show_progress)
 

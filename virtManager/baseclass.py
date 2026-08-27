@@ -413,6 +413,7 @@ class vmmGObjectUI(vmmGObject):
                     gtkcompat.install_window_accelerators(
                         self.builder, self.topwin, windowname
                     )
+                    gtkcompat.apply_gtk3_dialog_from_name(self.topwin, windowname)
                 gtkcompat.ensure_window_a11y_box(self.topwin)
                 title = ""
                 try:

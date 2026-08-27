@@ -911,6 +911,53 @@ def main():
         assert len(rgb) == 3
         assert all(0.0 <= c <= 1.0 for c in rgb)
 
+    def gtk3_theme_dialogs_passwords():
+        """GTK 3 theme tokens, dialog window hints, password purpose, vol icon."""
+        from gi.repository import Gdk
+        from gi.repository import Gtk
+
+        from virtManager import config as vmmconfig
+        from virtManager.createvol import vmmCreateVolume
+        from virtManager.lib import gtkcompat
+        from virtManager.lib.graphwidgets import _theme_base_rgb
+        from virtManager.preferences import vmmPreferences
+        from virtManager.vmwindow import vmmVMWindow
+
+        css = vmmconfig.CSSDATA
+        assert "alpha(@window_fg_color" in css, css
+        assert "@insensitive_fg_color" not in css, css
+
+        dlg = vmmPreferences()
+        color = gtkcompat.theme_insensitive_color(dlg.topwin)
+        assert color and color.startswith("rgb("), color
+        rgb = _theme_base_rgb(dlg.topwin)
+        assert len(rgb) == 3
+        assert all(0.0 <= c <= 1.0 for c in rgb)
+        rgb_fallback = _theme_base_rgb(None)
+        assert len(rgb_fallback) == 3
+
+        assert dlg.topwin._vmm_window_type_dialog
+        dlg.topwin.set_type_hint(Gdk.WindowTypeHint.DIALOG)
+        dlg.topwin.set_skip_taskbar_hint(True)
+        dlg.topwin.set_urgency_hint(True)
+        assert dlg.topwin._vmm_skip_taskbar
+        assert dlg.topwin._vmm_urgency_hint
+
+        win = vmmVMWindow.get_instance(None, vm)
+        auth = win._console.widget("console-auth-password")
+        assert not auth.get_visibility()
+        assert auth.get_input_purpose() == Gtk.InputPurpose.PASSWORD
+
+        pool = _first_pool(conn)
+        assert pool is not None
+        cvol = vmmCreateVolume(conn, pool)
+        btn = cvol.widget("vol-create")
+        assert getattr(btn, "_vmm_icon_child", False), "Finish button lost document-new icon"
+        try:
+            cvol.close()
+        except Exception:
+            pass
+
     def error_dialogs():
         from virtManager.error import vmmErrorDialog
 
@@ -3843,6 +3890,7 @@ def main():
         ("gtk3_menubar_mnemonics", gtk3_menubar_mnemonics),
         ("gtk3_entry_mnemonics", gtk3_entry_mnemonics),
         ("gtk3_notebook_mnemonics", gtk3_notebook_mnemonics),
+        ("gtk3_theme_dialogs_passwords", gtk3_theme_dialogs_passwords),
         ("error_dialogs", error_dialogs),
         ("cli_windows", cli_windows),
         ("xmleditor_pages", xmleditor_pages),

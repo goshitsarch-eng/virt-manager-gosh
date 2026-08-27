@@ -15,9 +15,10 @@ from .lib.inspection import vmmInspection
 
 
 CSSDATA = """
-/* Lighter colored text in some wizard summary fields */
+/* Lighter colored text in some wizard summary fields.
+   GTK 3 used @insensitive_fg_color; Adwaita GTK 4 does not define that token. */
 .vmm-lighter {
-    color: @insensitive_fg_color;
+    color: alpha(@window_fg_color, 0.55);
 }
 
 /* Text on the blue header in our wizards */
@@ -211,8 +212,19 @@ class vmmConfig:
             display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
-        # Adwaita does not expose theme colors via StyleContext.lookup_color
-        self.color_insensitive = "rgb(154,153,150)"
+        self._refresh_theme_colors()
+        try:
+            from gi.repository import Adw
+
+            sm = Adw.StyleManager.get_default()
+            sm.connect("notify::dark", lambda *_a: self._refresh_theme_colors())
+        except Exception:
+            pass
+
+    def _refresh_theme_colors(self, widget=None):
+        from .lib import gtkcompat
+
+        self.color_insensitive = gtkcompat.theme_insensitive_color(widget)
 
     # General app wide helpers (gsettings agnostic)
 
