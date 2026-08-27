@@ -5470,6 +5470,7 @@ class vmmDetails(vmmGObjectUI):
                     self._mediacombo.set_path(kwargs.get("path") or "")
                 except Exception:
                     pass
+                self._vmm_pending_media_path = None
             if "shareable" in kwargs:
                 try:
                     if kwargs.get("shareable"):
@@ -5790,16 +5791,26 @@ class vmmDetails(vmmGObjectUI):
         return self._change_config(self.vm.define_tpm, kwargs, devobj=devobj)
 
     def _pending_media_path(self):
-        """A11y media path the user typed that refresh must not drop."""
+        """A11y media path the user typed that refresh must not drop.
+
+        An existing empty .set means eject. Distinguish that from "no
+        pending edit" by returning "" rather than None.
+        """
         try:
             if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set"):
                 text = open(
                     "/tmp/vmm-a11y-details-media-entry.txt.set", "r"
                 ).read().strip()
-                if text:
-                    return self._mediacombo._path_from_display(text)
+                path = (
+                    self._mediacombo._path_from_display(text) if text else ""
+                )
+                self._vmm_pending_media_path = path
+                return path
         except Exception:
             pass
+        pending = getattr(self, "_vmm_pending_media_path", None)
+        if pending is not None:
+            return pending
         stored = getattr(self._mediacombo, "_a11y_path", None)
         if stored:
             return stored
@@ -5833,6 +5844,9 @@ class vmmDetails(vmmGObjectUI):
             return True
         try:
             self._mediacombo.set_path(text)
+            self._vmm_pending_media_path = (
+                self._mediacombo._path_from_display(text) if (text or "").strip() else ""
+            )
             self._enable_apply(EDIT_DISK_PATH)
         except Exception:
             pass
