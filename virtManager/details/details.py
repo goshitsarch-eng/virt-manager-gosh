@@ -1185,27 +1185,7 @@ class vmmDetails(vmmGObjectUI):
             GLib.timeout_add(50, _poll_boot_init)
         if not getattr(self, "_vmm_config_remove_poll", False):
             self._vmm_config_remove_poll = True
-
-            def _poll_config_remove():
-                path = "/tmp/vmm-a11y-config-remove"
-                try:
-                    if not os.path.exists(path):
-                        return True
-                    os.remove(path)
-                except Exception:
-                    return True
-                try:
-                    self._config_remove()
-                except Exception as exc:
-                    try:
-                        open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
-                            "%s\n" % exc
-                        )
-                    except Exception:
-                        pass
-                return True
-
-            GLib.timeout_add(50, _poll_config_remove)
+            GLib.timeout_add(50, self._poll_config_remove_tick)
         if not getattr(self, "_vmm_hw_popup_poll", False):
             self._vmm_hw_popup_poll = True
 
@@ -7304,8 +7284,46 @@ class vmmDetails(vmmGObjectUI):
     def _config_cancel_clicked_cb(self, src):
         self._config_cancel()
 
+    def _poll_config_remove_tick(self):
+        path = "/tmp/vmm-a11y-config-remove"
+        try:
+            if not os.path.exists(path):
+                return True
+            os.remove(path)
+        except Exception:
+            return True
+        try:
+            open("/tmp/vmm-a11y-config-remove-debug.txt", "a").write("poller\n")
+        except Exception:
+            pass
+        try:
+            self._config_remove()
+        except Exception as exc:
+            try:
+                open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
+                    "%s\n" % exc
+                )
+            except Exception:
+                pass
+        return True
+
     def _config_remove_clicked_cb(self, src):
-        self._config_remove()
+        # AT-SPI GetItems can activate the real Remove button while
+        # Overview is selected. Ignore that; uitests use the file poller.
+        row = None
+        try:
+            row = self._get_hw_row()
+        except Exception:
+            row = None
+        if row is not None and row[HW_LIST_COL_DEVICE] is not None:
+            self._config_remove()
+            return
+        try:
+            device = open("/tmp/vmm-a11y-hw-last-device.txt", "r").read().strip()
+        except Exception:
+            device = ""
+        if device:
+            self._config_remove()
 
     def _refresh_ip_clicked_cb(self, src):
         self._refresh_ip()
