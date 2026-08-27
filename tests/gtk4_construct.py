@@ -1625,6 +1625,9 @@ def main():
         dlg.err.val_err = _val_err
         dlg.err.show_err = _show_err
         dlg.widget("method-manual").set_active(True)
+        # _get_config_install_page prefers this sentinel over widgets so
+        # show()'s published "local" does not keep the wizard on ISO.
+        open("/tmp/vmm-a11y-method-active.txt", "w").write("manual")
         dlg._method_changed(dlg.widget("method-manual"))
         dlg._set_install_page()
         dlg.widget("create-pages").set_current_page(PAGE_NAME)
