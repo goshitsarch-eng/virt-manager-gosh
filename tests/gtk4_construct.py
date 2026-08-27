@@ -3805,6 +3805,40 @@ def main():
         assert apply_btn is not None
         assert apply_btn.get_sensitive()
 
+    def details_shared_mem_apply():
+        from virtManager.details.details import EDIT_MEM_SHARED
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_MEMORY
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test")
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        hwlist = details.widget("hw-list")
+        for idx, row in enumerate(hwlist.get_model()):
+            if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_MEMORY:
+                uiutil.set_list_selection_by_number(hwlist, idx)
+                details._hw_changed_cb(hwlist)
+                break
+        box = details.widget("shared-memory")
+        box.set_sensitive(True)
+        box.set_active(True)
+        details._enable_apply(EDIT_MEM_SHARED)
+        details._refresh_page_body(details._get_hw_row())
+        assert details._edited(EDIT_MEM_SHARED), "shared-memory refresh must keep Apply armed"
+        assert box.get_active(), "shared-memory refresh must keep the pending toggle"
+        details._config_apply()
+        _pump(GLib, 0.4)
+        xml = vmobj.get_xml_to_define()
+        assert 'source type="memfd"' in xml, "shared memory apply did not set memfd: %s" % xml
+        try:
+            win.close()
+        except Exception:
+            pass
+
     def media_change():
         from virtManager.details.details import EDIT_DISK_PATH
         from virtManager.details.details import HW_LIST_COL_DEVICE
@@ -4455,6 +4489,7 @@ def main():
         ("createvm_finish", createvm_finish),
         ("createvm_import_finish_empty_name", createvm_import_finish_empty_name),
         ("details_apply_xml", details_apply_xml),
+        ("details_shared_mem_apply", details_shared_mem_apply),
         ("media_change", media_change),
         ("media_change_cdrom_nodedev", media_change_cdrom_nodedev),
         ("details_media_hotplug_deferred", details_media_hotplug_deferred),

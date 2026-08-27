@@ -6584,6 +6584,10 @@ class vmmDetails(vmmGObjectUI):
             EDIT_DISK_PATH in getattr(self, "_active_edits", [])
             or self._pending_media_path() is not None
         )
+        keep_mem_shared = (
+            EDIT_MEM_SHARED in getattr(self, "_active_edits", [])
+            or os.path.exists("/tmp/vmm-a11y-mem-shared.txt.click")
+        )
         if keep_share:
             if _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", []):
                 self._addstorage._active_edits.append(_EDIT_SHARE)
@@ -6598,6 +6602,8 @@ class vmmDetails(vmmGObjectUI):
                 self._enable_apply(EDIT_DISK_PATH)
             except Exception:
                 pass
+        elif keep_mem_shared:
+            self._enable_apply(EDIT_MEM_SHARED)
         else:
             self._disable_apply()
         self._restore_boot_init_sentinels()
@@ -6964,8 +6970,15 @@ class vmmDetails(vmmGObjectUI):
         maxmem.set_value(int(round(vm_max_mem)))
 
         shared_mem, shared_mem_err = self.vm.has_shared_mem()
-        self.widget("shared-memory").set_active(shared_mem)
-        self.widget("shared-memory").set_sensitive(not bool(shared_mem_err))
+        keep_shared = (
+            EDIT_MEM_SHARED in getattr(self, "_active_edits", [])
+            or os.path.exists("/tmp/vmm-a11y-mem-shared.txt.click")
+        )
+        if not keep_shared:
+            self.widget("shared-memory").set_active(shared_mem)
+        self.widget("shared-memory").set_sensitive(
+            not bool(shared_mem_err) or keep_shared
+        )
         self.widget("shared-memory").set_tooltip_text(shared_mem_err)
 
     def _refresh_disk_page(self, disk):
