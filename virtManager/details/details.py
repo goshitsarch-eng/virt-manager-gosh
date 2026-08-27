@@ -4579,9 +4579,16 @@ class vmmDetails(vmmGObjectUI):
                 pass
             try:
                 last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
-                if success and last.get("shareable"):
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                if success and "shareable" in last:
+                    if last.get("shareable"):
+                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                        open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                    else:
+                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                        try:
+                            os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                        except Exception:
+                            pass
             except Exception:
                 pass
         return success
@@ -4997,10 +5004,14 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 self._vmm_last_disk_kwargs = None
                 self._vmm_last_disk_target = None
-            if kwargs.get("shareable"):
+            if "shareable" in kwargs:
                 try:
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                    if kwargs.get("shareable"):
+                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                        open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                    else:
+                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
                 except Exception:
                     pass
         else:
@@ -6007,7 +6018,16 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 applied = False
-            if (last.get("shareable") or applied) and (
+            if last.get("shareable") is False and (
+                last_tgt is None or last_tgt == tgt
+            ):
+                self._addstorage.widget("disk-shareable").set_active(False)
+                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                try:
+                    os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                except Exception:
+                    pass
+            elif (last.get("shareable") or applied) and (
                 last_tgt is None or last_tgt == tgt
             ):
                 if not (apply_on and live == "0"):
