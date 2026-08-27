@@ -6042,16 +6042,6 @@ class vmmDetails(vmmGObjectUI):
 
             hw_list_model.remove(_iter)
 
-        still = False
-        for row in hw_list_model:
-            if row[HW_LIST_COL_KEY] == self._oldhwkey:
-                still = True
-                break
-        if not still:
-            cur = self._get_hw_row()
-            if cur is not None:
-                self._oldhwkey = cur[HW_LIST_COL_KEY]
-
     ################
     # UI listeners #
     ################
