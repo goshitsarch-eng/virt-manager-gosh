@@ -8610,7 +8610,9 @@ class _SentinelHWList(object):
             if names and names == last:
                 if stable_since is None:
                     stable_since = time.time()
-                elif (time.time() - stable_since) >= 0.2:
+                elif (time.time() - stable_since) >= 0.45:
+                    # Model rebuild is debounced 150ms; do not snapshot
+                    # the first Overview-only publish.
                     break
             else:
                 last = list(names)
