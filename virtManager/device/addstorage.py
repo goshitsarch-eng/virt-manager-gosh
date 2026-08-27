@@ -367,6 +367,13 @@ class vmmAddStorage(vmmGObjectUI):
 
         if not pending_cache:
             uiutil.set_list_selection(self.widget("disk-cache"), cache)
+            try:
+                combo = self.widget("disk-cache")
+                child = combo.get_child() if combo is not None else None
+                if child is not None and hasattr(child, "set_text"):
+                    child.set_text(cache or _("Hypervisor default"))
+            except Exception:
+                pass
         uiutil.set_list_selection(self.widget("disk-discard"), discard)
 
         self.widget("disk-serial").set_text(serial or "")

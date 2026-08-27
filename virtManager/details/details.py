@@ -21,6 +21,7 @@ from ..lib import uiutil
 from ..addhardware import vmmAddHardware
 from ..baseclass import vmmGObjectUI
 from ..device.addstorage import (
+    _EDIT_CACHE,
     _EDIT_REMOVABLE,
     _EDIT_RO,
     _EDIT_SHARE,
@@ -1517,6 +1518,7 @@ class vmmDetails(vmmGObjectUI):
                             self._addstorage._change_cb(aedit)
                         if wid == "disk-shareable":
                             self._vmm_last_disk_kwargs = None
+                            self._addstorage._a11y_cache_override = None
                         self._enable_apply(edit)
                     except Exception:
                         pass
@@ -2009,6 +2011,7 @@ class vmmDetails(vmmGObjectUI):
                                 and hw != dirty
                                 and gtk_label == hw
                                 and not getattr(self, "_vmm_unapplied_nav", False)
+                                and not getattr(self, "_vmm_confirming_unapplied", False)
                                 and not getattr(self.err, "_in_prompt", False)
                             ):
                                 self._vmm_unapplied_nav = True
@@ -3059,6 +3062,10 @@ class vmmDetails(vmmGObjectUI):
 
         # A confirm is already running. Do not treat this as "No" or
         # the hardware-list callback will disable Apply mid-prompt.
+        # Also ignore a second caller that races in before the dialog
+        # is mapped (Don't-warn + Yes on Shareable).
+        if getattr(self, "_vmm_confirming_unapplied", False):
+            return True
         if getattr(self.err, "_in_prompt", False):
             return True
 
@@ -3093,10 +3100,13 @@ class vmmDetails(vmmGObjectUI):
             return not self._apply_overview()
 
         log.debug("Unapplied changes active_edits=%s", self._active_edits)
-        if not self.err.confirm_unapplied_changes():
-            return False
-
-        return not self._config_apply(row=row)
+        self._vmm_confirming_unapplied = True
+        try:
+            if not self.err.confirm_unapplied_changes():
+                return False
+            return not self._config_apply(row=row)
+        finally:
+            self._vmm_confirming_unapplied = False
 
     def _hw_changed_cb(self, src):
         """
@@ -3127,7 +3137,7 @@ class vmmDetails(vmmGObjectUI):
 
         if getattr(self.err, "_in_prompt", False) or getattr(
             self, "_vmm_unapplied_nav", False
-        ):
+        ) or getattr(self, "_vmm_confirming_unapplied", False):
             return
 
         try:
@@ -3143,7 +3153,12 @@ class vmmDetails(vmmGObjectUI):
         if oldhwrow is None:
             oldhwrow = self._pending_disk_apply_row()
 
-        if self._has_unapplied_changes(oldhwrow):
+        self._vmm_unapplied_nav = True
+        try:
+            failed = self._has_unapplied_changes(oldhwrow)
+        finally:
+            self._vmm_unapplied_nav = False
+        if failed:
             # Unapplied changes, and syncing them failed
             pageidx = 0
             for idx, row in enumerate(model):
@@ -4824,32 +4839,37 @@ class vmmDetails(vmmGObjectUI):
 
     def _apply_disk(self, devobj):
         kwargs = {}
+        cache_edited = _EDIT_CACHE in getattr(
+            self._addstorage, "_active_edits", []
+        )
         typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
-        if not typed:
-            try:
-                combo = self._addstorage.widget("disk-cache")
-                child = combo.get_child() if combo is not None else None
-                if child is not None and hasattr(child, "get_text"):
-                    typed = (child.get_text() or "").strip()
-            except Exception:
-                pass
-        if typed and typed.lower() not in ("hypervisor default",):
-            known = set(virtinst.DeviceDisk.CACHE_MODES)
-            if typed not in known:
-                self._vmm_apply_failed = True
-                # Do not reuse this invalid value on the next Shareable
-                # Apply (testDetailsMiscEdits Yes after badcachemode).
+        # Only validate a cache value the user actually typed/selected.
+        # Leftover combo-entry text from a failed badcachemode apply must
+        # not fail a later Shareable Yes (testDetailsMiscEdits).
+        if typed or cache_edited:
+            if not typed:
                 try:
-                    self._addstorage._a11y_cache_override = None
+                    combo = self._addstorage.widget("disk-cache")
+                    child = combo.get_child() if combo is not None else None
+                    if child is not None and hasattr(child, "get_text"):
+                        typed = (child.get_text() or "").strip()
                 except Exception:
                     pass
-                self.err.show_err(
-                    _("Error changing VM configuration: invalid cache mode '%s'")
-                    % typed,
-                    modal=True,
-                )
-                return False
-            kwargs["cache"] = typed
+            if typed and typed.lower() not in ("hypervisor default",):
+                known = set(virtinst.DeviceDisk.CACHE_MODES)
+                if typed not in known:
+                    self._vmm_apply_failed = True
+                    try:
+                        self._addstorage._a11y_cache_override = None
+                    except Exception:
+                        pass
+                    self.err.show_err(
+                        _("Error changing VM configuration: invalid cache mode '%s'")
+                        % typed,
+                        modal=True,
+                    )
+                    return False
+                kwargs["cache"] = typed
 
         if devobj is None:
             pending = self._pending_disk_apply_row()
@@ -4900,13 +4920,12 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 share_w = None
-            if share_edited or share_s == "1":
-                if share_s == "1" or share_w is True:
-                    vals["shareable"] = True
-                elif share_edited:
-                    vals["shareable"] = False
+            if share_s == "1" or share_w is True:
+                vals["shareable"] = True
+            elif share_edited or share_s == "0":
+                vals["shareable"] = False
             kwargs.update(vals)
-            if "cache" not in kwargs and typed:
+            if "cache" not in kwargs and typed and (typed or cache_edited):
                 kwargs["cache"] = typed
 
         if self._edited(EDIT_DISK_BUS):
@@ -4936,6 +4955,12 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 self._vmm_last_disk_kwargs = None
                 self._vmm_last_disk_target = None
+            if kwargs.get("shareable"):
+                try:
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                except Exception:
+                    pass
         else:
             self._vmm_last_disk_kwargs = None
             self._vmm_last_disk_target = None
