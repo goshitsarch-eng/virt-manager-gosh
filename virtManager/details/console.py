@@ -780,6 +780,19 @@ class vmmConsolePages(vmmGObjectUI):
 
     def _set_size_to_vm(self):
         if not self._viewer_is_visible():
+            try:
+                prev = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+                valw, valh = int(prev[0]) + 64, int(prev[1]) + 48
+            except Exception:
+                valw, valh = 880, 648
+            try:
+                self.topwin.resize(valw, valh)
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (valw, valh))
+            except Exception:
+                pass
             return  # pragma: no cover
 
         w, h = self._viewer.console_get_preferred_size()

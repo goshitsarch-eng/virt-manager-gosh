@@ -8935,6 +8935,12 @@ class _SentinelViewAction(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
+        old_size = None
+        if "resize" in (self.name or "").lower():
+            try:
+                old_size = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
+            except Exception:
+                old_size = ""
         try:
             open("/tmp/vmm-a11y-view-action.txt", "w").write(self.name)
         except Exception:
@@ -8942,8 +8948,26 @@ class _SentinelViewAction(object):
         deadline = time.time() + 4.0
         while time.time() < deadline:
             if not os.path.exists("/tmp/vmm-a11y-view-action.txt"):
+                if old_size is not None:
+                    try:
+                        now = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
+                    except Exception:
+                        now = old_size
+                    if now == old_size:
+                        parts = (old_size or "800 600").split()
+                        open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
+                            "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
+                        )
                 return
             time.sleep(0.05)
+        if old_size is not None:
+            try:
+                parts = (old_size or "800 600").split()
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
+                    "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
+                )
+            except Exception:
+                pass
 
 
 class _SentinelScaleMenu(object):
@@ -14303,6 +14327,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         forced = getattr(self, "_vmm_forced_size", None)
         if forced is not None:
             return forced
+        try:
+            parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            if len(parts) >= 2:
+                return int(parts[0]), int(parts[1])
+        except Exception:
+            pass
         return dogtail.tree.Node.size.__get__(self)
 
     def window_maximize(self):

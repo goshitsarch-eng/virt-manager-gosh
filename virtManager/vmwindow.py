@@ -411,13 +411,12 @@ class vmmVMWindow(vmmGObjectUI):
             def _this_vm_window():
                 if getattr(self, "builder", None) is None or self.vm is None:
                     return False
-                if not self.is_visible():
-                    return False
                 try:
                     shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
                 except Exception:
                     shown = ""
-                return not shown or shown == self.vm.get_name()
+                name = self.vm.get_name()
+                return (not shown) or shown == name or name in shown or shown in name
 
             def _publish_window_size(force=None):
                 try:
@@ -460,7 +459,15 @@ class vmmVMWindow(vmmGObjectUI):
             def _poll_view_action():
                 path = "/tmp/vmm-a11y-view-action.txt"
                 try:
-                    if not os.path.exists(path) or not _this_vm_window():
+                    if not os.path.exists(path):
+                        return True
+                    if not _this_vm_window():
+                        try:
+                            open("/tmp/vmm-a11y-view-action-skip.txt", "a").write(
+                                "skip vis=%s\n" % getattr(self, "is_visible", lambda: None)()
+                            )
+                        except Exception:
+                            pass
                         return True
                     action = open(path, "r").read().strip().lower()
                     os.remove(path)
