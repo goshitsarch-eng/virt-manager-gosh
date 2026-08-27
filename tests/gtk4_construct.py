@@ -110,6 +110,18 @@ def _reset_open_ui():
                     pass
         except Exception:
             pass
+    try:
+        from virtManager.delete import vmmDeleteDialog
+
+        inst = getattr(vmmDeleteDialog, "_instance", None)
+        if inst is not None:
+            try:
+                inst.close()
+            except Exception:
+                pass
+            vmmDeleteDialog._instance = None
+    except Exception:
+        pass
 
 
 def _pump(GLib, seconds=0.05):
@@ -2973,6 +2985,11 @@ def main():
 
         uiutil.set_list_selection_by_number(hwlist, cdrom1[0])
         details._hw_changed_cb(hwlist)
+        try:
+            details._set_hw_selection(cdrom1[0], _disable_apply=True)
+        except Exception:
+            pass
+        details._refresh_disk_page(cdrom1[1])
         _pump(GLib, 0.2)
         labels = []
         try:
@@ -3190,6 +3207,10 @@ def main():
         details._refresh_page_body(
             details._hw_row_for_label("VirtIO VSOCK")
         )
+        from virtManager.details.details import EDIT_VSOCK_CID
+
+        details._remember_vsock_cid(7)
+        details._enable_apply(EDIT_VSOCK_CID)
         details._config_apply()
         _pump(GLib, 0.3)
         published = ""
