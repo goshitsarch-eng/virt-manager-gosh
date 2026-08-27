@@ -3262,6 +3262,10 @@ class vmmCreateVM(vmmGObjectUI):
         if self._validate(curpage) is not True:
             return False
 
+        try:
+            self.widget("create-forward").grab_focus()
+        except Exception:
+            pass
         if curpage == PAGE_NAME:
             self._set_install_page()
 
@@ -3286,6 +3290,19 @@ class vmmCreateVM(vmmGObjectUI):
                 return
 
             self.widget("create-finish").grab_focus()
+            try:
+                gtkcompat.set_window_default_button(
+                    self.topwin, self.widget("create-finish")
+                )
+            except Exception:
+                pass
+        else:
+            try:
+                gtkcompat.set_window_default_button(
+                    self.topwin, self.widget("create-forward")
+                )
+            except Exception:
+                pass
 
         self.widget("create-back").set_sensitive(pagenum != PAGE_NAME)
         self.widget("create-forward").set_visible(pagenum != PAGE_FINISH)

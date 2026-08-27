@@ -101,6 +101,12 @@ class _vmmConnectAuth(vmmGObjectUI):
             gtkcompat.set_accessible_name(entry, prompt + "entry")
             if idx == 1:
                 self._entry2_in_use = True
+        try:
+            gtkcompat.set_window_default_button(
+                self.topwin, self.widget("connectauth-ok")
+            )
+        except Exception:
+            pass
 
     def run(self):
         self._closed = False

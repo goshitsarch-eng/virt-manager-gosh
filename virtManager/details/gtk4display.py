@@ -4171,6 +4171,15 @@ class _SpiceFileTransferWindow(Gtk.Window):
         box.append(self._status)
         box.append(btn_box)
         self.set_child(box)
+        try:
+            from virtManager.lib import gtkcompat
+
+            gtkcompat.apply_gtk3_window_hints(self, dialog=True)
+            gtkcompat._apply_window_icon(self)
+            gtkcompat.set_window_default_button(self, self._cancel)
+            gtkcompat.set_accessible_name(self._cancel, "Cancel")
+        except Exception:
+            pass
         if task is not None:
             try:
                 task.connect("notify::progress", self._on_task_progress)

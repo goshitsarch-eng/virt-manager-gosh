@@ -336,6 +336,12 @@ class vmmAsyncJob(vmmGObjectUI):
                 )
             except Exception:
                 pass
+            try:
+                gtkcompat.set_window_default_button(
+                    self.topwin, self.widget("cancel-async-job")
+                )
+            except Exception:
+                pass
 
         if not self.cancel_cb and self.show_progress:
             self._set_cursor("progress")

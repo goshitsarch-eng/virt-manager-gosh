@@ -559,6 +559,12 @@ class vmmCloneVM(vmmGObjectUI):
             gtkcompat.set_accessible_name(self._storage_dialog, "Change storage path")
             self._storage_dialog.set_title("Change storage path")
             self._storage_dialog.present()
+            try:
+                gtkcompat.set_window_default_button(
+                    self._storage_dialog, self.widget("change-storage-ok")
+                )
+            except Exception:
+                pass
             open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("1")
             open("/tmp/vmm-a11y-clone-stg-path.txt", "w").write(new or "")
             user_doclone = None

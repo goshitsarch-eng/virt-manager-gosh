@@ -407,6 +407,7 @@ def main():
 
         dlg = vmmCreateVM()
         dlg.show(None, conn.get_uri())
+        assert dlg.topwin.get_default_widget() is dlg.widget("create-forward")
 
     def host():
         from virtManager.host import vmmHost
@@ -440,30 +441,38 @@ def main():
 
         dlg = vmmAddHardware(vm)
         dlg.show(None)
+        assert dlg.topwin.get_default_widget() is dlg.widget("create-finish")
 
     def clone():
         from virtManager.clone import vmmCloneVM
 
         dlg = vmmCloneVM()
         dlg.show(None, _first_vm(conn, shutoff=True))
+        assert dlg.topwin.get_default_widget() is dlg.widget("clone-ok")
+        stg = dlg.widget("vmm-change-storage")
+        if stg is not None:
+            assert stg.get_default_widget() is dlg.widget("change-storage-ok")
 
     def migrate():
         from virtManager.migrate import vmmMigrateDialog
 
         dlg = vmmMigrateDialog()
         dlg.show(None, vm)
+        assert dlg.topwin.get_default_widget() is dlg.widget("migrate-finish")
 
     def delete():
         from virtManager.delete import vmmDeleteDialog
 
         dlg = vmmDeleteDialog()
         dlg.show(None, vm)
+        assert dlg.topwin.get_default_widget() is dlg.widget("delete-ok")
 
     def createpool():
         from virtManager.createpool import vmmCreatePool
 
         dlg = vmmCreatePool(conn)
         dlg.show(None)
+        assert dlg.topwin.get_default_widget() is dlg.widget("pool-finish")
 
     def createvol():
         from virtManager.createvol import vmmCreateVolume
@@ -472,12 +481,14 @@ def main():
             raise RuntimeError("No storage pool available")
         dlg = vmmCreateVolume(conn, pool)
         dlg.show(None)
+        assert dlg.topwin.get_default_widget() is dlg.widget("vol-create")
 
     def createnet():
         from virtManager.createnet import vmmCreateNetwork
 
         dlg = vmmCreateNetwork(conn)
         dlg.show(None)
+        assert dlg.topwin.get_default_widget() is dlg.widget("create-finish")
 
     def storagebrowse():
         from virtManager.storagebrowse import vmmStorageBrowser
@@ -502,6 +513,7 @@ def main():
         except Exception:
             pass
         assert dlg.topwin.get_icon_name() == "virt-manager"
+        assert dlg.topwin.get_default_widget() is dlg.widget("cancel-async-job")
 
     def systray():
         from virtManager.systray import vmmSystray
@@ -536,6 +548,7 @@ def main():
         dlg._entry_cb(dlg.entry1)
         assert focused == ["pass"], "Enter on username must focus passphrase"
         assert dlg.topwin.get_icon_name() == "virt-manager"
+        assert dlg.topwin.get_default_widget() is dlg.widget("connectauth-ok")
 
     def oslist():
         from virtManager.oslist import vmmOSList
@@ -550,6 +563,7 @@ def main():
 
         dlg = vmmSnapshotNew(vm)
         dlg.show(None)
+        assert dlg.topwin.get_default_widget() is dlg.widget("snapshot-new-ok")
 
     def vmwindow_pages():
         from virtManager.vmwindow import vmmVMWindow
@@ -1233,6 +1247,14 @@ def main():
         dialog = Gtk.Dialog(title="grab", transient_for=dlg.topwin)
         dialog.add_buttons("_Cancel", Gtk.ResponseType.REJECT, "_OK", Gtk.ResponseType.ACCEPT)
         assert dialog.get_widget_for_response(Gtk.ResponseType.ACCEPT) or True
+        dlg.change_grab_keys(None)
+        grab = getattr(dlg, "_grab_dialog", None)
+        assert grab is not None
+        assert grab.get_default_widget() is not None
+        try:
+            grab.close()
+        except Exception:
+            pass
 
     def window_accel_and_resize():
         from virtManager.lib import gtkcompat
@@ -1985,6 +2007,8 @@ def main():
         assert abs(xfer._bar.get_fraction() - 0.4) < 0.01
         assert xfer._cancel.get_label() == "_Cancel"
         assert xfer._cancel.get_sensitive() is True
+        assert xfer.get_default_widget() is xfer._cancel
+        assert xfer.get_icon_name() == "virt-manager"
         xfer.finish_error("nope")
         assert xfer._cancel.get_sensitive() is False
         cancel_xfer = gtk4display._SpiceFileTransferWindow(["demo.iso"])

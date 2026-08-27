@@ -1077,6 +1077,79 @@ def apply_gtk3_dialog_from_name(window, windowname):
     )
 
 
+# GTK 3 Glade has-default / receives-default: Enter activates these
+# when focus is not on an Entry that handles activate.
+_GTK3_DEFAULT_BUTTONS = {
+    "connectauth": "connectauth-ok",
+    "vmm-delete": "delete-ok",
+    "vmm-migrate": "migrate-finish",
+    "vmm-clone": "clone-ok",
+    "vmm-change-storage": "change-storage-ok",
+    "vmm-create": "create-forward",
+    "vmm-add-hardware": "create-finish",
+    "vmm-progress": "cancel-async-job",
+    "vmm-create-net": "create-finish",
+    "vmm-create-pool": "pool-finish",
+    "vmm-create-vol": "vol-create",
+    "snapshot-new": "snapshot-new-ok",
+    "vmm-open-connection": "connect",
+}
+
+
+def set_window_default_button(window, button):
+    """Make button the GTK 3 default widget (Enter / KP_Enter)."""
+    if window is None or button is None:
+        return False
+    try:
+        if hasattr(button, "set_receives_default"):
+            button.set_receives_default(True)
+    except Exception:
+        pass
+    try:
+        if hasattr(window, "set_default_widget"):
+            window.set_default_widget(button)
+    except Exception:
+        pass
+    try:
+        button.grab_default()
+    except Exception:
+        pass
+    return True
+
+
+def apply_gtk3_dialog_defaults(window, builder, windowname=None):
+    """Restore GTK 3 default/affirmative buttons for windows in this builder."""
+    getter = None
+    if builder is not None:
+        getter = getattr(builder, "get_object", None)
+        if getter is None and hasattr(builder, "_builder"):
+            getter = builder._builder.get_object
+    if getter is None:
+        btn_id = _GTK3_DEFAULT_BUTTONS.get(windowname)
+        ignore = btn_id
+        return
+    applied = False
+    for win_id, btn_id in _GTK3_DEFAULT_BUTTONS.items():
+        try:
+            win = getter(win_id)
+        except Exception:
+            win = None
+        try:
+            btn = getter(btn_id)
+        except Exception:
+            btn = None
+        if win is not None and btn is not None:
+            applied = set_window_default_button(win, btn) or applied
+    if not applied and window is not None and windowname:
+        btn_id = _GTK3_DEFAULT_BUTTONS.get(windowname)
+        if btn_id:
+            try:
+                btn = getter(btn_id)
+            except Exception:
+                btn = None
+            set_window_default_button(window, btn)
+
+
 def restore_button_icon_name(button, icon_name, accessible_name=None):
     """GTK 3 GtkButton image= sibling, rebuilt as icon+label child."""
     if button is None or not icon_name:

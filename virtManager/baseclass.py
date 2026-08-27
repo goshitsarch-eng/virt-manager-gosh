@@ -416,6 +416,9 @@ class vmmGObjectUI(vmmGObject):
                         self.builder, self.topwin, windowname
                     )
                     gtkcompat.apply_gtk3_dialog_from_name(self.topwin, windowname)
+                    gtkcompat.apply_gtk3_dialog_defaults(
+                        self.topwin, self.builder, windowname
+                    )
                 gtkcompat._apply_window_icon(self.topwin)
                 gtkcompat.ensure_window_a11y_box(self.topwin)
                 title = ""

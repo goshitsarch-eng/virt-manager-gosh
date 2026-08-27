@@ -1286,6 +1286,12 @@ class vmmConsolePages(vmmGObjectUI):
             open("/tmp/vmm-a11y-console-error.txt", "w").write("")
         except Exception:
             pass
+        try:
+            gtkcompat.set_window_default_button(
+                self.topwin, self.widget("console-connect-button")
+            )
+        except Exception:
+            pass
         self._publish_auth_state()
         self._publish_gfx_viewport()
 

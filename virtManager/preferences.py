@@ -498,6 +498,10 @@ class vmmPreferences(vmmGObjectUI):
         ok.connect("clicked", _accept)
         cancel.connect("clicked", _close_grab)
         dialog.connect("close-request", _close_grab)
+        try:
+            gtkcompat.set_window_default_button(dialog, ok)
+        except Exception:
+            pass
         self._grab_dialog = dialog
         self._grab_events = events
         self._grab_accept = _accept
