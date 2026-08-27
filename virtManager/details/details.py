@@ -4358,6 +4358,22 @@ class vmmDetails(vmmGObjectUI):
                 disk = labeled[HW_LIST_COL_DEVICE]
                 break
         if disk is None or not hasattr(disk, "is_floppy"):
+            try:
+                for cand_row in self.widget("hw-list").get_model():
+                    cand = cand_row[HW_LIST_COL_DEVICE]
+                    if cand is None or not hasattr(cand, "is_floppy"):
+                        continue
+                    if cand.is_floppy() or getattr(cand, "device", None) == "cdrom":
+                        row = cand_row
+                        disk = cand
+                        break
+            except Exception:
+                pass
+        if disk is None or not hasattr(disk, "is_floppy"):
+            try:
+                open("/tmp/vmm-a11y-browse-err.txt", "w").write("no-disk-row\n")
+            except Exception:
+                pass
             return
         if disk.is_floppy():
             reason = vmmStorageBrowser.REASON_FLOPPY_MEDIA

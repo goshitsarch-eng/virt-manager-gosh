@@ -3489,6 +3489,8 @@ def main():
         ]
         assert any(p and "iso-vol" in p for p in floppy_paths), floppy_paths
 
+        uiutil.set_list_selection_by_number(hwlist, floppy2[0])
+        details._hw_changed_cb(hwlist)
         details._disk_source_browse_clicked_cb(None)
         shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
         assert shown == "1", "details Browse must show the storage browser: %s" % shown
