@@ -1009,26 +1009,10 @@ class vmmCreateVM(vmmGObjectUI):
                 if getattr(self, "_vmm_method_active_seen", None) == stamp:
                     return True
                 self._vmm_method_active_seen = stamp
-                mapping = {
-                    "local": "method-local",
-                    "tree": "method-tree",
-                    "manual": "method-manual",
-                    "import": "method-import",
-                    "app": "method-container-app",
-                    "os": "method-container-os",
-                    "container": "vz-virt-type-exe",
-                    "hvm": "vz-virt-type-hvm",
-                }
-                wid = mapping.get(key)
-                if wid:
-                    try:
-                        # Only turn the requested radio on. set_active(False)
-                        # on a GTK 4 group member can select a sibling.
-                        src = self.widget(wid)
-                        if src is not None:
-                            src.set_active(True)
-                    except Exception:
-                        pass
+                try:
+                    self._set_install_method_key(key)
+                except Exception:
+                    pass
                 try:
                     self._publish_method_a11y()
                 except Exception:
@@ -2357,15 +2341,16 @@ class vmmCreateVM(vmmGObjectUI):
             key = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
         except Exception:
             key = ""
-        # Apply a pending uitest/user sentinel first, then trust widgets.
-        # File-only lookup ignored a real Manual click after show() wrote
-        # "local". Applying then reading keeps both the sentinel contract
-        # and a mouse click.
+        # Apply the sentinel (and enforce radio exclusivity — GTK 4
+        # builder groups can leave method-local active after Manual).
+        # Then honor the file so a mouse click that updated the file
+        # is not hidden by a still-checked Local radio.
         if key in by_key:
             try:
                 self._apply_method_active_file()
             except Exception:
                 pass
+            return by_key[key]
         if self.widget("vz-install-box").get_visible():
             if self.widget("vz-virt-type-exe").get_active():
                 return INSTALL_PAGE_VZ_TEMPLATE
@@ -2635,6 +2620,8 @@ class vmmCreateVM(vmmGObjectUI):
             self._set_conn(newconn)
 
     def _method_changed(self, src):
+        if getattr(self, "_vmm_setting_method", False):
+            return
         # Reset the page number, since the total page numbers depend
         # on the chosen install method
         self._set_page_num_text(0)
@@ -2653,6 +2640,7 @@ class vmmCreateVM(vmmGObjectUI):
                 key = src_map.get(src)
                 if key:
                     open("/tmp/vmm-a11y-method-active.txt", "w").write(key)
+                    self._set_install_method_key(key)
             self._publish_method_a11y()
         except Exception:
             pass
@@ -3110,6 +3098,28 @@ class vmmCreateVM(vmmGObjectUI):
             key = open(path, "r").read().strip()
         except Exception:
             return
+        self._set_install_method_key(key)
+
+    def _set_install_method_key(self, key):
+        """Turn on one install-method radio and turn off its GTK 4 group.
+
+        GtkBuilder group= on CheckButton does not always exclusive-select
+        in GTK 4, so method-local can stay active after Manual is clicked.
+        """
+        if getattr(self, "_vmm_setting_method", False):
+            return
+        self._vmm_setting_method = True
+        try:
+            self._set_install_method_key_body(key)
+        finally:
+            self._vmm_setting_method = False
+
+    def _set_install_method_key_body(self, key):
+        groups = (
+            ("local", "tree", "manual", "import"),
+            ("app", "os"),
+            ("container", "hvm"),
+        )
         mapping = {
             "local": "method-local",
             "tree": "method-tree",
@@ -3120,15 +3130,23 @@ class vmmCreateVM(vmmGObjectUI):
             "container": "vz-virt-type-exe",
             "hvm": "vz-virt-type-hvm",
         }
-        wid = mapping.get(key)
-        if not wid:
+        if key not in mapping:
             return
-        try:
-            src = self.widget(wid)
-            if src is not None:
-                src.set_active(True)
-        except Exception:
-            pass
+        group = None
+        for cand in groups:
+            if key in cand:
+                group = cand
+                break
+        if group is None:
+            return
+        for gkey in group:
+            src = self.widget(mapping[gkey])
+            if src is None:
+                continue
+            try:
+                src.set_active(gkey == key)
+            except Exception:
+                pass
 
     def _sync_container_sentinels(self):
         self._apply_method_active_file()
