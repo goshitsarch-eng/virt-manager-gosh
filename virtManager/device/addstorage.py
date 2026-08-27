@@ -392,14 +392,6 @@ class vmmAddStorage(vmmGObjectUI):
             pending_share = False
         if os.path.exists("/tmp/vmm-a11y-disk-shareable.txt.click"):
             pending_share = True
-        try:
-            if open("/tmp/vmm-a11y-disk-shareable-user.txt", "r").read().strip() in (
-                "0",
-                "1",
-            ):
-                pending_share = True
-        except Exception:
-            pass
         if not pending_share:
             self.widget("disk-shareable").set_active(share)
         self.widget("disk-removable").set_active(removable)

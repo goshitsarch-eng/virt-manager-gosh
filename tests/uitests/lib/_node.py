@@ -3684,7 +3684,7 @@ class _SentinelDetailsCheck(object):
         ignore = (args, kwargs)
         before = self.checked
         try:
-            open(self._path + ".click", "w").write("0" if before else "1")
+            open(self._path + ".click", "w").write("1")
         except Exception:
             pass
         if "cpu-copy-host" in (self._path or ""):

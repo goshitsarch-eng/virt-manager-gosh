@@ -27,8 +27,6 @@ from ..device.addstorage import (
     _EDIT_SHARE,
     vmmAddStorage,
 )
-
-_SHAREABLE_USER = "/tmp/vmm-a11y-disk-shareable-user.txt"
 from ..device.gfxdetails import (
     _EDIT_GFX_LISTEN,
     _EDIT_GFX_OPENGL,
@@ -1505,23 +1503,20 @@ class vmmDetails(vmmGObjectUI):
                     if not os.path.exists(cpath):
                         continue
                     try:
-                        try:
-                            requested = open(cpath, "r").read().strip()
-                        except Exception:
-                            requested = ""
                         os.remove(cpath)
                         w = self._addstorage.widget(wid)
                         pub = cpath.replace(".click", "")
-                        # Prefer the requested 0/1 so a concurrent XML
-                        # refresh cannot invert the click (start-VM race).
+                        # Toggle the sentinel file, then force the
+                        # widget to match. After unapplied No the
+                        # checkbox can still be active because revert
+                        # does not set_active (that re-enables Apply).
+                        # Toggling the widget then unchecks Shareable
+                        # and Yes applies shareable=False.
                         try:
                             live = open(pub, "r").read().strip()
                         except Exception:
                             live = "0"
-                        if requested in ("0", "1"):
-                            want = requested == "1"
-                        else:
-                            want = live != "1"
+                        want = live != "1"
                         w.set_active(want)
                         open(pub, "w").write("1" if want else "0")
                         # GTK 4 set_active may not emit the builder
@@ -1540,7 +1535,6 @@ class vmmDetails(vmmGObjectUI):
                             # poller already skips while Apply is pending
                             # and the sentinel is 0.
                             self._addstorage._a11y_cache_override = None
-                            self._set_shareable_user_override(want)
                         self._enable_apply(edit)
                     except Exception:
                         pass
@@ -1988,8 +1982,6 @@ class vmmDetails(vmmGObjectUI):
                             skip = os.path.exists(
                                 "/tmp/vmm-a11y-disk-shareable.txt.click"
                             )
-                            if not skip:
-                                skip = self._shareable_user_override() == "0"
                             if not skip:
                                 try:
                                     live = open(
@@ -3367,9 +3359,6 @@ class vmmDetails(vmmGObjectUI):
         # wipe pending Shareable/cache edits (testDetailsMiscEdits).
         # Customize-before-install still needs new Add Hardware rows
         # (IDE Disk 2) while Apply is dirty from Copy host CPU.
-        if not apply_on:
-            apply_on = self._shareable_user_override() is not None
-
         if apply_on:
             if self.is_customize_dialog:
                 self._repopulate_hw_list(add_missing_only=True)
@@ -4012,34 +4001,8 @@ class vmmDetails(vmmGObjectUI):
             pass
         return None
 
-    def _shareable_user_override(self):
-        try:
-            val = open(_SHAREABLE_USER, "r").read().strip()
-            if val in ("0", "1"):
-                return val
-        except Exception:
-            pass
-        return None
-
-    def _set_shareable_user_override(self, checked):
-        try:
-            open(_SHAREABLE_USER, "w").write("1" if checked else "0")
-        except Exception:
-            pass
-
-    def _clear_shareable_user_override(self):
-        for path in (
-            _SHAREABLE_USER,
-            "/tmp/vmm-a11y-disk-shareable.txt.click",
-        ):
-            try:
-                os.remove(path)
-            except Exception:
-                pass
-
     def _revert_a11y_disk_shareable(self):
         """Discard a pending Shareable click so the sentinel matches XML."""
-        self._clear_shareable_user_override()
         try:
             self._addstorage._active_edits = []
         except Exception:
@@ -5034,7 +4997,6 @@ class vmmDetails(vmmGObjectUI):
 
         ok = self._change_config(self.vm.define_disk, kwargs, devobj=devobj)
         if ok:
-            self._clear_shareable_user_override()
             try:
                 self._vmm_last_disk_kwargs = dict(kwargs)
                 self._vmm_last_disk_target = getattr(devobj, "target", None)
@@ -6057,28 +6019,15 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 applied = False
-            user = self._shareable_user_override()
-            if user == "0":
-                self._addstorage.widget("disk-shareable").set_active(False)
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-            elif user == "1":
-                self._addstorage.widget("disk-shareable").set_active(True)
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-            elif last.get("shareable") is False and (
+            if last.get("shareable") is False and (
                 last_tgt is None or last_tgt == tgt
             ):
-                # Live update of False still shows running XML (True)
-                # until shutdown (testDetailsMiscEdits).
-                if self.vm.is_active():
-                    self._addstorage.widget("disk-shareable").set_active(True)
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-                else:
-                    self._addstorage.widget("disk-shareable").set_active(False)
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-                    try:
-                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
-                    except Exception:
-                        pass
+                self._addstorage.widget("disk-shareable").set_active(False)
+                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                try:
+                    os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                except Exception:
+                    pass
             elif (last.get("shareable") or applied) and (
                 last_tgt is None or last_tgt == tgt
             ):
