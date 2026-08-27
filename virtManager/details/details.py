@@ -3843,7 +3843,8 @@ class vmmDetails(vmmGObjectUI):
             self._active_edits.append(edittype)
         if edittype != EDIT_XML:
             self._xmleditor.details_changed = True
-        self._vmm_last_disk_kwargs = None
+        if edittype in (EDIT_DISK, EDIT_DISK_PATH, EDIT_DISK_BUS):
+            self._vmm_last_disk_kwargs = None
         try:
             dirty = getattr(self, "_vmm_last_refreshed_hw", None)
             if not dirty:
