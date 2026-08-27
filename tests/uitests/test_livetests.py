@@ -2,6 +2,7 @@
 # See the COPYING file in the top-level directory.
 
 import os
+import re
 import tempfile
 
 import libvirt
@@ -20,6 +21,31 @@ def _session_tcg_xml(xml):
     xml = xml.replace(
         '<type arch="x86_64">hvm</type>',
         '<type arch="x86_64" machine="pc">hvm</type>',
+    )
+    return xml
+
+
+def _spice_to_vnc_xml(xml):
+    """Rewrite Spice-only devices so livetests can define on this QEMU."""
+    xml = xml.replace("type='spice'", "type='vnc'")
+    xml = xml.replace('type="spice"', 'type="vnc"')
+    xml = re.sub(r"[ \t]*<gl [^/]*/>\s*", "", xml)
+    xml = re.sub(
+        r"[ \t]*<channel type=['\"]spicevmc['\"].*?</channel>\s*",
+        "",
+        xml,
+        flags=re.S,
+    )
+    xml = re.sub(
+        r"[ \t]*<redirdev[^>]*type=['\"]spicevmc['\"][^/]*/>\s*",
+        "",
+        xml,
+    )
+    xml = re.sub(
+        r"[ \t]*<redirdev[^>]*type=['\"]spicevmc['\"][^>]*>.*?</redirdev>\s*",
+        "",
+        xml,
+        flags=re.S,
     )
     return xml
 
@@ -71,8 +97,9 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
                 # livetests only need a working graphics display.
                 if "spice graphics are not supported" not in str(e):
                     raise
-                xml = xml.replace("type='spice'", "type='vnc'")
-                xml = xml.replace('type="spice"', 'type="vnc"')
+                if "spice-specific" in vmname:
+                    pytest.skip("QEMU on this host does not support spice graphics")
+                xml = _spice_to_vnc_xml(xml)
                 dom = conn.defineXML(xml)
             try:
                 dom.create()
