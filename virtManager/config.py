@@ -44,6 +44,15 @@ CSSDATA = """
     margin: 0;
 }
 
+/* Open overlay dropdown: GTK 3 menubar menu chrome */
+.vmm-menu-open {
+    opacity: 1;
+    background-color: @window_bg_color;
+    border: 1px solid alpha(@window_fg_color, 0.25);
+    padding: 4px;
+    min-width: 140px;
+}
+
 /* GTK 3 serial console sat on a black EventBox */
 .vmm-serial-bg {
     background-color: #000000;

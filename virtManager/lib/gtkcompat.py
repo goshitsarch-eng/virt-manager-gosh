@@ -2179,6 +2179,88 @@ def ensure_window_a11y_box(window):
     return box
 
 
+def ensure_window_menu_layer(window):
+    """
+    Full-window overlay used to park menubar dropdowns. Children are
+    positioned with margins so File/Edit/View open under the item
+    (GTK 3 menubar behavior) while staying in the same AT-SPI tree.
+    """
+    if window is None:
+        return ensure_window_a11y_box(window)
+    layer = getattr(window, "_vmm_menu_layer", None)
+    if layer is not None:
+        return layer
+    ensure_window_a11y_box(window)
+    overlay = getattr(window, "_vmm_a11y_overlay", None)
+    if overlay is None:
+        return ensure_window_a11y_box(window)
+    layer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    layer.set_halign(Gtk.Align.FILL)
+    layer.set_valign(Gtk.Align.FILL)
+    layer.set_hexpand(True)
+    layer.set_vexpand(True)
+    try:
+        layer.set_can_target(False)
+    except Exception:
+        pass
+    overlay.add_overlay(layer)
+    window._vmm_menu_layer = layer
+    _ensure_window_menu_dismiss(window)
+    return layer
+
+
+def _widget_contains_root_point(widget, root, x, y):
+    if widget is None or root is None:
+        return False
+    try:
+        ox, oy = widget.translate_coordinates(root, 0.0, 0.0)
+        if ox is None or oy is None:
+            return False
+        width = int(widget.get_width() or 0)
+        height = int(widget.get_height() or 0)
+        return float(ox) <= float(x) <= float(ox) + width and float(oy) <= float(y) <= float(oy) + height
+    except Exception:
+        return False
+
+
+def _ensure_window_menu_dismiss(window):
+    """GTK 3 closes menubar and context menus on a click outside them."""
+    if window is None or getattr(window, "_vmm_menu_dismiss", None) is not None:
+        return
+    try:
+        gest = Gtk.GestureClick()
+        gest.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        gest.set_button(1)
+
+        def _on_pressed(_g, _n, x, y):
+            if _widget_contains_root_point(_find_window_menubar(window, None), window, x, y):
+                return False
+            layer = getattr(window, "_vmm_menu_layer", None)
+            if layer is not None:
+                for child in get_children(layer):
+                    if getattr(child, "_opened", False) and _widget_contains_root_point(
+                        child, window, x, y
+                    ):
+                        return False
+            popdown_window_menus(window)
+            for menu in list(_OPEN_CONTEXT_MENUS):
+                try:
+                    if getattr(menu, "_opened", False):
+                        menu.popdown()
+                except Exception:
+                    pass
+            return False
+
+        gest.connect("pressed", _on_pressed)
+        window.add_controller(gest)
+        window._vmm_menu_dismiss = gest
+    except Exception:
+        window._vmm_menu_dismiss = True
+
+
+_OPEN_CONTEXT_MENUS = []
+
+
 def _a11y_global_sidecar_box():
     """
     Fallback always-mapped window. Keep it named with a leading '.' so
@@ -7973,6 +8055,13 @@ class MenuItem(Gtk.Button):
         self._set_selected(True)
         if self._submenu:
             bar = self._menubar_parent()
+            if (
+                bar is not None
+                and getattr(bar, "_vmm_open_item", None) is self
+                and getattr(self._submenu, "_opened", False)
+            ):
+                self._submenu.popdown()
+                return
             if bar is not None:
                 bar._vmm_open_item = self
             self._submenu.popup_at_widget(self)
@@ -8293,15 +8382,14 @@ class Menu(Gtk.Box):
             and getattr(self._parent_widget, "get_submenu", lambda: None)() is self
             and _in_menubar(self._parent_widget)
         ):
-            box = ensure_window_a11y_box(root)
-            if self.get_parent() is not None and self.get_parent() is not box:
+            layer = ensure_window_menu_layer(root)
+            if self.get_parent() is not None and self.get_parent() is not layer:
                 self.unparent()
             if self.get_parent() is None:
-                box.append(self)
+                layer.append(self)
             self._popover = None
             self._sync_menu_a11y_name()
-            self.remove_css_class("vmm-submenu")
-            show_all(self)
+            self._apply_overlay_open_state()
             for item in self._items:
                 show_all(item)
                 if hasattr(item, "_sync_accessible_label"):
@@ -8399,6 +8487,7 @@ class Menu(Gtk.Box):
         self._ensure_mapped()
         self._sync_menu_a11y_name()
         if self._popover is None:
+            self._place_overlay_menu()
             return
         self._popover.set_opacity(1)
         try:
@@ -8406,6 +8495,8 @@ class Menu(Gtk.Box):
         except Exception:
             pass
         self._place_opened_menu()
+        if self not in _OPEN_CONTEXT_MENUS:
+            _OPEN_CONTEXT_MENUS.append(self)
 
     def _place_opened_menu(self):
         """GTK 3 popup_at_pointer/widget/rect placed the menu at the click."""
@@ -8417,14 +8508,85 @@ class Menu(Gtk.Box):
         except Exception:
             pass
 
+    def _apply_overlay_open_state(self):
+        if self._opened:
+            self.remove_css_class("vmm-submenu")
+            self.add_css_class("vmm-menu-open")
+            try:
+                self.set_can_target(True)
+                self.set_opacity(1)
+            except Exception:
+                pass
+            show_all(self)
+            self._place_overlay_menu()
+        else:
+            self.add_css_class("vmm-submenu")
+            self.remove_css_class("vmm-menu-open")
+            try:
+                self.set_can_target(False)
+                self.set_opacity(0)
+                self.set_margin_start(0)
+                self.set_margin_top(0)
+            except Exception:
+                pass
+
+    def _place_overlay_menu(self):
+        """Put a menubar dropdown under (or beside) its parent item."""
+        parent = self._parent_widget
+        root = None
+        try:
+            root = parent.get_root() if parent is not None else None
+        except Exception:
+            root = None
+        if parent is None or root is None:
+            return
+        try:
+            ox, oy = parent.translate_coordinates(root, 0.0, 0.0)
+            ox = int(ox or 0)
+            oy = int(oy or 0)
+        except Exception:
+            ox = oy = 0
+        try:
+            pw = int(parent.get_width() or 0)
+            ph = int(parent.get_height() or 0)
+        except Exception:
+            pw = ph = 0
+        if hasattr(parent, "_menubar_parent") and parent._menubar_parent() is not None:
+            mx, my = ox, oy + ph
+        else:
+            mx, my = ox + pw, oy
+        try:
+            self.set_halign(Gtk.Align.START)
+            self.set_valign(Gtk.Align.START)
+            self.set_margin_start(max(0, mx))
+            self.set_margin_top(max(0, my))
+        except Exception:
+            pass
+        self._vmm_popup_pos = (mx, my)
+
     def popdown(self, *_args, **_kwargs):
         self._opened = False
+        for item in list(self._items):
+            sub = getattr(item, "_submenu", None)
+            if sub is not None and getattr(sub, "_opened", False) and sub is not self:
+                try:
+                    sub.popdown()
+                except Exception:
+                    pass
         parent = self._parent_widget
         if parent is not None and hasattr(parent, "_menubar_parent"):
             bar = parent._menubar_parent()
             if bar is not None and getattr(bar, "_vmm_open_item", None) is parent:
                 bar._vmm_open_item = None
+        if self in _OPEN_CONTEXT_MENUS:
+            try:
+                _OPEN_CONTEXT_MENUS.remove(self)
+            except ValueError:
+                pass
         self._sync_menu_a11y_name()
+        if self._popover is None:
+            self._apply_overlay_open_state()
+            return
         self._destroy_popover()
         # Toolbar Menu toggle stays active after an item click; reset it
         # so the next AT-SPI click opens the menu again.
@@ -8994,6 +9156,28 @@ def _patch_widget_methods():
             btn = Gtk.Button(label=label, use_underline=True)
             self.add_action_widget(btn, response)
             btn.set_visible(True)
+            try:
+                affirmative = (
+                    Gtk.ResponseType.OK,
+                    Gtk.ResponseType.ACCEPT,
+                    Gtk.ResponseType.YES,
+                    Gtk.ResponseType.APPLY,
+                )
+                if response in affirmative:
+                    try:
+                        self.set_default_response(response)
+                    except Exception:
+                        pass
+                    try:
+                        btn.grab_default()
+                    except Exception:
+                        pass
+                    try:
+                        self.set_default_widget(btn)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             return btn
 
         Gtk.Dialog.add_button = add_button

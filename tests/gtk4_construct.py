@@ -771,6 +771,10 @@ def main():
         assert getattr(bar, "_vmm_open_item", None) is file_item
         file_menu = gtkcompat._item_submenu(file_item)
         assert file_menu is not None and getattr(file_menu, "_opened", False)
+        pos = getattr(file_menu, "_vmm_popup_pos", None)
+        assert pos, "File dropdown must be placed under the File item"
+        assert file_menu.get_margin_top() >= 0
+        assert "vmm-menu-open" in (file_menu.get_css_classes() or [])
 
         match = gtkcompat._lookup_mnemonic_item(
             gtkcompat._widget_children(file_menu), Gdk.KEY_c
