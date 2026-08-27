@@ -73,6 +73,14 @@ def _clear_a11y_sentinels():
 def _reset_open_ui():
     """Drop leftover Apply / mapped dialogs between same-process tests."""
     try:
+        from virtManager.about import vmmAbout
+
+        inst = getattr(vmmAbout, "_instance", None)
+        if inst is not None:
+            inst.close()
+    except Exception:
+        pass
+    try:
         from virtManager.vmwindow import vmmVMWindow
     except Exception:
         return
