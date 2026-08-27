@@ -515,6 +515,12 @@ def main():
         spice_display.set_scaling(True)
         usb = gtk4display.UsbDeviceWidget.new(None)
         assert usb is not None
+        from virtManager.details import viewers as vmod
+
+        assert vmod.SpiceClientGtk is None, (
+            "GTK 4 must not parent SpiceClientGtk widgets"
+        )
+        assert vmod.GtkVnc is None, "GTK 4 must not parent GtkVnc widgets"
         if ginfo is not None:
             if ginfo.gtype == "vnc":
                 viewer = VNCViewer(gfxvm, ginfo)
@@ -867,6 +873,43 @@ def main():
             dlg.close()
         except Exception:
             pass
+
+    def gtk3_notebook_mnemonics():
+        """GTK 3 notebook tab Alt+letter switches pages."""
+        from gi.repository import Gdk
+
+        from virtManager.host import vmmHost
+        from virtManager.lib import gtkcompat
+        from virtManager.preferences import vmmPreferences
+
+        dlg = vmmPreferences()
+        dlg.show(None)
+        _pump(GLib, 0.1)
+        nb = dlg.widget("prefs-pages")
+        assert nb is not None
+        nb.set_current_page(0)
+        assert gtkcompat.handle_notebook_key(dlg.topwin, dlg.builder, Gdk.KEY_o)
+        assert nb.get_current_page() == 1, "Alt+O should select P_olling"
+        assert gtkcompat.handle_notebook_key(dlg.topwin, dlg.builder, Gdk.KEY_l)
+        assert nb.get_current_page() == 3, "Alt+L should select Conso_le"
+        assert gtkcompat._on_window_menubar_key(
+            dlg.topwin, dlg.builder, Gdk.KEY_b, int(Gdk.ModifierType.ALT_MASK)
+        )
+        assert nb.get_current_page() == 4, "Alt+B should select Feed_back"
+
+        hwin = vmmHost.show_instance(None, conn)
+        if hwin is None:
+            hwin = vmmHost._instances[conn.get_uri()]
+        hnb = hwin.widget("details-tabs")
+        hnb.set_current_page(0)
+        assert gtkcompat.handle_notebook_key(hwin.topwin, hwin.builder, Gdk.KEY_s)
+        assert hnb.get_current_page() == 2, "Alt+S should select _Storage"
+
+        from virtManager.lib.graphwidgets import _theme_base_rgb
+
+        rgb = _theme_base_rgb(dlg.topwin)
+        assert len(rgb) == 3
+        assert all(0.0 <= c <= 1.0 for c in rgb)
 
     def error_dialogs():
         from virtManager.error import vmmErrorDialog
@@ -3799,6 +3842,7 @@ def main():
         ("gtk3_context_menus_and_window_size", gtk3_context_menus_and_window_size),
         ("gtk3_menubar_mnemonics", gtk3_menubar_mnemonics),
         ("gtk3_entry_mnemonics", gtk3_entry_mnemonics),
+        ("gtk3_notebook_mnemonics", gtk3_notebook_mnemonics),
         ("error_dialogs", error_dialogs),
         ("cli_windows", cli_windows),
         ("xmleditor_pages", xmleditor_pages),

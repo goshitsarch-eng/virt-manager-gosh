@@ -893,12 +893,80 @@ def _on_window_menubar_key(window, builder, keyval, state):
     if alt:
         if not _mnemonics_enabled():
             return False
-        return handle_menubar_key(window, builder, keyval, alt=True)
+        if handle_menubar_key(window, builder, keyval, alt=True):
+            return True
+        return handle_notebook_key(window, builder, keyval)
     if open_menu is None:
         return False
     if not Gdk.keyval_to_unicode(keyval):
         return False
     return handle_menubar_key(window, builder, keyval, alt=False)
+
+
+def _find_notebooks(window, builder=None):
+    found = []
+    seen = set()
+
+    def _walk(widget, depth=0):
+        if widget is None or depth > 14:
+            return
+        ident = id(widget)
+        if ident in seen:
+            return
+        seen.add(ident)
+        if isinstance(widget, Gtk.Notebook):
+            found.append(widget)
+        for child in _widget_children(widget):
+            _walk(child, depth + 1)
+
+    if window is not None:
+        try:
+            _walk(window)
+        except Exception:
+            pass
+    if builder is not None:
+        inner = getattr(builder, "_builder", builder)
+        try:
+            for obj in inner.get_objects():
+                if isinstance(obj, Gtk.Notebook) and id(obj) not in seen:
+                    found.append(obj)
+                    seen.add(id(obj))
+        except Exception:
+            pass
+    return found
+
+
+def handle_notebook_key(window, builder, keyval):
+    """Activate a GTK 3 notebook tab mnemonic (Alt+letter)."""
+    for notebook in _find_notebooks(window, builder):
+        try:
+            n = notebook.get_n_pages()
+        except Exception:
+            continue
+        for idx in range(n):
+            try:
+                page = notebook.get_nth_page(idx)
+            except Exception:
+                continue
+            label = None
+            try:
+                label = notebook.get_tab_label(page)
+            except Exception:
+                label = None
+            kv = _item_mnemonic_keyval(label) if label is not None else 0
+            if not kv:
+                try:
+                    text = notebook.get_tab_label_text(page) or ""
+                except Exception:
+                    text = ""
+                kv = _mnemonic_keyval_from_text(text)
+            if _keyvals_match(kv, keyval):
+                try:
+                    notebook.set_current_page(idx)
+                except Exception:
+                    return False
+                return True
+    return False
 
 
 def _install_menubar_mnemonic_controller(group, window, builder):

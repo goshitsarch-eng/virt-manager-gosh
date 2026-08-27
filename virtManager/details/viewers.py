@@ -50,6 +50,21 @@ except (ValueError, ImportError) as _SPICE_GTK_IMPORT_ERROR:
         # GTK 4 uses SpiceClientGLib + gtk4display.SpiceDisplay
         SPICE_GTK_IMPORT_ERROR = None
 
+# GTK 3 SpiceClientGtk / GtkVnc widgets cannot be parented into a GTK 4
+# window. Always draw with gtk4display; keep SpiceClientGLib for the
+# session, USB manager, and audio.
+try:
+    from gi.repository import Gtk as _GtkRuntime
+
+    _GTK4_DISPLAY = int(_GtkRuntime.get_major_version()) >= 4
+except Exception:
+    _GTK4_DISPLAY = True
+if _GTK4_DISPLAY:
+    GtkVnc = None
+    SpiceClientGtk = None
+    if SpiceClientGLib is not None and "VIRTINST_TEST_SUITE_FAKE_NO_SPICE" not in os.environ:
+        SPICE_GTK_IMPORT_ERROR = None
+
 if SPICE_GTK_IMPORT_ERROR:
     try:
         open("/tmp/vmm-a11y-spice-import.txt", "w").write(SPICE_GTK_IMPORT_ERROR)
