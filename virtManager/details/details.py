@@ -4369,13 +4369,7 @@ class vmmDetails(vmmGObjectUI):
                         break
             except Exception:
                 pass
-        if disk is None or not hasattr(disk, "is_floppy"):
-            try:
-                open("/tmp/vmm-a11y-browse-err.txt", "w").write("no-disk-row\n")
-            except Exception:
-                pass
-            return
-        if disk.is_floppy():
+        if disk is not None and hasattr(disk, "is_floppy") and disk.is_floppy():
             reason = vmmStorageBrowser.REASON_FLOPPY_MEDIA
         else:
             reason = vmmStorageBrowser.REASON_ISO_MEDIA

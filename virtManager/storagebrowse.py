@@ -97,6 +97,10 @@ class vmmStorageBrowser(vmmGObjectUI):
             if app is not None:
                 app.add_window(self.topwin)
             self._vmm_browse_hidden = False
+            try:
+                self.topwin.present()
+            except Exception:
+                pass
             gtkcompat.expose_storagebrowse_window(self)
             try:
                 open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")

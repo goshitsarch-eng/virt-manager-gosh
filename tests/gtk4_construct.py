@@ -3505,6 +3505,17 @@ def main():
         )
         shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
         assert shown == "0", "storage browser stayed open after Choose Volume: %s" % shown
+        details._disk_source_browse_clicked_cb(None)
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "1", "second details Browse must remount the storage browser: %s" % shown
+        open("/tmp/vmm-a11y-vol-select.txt", "w").write("backingl1.img")
+        open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+        _pump(GLib, 0.25)
+        assert not os.path.exists("/tmp/vmm-a11y-choose-volume"), (
+            "second details Browse choose poller did not consume Choose Volume"
+        )
+        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        assert shown == "0", "storage browser stayed open after second Choose Volume: %s" % shown
         details._vmm_pending_media_path = None
         details._disable_apply()
 

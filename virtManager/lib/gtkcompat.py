@@ -4097,13 +4097,6 @@ def expose_storagebrowse_window(browser):
             except Exception:
                 pass
             return
-        try:
-            top = getattr(browser, "topwin", None)
-            if top is not None and not top.get_visible():
-                open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
-                return
-        except Exception:
-            pass
         host = box or (win.get_child() if win is not None else None)
         if host is None or slist is None:
             return
