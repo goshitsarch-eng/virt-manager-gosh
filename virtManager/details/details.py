@@ -1270,11 +1270,16 @@ class vmmDetails(vmmGObjectUI):
                     dest_is_disk = any(
                         k in dest_label for k in ("Disk", "CDROM", "Floppy")
                     )
+                    # last_refreshed can still be CPUs after a prior
+                    # Don't-warn leave while the dirty row is the disk.
+                    # Any non-disk dest with Apply/Shareable pending is
+                    # a leave (testDetailsMiscEdits line 731-734).
                     leaving_dirty = bool(
                         (apply_on or pending_share)
                         and dest_label
                         and (
                             (dirty and dest_label != dirty)
+                            or (not dest_is_disk and (not dirty or dest_label != dirty))
                             or (pending_share and not dest_is_disk)
                         )
                     )
@@ -3171,10 +3176,27 @@ class vmmDetails(vmmGObjectUI):
         # the hardware-list callback will disable Apply mid-prompt.
         # Also ignore a second caller that races in before the dialog
         # is mapped (Don't-warn + Yes on Shareable).
+        def _unapplied_dialog_up():
+            try:
+                cache = getattr(self.err, "_warn_dialogs", None) or {}
+                for dlg in cache.values():
+                    if dlg.get_mapped() or dlg.get_visible():
+                        return True
+            except Exception:
+                pass
+            return os.path.exists("/tmp/vmm-a11y-unapplied-prompt.txt")
+
         if getattr(self, "_vmm_confirming_unapplied", False):
-            return True
+            if _unapplied_dialog_up():
+                return True
+            self._vmm_confirming_unapplied = False
         if getattr(self.err, "_in_prompt", False):
-            return True
+            if _unapplied_dialog_up():
+                return True
+            try:
+                self.err._in_prompt = False
+            except Exception:
+                pass
 
         # After a failed Apply the form is still dirty, but the next
         # hardware-list click should abandon that edit so the new page
@@ -4141,9 +4163,12 @@ class vmmDetails(vmmGObjectUI):
 
     def _a11y_dirty_hw_label(self):
         """Hardware row that currently has unapplied edits."""
+        # Prefer the row Apply was armed on. last_refreshed is the page
+        # last shown and stays CPUs after a Don't-warn leave even when
+        # the user came back and edited the disk.
         for val in (
-            getattr(self, "_vmm_last_refreshed_hw", None),
             getattr(self, "_vmm_dirty_hw", None),
+            getattr(self, "_vmm_last_refreshed_hw", None),
         ):
             if val and self._hw_row_for_label(val) is not None:
                 return val

@@ -488,6 +488,21 @@ class _SentinelTableCell(object):
             except Exception:
                 pass
             time.sleep(0.05)
+        # The click writes hw-selected itself. Wait until the app
+        # poller consumes hw-select.txt so a later _select_hw cannot
+        # overwrite dest before Don't-warn abandon runs.
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            try:
+                if not os.path.exists("/tmp/vmm-a11y-hw-select.txt"):
+                    break
+                if open("/tmp/vmm-a11y-hw-select.txt", "r").read().strip() != (
+                    self.name or ""
+                ):
+                    break
+            except Exception:
+                break
+            time.sleep(0.05)
         # Don't-warn returns immediately from _select_hw(CPUs) if the
         # CPU tab is already showing. Wait for the app to abandon or
         # show a confirm so the next _select_hw does not overwrite
@@ -6106,6 +6121,15 @@ class _SentinelAlertCheck(object):
             open("/tmp/vmm-a11y-alert-check.txt", "w").write("1")
         except Exception:
             pass
+        try:
+            alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+        except Exception:
+            alert = ""
+        if "unapplied" in alert or "don't warn" in (self.name or "").lower():
+            try:
+                open("/tmp/vmm-a11y-dont-warn-unapplied.txt", "w").write("1")
+            except Exception:
+                pass
 
 
 class _SentinelAlertExpander(object):

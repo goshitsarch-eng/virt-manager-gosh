@@ -2320,6 +2320,62 @@ def main():
             details._active_edits = []
             details._addstorage._active_edits = []
 
+        # Official sequence: last_refreshed stays CPUs after the first
+        # Don't-warn leave, then Shareable is unchecked on the disk and
+        # _select_hw(CPUs) must still abandon (line 731-734).
+        disk_label = details._get_hw_row_label_for_device(disk)
+        details._vmm_last_disk_kwargs = {"shareable": True}
+        details._vmm_last_disk_target = getattr(disk, "target", None)
+        try:
+            open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+        except Exception:
+            pass
+        details._addstorage.widget("disk-shareable").set_active(False)
+        details._addstorage._active_edits = [_EDIT_SHARE]
+        details._enable_apply(EDIT_DISK)
+        details._vmm_dirty_hw = disk_label
+        details._vmm_last_refreshed_hw = "CPUs"
+        assert details._a11y_dirty_hw_label() == disk_label, (
+            "dirty disk must win over a stale last_refreshed CPUs page"
+        )
+        try:
+            details.config.set_confirm_unapplied(False)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+            open("/tmp/vmm-a11y-hw-select.txt", "w").write("CPUs")
+        except Exception:
+            pass
+        try:
+            _pump(GLib, 0.4)
+            assert details._addstorage.widget("disk-shareable").get_active(), (
+                "poller Don't-warn leave must restore Shareable with stale CPUs"
+            )
+            assert open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip() == "1", (
+                "poller Don't-warn leave must republish Shareable checked"
+            )
+            try:
+                apply_left = (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                )
+            except Exception:
+                apply_left = "0"
+            assert apply_left != "1", (
+                "Don't-warn leave must clear Apply before the next hw-list click"
+            )
+        finally:
+            try:
+                details.config.set_confirm_unapplied(True)
+            except Exception:
+                pass
+            details._vmm_last_disk_kwargs = None
+            details._vmm_last_disk_target = None
+            details.widget("config-apply").set_sensitive(False)
+            details._active_edits = []
+            details._addstorage._active_edits = []
+
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
         from virtManager.lib import uiutil
