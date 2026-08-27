@@ -8,6 +8,7 @@ Run from the repo root:
     python3 tests/gtk4_construct.py
 """
 
+import glob
 import os
 import sys
 import time
@@ -58,6 +59,15 @@ def _compile_schemas():
 
 
 _PUMP_DEADLINE = None
+
+
+def _clear_a11y_sentinels():
+    """Pollers treat leftover /tmp/vmm-a11y-* as live UI events."""
+    for path in glob.glob("/tmp/vmm-a11y-*"):
+        try:
+            os.remove(path)
+        except Exception:
+            pass
 
 
 def _pump(GLib, seconds=0.05):
@@ -112,6 +122,7 @@ def _first_pool(conn):
 
 
 def main():
+    _clear_a11y_sentinels()
     print("compile schemas", flush=True)
     _compile_schemas()
     print("init gtk", flush=True)
@@ -182,6 +193,7 @@ def main():
         old = signal.signal(signal.SIGALRM, _on_alarm)
         signal.alarm(int(timeout))
         try:
+            _clear_a11y_sentinels()
             fn()
             _pump(GLib, 0.05)
             results.append((name, True, None))
