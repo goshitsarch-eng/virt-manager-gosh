@@ -171,8 +171,9 @@ class vmmMediaCombo(vmmGObjectUI):
         self._init_rows()
 
     def reset_state(self, is_floppy=False):
-        if not self._rows_inited:
-            self._init_rows()
+        # Re-read nodedevs each time so Floppy/CDROM lists stay current
+        # after the first fill (testMediaChange Floppy 2 -> IDE CDROM 1).
+        self._init_rows()
 
         self._entry.set_text("")
         if getattr(self, "_vmm_media_owner", None) != "details":

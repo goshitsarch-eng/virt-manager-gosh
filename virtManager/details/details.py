@@ -3302,6 +3302,15 @@ class vmmDetails(vmmGObjectUI):
                 self._addstorage._active_edits = []
             except Exception:
                 pass
+            self._vmm_pending_media_path = None
+            try:
+                os.remove("/tmp/vmm-a11y-media-browse.txt")
+            except Exception:
+                pass
+            try:
+                os.remove("/tmp/vmm-a11y-details-media-entry.txt.set")
+            except Exception:
+                pass
             self._disable_apply()
             self._revert_a11y_disk_shareable()
             self._refresh_page()
@@ -4202,7 +4211,9 @@ class vmmDetails(vmmGObjectUI):
             reason = vmmStorageBrowser.REASON_ISO_MEDIA
 
         def cb(ignore, path):
+            self._vmm_pending_media_path = path or ""
             self._mediacombo.set_path(path)
+            self._enable_apply(EDIT_DISK_PATH)
 
         try:
             names = []
@@ -5811,9 +5822,8 @@ class vmmDetails(vmmGObjectUI):
         pending = getattr(self, "_vmm_pending_media_path", None)
         if pending is not None:
             return pending
-        stored = getattr(self._mediacombo, "_a11y_path", None)
-        if stored:
-            return stored
+        # set_path() stores the displayed path in _a11y_path after
+        # apply/refresh. That is not an unapplied edit.
         return None
 
     def _poll_media_entry_tick(self):
@@ -6187,12 +6197,7 @@ class vmmDetails(vmmGObjectUI):
                 if getattr(self, "_vmm_apply_just_succeeded", False):
                     return self._clear_post_apply_refresh()
                 if self._active_edits == [EDIT_DISK_PATH]:
-                    pending = ""
-                    try:
-                        pending = getattr(self._mediacombo, "_a11y_path", None) or ""
-                    except Exception:
-                        pending = ""
-                    if pending:
+                    if self._pending_media_path() is not None:
                         return False
                     self._disable_apply()
                 elif self._active_edits == [EDIT_XML]:
@@ -6740,32 +6745,20 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         if is_removable:
-            pending = ""
-            try:
-                pending = getattr(self._mediacombo, "_a11y_path", None) or ""
-            except Exception:
-                pending = ""
-            if not pending:
+            pending = self._pending_media_path()
+            if pending is None:
                 try:
                     pending = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
                 except Exception:
-                    pending = ""
+                    pending = None
             user_pending = False
             try:
                 user_pending = EDIT_DISK_PATH in getattr(self, "_active_edits", [])
             except Exception:
                 user_pending = False
             if not user_pending:
-                try:
-                    user_pending = (
-                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
-                        .read()
-                        .strip()
-                        == "1"
-                    )
-                except Exception:
-                    user_pending = False
-            if user_pending and pending and pending != (path or ""):
+                user_pending = pending is not None
+            if user_pending and pending is not None and pending != (path or ""):
                 path = pending
             self._mediacombo.reset_state(is_floppy=disk.is_floppy())
             self._mediacombo.set_path(path or "")

@@ -4003,10 +4003,28 @@ class _SentinelMediaCombo(object):
         print(self.fmt_nodes())
 
     def _rows(self):
-        for path in (
-            "/tmp/vmm-a11y-createvm-media-combo.txt",
+        details_first = False
+        try:
+            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        try:
+            customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip()
+        except Exception:
+            customize = "0"
+        if shown and customize != "1":
+            details_first = True
+        paths = (
             "/tmp/vmm-a11y-details-media-combo.txt",
-        ):
+            "/tmp/vmm-a11y-createvm-media-combo.txt",
+        )
+        if not details_first:
+            paths = (
+                "/tmp/vmm-a11y-createvm-media-combo.txt",
+                "/tmp/vmm-a11y-details-media-combo.txt",
+            )
+        seen = []
+        for path in paths:
             try:
                 rows = [
                     line
@@ -4015,9 +4033,10 @@ class _SentinelMediaCombo(object):
                 ]
             except Exception:
                 rows = []
-            if rows:
-                return rows
-        return []
+            for row in rows:
+                if row not in seen:
+                    seen.append(row)
+        return seen
 
     def find(
         self,

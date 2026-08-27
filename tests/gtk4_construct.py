@@ -2855,6 +2855,90 @@ def main():
             found = True
         assert found
 
+    def media_change_cdrom_nodedev():
+        from virtManager.details.details import EDIT_DISK_PATH
+        from virtManager.details.details import HW_LIST_COL_DEVICE
+        from virtManager.details.details import HW_LIST_COL_LABEL
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_DISK
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-many-devices")
+        if vmobj.is_active():
+            try:
+                vmobj.destroy()
+            except Exception:
+                pass
+            _pump(GLib, 0.4)
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        hwlist = details.widget("hw-list")
+        floppy2 = None
+        cdrom1 = None
+        for idx, row in enumerate(hwlist.get_model()):
+            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
+                continue
+            label = str(row[HW_LIST_COL_LABEL] or "")
+            if label == "Floppy 2":
+                floppy2 = (idx, row[HW_LIST_COL_DEVICE])
+            elif label == "IDE CDROM 1":
+                cdrom1 = (idx, row[HW_LIST_COL_DEVICE])
+        assert floppy2 is not None, "test-many-devices has no Floppy 2"
+        assert cdrom1 is not None, "test-many-devices has no IDE CDROM 1"
+
+        uiutil.set_list_selection_by_number(hwlist, floppy2[0])
+        details._hw_changed_cb(hwlist)
+        details._vmm_pending_media_path = "/pool-dir/iso-vol"
+        details._mediacombo.set_path("/pool-dir/iso-vol")
+        details._enable_apply(EDIT_DISK_PATH)
+        details._config_apply()
+        _pump(GLib, 0.3)
+        details._refresh_page_body(details._hw_row_for_label("Floppy 2"))
+        _pump(GLib, 0.1)
+        assert not details.widget("config-apply").get_sensitive(), (
+            "Floppy 2 apply must not leave Apply armed, pending=%r"
+            % (details._pending_media_path(),)
+        )
+        inactive = vmobj.get_xmlobj(inactive=True)
+        floppy_paths = [
+            d.get_source_path()
+            for d in inactive.devices.disk
+            if getattr(d, "device", None) == "floppy"
+        ]
+        assert any(p and "iso-vol" in p for p in floppy_paths), floppy_paths
+
+        uiutil.set_list_selection_by_number(hwlist, cdrom1[0])
+        details._hw_changed_cb(hwlist)
+        _pump(GLib, 0.2)
+        details._refresh_disk_page(cdrom1[1])
+        labels = []
+        try:
+            model = details._mediacombo._combo.get_model()
+            if model is not None:
+                for row in model:
+                    label = row[details._mediacombo.MEDIA_FIELD_LABEL] or ""
+                    if label:
+                        labels.append(str(label))
+        except Exception:
+            labels = []
+        published = ""
+        try:
+            published = open("/tmp/vmm-a11y-details-media-combo.txt", "r").read()
+        except Exception:
+            published = ""
+        assert any("Fedora12_media" in lab and "/dev/sr0" in lab for lab in labels) or (
+            "Fedora12_media (/dev/sr0)" in published
+        ), "CDROM combo missing Fedora12_media after Floppy 2, labels=%r published=%r" % (
+            labels,
+            published,
+        )
+        assert not details.widget("config-apply").get_sensitive(), (
+            "switching to IDE CDROM 1 must not keep Floppy 2 media pending"
+        )
+
     def details_media_hotplug_deferred():
         from virtManager.details.details import EDIT_DISK_PATH
         from virtManager.details.details import HW_LIST_COL_DEVICE
@@ -3281,6 +3365,7 @@ def main():
         ("createvm_finish", createvm_finish),
         ("details_apply_xml", details_apply_xml),
         ("media_change", media_change),
+        ("media_change_cdrom_nodedev", media_change_cdrom_nodedev),
         ("details_media_hotplug_deferred", details_media_hotplug_deferred),
         ("details_config_remove_ignores_overview", details_config_remove_ignores_overview),
         ("details_vsock_cid_apply", details_vsock_cid_apply),
