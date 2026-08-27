@@ -118,8 +118,16 @@ def _reset_open_ui():
         except Exception:
             pass
     try:
+        from virtManager.delete import _vmmDeleteBase
         from virtManager.delete import vmmDeleteDialog
 
+        for dlg in list(getattr(_vmmDeleteBase, "_live", []) or []):
+            try:
+                dlg._vmm_delete_a11y_poll = False
+                dlg.close()
+            except Exception:
+                pass
+        _vmmDeleteBase._live = []
         inst = getattr(vmmDeleteDialog, "_instance", None)
         if inst is not None:
             try:
@@ -141,15 +149,14 @@ def _reset_open_ui():
                     title = win.get_title() or ""
                 except Exception:
                     title = ""
-                if title in ("Delete", "Remove Disk", "Remove Disk Device"):
+                if "Delete" in title or "Remove" in title:
                     try:
-                        win.hide()
+                        win.set_visible(False)
                     except Exception:
-                        pass
-                    try:
-                        win._vmm_delete_a11y_poll = False
-                    except Exception:
-                        pass
+                        try:
+                            win.hide()
+                        except Exception:
+                            pass
     except Exception:
         pass
 

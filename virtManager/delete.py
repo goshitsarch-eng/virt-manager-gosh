@@ -36,6 +36,8 @@ class _vmmDeleteBase(vmmGObjectUI):
     Base class for both types of VM/device storage deleting wizards
     """
 
+    _live = []
+
     def __init__(self):
         vmmGObjectUI.__init__(self, "delete.ui", "vmm-delete")
         self.vm = None
@@ -57,13 +59,23 @@ class _vmmDeleteBase(vmmGObjectUI):
     def _init_state(self):
         _prepare_storage_list(self.widget("delete-storage-list"))
 
+    @classmethod
+    def _active_dialog(cls):
+        for dlg in reversed(list(cls._live)):
+            try:
+                if dlg.vm is None:
+                    continue
+                if dlg.topwin.get_visible() or dlg.topwin.get_mapped():
+                    return dlg
+            except Exception:
+                continue
+        return None
+
     def show(self, parent, vm):
         log.debug("Showing delete wizard")
-        try:
-            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
-        except Exception:
-            pass
         self._set_vm(vm)
+        if self not in _vmmDeleteBase._live:
+            _vmmDeleteBase._live.append(self)
         self._reset_state()
         self.topwin.set_transient_for(parent)
         try:
@@ -88,22 +100,32 @@ class _vmmDeleteBase(vmmGObjectUI):
             gtkcompat.ensure_button_accessible_name(
                 self.widget("delete-ok"), "Delete"
             )
+            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
+            open("/tmp/vmm-a11y-delete-title.txt", "w").write(title)
         except Exception:
             pass
+        self.topwin.present()
         try:
             self._start_a11y_poll()
             self._publish_a11y_state()
         except Exception:
             pass
-        self.topwin.present()
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing delete wizard")
-        self.topwin.hide()
+        try:
+            self.topwin.set_visible(False)
+        except Exception:
+            self.topwin.hide()
         self._set_vm(None)
         self._vmm_delete_a11y_poll = False
         try:
-            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("0")
+            _vmmDeleteBase._live.remove(self)
+        except Exception:
+            pass
+        try:
+            if _vmmDeleteBase._active_dialog() is None:
+                open("/tmp/vmm-a11y-delete-shown.txt", "w").write("0")
         except Exception:
             pass
         return 1
@@ -184,6 +206,9 @@ class _vmmDeleteBase(vmmGObjectUI):
                 return
         except Exception:
             pass
+        active = _vmmDeleteBase._active_dialog()
+        if active is not None and active is not self:
+            return
         try:
             chk = self.widget("delete-remove-storage")
             active = bool(chk.get_active())
