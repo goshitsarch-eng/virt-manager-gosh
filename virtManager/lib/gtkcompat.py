@@ -769,17 +769,18 @@ def restore_button_icon_name(button, icon_name, accessible_name=None):
 # border-width; restore them as margins so dialogs are not cramped.
 _GTK3_BORDER_WIDTHS = {
     "addhardware.ui": {"vbox23": 12},
-    "asyncjob.ui": {"vmm-progress": 12},
+    "asyncjob.ui": {"vmm-progress": 12, "vbox13": 12},
     "clone.ui": {
         "vmm-change-storage": 5,
+        "dialog-vbox2": 5,
         "vbox2": 6,
         "table3": 6,
         "hbox77": 6,
         "vbox4": 12,
     },
-    "connectauth.ui": {"connectauth": 6},
+    "connectauth.ui": {"connectauth": 6, "grid": 6},
     "console.ui": {"console-auth": 6},
-    "createconn.ui": {"vmm-open-connection": 6},
+    "createconn.ui": {"vmm-open-connection": 6, "dialog-vbox2": 6},
     "createnet.ui": {"box77": 6, "vbox23": 12},
     "createpool.ui": {"hbox77": 6, "vbox2": 12},
     "createvm.ui": {
@@ -812,6 +813,7 @@ _GTK3_BORDER_WIDTHS = {
     "oslist.ui": {"vmm-oslist": 6},
     "preferences.ui": {
         "vmm-preferences": 12,
+        "vbox1": 12,
         "frame5": 12,
         "frame1": 12,
         "box3": 12,
@@ -820,7 +822,7 @@ _GTK3_BORDER_WIDTHS = {
     },
     "snapshots.ui": {"snapshot-top-box": 12},
     "snapshotsnew.ui": {"hbox77": 6, "box3": 12},
-    "storagebrowse.ui": {"vmm-storage-browse": 6},
+    "storagebrowse.ui": {"vmm-storage-browse": 6, "storage-align": 6},
 }
 
 
@@ -836,12 +838,15 @@ def apply_gtk3_border_width(widget, width):
         return
     target = widget
     try:
-        if isinstance(widget, Gtk.Window):
-            child = widget.get_child()
-            if child is not None:
-                target = child
-        elif isinstance(widget, Gtk.Popover):
-            child = widget.get_child()
+        if isinstance(widget, Gtk.Window) or isinstance(widget, Gtk.Popover):
+            child = None
+            if hasattr(widget, "get_content_area"):
+                try:
+                    child = widget.get_content_area()
+                except Exception:
+                    child = None
+            if child is None:
+                child = widget.get_child()
             if child is not None:
                 target = child
     except Exception:

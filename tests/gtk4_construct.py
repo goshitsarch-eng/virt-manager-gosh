@@ -954,9 +954,8 @@ def main():
         btn = cvol.widget("vol-create")
         assert getattr(btn, "_vmm_icon_child", False), "Finish button lost document-new icon"
         assert getattr(cvol.widget("vbox1"), "_vmm_gtk3_border_width", 0) == 12
-        child = dlg.topwin.get_child()
-        assert child is not None
-        assert child.get_margin_top() >= 12, child.get_margin_top()
+        prefs_box = dlg.widget("vbox1")
+        assert prefs_box.get_margin_top() >= 12, prefs_box.get_margin_top()
         try:
             cvol.close()
         except Exception:
