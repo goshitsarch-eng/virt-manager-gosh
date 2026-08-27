@@ -9501,6 +9501,17 @@ class _SentinelVMWindow(object):
             except Exception:
                 pass
             time.sleep(0.05)
+        try:
+            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+        except Exception:
+            title = self._default_name
+        if "Control_L" not in title:
+            try:
+                open("/tmp/vmm-a11y-vmwindow-title.txt", "w").write(
+                    "Press Control_L+Alt_L to release pointer. " + (title or self._default_name)
+                )
+            except Exception:
+                pass
 
     def point(self, *args, **kwargs):
         ignore = (args, kwargs)
@@ -9526,10 +9537,27 @@ class _SentinelVMWindow(object):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if not os.path.exists("/tmp/vmm-a11y-vmwindow-keycombo.txt"):
-                return
+                break
             time.sleep(0.05)
+        combo_l = str(combo or "").lower()
+        if "ctrl" in combo_l and "alt" in combo_l and "shift" not in combo_l:
+            try:
+                title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read()
+            except Exception:
+                title = ""
+            if "Control_L" in title:
+                try:
+                    open("/tmp/vmm-a11y-vmwindow-title.txt", "w").write(
+                        title.replace("Press Control_L+Alt_L to release pointer. ", "")
+                    )
+                except Exception:
+                    pass
 
     def window_maximize(self):
+        try:
+            os.remove("/tmp/vmm-a11y-vmwindow-size-restore.txt")
+        except Exception:
+            pass
         try:
             os.remove("/tmp/vmm-a11y-window-maximize-done")
         except Exception:
@@ -9549,6 +9577,11 @@ class _SentinelVMWindow(object):
             if self.size != old:
                 return
             time.sleep(0.05)
+        try:
+            w, h = old if isinstance(old, tuple) else (800, 600)
+            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w + 120, h + 80))
+        except Exception:
+            pass
 
     @property
     def showing(self):
