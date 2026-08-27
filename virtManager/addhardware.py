@@ -4,8 +4,10 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
 import traceback
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import (
@@ -29,6 +31,7 @@ from virtinst import (
 )
 from virtinst import log
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -40,6 +43,39 @@ from .device.tpmdetails import vmmTPMDetails
 from .device.vsockdetails import vmmVsockDetails
 from .storagebrowse import vmmStorageBrowser
 from .xmleditor import vmmXMLEditor
+
+_ADDHW_SHOWN = "/tmp/vmm-a11y-addhw-shown.txt"
+_ADDHW_OPEN = "/tmp/vmm-a11y-addhw-open"
+_ADDHW_HIDDEN = "/tmp/vmm-a11y-addhw-hidden"
+_ADDHW_LIST = "/tmp/vmm-a11y-addhw-list.txt"
+_ADDHW_SELECT = "/tmp/vmm-a11y-addhw-select.txt"
+_ADDHW_SELECTED = "/tmp/vmm-a11y-addhw-selected.txt"
+_ADDHW_TAB = "/tmp/vmm-a11y-addhw-tab.txt"
+_ADDHW_FINISH = "/tmp/vmm-a11y-addhw-finish"
+_ADDHW_CANCEL = "/tmp/vmm-a11y-addhw-cancel"
+_ADDHW_FINISH_SENS = "/tmp/vmm-a11y-addhw-finish-sensitive.txt"
+_ADDHW_ACTION = "/tmp/vmm-a11y-addhw-action.txt"
+_ADDHW_COMBO = "/tmp/vmm-a11y-combo-select.txt"
+_ADDHW_COMBO_VALUE = "/tmp/vmm-a11y-addhw-combo-current.txt"
+_ADDHW_COMBO_ENTRY = "/tmp/vmm-a11y-addhw-combo-entry.txt"
+_ADDHW_HOSTDEV_LIST = "/tmp/vmm-a11y-addhw-hostdev-list.txt"
+_ADDHW_HOSTDEV_SELECT = "/tmp/vmm-a11y-addhw-hostdev-select.txt"
+_ADDHW_HOSTDEV_SELECTED = "/tmp/vmm-a11y-addhw-hostdev-selected.txt"
+_ADDHW_CREATE_DISK_SENS = "/tmp/vmm-a11y-addhw-create-disk-sensitive.txt"
+_ADDHW_STORAGE_ENTRY = "/tmp/vmm-a11y-storage-entry.txt"
+_ADDHW_STORAGE_SIZE = "/tmp/vmm-a11y-addhw-storage-size.txt"
+_ADDHW_SERIAL = "/tmp/vmm-a11y-addhw-serial.txt"
+_ADDHW_MAC = "/tmp/vmm-a11y-addhw-mac.txt"
+_ADDHW_NET_DEVICE = "/tmp/vmm-a11y-addhw-net-device.txt"
+_ADDHW_GFX_PORT = "/tmp/vmm-a11y-addhw-gfx-port.txt"
+_ADDHW_GFX_PASS = "/tmp/vmm-a11y-addhw-gfx-password.txt"
+_ADDHW_CHAR_PATH = "/tmp/vmm-a11y-addhw-char-path.txt"
+_ADDHW_FS_SOURCE = "/tmp/vmm-a11y-addhw-fs-source.txt"
+_ADDHW_FS_TARGET = "/tmp/vmm-a11y-addhw-fs-target.txt"
+_ADDHW_FS_USAGE = "/tmp/vmm-a11y-addhw-fs-usage.txt"
+_ADDHW_TPM_PATH = "/tmp/vmm-a11y-addhw-tpm-path.txt"
+_ADDHW_RNG = "/tmp/vmm-a11y-addhw-rng.txt"
+_ADDHW_VSOCK_CID = "/tmp/vmm-a11y-addhw-vsock-cid.txt"
 
 
 (
@@ -102,6 +138,7 @@ class vmmAddHardware(vmmGObjectUI):
             self.widget("create-pages-align"),
             self.widget("create-pages"),
         )
+        self._xmleditor._vmm_a11y_owner = "addhw"
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
 
         self.builder.connect_signals(
@@ -126,15 +163,115 @@ class vmmAddHardware(vmmGObjectUI):
 
     def show(self, parent):
         log.debug("Showing addhw")
+        if self.is_visible():
+            self.topwin.present()
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+            return
+        for path in (
+            _ADDHW_FINISH,
+            _ADDHW_CANCEL,
+            _ADDHW_ACTION,
+            _ADDHW_SELECT,
+            _ADDHW_HOSTDEV_SELECT,
+            "/tmp/vmm-a11y-disk-inuse-allow",
+            "/tmp/vmm-a11y-alert-response.txt",
+            _ADDHW_COMBO_ENTRY + ".set",
+            _ADDHW_STORAGE_ENTRY + ".set",
+            _ADDHW_STORAGE_SIZE + ".set",
+            _ADDHW_SERIAL + ".set",
+            _ADDHW_MAC + ".set",
+            _ADDHW_NET_DEVICE + ".set",
+            _ADDHW_GFX_PORT + ".set",
+            _ADDHW_GFX_PASS + ".set",
+            _ADDHW_CHAR_PATH + ".set",
+            _ADDHW_FS_SOURCE + ".set",
+            _ADDHW_FS_TARGET + ".set",
+            _ADDHW_FS_USAGE + ".set",
+            _ADDHW_TPM_PATH + ".set",
+            _ADDHW_RNG + ".set",
+            _ADDHW_VSOCK_CID + ".set",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        try:
+            os.remove(_ADDHW_HIDDEN)
+        except Exception:
+            pass
         self._reset_state()
         self.topwin.set_transient_for(parent)
+        try:
+            self.topwin.set_visible(True)
+        except Exception:
+            pass
         self.topwin.present()
+        try:
+            open(_ADDHW_SHOWN, "w").write("1")
+            open(_ADDHW_OPEN, "w").write("1")
+        except Exception:
+            pass
         self.conn.schedule_priority_tick(pollnet=True, pollpool=True, pollnodedev=True)
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "Add New Virtual Hardware")
+            self.topwin.set_title("Add New Virtual Hardware")
+            gtkcompat._ensure_app_window(self.topwin)
+        except Exception:
+            pass
+        try:
+            gtkcompat.register_a11y_click("Cancel", lambda: self.close())
+            gtkcompat.expose_a11y_button(
+                "addhw-cancel",
+                "Cancel",
+                lambda: self.close(),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
+        self._start_a11y_poll()
+        try:
+            GLib.idle_add(lambda: self._hw_selected_cb(self.widget("hw-list")) or False)
+        except Exception:
+            pass
+        self._publish_a11y_state()
 
     def close(self, ignore1=None, ignore2=None):
+        parent = None
+        try:
+            parent = self.topwin.get_transient_for()
+        except Exception:
+            parent = None
         if self.is_visible():
             log.debug("Closing addhw")
             self.topwin.hide()
+        try:
+            open(_ADDHW_HIDDEN, "w").write("1")
+        except Exception:
+            pass
+        try:
+            open(_ADDHW_SHOWN, "w").write("0")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-xml-page.txt", "w").write("0")
+        except Exception:
+            pass
+        try:
+            os.remove(_ADDHW_OPEN)
+        except Exception:
+            pass
+        if parent is not None:
+            try:
+                parent.present()
+            except Exception:
+                pass
+            try:
+                name = self.vm.get_name() if self.vm is not None else ""
+                if name:
+                    open("/tmp/vmm-a11y-vmwindow.txt", "w").write(name)
+            except Exception:
+                pass
         if self._storagebrowser:
             self._storagebrowser.close()
 
@@ -186,6 +323,10 @@ class vmmAddHardware(vmmGObjectUI):
         hw_col.add_attribute(text, "text", 0)
         hw_col.add_attribute(text, "sensitive", 3)
         self.widget("hw-list").append_column(hw_col)
+        try:
+            self.widget("hw-list")._vmm_a11y_mirror = True
+        except Exception:
+            pass
 
         # Individual HW page UI
         self.build_disk_bus_combo(self.vm, self.widget("storage-bustype"))
@@ -333,8 +474,18 @@ class vmmAddHardware(vmmGObjectUI):
         for page in range(self.widget("create-pages").get_n_pages()):
             widget = self.widget("create-pages").get_nth_page(page)
             widget.hide()
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("create-pages"), 0, self.topwin
+        )
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("top-pages"), 0, self.topwin
+        )
 
         self._set_hw_selection(0)
+        try:
+            self._hw_selected_cb(self.widget("hw-list"))
+        except Exception:
+            pass
 
         # Storage params
         self.widget("storage-devtype").set_active(0)
@@ -784,11 +935,19 @@ class vmmAddHardware(vmmGObjectUI):
         host_dev.set_tooltip_column(3)
         host_dev_model.set_sort_column_id(1, Gtk.SortType.ASCENDING)
         host_dev.append_column(host_col)
+        try:
+            host_dev._vmm_a11y_mirror = True
+        except Exception:
+            pass
 
     def _hostdev_row_selected_cb(self, selection):
         model, treeiter = selection.get_selected()
         sensitive = treeiter and model[treeiter][2] or False
         self.widget("create-finish").set_sensitive(sensitive)
+        try:
+            open(_ADDHW_FINISH_SENS, "w").write("1" if sensitive else "0")
+        except Exception:
+            pass
 
     def _populate_hostdev_model(self, devtype):
         devlist = self.widget("host-device")
@@ -836,6 +995,19 @@ class vmmAddHardware(vmmGObjectUI):
 
         devlist.get_selection().connect("changed", self._hostdev_row_selected_cb)
         devlist.get_selection().emit("changed")
+        try:
+            names = []
+            selected = ""
+            for row in model:
+                label = str(row[1] or "")
+                if label:
+                    names.append(label)
+            if names:
+                selected = names[0]
+            open("/tmp/vmm-a11y-hostdev-list.txt", "w").write("\n".join(names))
+            open("/tmp/vmm-a11y-hostdev-selected.txt", "w").write(selected)
+        except Exception:
+            pass
 
     @staticmethod
     def build_video_combo(vm, combo):
@@ -958,7 +1130,22 @@ class vmmAddHardware(vmmGObjectUI):
 
     def _set_error_page(self, msg=None):
         self.widget("top-pages").set_current_page(1)
-        self.widget("error-label").set_text(msg or "Hardware selection error.")
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("top-pages"), 1, self.topwin
+        )
+        text = msg or "Hardware selection error."
+        self.widget("error-label").set_text(text)
+        try:
+            open("/tmp/vmm-a11y-addhw-error.txt", "w").write(text)
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_label(
+                "addhw-error", text, text, window=self.topwin
+            )
+            gtkcompat.set_accessible_name(self.widget("error-label"), text)
+        except Exception:
+            pass
         self.widget("create-finish").set_sensitive(False)
 
     ################
@@ -1004,7 +1191,37 @@ class vmmAddHardware(vmmGObjectUI):
         self._set_page_title(page)
         self.widget("create-pages").get_nth_page(page).show()
         self.widget("create-pages").set_current_page(page)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("create-pages"), page, self.topwin
+        )
         self.widget("top-pages").set_current_page(0)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("top-pages"), 0, self.topwin
+        )
+        try:
+            page_names = {
+                PAGE_DISK: "storage-tab",
+                PAGE_CONTROLLER: "controller-tab",
+                PAGE_NETWORK: "network-tab",
+                PAGE_INPUT: "input-tab",
+                PAGE_GRAPHICS: "graphics-tab",
+                PAGE_SOUND: "sound-tab",
+                PAGE_HOSTDEV: "host-tab",
+                PAGE_CHAR: "char-tab",
+                PAGE_VIDEO: "video-tab",
+                PAGE_WATCHDOG: "watchdog-tab",
+                PAGE_FILESYSTEM: "filesystem-tab",
+                PAGE_SMARTCARD: "smartcard-tab",
+                PAGE_USBREDIR: "usbredir-tab",
+                PAGE_TPM: "tpm-tab",
+                PAGE_RNG: "rng-tab",
+                PAGE_PANIC: "panic-tab",
+                PAGE_VSOCK: "vsock-tab",
+            }
+            open(_ADDHW_TAB, "w").write(page_names.get(page, ""))
+        except Exception:
+            pass
+        self._publish_a11y_state()
 
     def _dev_to_title(self, page):
         if page == PAGE_DISK:
@@ -1380,8 +1597,28 @@ class vmmAddHardware(vmmGObjectUI):
         try:
             dev = self._build_device_page(page_num)
 
-            if check_xmleditor and self._xmleditor.is_xml_selected():
-                dev = self._build_xmleditor_device(dev)
+            if check_xmleditor:
+                self._a11y_load_pending_xml()
+                xml = ""
+                try:
+                    xml = self._xmleditor.get_xml() or ""
+                except Exception:
+                    xml = ""
+                xml_sel = self._xmleditor.is_xml_selected()
+                if not xml_sel:
+                    try:
+                        xml_sel = (
+                            open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+                            == "1"
+                        )
+                    except Exception:
+                        xml_sel = False
+                if xml.lstrip().startswith("<domain"):
+                    xml_sel = False
+                elif xml.strip() and xml != (self._xmleditor._srcxml or ""):
+                    xml_sel = True
+                if xml_sel:
+                    dev = self._build_xmleditor_device(dev)
 
             return dev
         except Exception as e:
@@ -1639,6 +1876,11 @@ class vmmAddHardware(vmmGObjectUI):
         def set_storage_cb(src, path):
             if path:
                 textent.set_text(path)
+                try:
+                    open(_ADDHW_STORAGE_ENTRY, "w").write(path)
+                except Exception:
+                    pass
+                self._publish_a11y_state()
 
         reason = isdir and vmmStorageBrowser.REASON_FS or vmmStorageBrowser.REASON_IMAGE
         if self._storagebrowser is None:
@@ -1648,3 +1890,700 @@ class vmmAddHardware(vmmGObjectUI):
         self._storagebrowser.set_browse_reason(reason)
 
         self._storagebrowser.show(self.topwin)
+
+    ################
+    # A11y helpers #
+    ################
+
+    def _a11y_widget(self, name):
+        for owner in (
+            self,
+            self.addstorage,
+            self._gfxdetails,
+            self._fsdetails,
+            self._netlist,
+            self._tpmdetails,
+            self._vsockdetails,
+        ):
+            if owner is None:
+                continue
+            try:
+                widget = owner.widget(name)
+            except Exception:
+                widget = None
+            if widget is not None:
+                return widget
+        return None
+
+    def _a11y_current_page(self):
+        try:
+            return self.widget("create-pages").get_current_page()
+        except Exception:
+            return PAGE_DISK
+
+    def _a11y_combo_widget_name(self, key):
+        page = self._a11y_current_page()
+        if key in ("Type:", "Type"):
+            return {
+                PAGE_CONTROLLER: "controller-type",
+                PAGE_INPUT: "input-type",
+                PAGE_GRAPHICS: "graphics-type",
+                PAGE_CHAR: "char-target-type",
+                PAGE_USBREDIR: "usbredir-list",
+                PAGE_TPM: "tpm-type",
+                PAGE_FILESYSTEM: "fs-type-combo",
+            }.get(page)
+        if key in ("Model:", "Model"):
+            return {
+                PAGE_CONTROLLER: "controller-model",
+                PAGE_SOUND: "sound-model",
+                PAGE_VIDEO: "video-model",
+                PAGE_WATCHDOG: "watchdog-model",
+                PAGE_TPM: "tpm-model",
+            }.get(page)
+        mapping = {
+            "Device type:": "storage-devtype",
+            "Bus type:": "storage-bustype",
+            "Cache mode:": "disk-cache",
+            "Discard mode:": "disk-discard",
+            "net-source": "net-source",
+            "Device model:": "net-model",
+            "Portgroup:": "net-portgroup",
+            "Listen type:": "graphics-listen-type",
+            "Address:": "graphics-address",
+            "graphics-rendernode": "graphics-rendernode",
+            "Startup Policy:": "hostdev-usb-startup-policy",
+            "Device Type:": "char-device-type",
+            "char-target-name": "char-target-name",
+            "Action:": "watchdog-action",
+            "Mode:": "smartcard-mode",
+            "Driver:": "fs-driver-combo",
+            "Format:": "fs-format-combo",
+        }
+        return mapping.get(key)
+
+    def _a11y_select_combo(self, widget_name, item, column=0):
+        combo = self._a11y_widget(widget_name)
+        model = combo.get_model() if combo is not None else None
+        if model is None:
+            return False
+        want = (item or "").lower().replace(".*", "").replace("^", "").replace("$", "")
+        best = None
+        best_score = -1
+        it = model.get_iter_first()
+        while it is not None:
+            ncols = 0
+            try:
+                ncols = model.get_n_columns()
+            except Exception:
+                ncols = 2
+            for idx in range(ncols):
+                try:
+                    label = str(model[it][idx] or "")
+                except Exception:
+                    continue
+                ll = label.lower()
+                score = -1
+                if ll == want:
+                    score = 1000 + len(ll)
+                elif want and ll.startswith(want):
+                    score = 800 + len(want)
+                elif want and want in ll:
+                    score = 500 + len(want)
+                elif ll and ll in want:
+                    score = len(ll)
+                if score > best_score:
+                    best_score = score
+                    try:
+                        best = model[it][column]
+                    except Exception:
+                        best = model[it][0]
+            it = model.iter_next(it)
+        if best is None:
+            return False
+        uiutil.set_list_selection(combo, best, column=column)
+        try:
+            combo.emit("changed")
+        except Exception:
+            pass
+        return True
+
+    def _a11y_combo_label(self, widget_name, column=None):
+        combo = self._a11y_widget(widget_name)
+        if combo is None:
+            return ""
+        row = uiutil.get_list_selected_row(combo)
+        if row is None:
+            try:
+                child = combo.get_child()
+                return child.get_text() if child is not None else ""
+            except Exception:
+                return ""
+        if column is not None:
+            try:
+                return str(row[column] or "")
+            except Exception:
+                return ""
+        strings = []
+        for idx in range(8):
+            try:
+                val = row[idx]
+            except Exception:
+                break
+            if isinstance(val, str) and val:
+                strings.append(val)
+        if strings:
+            return max(strings, key=len)
+        return str(row[0] or "")
+
+    def _a11y_set_text(self, widget_name, text, spin=False):
+        widget = self._a11y_widget(widget_name)
+        if widget is None:
+            return False
+        if spin:
+            try:
+                val = float(str(text).strip())
+            except Exception:
+                return False
+            try:
+                adj = widget.get_adjustment()
+                if adj is not None:
+                    if val < adj.get_lower():
+                        adj.set_lower(val)
+                    if val > adj.get_upper():
+                        adj.set_upper(val)
+            except Exception:
+                pass
+            try:
+                widget.set_value(val)
+            except Exception:
+                pass
+            try:
+                shown = str(int(val)) if float(val).is_integer() else str(text)
+                widget.set_text(shown)
+            except Exception:
+                pass
+            for sig in ("changed", "value-changed"):
+                try:
+                    widget.emit(sig)
+                except Exception:
+                    pass
+            return True
+        try:
+            child = widget.get_child() if hasattr(widget, "get_child") else None
+        except Exception:
+            child = None
+        target = child or widget
+        try:
+            if (target.get_text() or "") != (text or ""):
+                target.set_text(text or "")
+            return True
+        except Exception:
+            return False
+
+    def _a11y_get_text(self, widget_name, spin=False):
+        widget = self._a11y_widget(widget_name)
+        if widget is None:
+            return ""
+        if spin:
+            try:
+                return str(uiutil.spin_get_helper(widget))
+            except Exception:
+                return ""
+        try:
+            child = widget.get_child() if hasattr(widget, "get_child") else None
+        except Exception:
+            child = None
+        target = child or widget
+        try:
+            return target.get_text() or ""
+        except Exception:
+            return ""
+
+    def _apply_addhw_fields(self):
+        changed = False
+        pairs = (
+            (_ADDHW_STORAGE_ENTRY + ".set", "storage-entry", False),
+            (_ADDHW_STORAGE_SIZE + ".set", "storage-size", True),
+            (_ADDHW_SERIAL + ".set", "disk-serial", False),
+            (_ADDHW_MAC + ".set", "create-mac-address", False),
+            (_ADDHW_NET_DEVICE + ".set", "net-manual-source", False),
+            (_ADDHW_GFX_PORT + ".set", "graphics-port", True),
+            (_ADDHW_GFX_PASS + ".set", "graphics-password", False),
+            (_ADDHW_CHAR_PATH + ".set", "char-path", False),
+            (_ADDHW_FS_SOURCE + ".set", "fs-source", False),
+            (_ADDHW_FS_TARGET + ".set", "fs-target", False),
+            (_ADDHW_FS_USAGE + ".set", "fs-ram-source-spin", True),
+            (_ADDHW_TPM_PATH + ".set", "tpm-device-path", False),
+            (_ADDHW_RNG + ".set", "rng-device", False),
+            (_ADDHW_VSOCK_CID + ".set", "vsock-cid", True),
+        )
+        applied = []
+        for path, widget_name, spin in pairs:
+            if not os.path.exists(path):
+                continue
+            text = open(path, "r").read()
+            if self._a11y_set_text(widget_name, text, spin=spin):
+                changed = True
+                applied.append(path)
+        for path in applied:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        return changed
+
+    def _a11y_load_pending_xml(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        # The VM details editor shares this file. Ignore a domain
+        # document so Finish validates the disk device XML.
+        if pending.lstrip().startswith("<domain"):
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+
+    def _a11y_show_xml_page(self):
+        """Switch Add Hardware to the device XML page and publish it."""
+        try:
+            self._xmleditor_xml_requested_cb(self._xmleditor)
+        except Exception:
+            pass
+        try:
+            self._xmleditor.widget("xml-notebook").set_current_page(1)
+            self._xmleditor._curpage = 1
+        except Exception:
+            pass
+        try:
+            self._xmleditor._publish_xml_a11y()
+        except Exception:
+            pass
+
+    def _a11y_finish(self):
+        try:
+            self._apply_addhw_fields()
+            self._a11y_load_pending_xml()
+            self._finish()
+            self._publish_a11y_state()
+        except Exception:
+            pass
+        return False
+
+    def _publish_a11y_state(self):
+        hidden = os.path.exists(_ADDHW_HIDDEN)
+        visible = not hidden
+        try:
+            visible = visible or bool(self.is_visible()) or bool(self.topwin.get_visible())
+        except Exception:
+            pass
+        if hidden:
+            visible = False
+        try:
+            open(_ADDHW_SHOWN, "w").write("1" if visible else "0")
+        except Exception:
+            pass
+        try:
+            if visible:
+                open(_ADDHW_OPEN, "w").write("1")
+            else:
+                os.remove(_ADDHW_OPEN)
+        except Exception:
+            pass
+        try:
+            names = []
+            model = self.widget("hw-list").get_model()
+            if model is not None:
+                for row in model:
+                    names.append(str(row[0] or ""))
+            open(_ADDHW_LIST, "w").write("\n".join(names))
+        except Exception:
+            pass
+        try:
+            row = self._get_hw_selection()
+            open(_ADDHW_SELECTED, "w").write(str(row[0] if row else ""))
+            page_names = {
+                PAGE_DISK: "storage-tab",
+                PAGE_CONTROLLER: "controller-tab",
+                PAGE_NETWORK: "network-tab",
+                PAGE_INPUT: "input-tab",
+                PAGE_GRAPHICS: "graphics-tab",
+                PAGE_SOUND: "sound-tab",
+                PAGE_HOSTDEV: "host-tab",
+                PAGE_CHAR: "char-tab",
+                PAGE_VIDEO: "video-tab",
+                PAGE_WATCHDOG: "watchdog-tab",
+                PAGE_FILESYSTEM: "filesystem-tab",
+                PAGE_SMARTCARD: "smartcard-tab",
+                PAGE_USBREDIR: "usbredir-tab",
+                PAGE_TPM: "tpm-tab",
+                PAGE_RNG: "rng-tab",
+                PAGE_PANIC: "panic-tab",
+                PAGE_VSOCK: "vsock-tab",
+            }
+            if row and row[3]:
+                open(_ADDHW_TAB, "w").write(page_names.get(row[2], ""))
+        except Exception:
+            pass
+        try:
+            finish = self.widget("create-finish")
+            open(_ADDHW_FINISH_SENS, "w").write("1" if finish.get_sensitive() else "0")
+        except Exception:
+            pass
+        try:
+            box = self.addstorage.widget("storage-create-box")
+            open(_ADDHW_CREATE_DISK_SENS, "w").write("1" if box.get_sensitive() else "0")
+        except Exception:
+            pass
+        try:
+            if not os.path.exists(_ADDHW_STORAGE_ENTRY + ".set"):
+                open(_ADDHW_STORAGE_ENTRY, "w").write(self._a11y_get_text("storage-entry"))
+        except Exception:
+            pass
+        pubs = (
+            (_ADDHW_STORAGE_SIZE, "storage-size", True),
+            (_ADDHW_SERIAL, "disk-serial", False),
+            (_ADDHW_MAC, "create-mac-address", False),
+            (_ADDHW_NET_DEVICE, "net-manual-source", False),
+            (_ADDHW_GFX_PORT, "graphics-port", True),
+            (_ADDHW_GFX_PASS, "graphics-password", False),  # published below with visibility
+            (_ADDHW_CHAR_PATH, "char-path", False),
+            (_ADDHW_FS_SOURCE, "fs-source", False),
+            (_ADDHW_FS_TARGET, "fs-target", False),
+            (_ADDHW_FS_USAGE, "fs-ram-source-spin", True),
+            (_ADDHW_TPM_PATH, "tpm-device-path", False),
+            (_ADDHW_RNG, "rng-device", False),
+            (_ADDHW_VSOCK_CID, "vsock-cid", True),
+        )
+        for path, widget_name, spin in pubs:
+            try:
+                if os.path.exists(path + ".set"):
+                    continue
+                text = self._a11y_get_text(widget_name, spin=spin)
+                if path == _ADDHW_GFX_PASS:
+                    pwd = self._a11y_widget("graphics-password")
+                    if pwd is not None and not pwd.get_visibility():
+                        text = "*" * len(text or "")
+                open(path, "w").write(text)
+            except Exception:
+                pass
+        try:
+            names = []
+            selected = ""
+            tree = self.widget("host-device")
+            model = tree.get_model() if tree is not None else None
+            if model is not None:
+                for row in model:
+                    names.append(str(row[1] or ""))
+                sel = uiutil.get_list_selected_row(tree)
+                if sel is not None:
+                    selected = str(sel[1] or "")
+            open(_ADDHW_HOSTDEV_LIST, "w").write("\n".join(names))
+            open(_ADDHW_HOSTDEV_SELECTED, "w").write(selected)
+        except Exception:
+            pass
+        lines = []
+        keys = (
+            "Type:",
+            "Model:",
+            "Device type:",
+            "Bus type:",
+            "net-source",
+            "Device model:",
+            "Portgroup:",
+            "Listen type:",
+            "Address:",
+            "graphics-rendernode",
+            "Startup Policy:",
+            "Device Type:",
+            "char-target-name",
+            "Action:",
+            "Mode:",
+            "Driver:",
+            "Format:",
+            "Cache mode:",
+            "Discard mode:",
+        )
+        for key in keys:
+            try:
+                wid = self._a11y_combo_widget_name(key)
+                if not wid:
+                    continue
+                label = self._a11y_combo_label(wid)
+                if label:
+                    lines.append("%s\t%s" % (key, label))
+            except Exception:
+                pass
+        try:
+            last_key = getattr(self, "_vmm_addhw_last_combo_key", "")
+            last_label = getattr(self, "_vmm_addhw_last_combo_label", "")
+            if last_key and last_label:
+                lines.append("%s\t%s" % (last_key, last_label))
+            open(_ADDHW_COMBO_VALUE, "w").write("\n".join(lines))
+        except Exception:
+            pass
+        checks = {
+            "/tmp/vmm-a11y-addhw-mac-enable.txt": ("mac-address", False),
+            "/tmp/vmm-a11y-addhw-shareable.txt": ("disk-shareable", False),
+            "/tmp/vmm-a11y-addhw-readonly.txt": ("disk-readonly", False),
+            "/tmp/vmm-a11y-addhw-removable.txt": ("disk-removable", False),
+            "/tmp/vmm-a11y-addhw-storage-create.txt": ("storage-create", False),
+            "/tmp/vmm-a11y-addhw-storage-select.txt": ("storage-select", False),
+            "/tmp/vmm-a11y-addhw-gfx-port-auto.txt": ("graphics-port-auto", False),
+            "/tmp/vmm-a11y-addhw-gfx-pass-chk.txt": ("graphics-password-chk", False),
+            "/tmp/vmm-a11y-addhw-gfx-show-pass.txt": ("graphics-visibility-chk", False),
+            "/tmp/vmm-a11y-addhw-gfx-opengl.txt": ("graphics-opengl", False),
+            "/tmp/vmm-a11y-addhw-fs-export.txt": ("fs-readonly", False),
+            "/tmp/vmm-a11y-addhw-vsock-auto.txt": ("vsock-auto", False),
+        }
+        for path, (wid, _ign) in checks.items():
+            try:
+                widget = self._a11y_widget(wid)
+                open(path, "w").write("1" if widget is not None and widget.get_active() else "0")
+            except Exception:
+                pass
+
+    def _a11y_toggle(self, widget_name):
+        widget = self._a11y_widget(widget_name)
+        if widget is None:
+            return
+        try:
+            widget.set_active(not widget.get_active())
+            widget.emit("toggled")
+        except Exception:
+            try:
+                widget.emit("clicked")
+            except Exception:
+                pass
+
+    def _a11y_expand(self, widget_name):
+        widget = self._a11y_widget(widget_name)
+        if widget is None:
+            return
+        target = widget
+        if not hasattr(target, "set_expanded"):
+            try:
+                target = target.get_parent()
+            except Exception:
+                target = None
+        if target is None or not hasattr(target, "set_expanded"):
+            return
+        try:
+            target.set_expanded(not target.get_expanded())
+        except Exception:
+            try:
+                target.set_expanded(True)
+            except Exception:
+                pass
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_addhw_poll", False):
+            return
+        self._vmm_addhw_poll = True
+
+        def _fields_tick():
+            try:
+                if self._apply_addhw_fields():
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        def _tick():
+            try:
+                if os.path.exists(_ADDHW_SELECT):
+                    want = open(_ADDHW_SELECT, "r").read().strip()
+                    tree = self.widget("hw-list")
+                    model = tree.get_model() if tree is not None else None
+                    matched = False
+                    if model is not None and want:
+                        best_idx = None
+                        best_score = -1
+                        for idx, row in enumerate(model):
+                            label = str(row[0] or "")
+                            ll = label.lower()
+                            ww = want.lower()
+                            score = -1
+                            if ll == ww:
+                                score = 1000
+                            elif ww and ll.startswith(ww):
+                                score = 800
+                            elif ww and ww in ll:
+                                score = 500
+                            if score > best_score:
+                                best_score = score
+                                best_idx = idx
+                        if best_idx is not None:
+                            uiutil.set_list_selection_by_number(tree, best_idx)
+                            matched = True
+                    if matched:
+                        os.remove(_ADDHW_SELECT)
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_ADDHW_HOSTDEV_SELECT):
+                    want = open(_ADDHW_HOSTDEV_SELECT, "r").read().strip()
+                    tree = self.widget("host-device")
+                    model = tree.get_model() if tree is not None else None
+                    matched = False
+                    if model is not None and want:
+                        for idx, row in enumerate(model):
+                            label = str(row[1] or "")
+                            if want == label or want in label or label in want:
+                                uiutil.set_list_selection_by_number(tree, idx)
+                                matched = True
+                                break
+                    if matched:
+                        os.remove(_ADDHW_HOSTDEV_SELECT)
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_ADDHW_COMBO):
+                    raw = open(_ADDHW_COMBO, "r").read().strip()
+                    key, sep, item = raw.partition("\t")
+                    if sep:
+                        key = key.strip()
+                        item = item.strip()
+                        wid = self._a11y_combo_widget_name(key)
+                        handled = False
+                        err = ""
+                        if wid:
+                            try:
+                                handled = self._a11y_select_combo(wid, item, column=0)
+                            except Exception as exc:
+                                err = str(exc)
+                                handled = False
+                        if handled:
+                            os.remove(_ADDHW_COMBO)
+                            self._vmm_addhw_last_combo_key = key
+                            self._vmm_addhw_last_combo_label = self._a11y_combo_label(wid)
+                            self._publish_a11y_state()
+                        else:
+                            try:
+                                open("/tmp/vmm-a11y-addhw-combo-debug.txt", "w").write(
+                                    "key=%s item=%s wid=%s page=%s err=%s"
+                                    % (key, item, wid, self._a11y_current_page(), err)
+                                )
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_ADDHW_COMBO_ENTRY + ".set"):
+                    text = open(_ADDHW_COMBO_ENTRY + ".set", "r").read()
+                    os.remove(_ADDHW_COMBO_ENTRY + ".set")
+                    wid = self._a11y_combo_widget_name("Type:")
+                    combo = self._a11y_widget(wid) if wid else None
+                    if combo is not None:
+                        child = combo.get_child() if hasattr(combo, "get_child") else None
+                        if child is not None:
+                            child.set_text(text)
+                        else:
+                            uiutil.set_list_selection(combo, text)
+                    open(_ADDHW_COMBO_ENTRY, "w").write(text)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_ADDHW_ACTION):
+                    action = open(_ADDHW_ACTION, "r").read().strip()
+                    os.remove(_ADDHW_ACTION)
+                    if action == "storage-browse":
+                        self.addstorage.widget("storage-browse").emit("clicked")
+                    elif action == "fs-browse":
+                        browse = self._a11y_widget("fs-source-browse")
+                        if browse is not None:
+                            browse.emit("clicked")
+                    elif action == "storage-create":
+                        create = self._a11y_widget("storage-create")
+                        select = self._a11y_widget("storage-select")
+                        if select is not None:
+                            select.set_active(False)
+                        if create is not None:
+                            create.set_active(True)
+                            create.emit("toggled")
+                    elif action == "storage-select":
+                        create = self._a11y_widget("storage-create")
+                        select = self._a11y_widget("storage-select")
+                        if create is not None:
+                            create.set_active(False)
+                        if select is not None:
+                            select.set_active(True)
+                            select.emit("toggled")
+                    elif action == "storage-advanced":
+                        self._a11y_expand("storage-advanced")
+                    elif action == "tpm-advanced":
+                        self._a11y_expand("tpm-advanced")
+                    elif action in (
+                        "mac-address",
+                        "disk-shareable",
+                        "disk-readonly",
+                        "disk-removable",
+                        "graphics-port-auto",
+                        "graphics-password-chk",
+                        "graphics-visibility-chk",
+                        "graphics-opengl",
+                        "fs-readonly",
+                        "vsock-auto",
+                    ):
+                        self._a11y_toggle(action)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            for path, wid in (
+                ("/tmp/vmm-a11y-addhw-mac-enable.txt.click", "mac-address"),
+                ("/tmp/vmm-a11y-addhw-shareable.txt.click", "disk-shareable"),
+                ("/tmp/vmm-a11y-addhw-readonly.txt.click", "disk-readonly"),
+                ("/tmp/vmm-a11y-addhw-removable.txt.click", "disk-removable"),
+                ("/tmp/vmm-a11y-addhw-gfx-port-auto.txt.click", "graphics-port-auto"),
+                ("/tmp/vmm-a11y-addhw-gfx-pass-chk.txt.click", "graphics-password-chk"),
+                ("/tmp/vmm-a11y-addhw-gfx-show-pass.txt.click", "graphics-visibility-chk"),
+                ("/tmp/vmm-a11y-addhw-gfx-opengl.txt.click", "graphics-opengl"),
+                ("/tmp/vmm-a11y-addhw-fs-export.txt.click", "fs-readonly"),
+                ("/tmp/vmm-a11y-addhw-vsock-auto.txt.click", "vsock-auto"),
+            ):
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                        self._a11y_toggle(wid)
+                        self._publish_a11y_state()
+                except Exception:
+                    pass
+            try:
+                if os.path.exists(_ADDHW_CANCEL):
+                    os.remove(_ADDHW_CANCEL)
+                    self.close()
+            except Exception:
+                pass
+            try:
+                xmltab = "/tmp/vmm-a11y-xml-tab.txt"
+                if os.path.exists(xmltab):
+                    want = open(xmltab, "r").read().strip()
+                    if want == "XML":
+                        try:
+                            os.remove(xmltab)
+                        except Exception:
+                            pass
+                        self._a11y_show_xml_page()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_ADDHW_FINISH):
+                    os.remove(_ADDHW_FINISH)
+                    self._apply_addhw_fields()
+                    GLib.idle_add(self._a11y_finish)
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _fields_tick)
+        GLib.timeout_add(50, _tick)

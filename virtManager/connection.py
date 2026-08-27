@@ -235,7 +235,7 @@ class vmmConnection(vmmGObject):
         Wait for this object to emit the specified signal. Will not
         block the mainloop.
         """
-        from gi.repository import Gtk
+        from gi.repository import GLib
 
         is_main_thread = threading.current_thread().name == "MainThread"
         start_time = time.time()
@@ -248,8 +248,9 @@ class vmmConnection(vmmGObject):
                 return  # pragma: no cover
 
             if is_main_thread:
-                if Gtk.events_pending():
-                    Gtk.main_iteration_do(False)
+                ctx = GLib.MainContext.default()
+                if ctx.pending():
+                    ctx.iteration(False)
                     continue
 
             time.sleep(0.1)
@@ -495,7 +496,22 @@ class vmmConnection(vmmGObject):
     #################################
 
     def get_vm_by_name(self, name):
-        return self._objects.lookup_object(vmmDomain, name)
+        obj = self._objects.lookup_object(vmmDomain, name)
+        if obj is not None or not name:
+            return obj
+        for vm in self.list_vms():
+            try:
+                if vm.get_name() == name:
+                    return vm
+                title = vm.get_title()
+                if title and title == name:
+                    return vm
+                pretty = vm.get_name_or_title()
+                if pretty and pretty == name:
+                    return vm
+            except Exception:
+                continue
+        return None
 
     def list_vms(self):
         return self._objects.get_objects_for_class(vmmDomain)
@@ -1006,7 +1022,8 @@ class vmmConnection(vmmGObject):
             initial_poll=True,
         )
 
-        self._init_object_event.wait()
+        if not self._init_object_event.wait(timeout=15):
+            log.debug("Timed out waiting for initial objects on %s", self.get_uri())
         self._init_object_event = None
         self._init_object_count = None
 

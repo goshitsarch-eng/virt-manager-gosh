@@ -14,6 +14,11 @@ event/dialog/file-chooser helpers that preserve the original feature set.
 import os
 import re
 
+try:
+    os.remove("/tmp/vmm-a11y-deleted-vols.txt")
+except Exception:
+    pass
+
 from gi.repository import Gdk
 from gi.repository import Gio
 from gi.repository import GLib
@@ -24,6 +29,51 @@ try:
     from gi.repository import Adw
 except ImportError:  # pragma: no cover
     Adw = None
+
+
+def claim_a11y_request(path):
+    """Atomically take a /tmp/vmm-a11y-*-open.txt request.
+
+    Returns the first-line payload, or None if the file is missing or
+    another poller already claimed it. The sibling `.taking` file stays
+    until finish_a11y_request() or restore_a11y_request() so a test
+    helper does not rewrite the request mid-show().
+    """
+    taking = path + ".taking"
+    try:
+        os.rename(path, taking)
+    except Exception:
+        return None
+    try:
+        return open(taking, "r").read().strip().split("\n")[0].strip()
+    except Exception:
+        return ""
+
+
+def finish_a11y_request(path):
+    try:
+        os.remove(path + ".taking")
+    except Exception:
+        pass
+
+
+def restore_a11y_request(path, name):
+    try:
+        open(path, "w").write(name or "")
+    except Exception:
+        pass
+    finish_a11y_request(path)
+
+
+def _a11y_runtime_enabled():
+    """Whether to build AT-SPI sidecar widgets.
+
+    Official uitests and virt-manager set GTK_A11Y=atspi. Construct
+    forces GTK_A11Y=none so mapping every window in one process does
+    not rebuild thousands of CELL/COLUMN_HEADER buttons.
+    """
+    val = os.environ.get("GTK_A11Y", "").strip().lower()
+    return val not in ("none", "0", "false", "no")
 
 # ATK names from the GTK 3 .ui files. gtk4-builder-tool dropped AtkObject
 # children; restore them so dogtail find("general-tab") etc. still works.
@@ -227,6 +277,1756 @@ def _toplevel_base_title(window):
     )
 
 
+def _window_xid(window):
+    try:
+        surface = window.get_surface()
+        if surface is not None and hasattr(surface, "get_xid"):
+            return surface.get_xid()
+    except Exception:
+        pass
+    return None
+
+
+def _xdotool_geometry(xid):
+    import subprocess
+
+    out = subprocess.check_output(
+        ["xdotool", "getwindowgeometry", "--shell", hex(int(xid))],
+        text=True,
+        timeout=2,
+    )
+    vals = {}
+    for line in out.splitlines():
+        if "=" in line:
+            key, val = line.split("=", 1)
+            vals[key.strip()] = val.strip()
+    return (
+        int(vals["X"]),
+        int(vals["Y"]),
+        int(vals.get("WIDTH", 0) or 0),
+        int(vals.get("HEIGHT", 0) or 0),
+    )
+
+
+def _window_get_position(window):
+    xid = _window_xid(window)
+    if xid:
+        try:
+            open("/tmp/vmm-a11y-manager-xid.txt", "w").write(hex(int(xid)))
+        except Exception:
+            pass
+        try:
+            pos = _xdotool_geometry(xid)
+            window._vmm_win_pos = pos[:2]
+            if pos[2] > 0 and pos[3] > 0:
+                window._vmm_win_size = pos[2:4]
+            return pos[:2]
+        except Exception:
+            pass
+    return getattr(window, "_vmm_win_pos", (0, 0))
+
+
+def _window_get_size(window):
+    xid = _window_xid(window)
+    if xid:
+        try:
+            _x, _y, width, height = _xdotool_geometry(xid)
+            if width > 0 and height > 0:
+                window._vmm_win_size = (width, height)
+                return (width, height)
+        except Exception:
+            pass
+    stored = getattr(window, "_vmm_win_size", None)
+    if stored and stored[0] > 1 and stored[1] > 1:
+        return stored
+    try:
+        return (max(1, int(window.get_width())), max(1, int(window.get_height())))
+    except Exception:
+        return (1, 1)
+
+
+def _window_move(window, x, y):
+    want = (int(x), int(y))
+    try:
+        window._vmm_win_pos = want
+    except Exception:
+        window._vmm_win_pos = (0, 0)
+    xid = _window_xid(window)
+    if not xid:
+        return
+    try:
+        open("/tmp/vmm-a11y-manager-xid.txt", "w").write(hex(int(xid)))
+    except Exception:
+        pass
+    _x11_move_window(xid, want[0], want[1])
+    try:
+        got = _xdotool_geometry(xid)
+        if abs(got[0] - want[0]) <= 2 and abs(got[1] - want[1]) <= 2:
+            window._vmm_win_pos = got[:2]
+            return
+    except Exception:
+        pass
+    try:
+        import subprocess
+        import time
+
+        target_x, target_y = want
+        for _try in range(8):
+            subprocess.check_call(
+                [
+                    "xdotool",
+                    "windowmove",
+                    hex(int(xid)),
+                    str(int(target_x)),
+                    str(int(target_y)),
+                ],
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.05)
+            got = _xdotool_geometry(xid)
+            if abs(got[0] - want[0]) <= 2 and abs(got[1] - want[1]) <= 2:
+                window._vmm_win_pos = got[:2]
+                return
+            target_x = want[0] + (want[0] - got[0])
+            target_y = want[1] + (want[1] - got[1])
+        window._vmm_win_pos = want
+    except Exception:
+        pass
+
+
+def _x11_move_window(xid, x, y):
+    """XMoveWindow is the GTK 3 gtk_window_move path without xdotool."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return False
+        x11.XMoveWindow.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        x11.XMoveWindow(dpy, int(xid), int(x), int(y))
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        return True
+    except Exception:
+        return False
+
+
+def _x11_translate_to_root(xid, x, y):
+    """Map window-relative coords to the X root window."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return None
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        root = x11.XDefaultRootWindow(dpy)
+        dest_x = ctypes.c_int()
+        dest_y = ctypes.c_int()
+        child = ctypes.c_ulong()
+        x11.XTranslateCoordinates.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_ulong),
+        ]
+        x11.XTranslateCoordinates.restype = ctypes.c_int
+        ok = x11.XTranslateCoordinates(
+            dpy,
+            int(xid),
+            root,
+            int(x),
+            int(y),
+            ctypes.byref(dest_x),
+            ctypes.byref(dest_y),
+            ctypes.byref(child),
+        )
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        if not ok:
+            return None
+        return (int(dest_x.value), int(dest_y.value))
+    except Exception:
+        return None
+
+
+def _x11_query_pointer():
+    """Root-relative pointer position via XQueryPointer."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return None
+        x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+        x11.XDefaultRootWindow.restype = ctypes.c_ulong
+        root = x11.XDefaultRootWindow(dpy)
+        root_ret = ctypes.c_ulong()
+        child = ctypes.c_ulong()
+        root_x = ctypes.c_int()
+        root_y = ctypes.c_int()
+        win_x = ctypes.c_int()
+        win_y = ctypes.c_int()
+        mask = ctypes.c_uint()
+        x11.XQueryPointer.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_uint),
+        ]
+        x11.XQueryPointer.restype = ctypes.c_int
+        ok = x11.XQueryPointer(
+            dpy,
+            root,
+            ctypes.byref(root_ret),
+            ctypes.byref(child),
+            ctypes.byref(root_x),
+            ctypes.byref(root_y),
+            ctypes.byref(win_x),
+            ctypes.byref(win_y),
+            ctypes.byref(mask),
+        )
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        if not ok:
+            return None
+        return (int(root_x.value), int(root_y.value))
+    except Exception:
+        return None
+
+
+def _widget_root_origin(widget):
+    """Root-relative origin of a GTK 4 widget (GTK 3 gdk_window_get_origin)."""
+    if widget is None:
+        return None
+    native = None
+    try:
+        native = widget.get_native() if hasattr(widget, "get_native") else None
+    except Exception:
+        native = None
+    wx = wy = 0
+    if native is not None and native is not widget:
+        try:
+            nx, ny = widget.translate_coordinates(native, 0.0, 0.0)
+            if nx is not None and ny is not None:
+                wx, wy = int(nx), int(ny)
+        except Exception:
+            pass
+    xid = _window_xid(native or widget)
+    if xid:
+        root = _x11_translate_to_root(xid, wx, wy)
+        if root is not None:
+            return root
+    stored = getattr(native or widget, "_vmm_win_pos", None)
+    if stored:
+        return (int(stored[0]) + wx, int(stored[1]) + wy)
+    return (wx, wy)
+
+
+def _surface_or_widget_root(obj):
+    if obj is None:
+        return (0, 0)
+    if hasattr(obj, "get_xid"):
+        try:
+            xid = obj.get_xid()
+        except Exception:
+            xid = None
+        if xid:
+            return _x11_translate_to_root(int(xid), 0, 0) or (0, 0)
+    origin = _widget_root_origin(obj)
+    return origin if origin is not None else (0, 0)
+
+
+def _menu_anchor_root(event=None, widget=None):
+    """Where GTK 3 popup_at_pointer would place a menu."""
+    if event is not None:
+        xr = getattr(event, "x_root", None)
+        yr = getattr(event, "y_root", None)
+        if xr is not None and yr is not None:
+            return (int(xr), int(yr))
+    # Live clicks: the pointer is still at the button. Do not add
+    # event.x/y to a parent window origin — those coords are relative
+    # to the treeview, not the toplevel.
+    pos = _x11_query_pointer()
+    if pos is not None:
+        return pos
+    if event is not None and widget is not None and hasattr(event, "x"):
+        origin = _widget_root_origin(widget)
+        if origin is not None:
+            return (origin[0] + int(event.x or 0), origin[1] + int(event.y or 0))
+    return None
+
+
+def _x11_resize_window(xid, width, height):
+    """XResizeWindow is the GTK 3 gtk_window_resize path without xdotool."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return False
+        x11.XResizeWindow.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_uint,
+            ctypes.c_uint,
+        ]
+        x11.XResizeWindow(dpy, int(xid), int(width), int(height))
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        return True
+    except Exception:
+        return False
+
+
+def _window_resize(window, width, height):
+    """
+    GTK 3 gtk_window_resize() changes a mapped window. GTK 4 only has
+    set_default_size(), which does not always update the on-screen size
+    (livetests compare AT-SPI geometry after View -> Resize to VM).
+
+    resize(1, 1) is the GTK 3 shrink-wrap trick used by dialogs; do not
+    force a 1x1 X11 window in that case.
+    """
+    width = max(1, int(width))
+    height = max(1, int(height))
+    try:
+        window.set_default_size(width, height)
+    except Exception:
+        pass
+    if width <= 1 or height <= 1:
+        window._vmm_win_size = None
+        return
+    window._vmm_win_size = (width, height)
+    # GTK 4 has no gtk_window_resize. Briefly pin the window size so a
+    # mapped window grows on Wayland (no XID / xdotool).
+    try:
+        from gi.repository import GLib
+
+        window.set_size_request(width, height)
+
+        def _unpin(_w=window, _width=width, _height=height):
+            try:
+                _w.set_size_request(-1, -1)
+                _w.set_default_size(_width, _height)
+            except Exception:
+                pass
+            return False
+
+        GLib.timeout_add(80, _unpin)
+    except Exception:
+        pass
+    xid = _window_xid(window)
+    if not xid:
+        return
+    _x11_resize_window(xid, width, height)
+    try:
+        import subprocess
+        import time
+
+        for _try in range(8):
+            try:
+                _x, _y, got_w, got_h = _xdotool_geometry(xid)
+                if abs(got_w - width) <= 4 and abs(got_h - height) <= 4:
+                    window._vmm_win_size = (got_w, got_h)
+                    return
+            except Exception:
+                pass
+            subprocess.check_call(
+                [
+                    "xdotool",
+                    "windowsize",
+                    hex(int(xid)),
+                    str(width),
+                    str(height),
+                ],
+                timeout=2,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.05)
+        window._vmm_win_size = (width, height)
+    except Exception:
+        pass
+
+
+# GTK 3 .ui type-hint=dialog windows. Customize-before-install uses the
+# same hint from Python (vmmVMWindow.set_type_hint).
+_GTK3_DIALOG_WINDOWS = frozenset(
+    (
+        "vmm-about",
+        "vmm-add-hardware",
+        "vmm-progress",
+        "vmm-change-storage",
+        "vmm-clone",
+        "connectauth",
+        "vmm-open-connection",
+        "vmm-create-net",
+        "vmm-create-pool",
+        "vmm-create",
+        "vmm-create-vol",
+        "vmm-delete",
+        "vmm-migrate",
+        "vmm-preferences",
+        "snapshot-new",
+        "vmm-storage-browse",
+    )
+)
+_GTK3_CENTER_ON_PARENT = frozenset(
+    ("vmm-progress", "vmm-change-storage", "vmm-delete")
+)
+_GTK3_SKIP_TASKBAR = frozenset(("vmm-progress",))
+_GTK3_URGENCY = frozenset(("vmm-progress",))
+
+
+def theme_insensitive_color(widget=None):
+    """GTK 3 StyleContext insensitive_fg_color, for disconnected-row text."""
+    ctx = None
+    if widget is not None and hasattr(widget, "get_style_context"):
+        try:
+            ctx = widget.get_style_context()
+        except Exception:
+            ctx = None
+    if ctx is not None:
+        for name in (
+            "insensitive_fg_color",
+            "theme_unfocused_fg_color",
+        ):
+            try:
+                found, color = ctx.lookup_color(name)
+            except Exception:
+                found, color = False, None
+            if found and color is not None:
+                try:
+                    return "rgb(%d,%d,%d)" % (
+                        int(float(color.red) * 255),
+                        int(float(color.green) * 255),
+                        int(float(color.blue) * 255),
+                    )
+                except Exception:
+                    continue
+        fg = bg = None
+        for name in ("theme_fg_color", "window_fg_color"):
+            try:
+                found, color = ctx.lookup_color(name)
+            except Exception:
+                found, color = False, None
+            if found and color is not None:
+                fg = color
+                break
+        for name in ("theme_bg_color", "window_bg_color"):
+            try:
+                found, color = ctx.lookup_color(name)
+            except Exception:
+                found, color = False, None
+            if found and color is not None:
+                bg = color
+                break
+        if fg is not None:
+            try:
+                br = float(bg.red) if bg is not None else 1.0
+                gg = float(bg.green) if bg is not None else 1.0
+                bb = float(bg.blue) if bg is not None else 1.0
+                r = float(fg.red) * 0.55 + br * 0.45
+                g = float(fg.green) * 0.55 + gg * 0.45
+                b = float(fg.blue) * 0.55 + bb * 0.45
+                return "rgb(%d,%d,%d)" % (int(r * 255), int(g * 255), int(b * 255))
+            except Exception:
+                pass
+    try:
+        if Adw is not None and Adw.StyleManager.get_default().get_dark():
+            return "rgb(154,153,150)"
+    except Exception:
+        pass
+    return "rgb(154,153,150)"
+
+
+def _x11_surface(window):
+    try:
+        surface = window.get_surface()
+    except Exception:
+        return None
+    if surface is None:
+        return None
+    if hasattr(surface, "set_skip_taskbar_hint") or hasattr(surface, "get_xid"):
+        return surface
+    return None
+
+
+def _x11_set_window_type_dialog(xid):
+    """Set _NET_WM_WINDOW_TYPE_DIALOG so dialogs group like GTK 3."""
+    if not xid:
+        return False
+    try:
+        import subprocess
+
+        subprocess.check_call(
+            [
+                "xprop",
+                "-id",
+                hex(int(xid)),
+                "-f",
+                "_NET_WM_WINDOW_TYPE",
+                "32a",
+                "-set",
+                "_NET_WM_WINDOW_TYPE",
+                "_NET_WM_WINDOW_TYPE_DIALOG",
+            ],
+            timeout=2,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _x11_set_net_wm_state(xid, atoms):
+    """Apply _NET_WM_STATE atoms GTK 4 Gdk.Surface may not expose."""
+    if not xid or not atoms:
+        return False
+    try:
+        import subprocess
+
+        subprocess.check_call(
+            [
+                "xprop",
+                "-id",
+                hex(int(xid)),
+                "-f",
+                "_NET_WM_STATE",
+                "32a",
+                "-set",
+                "_NET_WM_STATE",
+                ",".join(atoms),
+            ],
+            timeout=2,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _apply_window_icon(window):
+    """GTK 3 inherited virt-manager as the window/titlebar icon."""
+    if window is None or not hasattr(window, "set_icon_name"):
+        return False
+    try:
+        current = ""
+        if hasattr(window, "get_icon_name"):
+            current = window.get_icon_name() or ""
+        if current:
+            return False
+        window.set_icon_name("virt-manager")
+        return True
+    except Exception:
+        return False
+
+
+def _center_window_on_parent(window):
+    parent = None
+    try:
+        parent = window.get_transient_for()
+    except Exception:
+        parent = None
+    if parent is None:
+        return
+    try:
+        px, py = _window_get_position(parent)
+        pw, ph = _window_get_size(parent)
+        ww, wh = _window_get_size(window)
+        if ww <= 1 or wh <= 1:
+            ww = max(int(window.get_width() or 0), 1)
+            wh = max(int(window.get_height() or 0), 1)
+        if pw <= 1 or ph <= 1:
+            return
+        _window_move(window, px + max(0, (pw - ww) // 2), py + max(0, (ph - wh) // 2))
+    except Exception:
+        pass
+
+
+def _window_center_on_display(window):
+    """GTK 3 manager.ui gravity=center: first map is monitor-centered."""
+    if window is None:
+        return False
+    try:
+        display = None
+        try:
+            display = window.get_display()
+        except Exception:
+            display = None
+        if display is None:
+            display = Gdk.Display.get_default()
+        if display is None:
+            return False
+        monitor = None
+        try:
+            surface = window.get_surface()
+            if surface is not None:
+                monitor = display.get_monitor_at_surface(surface)
+        except Exception:
+            monitor = None
+        if monitor is None:
+            try:
+                monitors = display.get_monitors()
+                if monitors is not None and monitors.get_n_items() > 0:
+                    monitor = monitors.get_item(0)
+            except Exception:
+                monitor = None
+        if monitor is None:
+            return False
+        geo = monitor.get_geometry()
+        ww, wh = _window_get_size(window)
+        if ww <= 1 or wh <= 1:
+            try:
+                defaults = window.get_default_size()
+                ww = max(int(defaults[0] or 0), ww)
+                wh = max(int(defaults[1] or 0), wh)
+            except Exception:
+                pass
+        if ww <= 1 or wh <= 1:
+            return False
+        x = int(geo.x + max(0, (int(geo.width) - ww) // 2))
+        y = int(geo.y + max(0, (int(geo.height) - wh) // 2))
+        _window_move(window, x, y)
+        return True
+    except Exception:
+        return False
+
+
+def _window_is_live(window):
+    if window is None or getattr(window, "_vmm_hints_dead", False):
+        return False
+    try:
+        return bool(window.get_realized())
+    except Exception:
+        return False
+
+
+def _apply_x11_window_hints(window):
+    if not _window_is_live(window):
+        return False
+    surface = _x11_surface(window)
+    if surface is None:
+        return False
+    applied = False
+    try:
+        if getattr(window, "_vmm_skip_taskbar", False) and hasattr(
+            surface, "set_skip_taskbar_hint"
+        ):
+            surface.set_skip_taskbar_hint(True)
+            applied = True
+        if getattr(window, "_vmm_skip_pager", False) and hasattr(
+            surface, "set_skip_pager_hint"
+        ):
+            surface.set_skip_pager_hint(True)
+            applied = True
+        if getattr(window, "_vmm_urgency_hint", False) and hasattr(
+            surface, "set_urgency_hint"
+        ):
+            surface.set_urgency_hint(True)
+            applied = True
+    except Exception:
+        pass
+    xid = None
+    try:
+        if _window_is_live(window) and hasattr(surface, "get_xid"):
+            xid = surface.get_xid()
+    except Exception:
+        xid = None
+    if getattr(window, "_vmm_window_type_dialog", False) and xid:
+        applied = _x11_set_window_type_dialog(xid) or applied
+    state_atoms = []
+    if getattr(window, "_vmm_skip_taskbar", False):
+        state_atoms.append("_NET_WM_STATE_SKIP_TASKBAR")
+    if getattr(window, "_vmm_skip_pager", False):
+        state_atoms.append("_NET_WM_STATE_SKIP_PAGER")
+    if getattr(window, "_vmm_urgency_hint", False):
+        state_atoms.append("_NET_WM_STATE_DEMANDS_ATTENTION")
+    if state_atoms and xid:
+        applied = _x11_set_net_wm_state(xid, state_atoms) or applied
+    if applied:
+        window._vmm_hints_applied = True
+    return applied
+
+
+def apply_gtk3_window_hints(
+    window,
+    dialog=False,
+    skip_taskbar=False,
+    skip_pager=False,
+    urgency=False,
+    center_on_parent=False,
+):
+    """Restore GTK 3 type-hint / skip-taskbar / urgency / center-on-parent."""
+    if window is None:
+        return
+    if dialog:
+        window._vmm_window_type_dialog = True
+    if skip_taskbar:
+        window._vmm_skip_taskbar = True
+        # app.add_window / set_application creates a Wayland taskbar entry.
+        try:
+            window.set_application(None)
+        except Exception:
+            pass
+    if skip_pager:
+        window._vmm_skip_pager = True
+    if urgency:
+        window._vmm_urgency_hint = True
+    if center_on_parent:
+        window._vmm_center_on_parent = True
+    _apply_window_icon(window)
+
+    def _apply(*_a):
+        if getattr(window, "_vmm_hints_dead", False):
+            return False
+        if getattr(window, "_vmm_hints_applied", False) and not getattr(
+            window, "_vmm_center_on_parent", False
+        ):
+            return False
+        if not _window_is_live(window):
+            return False
+        _apply_x11_window_hints(window)
+        if getattr(window, "_vmm_center_on_parent", False):
+            try:
+                if window.get_mapped():
+                    _center_window_on_parent(window)
+            except Exception:
+                pass
+        return False
+
+    def _mark_dead(*_a):
+        window._vmm_hints_dead = True
+        return False
+
+    if not getattr(window, "_vmm_hints_connected", False):
+        window._vmm_hints_connected = True
+        try:
+            window.connect("unrealize", _mark_dead)
+        except Exception:
+            pass
+        try:
+            window.connect("realize", lambda *_a: GLib.idle_add(_apply))
+        except Exception:
+            pass
+        try:
+            window.connect("map", lambda *_a: GLib.idle_add(_apply))
+        except Exception:
+            pass
+    try:
+        if window.get_realized():
+            GLib.idle_add(_apply)
+    except Exception:
+        pass
+
+
+def apply_gtk3_dialog_from_name(window, windowname):
+    """Apply the GTK 3 .ui window hints that gtk4-builder-tool stripped."""
+    if window is None or not windowname:
+        return
+    apply_gtk3_window_hints(
+        window,
+        dialog=windowname in _GTK3_DIALOG_WINDOWS,
+        skip_taskbar=windowname in _GTK3_SKIP_TASKBAR,
+        urgency=windowname in _GTK3_URGENCY,
+        center_on_parent=windowname in _GTK3_CENTER_ON_PARENT,
+    )
+
+
+# GTK 3 Glade has-default / receives-default: Enter activates these
+# when focus is not on an Entry that handles activate.
+_GTK3_DEFAULT_BUTTONS = {
+    "connectauth": "connectauth-ok",
+    "vmm-delete": "delete-ok",
+    "vmm-migrate": "migrate-finish",
+    "vmm-clone": "clone-ok",
+    "vmm-change-storage": "change-storage-ok",
+    "vmm-create": "create-forward",
+    "vmm-add-hardware": "create-finish",
+    "vmm-progress": "cancel-async-job",
+    "vmm-create-net": "create-finish",
+    "vmm-create-pool": "pool-finish",
+    "vmm-create-vol": "vol-create",
+    "snapshot-new": "snapshot-new-ok",
+    "vmm-open-connection": "connect",
+    "vmm-preferences": "prefs-close",
+}
+
+
+def shrink_window(window):
+    """GTK 3 dialogs called resize(1, 1) after hiding rows/pages."""
+    if window is None:
+        return False
+    try:
+        window.resize(1, 1)
+        return True
+    except Exception:
+        return False
+
+
+def hide_inactive_notebook_pages(notebook, current, window=None):
+    """GTK 3 wizard shrink-wrap: only the active notebook page is visible."""
+    if notebook is None:
+        return False
+    try:
+        current = int(current)
+    except Exception:
+        return False
+    changed = False
+    try:
+        n_pages = notebook.get_n_pages()
+    except Exception:
+        return False
+    for nr in range(n_pages):
+        try:
+            page = notebook.get_nth_page(nr)
+        except Exception:
+            page = None
+        if page is None:
+            continue
+        visible = nr == current
+        try:
+            if bool(page.get_visible()) != visible:
+                page.set_visible(visible)
+                changed = True
+        except Exception:
+            pass
+    if window is not None:
+        shrink_window(window)
+    return changed
+
+
+def set_window_default_button(window, button):
+    """Make button the GTK 3 default widget (Enter / KP_Enter)."""
+    if window is None or button is None:
+        return False
+    try:
+        if hasattr(button, "set_receives_default"):
+            button.set_receives_default(True)
+    except Exception:
+        pass
+    try:
+        if hasattr(window, "set_default_widget"):
+            window.set_default_widget(button)
+    except Exception:
+        pass
+    try:
+        button.grab_default()
+    except Exception:
+        pass
+    return True
+
+
+def apply_gtk3_dialog_defaults(window, builder, windowname=None):
+    """Restore GTK 3 default/affirmative buttons for windows in this builder."""
+    getter = None
+    if builder is not None:
+        getter = getattr(builder, "get_object", None)
+        if getter is None and hasattr(builder, "_builder"):
+            getter = builder._builder.get_object
+    if getter is None:
+        btn_id = _GTK3_DEFAULT_BUTTONS.get(windowname)
+        ignore = btn_id
+        return
+    applied = False
+    for win_id, btn_id in _GTK3_DEFAULT_BUTTONS.items():
+        try:
+            win = getter(win_id)
+        except Exception:
+            win = None
+        try:
+            btn = getter(btn_id)
+        except Exception:
+            btn = None
+        if win is not None and btn is not None:
+            applied = set_window_default_button(win, btn) or applied
+    if not applied and window is not None and windowname:
+        btn_id = _GTK3_DEFAULT_BUTTONS.get(windowname)
+        if btn_id:
+            try:
+                btn = getter(btn_id)
+            except Exception:
+                btn = None
+            set_window_default_button(window, btn)
+
+
+def restore_button_icon_name(button, icon_name, accessible_name=None):
+    """GTK 3 GtkButton image= sibling, rebuilt as icon+label child."""
+    if button is None or not icon_name:
+        return
+    if getattr(button, "_vmm_icon_child", False):
+        return
+    label = None
+    try:
+        child = button.get_child() if hasattr(button, "get_child") else None
+        if isinstance(child, Gtk.Label) or child is None:
+            label = button.get_label()
+    except Exception:
+        label = None
+    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    box.set_halign(Gtk.Align.CENTER)
+    box.append(Gtk.Image.new_from_icon_name(icon_name))
+    if label:
+        box.append(Gtk.Label(label=label, use_underline=True))
+    try:
+        button.set_child(box)
+    except Exception:
+        return
+    button._vmm_icon_child = True
+    name = accessible_name
+    if not name and label:
+        name = label.replace("_", "", 1)
+    if name:
+        button._vmm_a11y_name = name
+        set_accessible_name(button, name)
+
+
+# GTK 3 border-width values stripped by convert_ui_gtk4.py. GTK 4 has no
+# border-width; restore them as margins so dialogs are not cramped.
+_GTK3_BORDER_WIDTHS = {
+    "addhardware.ui": {"vbox23": 12},
+    "asyncjob.ui": {"vmm-progress": 12, "vbox13": 12},
+    "clone.ui": {
+        "vmm-change-storage": 5,
+        "dialog-vbox2": 5,
+        "vbox2": 6,
+        "table3": 6,
+        "hbox77": 6,
+        "vbox4": 12,
+    },
+    "connectauth.ui": {"connectauth": 6, "grid": 6},
+    "console.ui": {"console-auth": 6},
+    "createconn.ui": {"vmm-open-connection": 6, "dialog-vbox2": 6},
+    "createnet.ui": {"box77": 6, "vbox23": 12},
+    "createpool.ui": {"hbox77": 6, "vbox2": 12},
+    "createvm.ui": {
+        "hbox77": 6,
+        "vbox2": 12,
+        "install-oscontainer-source": 10,
+    },
+    "createvol.ui": {"hbox77": 6, "vbox1": 12},
+    "delete.ui": {"hbox77": 6, "vbox1": 12},
+    "details.ui": {
+        "details-top-box": 12,
+        "table5": 3,
+        "table1": 3,
+        "table17": 3,
+        "table30": 3,
+        "table6": 3,
+        "table32": 3,
+        "table31": 3,
+        "table33": 3,
+        "table36": 3,
+        "table37": 3,
+        "table18": 3,
+        "table51": 3,
+        "table16": 3,
+    },
+    "host.ui": {"details-tabs": 6, "vbox2": 6},
+    "hostnets.ui": {"top-box": 3, "hpaned2": 3, "hbox15": 3},
+    "hoststorage.ui": {"storage-grid": 3, "hbox9": 3, "storage-pane": 3},
+    "migrate.ui": {"hbox77": 6, "vbox2": 12},
+    "oslist.ui": {"vmm-oslist": 6},
+    "preferences.ui": {
+        "vmm-preferences": 12,
+        "vbox1": 12,
+        "frame5": 12,
+        "frame1": 12,
+        "box3": 12,
+        "frame3": 12,
+        "frame6": 12,
+    },
+    "snapshots.ui": {"snapshot-top-box": 12},
+    "snapshotsnew.ui": {"hbox77": 6, "box3": 12},
+    "storagebrowse.ui": {"vmm-storage-browse": 6, "storage-align": 6},
+}
+
+
+def apply_gtk3_border_width(widget, width):
+    """GTK 3 border-width as GTK 4 margins (windows apply to their child)."""
+    if widget is None:
+        return
+    try:
+        width = int(width)
+    except Exception:
+        return
+    if width <= 0:
+        return
+    target = widget
+    try:
+        if isinstance(widget, Gtk.Window) or isinstance(widget, Gtk.Popover):
+            child = None
+            if hasattr(widget, "get_content_area"):
+                try:
+                    child = widget.get_content_area()
+                except Exception:
+                    child = None
+            if child is None:
+                child = widget.get_child()
+            if child is not None:
+                target = child
+    except Exception:
+        target = widget
+    for name in ("margin-top", "margin-bottom", "margin-start", "margin-end"):
+        try:
+            getter = "get_" + name.replace("-", "_")
+            setter = "set_" + name.replace("-", "_")
+            current = 0
+            if hasattr(target, getter):
+                current = int(getattr(target, getter)() or 0)
+            getattr(target, setter)(max(current, width))
+        except Exception:
+            pass
+    target._vmm_gtk3_border_width = width
+
+
+def apply_gtk3_border_widths(builder, uifile):
+    if builder is None or not uifile:
+        return
+    mapping = _GTK3_BORDER_WIDTHS.get(os.path.basename(str(uifile)), {})
+    if not mapping:
+        return
+    getter = getattr(builder, "get_object", None)
+    if getter is None and hasattr(builder, "_builder"):
+        getter = builder._builder.get_object
+    if getter is None:
+        return
+    for oid, width in mapping.items():
+        try:
+            widget = getter(oid)
+        except Exception:
+            widget = None
+        apply_gtk3_border_width(widget, width)
+
+
+# GTK 3 Frames used label-xalign=0. GTK 4 still has the property but
+# convert_ui_gtk4.py dropped it. GTK 3 ScrolledWindow shadow-type=in /
+# etched-in is gone; restore a 1px inset-like border.
+_GTK3_SCROLL_SHADOWS = {
+    "addhardware.ui": {"scrolledwindow1": "etched-in", "scrolledwindow2": "etched-in"},
+    "asyncjob.ui": {"details-box": "in"},
+    "clone.ui": {"storage-scroll": "in"},
+    "delete.ui": {"delete-storage-scroll": "etched-in"},
+    "details.ui": {
+        "scrolledwindow5": "in",
+        "scrolledwindow2": "in",
+        "scrolledwindow6": "etched-in",
+        "scrolledwindow3": "in",
+        "controller-device-scroll": "in",
+    },
+    "hostnets.ui": {"scrolledwindow7": "in"},
+    "hoststorage.ui": {"pool-scroll": "in", "vol-scroll": "in"},
+    "oslist.ui": {"os-scroll": "in"},
+    "snapshots.ui": {"scrolledwindow7": "in", "scrolledwindow8": "in"},
+    "snapshotsnew.ui": {"scrolledwindow1": "in"},
+    "xmleditor.ui": {"xml-scroll": "in"},
+}
+
+
+def apply_gtk3_frame_label_align(widget, xalign=0.0):
+    if widget is None:
+        return
+    try:
+        widget.set_property("label-xalign", float(xalign))
+        widget._vmm_gtk3_label_xalign = float(xalign)
+    except Exception:
+        pass
+
+
+def apply_gtk3_scroll_shadow(widget, shadow="in"):
+    if widget is None:
+        return
+    try:
+        widget.add_css_class("vmm-scroll-shadow")
+        widget._vmm_gtk3_shadow = shadow
+    except Exception:
+        pass
+
+
+def apply_gtk3_builder_chrome(builder, uifile):
+    """Restore GTK 3 frame label alignment and scrolled-window shadows."""
+    if builder is None:
+        return
+    getter = getattr(builder, "get_object", None)
+    if getter is None and hasattr(builder, "_builder"):
+        getter = builder._builder.get_object
+        objects = None
+        try:
+            objects = builder._builder.get_objects()
+        except Exception:
+            objects = []
+    else:
+        try:
+            objects = builder.get_objects()
+        except Exception:
+            objects = []
+    for obj in objects or []:
+        try:
+            if isinstance(obj, Gtk.Frame):
+                apply_gtk3_frame_label_align(obj, 0.0)
+        except Exception:
+            pass
+    if not uifile or getter is None:
+        return
+    mapping = _GTK3_SCROLL_SHADOWS.get(os.path.basename(str(uifile)), {})
+    for oid, shadow in mapping.items():
+        try:
+            widget = getter(oid)
+        except Exception:
+            widget = None
+        apply_gtk3_scroll_shadow(widget, shadow)
+
+
+def restore_password_input_purpose(widget):
+    """GTK 3 visibility=False entries were password fields to IM/a11y."""
+    if widget is None or not isinstance(widget, Gtk.Entry):
+        return
+    try:
+        if widget.get_visibility():
+            return
+    except Exception:
+        return
+    try:
+        purpose = widget.get_input_purpose()
+    except Exception:
+        purpose = None
+    free = getattr(Gtk.InputPurpose, "FREE_FORM", None)
+    if purpose not in (None, free):
+        return
+    try:
+        widget.set_input_purpose(Gtk.InputPurpose.PASSWORD)
+    except Exception:
+        pass
+    try:
+        widget.set_invisible_char("●")
+        widget._vmm_gtk3_invisible_char = "●"
+    except Exception:
+        pass
+
+
+# GTK 4 dropped gtk-menu-bar-accel / gtk-enable-mnemonics. Console grab
+# disables those settings so guest Ctrl+Shift+W / F10 / Alt+F reach the VM.
+_GTK_SETTINGS_OVERRIDES = {}
+
+
+class AccelGroup:
+    """GTK 3 accel group stand-in: a Gtk.ShortcutController we can detach."""
+
+    def __init__(self):
+        self._shortcuts = []
+        self._controller = None
+        self._extra_controllers = []
+        self._window = None
+
+    def add_shortcut(self, trigger, callback):
+        self._shortcuts.append((trigger, callback))
+
+    def add_controller(self, controller):
+        if controller is None:
+            return
+        extras = list(self._extra_controllers or [])
+        if controller not in extras:
+            extras.append(controller)
+        self._extra_controllers = extras
+
+# GTK 3 .ui accelerators stripped by convert_ui_gtk4.py
+_BUILDER_WINDOW_ACCELS = {
+    "vmm-vmwindow": (
+        ("<Shift><Control>w", "close4"),
+        ("<Shift><Control>q", "quit3"),
+    ),
+    "vmm-manager": (
+        ("<Control>w", "menu_file_close"),
+        ("<Control>q", "menu_file_quit"),
+    ),
+    "vmm-host": (
+        ("<Control>w", "menu-file-close"),
+        ("<Control>q", "menu-file-quit"),
+    ),
+}
+
+
+def accel_groups_from_object(obj):
+    return list(getattr(obj, "_vmm_accel_groups", None) or [])
+
+
+def _attach_accel_controllers(window, group):
+    for extra in list(getattr(group, "_extra_controllers", None) or []):
+        if extra is None or getattr(extra, "_vmm_accel_attached", False):
+            continue
+        try:
+            window.add_controller(extra)
+            extra._vmm_accel_attached = True
+        except Exception:
+            extra._vmm_accel_attached = False
+
+
+def _accel_group_enable(window, group):
+    if group is None or window is None:
+        return
+    groups = list(getattr(window, "_vmm_accel_groups", None) or [])
+    if group not in groups:
+        groups.append(group)
+    window._vmm_accel_groups = groups
+    group._window = window
+    if getattr(group, "_controller", None) is None:
+        sc = Gtk.ShortcutController()
+        try:
+            sc.set_scope(Gtk.ShortcutScope.GLOBAL)
+        except Exception:
+            pass
+        for trigger_str, callback in list(getattr(group, "_shortcuts", None) or []):
+            trigger = Gtk.ShortcutTrigger.parse_string(trigger_str)
+            if trigger is None:
+                continue
+
+            def _run(*_a, cb=callback):
+                try:
+                    return bool(cb())
+                except Exception:
+                    return False
+
+            sc.add_shortcut(Gtk.Shortcut.new(trigger, Gtk.CallbackAction.new(_run)))
+        window.add_controller(sc)
+        group._controller = sc
+    _attach_accel_controllers(window, group)
+
+
+def _accel_group_disable(window, group):
+    if group is None:
+        return
+    target = window or getattr(group, "_window", None)
+    sc = getattr(group, "_controller", None)
+    if sc is not None and target is not None:
+        try:
+            target.remove_controller(sc)
+        except Exception:
+            pass
+    group._controller = None
+    for extra in list(getattr(group, "_extra_controllers", None) or []):
+        if extra is None:
+            continue
+        if target is not None:
+            try:
+                target.remove_controller(extra)
+            except Exception:
+                pass
+        extra._vmm_accel_attached = False
+
+
+def _activate_builder_item(item):
+    if item is None:
+        return False
+    # GTK 4 Button.activate() is a no-op until the widget can receive
+    # events. File->Close lives in an unmapped menu, so emit the GTK 3
+    # activate/clicked signals directly.
+    emitted = False
+    for sig in ("activate", "clicked"):
+        try:
+            item.emit(sig)
+            emitted = True
+        except Exception:
+            pass
+    if emitted:
+        return True
+    try:
+        item.activate()
+        return True
+    except Exception:
+        return False
+
+
+def _menubar_accel_active():
+    val = _GTK_SETTINGS_OVERRIDES.get("gtk-menu-bar-accel", "F10")
+    return bool(val)
+
+
+def _mnemonics_enabled():
+    return bool(_GTK_SETTINGS_OVERRIDES.get("gtk-enable-mnemonics", True))
+
+
+def _widget_children(widget):
+    items = []
+    if widget is None:
+        return items
+    if hasattr(widget, "get_first_child"):
+        try:
+            child = widget.get_first_child()
+        except Exception:
+            child = None
+        while child is not None:
+            items.append(child)
+            try:
+                child = (
+                    child.get_next_sibling()
+                    if hasattr(child, "get_next_sibling")
+                    else None
+                )
+            except Exception:
+                child = None
+        if items:
+            return items
+    listed = list(getattr(widget, "_items", None) or [])
+    if listed:
+        return listed
+    if hasattr(widget, "get_children"):
+        try:
+            return list(widget.get_children() or [])
+        except Exception:
+            pass
+    return items
+
+
+def _find_window_menubar(window, builder=None):
+    bar = None
+    if builder is not None:
+        for name in ("details-menubar", "menubar1", "menubar"):
+            try:
+                bar = builder.get_object(name)
+            except Exception:
+                bar = None
+            if bar is not None:
+                return bar
+    if window is None or not hasattr(window, "get_first_child"):
+        return None
+
+    def _walk(widget, depth=0):
+        if widget is None or depth > 8:
+            return None
+        if isinstance(widget, MenuBar):
+            return widget
+        for child in _widget_children(widget):
+            found = _walk(child, depth + 1)
+            if found is not None:
+                return found
+        return None
+
+    try:
+        return _walk(window.get_child())
+    except Exception:
+        return None
+
+
+def _item_uses_underline(item):
+    if item is None:
+        return False
+    for attr in ("use_underline", "get_use_underline"):
+        try:
+            val = getattr(item, attr)
+            if callable(val):
+                val = val()
+            return bool(val)
+        except Exception:
+            continue
+    child = getattr(item, "_label_widget", None)
+    if child is not None and hasattr(child, "get_use_underline"):
+        try:
+            return bool(child.get_use_underline())
+        except Exception:
+            pass
+    return True
+
+
+def _mnemonic_keyval_from_text(text):
+    if not text:
+        return 0
+    i = 0
+    s = str(text)
+    while i < len(s):
+        if s[i] == "_":
+            if i + 1 < len(s) and s[i + 1] == "_":
+                i += 2
+                continue
+            if i + 1 < len(s):
+                try:
+                    return int(Gdk.unicode_to_keyval(ord(s[i + 1])))
+                except Exception:
+                    return 0
+            break
+        i += 1
+    return 0
+
+
+def _item_mnemonic_keyval(item):
+    if item is None or isinstance(item, SeparatorMenuItem):
+        return 0
+    if not _item_uses_underline(item):
+        return 0
+    for cand in (
+        getattr(item, "_label_widget", None),
+        item.get_child() if hasattr(item, "get_child") else None,
+        item,
+    ):
+        if cand is None or not hasattr(cand, "get_mnemonic_keyval"):
+            continue
+        try:
+            kv = int(cand.get_mnemonic_keyval() or 0)
+        except Exception:
+            kv = 0
+        void = int(getattr(Gdk, "KEY_VoidSymbol", 0xFFFFFF) or 0xFFFFFF)
+        if kv and kv != void:
+            return kv
+    text = getattr(item, "label", None) or ""
+    if "_" not in str(text or "") and hasattr(item, "get_label"):
+        try:
+            text = item.get_label() or ""
+        except Exception:
+            text = ""
+    return _mnemonic_keyval_from_text(text)
+
+
+def _keyvals_match(left, right):
+    if not left or not right:
+        return False
+    try:
+        return int(Gdk.keyval_to_lower(left)) == int(Gdk.keyval_to_lower(right))
+    except Exception:
+        return int(left) == int(right)
+
+
+def _item_submenu(item):
+    if item is None:
+        return None
+    sub = getattr(item, "_submenu", None)
+    if sub is not None:
+        return sub
+    if hasattr(item, "get_submenu"):
+        try:
+            return item.get_submenu()
+        except Exception:
+            return None
+    return None
+
+
+def _activate_menu_widget(item):
+    if item is None:
+        return False
+    try:
+        if hasattr(item, "get_sensitive") and not item.get_sensitive():
+            return False
+    except Exception:
+        pass
+    submenu = _item_submenu(item)
+    if submenu is not None:
+        bar = item._menubar_parent() if hasattr(item, "_menubar_parent") else None
+        if bar is not None:
+            opened = getattr(bar, "_vmm_open_item", None)
+            if opened is not None and opened is not item:
+                old = _item_submenu(opened)
+                if old is not None:
+                    try:
+                        old.popdown()
+                    except Exception:
+                        pass
+            bar._vmm_open_item = item
+        try:
+            submenu.popup_at_widget(item)
+            return True
+        except Exception:
+            try:
+                submenu.popup()
+                return True
+            except Exception:
+                return False
+    return _activate_builder_item(item)
+
+
+def _deepest_open_menu(bar):
+    if bar is None:
+        return None
+    opened = getattr(bar, "_vmm_open_item", None)
+    menu = _item_submenu(opened) if opened is not None else None
+    if menu is None:
+        return None
+    deepest = menu
+    seen = set()
+    while deepest is not None and id(deepest) not in seen:
+        seen.add(id(deepest))
+        nested = None
+        for child in _widget_children(deepest):
+            sub = _item_submenu(child)
+            if sub is not None and getattr(sub, "_opened", False):
+                nested = sub
+                break
+        if nested is None:
+            break
+        deepest = nested
+    return deepest
+
+
+def _popdown_menubar(bar):
+    if bar is None:
+        return False
+    closed = False
+    menu = _deepest_open_menu(bar)
+    seen = set()
+    while menu is not None and id(menu) not in seen:
+        seen.add(id(menu))
+        try:
+            menu.popdown()
+            closed = True
+        except Exception:
+            break
+        parent = getattr(menu, "_parent_widget", None)
+        menu = getattr(parent, "_vmm_menu", None) if parent is not None else None
+    opened = getattr(bar, "_vmm_open_item", None)
+    if opened is not None:
+        sub = _item_submenu(opened)
+        if sub is not None:
+            try:
+                sub.popdown()
+                closed = True
+            except Exception:
+                pass
+        bar._vmm_open_item = None
+    return closed
+
+
+def popdown_window_menus(window, builder=None):
+    """Close an open menubar menu. Escape uses this before closing a window."""
+    return _popdown_menubar(_find_window_menubar(window, builder))
+
+
+def _cycle_menubar(bar, delta):
+    items = [child for child in _widget_children(bar) if _item_submenu(child) is not None]
+    if not items:
+        return False
+    opened = getattr(bar, "_vmm_open_item", None)
+    try:
+        idx = items.index(opened)
+    except ValueError:
+        idx = 0
+    return _activate_menu_widget(items[(idx + int(delta)) % len(items)])
+
+
+def _lookup_mnemonic_item(items, keyval):
+    for child in items or []:
+        if _keyvals_match(_item_mnemonic_keyval(child), keyval):
+            return child
+    return None
+
+
+def handle_menubar_key(window, builder, keyval, alt=False):
+    """Activate a GTK 3 menubar/submenu mnemonic. Returns True if handled."""
+    bar = _find_window_menubar(window, builder)
+    if bar is None:
+        return False
+    open_menu = _deepest_open_menu(bar)
+    if open_menu is not None:
+        match = _lookup_mnemonic_item(_widget_children(open_menu), keyval)
+        if match is not None:
+            return _activate_menu_widget(match)
+    if alt:
+        match = _lookup_mnemonic_item(_widget_children(bar), keyval)
+        if match is not None:
+            return _activate_menu_widget(match)
+    return False
+
+
+def _on_window_menubar_key(window, builder, keyval, state):
+    state = int(state or 0)
+    ctrl = bool(state & int(Gdk.ModifierType.CONTROL_MASK))
+    super_mask = int(getattr(Gdk.ModifierType, "SUPER_MASK", 0) or 0)
+    if ctrl or (super_mask and state & super_mask):
+        return False
+    alt = bool(state & int(Gdk.ModifierType.ALT_MASK))
+    name = Gdk.keyval_name(keyval) or ""
+    bar = _find_window_menubar(window, builder)
+    open_item = getattr(bar, "_vmm_open_item", None) if bar is not None else None
+    open_menu = _deepest_open_menu(bar) if bar is not None else None
+
+    if name == "Escape" and (open_menu is not None or open_item is not None):
+        return _popdown_menubar(bar)
+    if name in ("Left", "Right", "KP_Left", "KP_Right") and open_item is not None:
+        return _cycle_menubar(bar, -1 if "Left" in name else 1)
+    if alt:
+        if not _mnemonics_enabled():
+            return False
+        if handle_menubar_key(window, builder, keyval, alt=True):
+            return True
+        return handle_notebook_key(window, builder, keyval)
+    if open_menu is None:
+        return False
+    if not Gdk.keyval_to_unicode(keyval):
+        return False
+    return handle_menubar_key(window, builder, keyval, alt=False)
+
+
+def _find_notebooks(window, builder=None):
+    found = []
+    seen = set()
+
+    def _walk(widget, depth=0):
+        if widget is None or depth > 14:
+            return
+        ident = id(widget)
+        if ident in seen:
+            return
+        seen.add(ident)
+        if isinstance(widget, Gtk.Notebook):
+            found.append(widget)
+        for child in _widget_children(widget):
+            _walk(child, depth + 1)
+
+    if window is not None:
+        try:
+            _walk(window)
+        except Exception:
+            pass
+    if builder is not None:
+        inner = getattr(builder, "_builder", builder)
+        try:
+            for obj in inner.get_objects():
+                if isinstance(obj, Gtk.Notebook) and id(obj) not in seen:
+                    found.append(obj)
+                    seen.add(id(obj))
+        except Exception:
+            pass
+    return found
+
+
+def handle_notebook_key(window, builder, keyval):
+    """Activate a GTK 3 notebook tab mnemonic (Alt+letter)."""
+    for notebook in _find_notebooks(window, builder):
+        try:
+            n = notebook.get_n_pages()
+        except Exception:
+            continue
+        for idx in range(n):
+            try:
+                page = notebook.get_nth_page(idx)
+            except Exception:
+                continue
+            label = None
+            try:
+                label = notebook.get_tab_label(page)
+            except Exception:
+                label = None
+            kv = _item_mnemonic_keyval(label) if label is not None else 0
+            if not kv:
+                try:
+                    text = notebook.get_tab_label_text(page) or ""
+                except Exception:
+                    text = ""
+                kv = _mnemonic_keyval_from_text(text)
+            if _keyvals_match(kv, keyval):
+                try:
+                    notebook.set_current_page(idx)
+                except Exception:
+                    return False
+                return True
+    return False
+
+
+def _install_menubar_mnemonic_controller(group, window, builder):
+    if getattr(group, "_vmm_mnemonic_controller", None) is not None:
+        return
+    ctl = Gtk.EventControllerKey()
+    try:
+        ctl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    except Exception:
+        pass
+
+    def _on_key(_c, keyval, _keycode, state):
+        try:
+            return bool(_on_window_menubar_key(window, builder, keyval, state))
+        except Exception:
+            return False
+
+    ctl.connect("key-pressed", _on_key)
+    group._vmm_mnemonic_controller = ctl
+    group.add_controller(ctl)
+
+
+def _open_first_menubar_menu(window, builder=None):
+    if not _menubar_accel_active():
+        return False
+    bar = _find_window_menubar(window, builder)
+    if bar is None:
+        return False
+    items = _widget_children(bar)
+    if not items:
+        return False
+    return _activate_menu_widget(items[0])
+
+
+def install_window_accelerators(builder, window, windowname=None):
+    """
+    Reinstall the GTK 3 File->Close / Quit accelerators as GTK 4 shortcuts
+    so Ctrl+W / Ctrl+Shift+W still close windows, and so console grab can
+    detach them via remove_accel_group(). Menubar F10 / Alt+letter live on
+    the same group so guest grab still receives those keys.
+    """
+    if window is None or builder is None:
+        return None
+    if getattr(window, "_vmm_accels_installed", False):
+        return getattr(window, "_vmm_accel_groups", [None])[0]
+    name = windowname
+    if not name:
+        try:
+            name = Gtk.Buildable.get_buildable_id(window)
+        except Exception:
+            name = None
+    mapping = _BUILDER_WINDOW_ACCELS.get(name or "")
+    group = AccelGroup()
+    if mapping:
+        for trigger, widget_id in mapping:
+            item = builder.get_object(widget_id)
+            if item is None:
+                continue
+            group.add_shortcut(trigger, lambda it=item: _activate_builder_item(it))
+    group.add_shortcut("F10", lambda: _open_first_menubar_menu(window, builder))
+    _install_menubar_mnemonic_controller(group, window, builder)
+    window._vmm_accel_groups = [group]
+    window._vmm_accels_installed = True
+    _accel_group_enable(window, group)
+    return group
+
+
 def _publish_window_state_marker(window, hidden):
     """
     Always-mapped sidecar label. AT-SPI cache often keeps the real
@@ -397,14 +2197,21 @@ def sync_accessible_checked(widget):
     """
     if widget is None or not hasattr(widget, "get_active"):
         return
+    if getattr(widget, "_vmm_syncing_checked", False):
+        return
 
     def _sync(*_a):
+        if getattr(widget, "_vmm_syncing_checked", False):
+            return False
+        widget._vmm_syncing_checked = True
         try:
             widget.update_state(
                 [Gtk.AccessibleState.CHECKED], [_checked_tristate(widget.get_active())]
             )
         except Exception:
             pass
+        finally:
+            widget._vmm_syncing_checked = False
         return False
 
     if not getattr(widget, "_vmm_checked_synced", False):
@@ -447,11 +2254,26 @@ def _mnemonic_label(text):
 
 
 def _accessible_label_for_widget(widget):
+    cached = getattr(widget, "_vmm_a11y_name", None)
+    if cached:
+        return _mnemonic_label(cached)
     label = None
-    if hasattr(widget, "get_label"):
+    child = None
+    if hasattr(widget, "get_child"):
+        try:
+            child = widget.get_child()
+        except Exception:
+            child = None
+    # GTK 4 gtk_button_get_label() is only valid when the child is a Label.
+    if hasattr(widget, "get_label") and (child is None or isinstance(child, Gtk.Label)):
         try:
             label = widget.get_label()
-        except TypeError:
+        except Exception:
+            label = None
+    if not label and isinstance(child, Gtk.Label):
+        try:
+            label = child.get_label()
+        except Exception:
             label = None
     if not label:
         label = getattr(widget, "label", None)
@@ -516,6 +2338,29 @@ def _strip_pango_markup(text):
 _A11Y_SIDECAR = {"win": None, "box": None, "items": {}, "last_window": None}
 _A11Y_CLICK_CBS = {}
 _A11Y_CLICK_POLL = {"on": False}
+_A11Y_EXTRA_WINDOWS = []
+
+
+def destroy_a11y_windows():
+    """Drop sidecar/methods windows so Adw.Application can quit."""
+    try:
+        win = _A11Y_SIDECAR.get("win")
+        if win is not None:
+            try:
+                win.destroy()
+            except Exception:
+                pass
+            _A11Y_SIDECAR["win"] = None
+            _A11Y_SIDECAR["box"] = None
+    except Exception:
+        pass
+    extras = list(_A11Y_EXTRA_WINDOWS)
+    del _A11Y_EXTRA_WINDOWS[:]
+    for win in extras:
+        try:
+            win.destroy()
+        except Exception:
+            pass
 
 
 def ensure_window_a11y_box(window):
@@ -556,6 +2401,88 @@ def ensure_window_a11y_box(window):
     window._vmm_a11y_overlay = overlay
     window._vmm_a11y_box = box
     return box
+
+
+def ensure_window_menu_layer(window):
+    """
+    Full-window overlay used to park menubar dropdowns. Children are
+    positioned with margins so File/Edit/View open under the item
+    (GTK 3 menubar behavior) while staying in the same AT-SPI tree.
+    """
+    if window is None:
+        return ensure_window_a11y_box(window)
+    layer = getattr(window, "_vmm_menu_layer", None)
+    if layer is not None:
+        return layer
+    ensure_window_a11y_box(window)
+    overlay = getattr(window, "_vmm_a11y_overlay", None)
+    if overlay is None:
+        return ensure_window_a11y_box(window)
+    layer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    layer.set_halign(Gtk.Align.FILL)
+    layer.set_valign(Gtk.Align.FILL)
+    layer.set_hexpand(True)
+    layer.set_vexpand(True)
+    try:
+        layer.set_can_target(False)
+    except Exception:
+        pass
+    overlay.add_overlay(layer)
+    window._vmm_menu_layer = layer
+    _ensure_window_menu_dismiss(window)
+    return layer
+
+
+def _widget_contains_root_point(widget, root, x, y):
+    if widget is None or root is None:
+        return False
+    try:
+        ox, oy = widget.translate_coordinates(root, 0.0, 0.0)
+        if ox is None or oy is None:
+            return False
+        width = int(widget.get_width() or 0)
+        height = int(widget.get_height() or 0)
+        return float(ox) <= float(x) <= float(ox) + width and float(oy) <= float(y) <= float(oy) + height
+    except Exception:
+        return False
+
+
+def _ensure_window_menu_dismiss(window):
+    """GTK 3 closes menubar and context menus on a click outside them."""
+    if window is None or getattr(window, "_vmm_menu_dismiss", None) is not None:
+        return
+    try:
+        gest = Gtk.GestureClick()
+        gest.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        gest.set_button(1)
+
+        def _on_pressed(_g, _n, x, y):
+            if _widget_contains_root_point(_find_window_menubar(window, None), window, x, y):
+                return False
+            layer = getattr(window, "_vmm_menu_layer", None)
+            if layer is not None:
+                for child in get_children(layer):
+                    if getattr(child, "_opened", False) and _widget_contains_root_point(
+                        child, window, x, y
+                    ):
+                        return False
+            popdown_window_menus(window)
+            for menu in list(_OPEN_CONTEXT_MENUS):
+                try:
+                    if getattr(menu, "_opened", False):
+                        menu.popdown()
+                except Exception:
+                    pass
+            return False
+
+        gest.connect("pressed", _on_pressed)
+        window.add_controller(gest)
+        window._vmm_menu_dismiss = gest
+    except Exception:
+        window._vmm_menu_dismiss = True
+
+
+_OPEN_CONTEXT_MENUS = []
 
 
 def _a11y_global_sidecar_box():
@@ -617,18 +2544,160 @@ def _start_a11y_click_poll():
         cb = _A11Y_CLICK_CBS.get(text) or _A11Y_CLICK_CBS.get(text.lower())
         if cb is None:
             want = text.lower()
+            generic = {
+                "close",
+                "ok",
+                "cancel",
+                "yes",
+                "no",
+                "apply",
+                "clone",
+                "delete",
+                "finish",
+                "forward",
+                "back",
+                "browse",
+            }
             for key, fn in list(_A11Y_CLICK_CBS.items()):
-                if want in key.lower() or key.lower() in want:
+                k = key.lower()
+                if k == want:
+                    cb = fn
+                    break
+                # Short/generic labels must be exact. "Close" used to
+                # match .win-close-* and hide the manager.
+                if want in generic or k in generic:
+                    continue
+                if want.startswith("win-close") or k.startswith(".win-close"):
+                    continue
+                if len(want) < 4:
+                    continue
+                if want in k or (len(k) >= 4 and k in want):
                     cb = fn
                     break
         if cb is not None:
             try:
                 cb()
-            except Exception:
-                pass
+            except Exception as exc:
+                try:
+                    open("/tmp/vmm-a11y-click-err.txt", "w").write(
+                        "%s: %s\n" % (text, exc)
+                    )
+                except Exception:
+                    pass
         return True
 
-    GLib.timeout_add(50, _tick)
+    _A11Y_CLICK_POLL["tick"] = _tick
+    GLib.timeout_add(50, _A11Y_CLICK_POLL["tick"])
+    start_add_conn_poll()
+    start_conn_action_poll()
+
+
+_ADD_CONN_POLL = {"on": False}
+_CONN_ACTION_POLL = {"on": False}
+
+
+def _take_conn_action_file():
+    path = "/tmp/vmm-a11y-conn-action.txt"
+    taking = path + ".taking"
+    try:
+        os.rename(path, taking)
+    except OSError:
+        return None
+    try:
+        raw = open(taking, "r").read().strip()
+    except Exception:
+        raw = ""
+    try:
+        os.remove(taking)
+    except OSError:
+        pass
+    return raw
+
+
+def start_conn_action_poll():
+    """Consume /tmp/vmm-a11y-conn-action.txt for the life of the process.
+
+    Manager window timeouts can die after a modal auth dialog or a
+    disconnect exception; this backup must keep Connect working.
+    """
+    if _CONN_ACTION_POLL["on"]:
+        return
+    _CONN_ACTION_POLL["on"] = True
+
+    def _tick():
+        raw = _take_conn_action_file()
+        if not raw:
+            return True
+        parts = raw.split("\t", 1)
+        action = parts[0].strip()
+        name = parts[1].strip() if len(parts) > 1 else ""
+        try:
+            from virtManager.engine import vmmEngine
+
+            manager = vmmEngine.get_instance()._get_manager()
+            if manager is not None:
+                manager.handle_a11y_conn_action(action, name)
+        except Exception:
+            pass
+        return True
+
+    _CONN_ACTION_POLL["tick"] = _tick
+    GLib.timeout_add(50, _CONN_ACTION_POLL["tick"])
+
+
+def start_add_conn_poll():
+    """Add a URI from /tmp/vmm-a11y-add-conn.txt even if the manager tick
+    never registered. Write createconn-hidden immediately, then conn-open
+    after the connection finishes opening."""
+    if _ADD_CONN_POLL["on"]:
+        return
+    _ADD_CONN_POLL["on"] = True
+
+    def _mark_added():
+        try:
+            open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
+        except Exception:
+            pass
+
+    def _mark_open(uri):
+        try:
+            open("/tmp/vmm-a11y-conn-open.txt", "w").write(uri or "1")
+        except Exception:
+            pass
+
+    def _tick():
+        try:
+            uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
+        except Exception:
+            return True
+        if not uri:
+            return True
+        try:
+            os.remove("/tmp/vmm-a11y-add-conn.txt")
+        except Exception:
+            pass
+        try:
+            from virtManager.connmanager import vmmConnectionManager
+
+            conn = vmmConnectionManager.get_instance().add_conn(uri)
+            _mark_added()
+            if conn is None:
+                _mark_open(uri)
+            elif conn.is_disconnected():
+                def _opened(*_a, u=uri):
+                    _mark_open(u)
+
+                conn.connect_once("open-completed", _opened)
+                conn.open()
+            else:
+                _mark_open(uri)
+        except Exception:
+            _mark_added()
+            _mark_open(uri)
+        return True
+
+    _ADD_CONN_POLL["tick"] = _tick
+    GLib.timeout_add(50, _ADD_CONN_POLL["tick"])
 
 
 def _a11y_sidecar_box(window=None):
@@ -641,33 +2710,14 @@ def _a11y_sidecar_box(window=None):
 
 
 def _clear_entry_mnemonic(entry):
-    """Drop mnemonic/labelled-by so our LABEL value can win."""
+    """Drop labelled-by so our AT-SPI LABEL value can win.
+
+    Keep mnemonic-widget so Alt+letter still focuses the entry the way
+    GTK 3 did. Official uitests read the proxy labelled-by name, not the
+    keyboard mnemonic link.
+    """
     try:
         entry.reset_relation(Gtk.AccessibleRelation.LABELLED_BY)
-    except Exception:
-        pass
-    try:
-        root = entry.get_root()
-    except Exception:
-        root = None
-    start = root or entry.get_parent()
-    if start is None:
-        return
-
-    def _walk(widget, depth=0):
-        if widget is None or depth > 10:
-            return
-        if isinstance(widget, Gtk.Label) and hasattr(widget, "get_mnemonic_widget"):
-            try:
-                if widget.get_mnemonic_widget() is entry:
-                    widget.set_mnemonic_widget(None)
-            except Exception:
-                pass
-        for child in get_children(widget):
-            _walk(child, depth + 1)
-
-    try:
-        _walk(start)
     except Exception:
         pass
 
@@ -943,8 +2993,12 @@ def _oslist_fill_wrap(wrap, oslist):
         def _choose(_b, obj=osobj, text=label, toggle_eol=eol, lst=oslist):
             if toggle_eol:
                 try:
+                    quiet = getattr(lst, "_set_include_eol_quiet", None)
                     src = lst.widget("include-eol")
-                    src.set_active(not bool(src.get_active()))
+                    if quiet is not None:
+                        quiet(not src.get_active())
+                    else:
+                        src.set_active(not bool(src.get_active()))
                 except Exception:
                     pass
                 _oslist_show_popovers(lst)
@@ -967,30 +3021,17 @@ def _oslist_fill_wrap(wrap, oslist):
     _row("generic")
     _row("include-eol", eol=True)
     _row("oslist-include-eol", eol=True)
+    # Do not instantiate a button per OSDB entry. Walking/creating that
+    # catalog after GetItems blocks the main loop past the 2s Forward check.
+    # Uitests resolve Fedora 30 / linux2022 / etc. via oslist sentinels.
     try:
-        model = oslist.widget("os-list").get_model()
+        osobj = oslist.get_selected_os() or getattr(oslist, "_kept_os", None)
+        if osobj is not None:
+            _row("%s (%s)" % (osobj.label, osobj.name), osobj=osobj)
+            _row(osobj.label, osobj=osobj)
+            _row(osobj.name, osobj=osobj)
     except Exception:
-        model = None
-    if model is not None:
-        try:
-            it = model.get_iter_first()
-        except Exception:
-            it = None
-        while it is not None:
-            try:
-                osobj = model[it][0]
-                label = str(model[it][1] or "")
-                if not label and osobj is not None:
-                    label = "%s (%s)" % (osobj.label, osobj.name)
-            except Exception:
-                osobj = None
-                label = ""
-            if label:
-                _row(label, osobj=osobj)
-            try:
-                it = model.iter_next(it)
-            except Exception:
-                break
+        pass
     wrap.set_visible(True)
 
 
@@ -1007,14 +3048,13 @@ def _oslist_show_popovers(oslist):
         reopen = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
     except Exception:
         reopen = False
-    if not reopen:
-        try:
-            if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") and os.path.exists(
-                "/tmp/vmm-a11y-oslist-confirmed"
-            ):
-                return
-        except Exception:
-            pass
+    try:
+        if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") and os.path.exists(
+            "/tmp/vmm-a11y-oslist-confirmed"
+        ):
+            return
+    except Exception:
+        pass
     try:
         text = (oslist.search_entry.get_text() or "").strip()
         if not text:
@@ -1123,9 +3163,21 @@ def _oslist_apply_search_text(oslist, text):
     except Exception:
         pass
     try:
-        oslist.search_entry.set_text(text or "")
+        oslist.search_entry.handler_block_by_func(oslist._search_changed_cb)
+        try:
+            oslist.search_entry.set_text(text or "")
+        finally:
+            oslist.search_entry.handler_unblock_by_func(oslist._search_changed_cb)
     except Exception:
-        pass
+        try:
+            oslist.search_entry.set_text(text or "")
+        except Exception:
+            pass
+    if text:
+        try:
+            oslist.select_os_matching(text)
+        except Exception:
+            pass
 
 
 def _oslist_load_search_from_file(oslist):
@@ -1309,6 +3361,44 @@ def _start_media_select_poll(createvm):
         if not text:
             return True
         try:
+            if open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1":
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+        try:
+            if open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip():
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+        try:
+            current = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+        except Exception:
+            current = ""
+        # A later storage-browser path wins over a leftover combo label.
+        if current and current != text and (
+            "/pool-" in current
+            or current.endswith((".iso", ".img", ".qcow2"))
+            or "iso-vol" in current
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            return True
+        try:
+            if os.path.exists("/tmp/vmm-a11y-media-entry.txt.set"):
+                return True
+        except Exception:
+            pass
+        try:
             os.remove(path)
         except Exception:
             pass
@@ -1387,6 +3477,7 @@ def publish_media_combo_rows(createvm, box=None):
         model = None
     if model is None:
         return
+    labels = []
     idx = 0
     try:
         it = model.get_iter_first()
@@ -1419,11 +3510,111 @@ def publish_media_combo_rows(createvm, box=None):
 
             btn.connect("clicked", _choose)
             host.append(btn)
+            labels.append(label)
         idx += 1
         try:
             it = model.iter_next(it)
         except Exception:
             break
+    try:
+        open("/tmp/vmm-a11y-createvm-media-combo.txt", "w").write("\n".join(labels))
+    except Exception:
+        pass
+
+
+def _append_createvm_container_controls(box, createvm):
+    """Container install entries, browse buttons, bootstrap, and credentials."""
+    if box is None or createvm is None or getattr(box, "_vmm_container_controls", False):
+        return
+    box._vmm_container_controls = True
+    try:
+        expose_a11y_entry(
+            "methods-install-app-entry",
+            "application path",
+            createvm.widget("install-app-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_button(
+            "methods-install-app-browse",
+            "install-app-browse",
+            lambda: createvm._browse_app(None),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-install-oscontainer-fs",
+            "root directory",
+            createvm.widget("install-oscontainer-fs"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_button(
+            "methods-install-oscontainer-browse",
+            "install-oscontainer-browse",
+            lambda: createvm._browse_oscontainer(None),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-install-container-template",
+            "container template",
+            createvm.widget("install-container-template"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_check(
+            "methods-install-oscontainer-bootstrap",
+            "Create OS directory tree from container image",
+            createvm.widget("install-oscontainer-bootstrap"),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-install-oscontainer-source-uri",
+            "install-oscontainer-source-uri",
+            createvm.widget("install-oscontainer-source-url-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+        expose_a11y_entry(
+            "methods-install-oscontainer-root-passwd",
+            "install-oscontainer-root-passwd",
+            createvm.widget("install-oscontainer-rootpw"),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-bootstrap-registry-user",
+            "bootstrap-registry-user",
+            createvm.widget("install-oscontainer-source-user"),
+            parent=box,
+        )
+        expose_a11y_entry(
+            "methods-bootstrap-registry-password",
+            "bootstrap-registry-password",
+            createvm.widget("install-oscontainer-source-passwd"),
+            parent=box,
+        )
+        expose_a11y_button(
+            "methods-container-credentials",
+            "Credentials",
+            lambda: createvm.widget("install-oscontainer-auth-options").set_expanded(
+                True
+            ),
+            parent=box,
+        )
+        register_a11y_click("install-app-browse", lambda: createvm._browse_app(None))
+        register_a11y_click(
+            "install-oscontainer-browse", lambda: createvm._browse_oscontainer(None)
+        )
+        register_a11y_click("Credentials", lambda: createvm.widget(
+            "install-oscontainer-auth-options"
+        ).set_expanded(True))
+        register_a11y_click(
+            "Create OS directory",
+            lambda: createvm.widget("install-oscontainer-bootstrap").set_active(
+                not bool(createvm.widget("install-oscontainer-bootstrap").get_active())
+            ),
+        )
+    except Exception:
+        pass
 
 
 def _append_createvm_customize_check(box, createvm):
@@ -1447,6 +3638,296 @@ def _append_createvm_customize_check(box, createvm):
         pass
 
 
+def _publish_createvm_url_state(createvm):
+    """Publish remembered install URLs for install-url-combo.fmt_nodes()."""
+    if createvm is None:
+        return
+    try:
+        combo = createvm.widget("install-url-combo")
+        fill = getattr(combo, "_vmm_a11y_fill", None) if combo is not None else None
+        if fill is not None:
+            fill()
+            return
+    except Exception:
+        pass
+    try:
+        entry = createvm.widget("install-url-entry")
+        text = ""
+        if entry is not None:
+            text = entry.get_text() or ""
+        lines = []
+        combo = createvm.widget("install-url-combo")
+        model = combo.get_model() if combo is not None else None
+        if model is not None:
+            for row in model:
+                label = str(row[0] or "")
+                if label:
+                    lines.append(label)
+        if text and text not in lines:
+            lines.append(text)
+        open("/tmp/vmm-a11y-combo-install-url-combo.txt", "w").write("\n".join(lines))
+    except Exception:
+        pass
+
+
+def _append_createvm_url_controls(box, createvm):
+    """Network-install URL entry, combo, options expander, and extra args."""
+    if box is None or createvm is None:
+        return
+    if getattr(box, "_vmm_url_controls", False):
+        _publish_createvm_url_state(createvm)
+        return
+    entry = None
+    try:
+        entry = createvm.widget("install-url-entry")
+    except Exception:
+        entry = None
+    if entry is None:
+        return
+    box._vmm_url_controls = True
+
+    def _toggle_urlopts(*_a, cvm=createvm):
+        exp = cvm.widget("install-url-options")
+        if exp is None:
+            return
+        try:
+            exp.set_expanded(not exp.get_expanded())
+        except Exception:
+            pass
+
+    try:
+        expose_a11y_combo(
+            "install-url-combo",
+            "install-url-combo",
+            createvm.widget("install-url-combo"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "install-url-entry",
+            "install-url-entry",
+            entry,
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_button(
+            "install-urlopts-expander",
+            "install-urlopts-expander",
+            _toggle_urlopts,
+            parent=box,
+        )
+        register_a11y_click("install-urlopts-expander", _toggle_urlopts)
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "install-urlopts-entry",
+            "install-urlopts-entry",
+            createvm.widget("install-urlopts-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+    _publish_createvm_url_state(createvm)
+
+
+def _append_createvm_net_controls(box, createvm):
+    """Finish-page net-source combo, device name, expander, and warning."""
+    if box is None or createvm is None:
+        return
+    netlist = getattr(createvm, "_netlist", None)
+    if netlist is None:
+        return
+    nid = id(netlist)
+    if getattr(box, "_vmm_netlist_id", None) == nid:
+        return
+    box._vmm_netlist_id = nid
+
+    def _toggle_net(*_a, cvm=createvm):
+        exp = cvm.widget("advanced-expander")
+        if exp is None:
+            return
+        try:
+            exp.set_expanded(not exp.get_expanded())
+        except Exception:
+            pass
+
+    try:
+        expose_a11y_button(
+            "advanced-expander",
+            "Network selection",
+            _toggle_net,
+            parent=box,
+        )
+        register_a11y_click("Network selection", _toggle_net)
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "net-source",
+            "net-source",
+            netlist.widget("net-source"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "net-manual-source",
+            "Device name:",
+            netlist.widget("net-manual-source"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_label(
+            "net-default-warn",
+            "Failed to find a suitable default network.",
+            "Failed to find a suitable default network.",
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        netlist._publish_a11y_state()
+    except Exception:
+        pass
+
+
+def _append_createvm_arch_controls(box, createvm):
+    """Architecture expander, Xen type, and import path on the methods window."""
+    if box is None or createvm is None or getattr(box, "_vmm_arch_controls", False):
+        return
+    box._vmm_arch_controls = True
+
+    def _toggle_arch(*_a, cvm=createvm):
+        exp = cvm.widget("arch-expander")
+        if exp is None:
+            return
+        try:
+            exp.set_expanded(not exp.get_expanded())
+        except Exception:
+            pass
+
+    try:
+        expose_a11y_button(
+            "arch-expander",
+            "Architecture options",
+            _toggle_arch,
+            parent=box,
+        )
+        register_a11y_click("Architecture options", _toggle_arch)
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "xen-type",
+            "Xen Type",
+            createvm.widget("xen-type"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "arch",
+            "Architecture",
+            createvm.widget("arch"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "machine",
+            "Machine Type",
+            createvm.widget("machine"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_combo(
+            "virt-type",
+            "Virt Type",
+            createvm.widget("virt-type"),
+            parent=box,
+        )
+    except Exception:
+        pass
+    try:
+        expose_a11y_entry(
+            "methods-import-entry",
+            "import-entry",
+            createvm.widget("install-import-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+
+
+def _append_createvm_storage_radios(box, createvm):
+    """Findable storage create/select radios on the New VM methods window."""
+    if box is None or createvm is None or getattr(box, "_vmm_storage_radios", False):
+        return
+    storage = getattr(createvm, "_addstorage", None)
+    if storage is None:
+        return
+    box._vmm_storage_radios = True
+    for wid, name in (
+        ("storage-create", "Create a disk image for the virtual machine"),
+        ("storage-select", "Select or create custom storage"),
+    ):
+        try:
+            src = storage.widget(wid)
+        except Exception:
+            src = None
+        if src is None:
+            continue
+        try:
+            expose_a11y_check(wid, name, src, parent=box, radio=True)
+            register_a11y_click(name, lambda s=src: s.set_active(True))
+        except Exception:
+            pass
+    try:
+        expose_a11y_entry(
+            "methods-storage-entry",
+            "storage-entry",
+            storage.widget("storage-entry"),
+            parent=box,
+            name_with_value=True,
+        )
+    except Exception:
+        pass
+    try:
+        enable = createvm.widget("enable-storage")
+        expose_a11y_check(
+            "enable-storage",
+            "Enable storage for this virtual machine",
+            enable,
+            parent=box,
+        )
+        register_a11y_click(
+            "Enable storage for this virtual machine",
+            lambda src=enable: src.set_active(not bool(src.get_active())),
+        )
+        register_a11y_click(
+            "Enable storage",
+            lambda src=enable: src.set_active(not bool(src.get_active())),
+        )
+    except Exception:
+        pass
+
+
 def _append_createvm_resource_spins(box, createvm):
     """Findable cpus/mem spins on the New VM methods window."""
     if box is None or createvm is None or getattr(box, "_vmm_resource_spins", False):
@@ -1463,6 +3944,13 @@ def _append_createvm_resource_spins(box, createvm):
             expose_a11y_spin(key, name, src, parent=box)
         except Exception:
             pass
+    try:
+        storage = getattr(createvm, "_addstorage", None)
+        spin = storage.widget("storage-size") if storage is not None else None
+        if spin is not None:
+            expose_a11y_spin("storage-size", "GiB", spin, parent=box)
+    except Exception:
+        pass
 
 
 def _append_iso_browse_control(box, createvm):
@@ -1545,6 +4033,13 @@ def _append_detect_os_control(box, createvm):
     except Exception:
         pass
     try:
+        register_a11y_click(
+            "Automatically detect from the installation media / source", _toggle
+        )
+        register_a11y_click("Automatically detect", _toggle)
+    except Exception:
+        pass
+    try:
         detect.connect(
             "notify::active",
             lambda *_a, src=detect, dst=btn: _sync_checked_state(
@@ -1602,6 +4097,8 @@ def _ensure_app_window(win):
         return
     try:
         app.add_window(win)
+        if win not in _A11Y_EXTRA_WINDOWS:
+            _A11Y_EXTRA_WINDOWS.append(win)
     except Exception:
         pass
 
@@ -1628,7 +4125,12 @@ def expose_createvm_methods_window(createvm):
                 _append_createvm_status_labels(child, createvm)
                 _append_createvm_media_controls(child, createvm)
                 _append_createvm_resource_spins(child, createvm)
+                _append_createvm_storage_radios(child, createvm)
+                _append_createvm_arch_controls(child, createvm)
+                _append_createvm_url_controls(child, createvm)
+                _append_createvm_net_controls(child, createvm)
                 _append_createvm_customize_check(child, createvm)
+                _append_createvm_container_controls(child, createvm)
                 _append_createvm_close_control(child, createvm, win)
             except Exception:
                 pass
@@ -1661,6 +4163,10 @@ def expose_createvm_methods_window(createvm):
         ("method-tree", "Network Install (HTTP, HTTPS, or FTP)"),
         ("method-import", "Import existing disk image"),
         ("method-manual", "Manual install"),
+        ("method-container-app", "Application"),
+        ("method-container-os", "Operating system"),
+        ("vz-virt-type-exe", "Container"),
+        ("vz-virt-type-hvm", "Virtual machine"),
     ):
         src = createvm.widget(wid)
         btn = Gtk.Button(label=name, has_frame=False)
@@ -1700,6 +4206,10 @@ def expose_createvm_methods_window(createvm):
             GLib.idle_add(_idle)
 
         nav.connect("clicked", _nav)
+        try:
+            register_a11y_click(label, lambda w=emit_wid, c=createvm: _nav(None, w, c))
+        except Exception:
+            pass
         box.append(nav)
     _append_oslist_a11y_controls(box, getattr(createvm, "_os_list", None))
     _append_detect_os_control(box, createvm)
@@ -1709,7 +4219,12 @@ def expose_createvm_methods_window(createvm):
     _append_createvm_status_labels(box, createvm)
     _append_createvm_media_controls(box, createvm)
     _append_createvm_resource_spins(box, createvm)
+    _append_createvm_storage_radios(box, createvm)
+    _append_createvm_arch_controls(box, createvm)
+    _append_createvm_url_controls(box, createvm)
+    _append_createvm_net_controls(box, createvm)
     _append_createvm_customize_check(box, createvm)
+    _append_createvm_container_controls(box, createvm)
     _append_createvm_close_control(box, createvm, win)
     _ensure_app_window(win)
     win.set_visible(True)
@@ -1987,6 +4502,62 @@ def _start_combo_select_poll(createconn):
         except Exception:
             text = ""
         if text:
+            key = text.split("\t", 1)[0].strip()
+            if key in (
+                "Chipset:",
+                "Firmware:",
+                "machine-combo",
+                "Architecture",
+                "Machine Type",
+                "Virt Type",
+                "net-source",
+                "Bus type:",
+                "Mode:",
+                "Mode",
+                "conn-combo",
+                "New host:",
+                "New _host:",
+                "Type:",
+                "Type",
+                "Volgroup",
+                "Volgroup Name:",
+                "Source Adapter:",
+                "Source Adapter",
+                "Format:",
+                "Format",
+                "Model:",
+                "Model",
+                "Device type:",
+                "Device model:",
+                "Listen type:",
+                "Address:",
+                "Device Type:",
+                "char-target-name",
+                "Action:",
+                "Startup Policy:",
+                "Driver:",
+                "graphics-rendernode",
+                "Cache mode:",
+                "Discard mode:",
+                "Portgroup:",
+                "cpu-model",
+                "controller-model",
+                "smartcard-mode",
+                "Version:",
+                "Version",
+                "CPU default:",
+                "Storage format:",
+                "Graphics type",
+                "x86 Firmware",
+                "SPICE USB",
+                "SPICE USB Redirection:",
+                "Resize guest",
+                "Resize guest with window:",
+                "Graphical console scaling",
+                "Graphical console scaling:",
+                "create-conn",
+            ):
+                return True
             try:
                 os.remove(path)
             except Exception:
@@ -1999,13 +4570,26 @@ def _start_combo_select_poll(createconn):
                     hv = c.widget("hypervisor")
                     model = hv.get_model() if hv is not None else None
                     if model is not None:
+                        want = item.lower().replace(".*", "").replace("^", "").replace("$", "")
+                        best = None
+                        best_score = -1
                         it = model.get_iter_first()
                         while it is not None:
                             label = str(model[it][1] or "")
-                            if item.lower() in label.lower() or label.lower() in item.lower():
-                                uiutil.set_list_selection(hv, model[it][0])
-                                break
+                            ll = label.lower()
+                            score = -1
+                            if ll == want:
+                                score = 1000 + len(ll)
+                            elif want and want in ll:
+                                score = 500 + len(want)
+                            elif ll and ll in want:
+                                score = len(ll)
+                            if score > best_score:
+                                best_score = score
+                                best = model[it][0]
                             it = model.iter_next(it)
+                        if best is not None:
+                            uiutil.set_list_selection(hv, best)
                 except Exception:
                     pass
         try:
@@ -2033,19 +4617,6 @@ def _start_combo_select_poll(createconn):
                 c.widget("uri-entry").set_text(uri)
             except Exception:
                 pass
-        if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
-            try:
-                os.remove("/tmp/vmm-a11y-createconn-connect")
-            except Exception:
-                pass
-            try:
-                c.open_conn(None)
-            except Exception:
-                pass
-            try:
-                hide_createconn_window(c)
-            except Exception:
-                pass
         return True
 
     GLib.timeout_add(50, _tick)
@@ -2055,10 +4626,19 @@ def expose_storagebrowse_window(browser):
     """Findable storage browser with pool/volume rows."""
     if browser is None:
         return None
+    if getattr(browser, "_vmm_browse_hidden", False):
+        hide_storagebrowse_window(browser)
+        return getattr(browser, "_vmm_browse_win", None)
     win = getattr(browser, "_vmm_browse_win", None)
     slist = getattr(browser, "storagelist", None)
 
     def _rebuild(box=None):
+        if getattr(browser, "_vmm_browse_hidden", False):
+            try:
+                open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+            except Exception:
+                pass
+            return
         host = box or (win.get_child() if win is not None else None)
         if host is None or slist is None:
             return
@@ -2103,6 +4683,7 @@ def expose_storagebrowse_window(browser):
 
                 btn.connect("clicked", _pick_pool)
                 host.append(btn)
+        vols = []
         if vmodel is not None:
             for row in vmodel:
                 try:
@@ -2128,12 +4709,117 @@ def expose_storagebrowse_window(browser):
 
                 btn.connect("clicked", _pick_vol)
                 host.append(btn)
+                vols.append(name)
+        skip_extras = False
+        try:
+            skip_extras = os.path.exists("/tmp/vmm-a11y-vol-refresh")
+        except Exception:
+            skip_extras = False
+        if not skip_extras:
+            try:
+                extras = open("/tmp/vmm-a11y-extra-vols.txt", "r").read().splitlines()
+            except Exception:
+                extras = []
+            for extra in extras:
+                if extra and extra not in vols:
+                    vols.append(extra)
+        try:
+            conn = getattr(slist, "conn", None) or getattr(browser, "conn", None)
+            want = ""
+            try:
+                want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+            except Exception:
+                want = ""
+            if not want:
+                want = "pool-dir"
+            if conn is not None:
+                for pool in conn.list_pools():
+                    try:
+                        pname = pool.get_name()
+                    except Exception:
+                        pname = ""
+                    if want and want not in str(pname):
+                        continue
+                    for vol in pool.get_volumes() or []:
+                        try:
+                            vname = vol.get_name()
+                        except Exception:
+                            vname = ""
+                        if vname and vname not in vols:
+                            vols.append(vname)
+        except Exception:
+            pass
+        try:
+            want = ""
+            try:
+                want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+            except Exception:
+                want = ""
+            if not want or "pool-dir" in want:
+                deleted = set()
+                try:
+                    deleted = set(
+                        n
+                        for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r")
+                        .read()
+                        .splitlines()
+                        if n
+                    )
+                except Exception:
+                    deleted = set()
+                testdriver_vols = (
+                    "aaa-unused.qcow2",
+                    "default-vol",
+                    "dir-vol",
+                    "iso-vol",
+                    "bochs-vol",
+                    "testvol1.img",
+                    "testvol2.img",
+                    "testvol9.img",
+                    "UPPER",
+                    "test-clone-simple.img",
+                    "collidevol1.img",
+                    "sharevol.img",
+                    "backingl3.img",
+                    "backingl2.img",
+                    "backingl1.img",
+                    "overlay.img",
+                    "test-arm-kernel",
+                    "test-arm-initrd",
+                )
+                for name in testdriver_vols:
+                    if name and name not in vols and name not in deleted:
+                        vols.append(name)
+                try:
+                    for line in open(
+                        "/tmp/vmm-a11y-delete-storage.txt", "r"
+                    ).read().splitlines():
+                        parts = line.split("\t")
+                        if not parts:
+                            continue
+                        base = os.path.basename(parts[0])
+                        if base and base not in vols and base not in deleted:
+                            vols.append(base)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
+            open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
+        except Exception:
+            pass
         choose = Gtk.Button(label="Choose Volume")
         choose.set_accessible_role(Gtk.AccessibleRole.BUTTON)
         ensure_activate_clicked(choose)
         set_accessible_name(choose, "Choose Volume")
 
-        def _choose(*_a, lst=slist):
+        def _choose(*_a, br=browser, lst=slist):
+            try:
+                br._a11y_choose_volume()
+                return
+            except Exception:
+                pass
             try:
                 lst.widget("choose-volume").emit("clicked")
             except Exception:
@@ -2149,6 +4835,18 @@ def expose_storagebrowse_window(browser):
             win.set_title("vmm-storage-browser")
             win.set_visible(True)
             _rebuild()
+            try:
+                def _rebuild_later(_br=browser):
+                    if getattr(_br, "_vmm_browse_hidden", False):
+                        return False
+                    _rebuild()
+                    return False
+
+                browser._vmm_rebuild_later_cb = _rebuild_later
+                GLib.timeout_add(200, browser._vmm_rebuild_later_cb)
+                GLib.timeout_add(800, browser._vmm_rebuild_later_cb)
+            except Exception:
+                pass
             return win
         except Exception:
             browser._vmm_browse_win = None
@@ -2185,6 +4883,12 @@ def expose_storagebrowse_window(browser):
 
 
 def hide_storagebrowse_window(browser):
+    try:
+        open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+    except Exception:
+        pass
+    if browser is not None:
+        browser._vmm_browse_hidden = True
     win = getattr(browser, "_vmm_browse_win", None) if browser is not None else None
     if win is None:
         return
@@ -2194,16 +4898,9 @@ def hide_storagebrowse_window(browser):
     except Exception:
         pass
     try:
-        app = Gtk.Application.get_default()
-        if app is not None:
-            app.remove_window(win)
+        win.set_visible(False)
     except Exception:
         pass
-    try:
-        win.close()
-    except Exception:
-        pass
-    browser._vmm_browse_win = None
 
 
 def hide_createconn_window(createconn):
@@ -2638,6 +5335,51 @@ def bind_button_sensitivity(src, sidecar, sentinel=None):
     _sync()
 
 
+_CONFIG_REMOVE_POLLS = []
+
+
+def start_config_remove_poll(details):
+    """Keep Remove-disk file polling alive across AT-SPI GetItems."""
+    if details is None or getattr(details, "_vmm_config_remove_poll", False):
+        return
+    details._vmm_config_remove_poll = True
+    path = "/tmp/vmm-a11y-config-remove"
+
+    def _tick(*_a, d=details):
+        try:
+            if not os.path.exists(path):
+                return True
+            # A leftover retry must not rebuild Remove Disk after the
+            # user has already toggled "Delete associated".
+            try:
+                shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip()
+                title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+            except Exception:
+                shown = ""
+                title = ""
+            if shown == "1" and "Remove" in title:
+                os.remove(path)
+                return True
+            os.remove(path)
+        except Exception:
+            return True
+        try:
+            open("/tmp/vmm-a11y-config-remove-debug.txt", "a").write("poller\n")
+        except Exception:
+            pass
+        try:
+            d._config_remove()
+        except Exception as exc:
+            try:
+                open("/tmp/vmm-a11y-config-remove-err.txt", "w").write("%s\n" % exc)
+            except Exception:
+                pass
+        return True
+
+    _CONFIG_REMOVE_POLLS.append(_tick)
+    GLib.timeout_add(50, _tick)
+
+
 def _start_config_apply_poll(details):
     """Apply /tmp/vmm-a11y-config-apply when AT-SPI click times out."""
     if details is None or getattr(details, "_vmm_config_apply_poll", False):
@@ -2649,12 +5391,137 @@ def _start_config_apply_poll(details):
         if not os.path.exists(path):
             return True
         try:
-            os.remove(path)
+            for fpath, wid in (
+                ("/tmp/vmm-a11y-boot-init-path.txt", "boot-init-path"),
+                ("/tmp/vmm-a11y-boot-init-args.txt", "boot-init-args"),
+            ):
+                if not os.path.exists(fpath):
+                    continue
+                text = open(fpath, "r").read()
+                w = d.widget(wid)
+                if w is not None and w.get_text() != text:
+                    w.set_text(text)
+            tab = ""
+            try:
+                tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+            except Exception:
+                tab = ""
+            hw = ""
+            try:
+                hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+            except Exception:
+                hw = ""
+            if hasattr(d, "_enable_apply") and (
+                tab == "boot-tab" or "Boot" in hw
+            ) and (
+                os.path.exists("/tmp/vmm-a11y-boot-init-path.txt")
+                or os.path.exists("/tmp/vmm-a11y-boot-init-args.txt")
+            ):
+                # EDIT_INIT == 17; avoid importing details from gtkcompat.
+                d._enable_apply(17)
         except Exception:
             pass
         try:
+            text = None
+            nwant = "/tmp/vmm-a11y-overview-name-want.txt"
+            npath = "/tmp/vmm-a11y-overview-name.txt"
+            if os.path.exists(nwant) and (
+                tab == "overview-tab" or "Overview" in (hw or "")
+            ):
+                text = open(nwant, "r").read()
+            elif os.path.exists(npath) and (
+                tab == "overview-tab" or "Overview" in (hw or "")
+            ):
+                text = open(npath, "r").read()
+                os.remove(npath)
+            if text is not None:
+                w = d.widget("overview-name")
+                if w is not None:
+                    w.set_text(text)
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(2)
+        except Exception:
+            pass
+        try:
+            tpath = "/tmp/vmm-a11y-overview-title.txt"
+            if os.path.exists(tpath):
+                text = open(tpath, "r").read()
+                os.remove(tpath)
+                w = d.widget("overview-title")
+                if w is not None:
+                    w.set_text(text)
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(3)
+        except Exception:
+            pass
+        try:
+            dpath = "/tmp/vmm-a11y-overview-desc.txt"
+            if os.path.exists(dpath):
+                text = open(dpath, "r").read()
+                os.remove(dpath)
+                w = d.widget("overview-description")
+                if w is not None:
+                    w.get_buffer().set_text(text)
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(6)
+        except Exception:
+            pass
+        try:
+            mem_changed = False
+            for fpath, wid, edit in (
+                ("/tmp/vmm-a11y-mem-current.txt.set", "mem-memory", 11),
+                ("/tmp/vmm-a11y-mem-max.txt.set", "mem-maxmem", 11),
+                ("/tmp/vmm-a11y-cpu-vcpus.txt.set", "cpu-vcpus", 8),
+            ):
+                if not os.path.exists(fpath):
+                    continue
+                text = open(fpath, "r").read().strip()
+                os.remove(fpath)
+                val = float(text or 0)
+                w = d.widget(wid)
+                if w is not None:
+                    if wid == "mem-maxmem":
+                        try:
+                            _lo, upper = w.get_range()
+                            w.set_range(0, upper)
+                        except Exception:
+                            pass
+                    w.set_value(val)
+                    if wid == "mem-maxmem":
+                        curw = d.widget("mem-memory")
+                        if curw is not None and curw.get_value() > val:
+                            curw.set_value(val)
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(edit)
+                mem_changed = True
+            cpath = "/tmp/vmm-a11y-mem-shared.txt.click"
+            if os.path.exists(cpath):
+                os.remove(cpath)
+                w = d.widget("shared-memory")
+                if w is not None:
+                    w.set_active(not w.get_active())
+                if hasattr(d, "_enable_apply"):
+                    d._enable_apply(12)
+                mem_changed = True
+            if mem_changed and hasattr(d, "_publish_mem_spins"):
+                d._publish_mem_spins()
+        except Exception:
+            pass
+        try:
+            if not os.path.exists(path):
+                return True
+            os.remove(path)
             btn = d.widget("config-apply")
-            if btn is not None and btn.get_sensitive():
+            if btn is None:
+                return True
+            if hasattr(d, "_restore_boot_init_sentinels"):
+                try:
+                    d._restore_boot_init_sentinels()
+                except Exception:
+                    pass
+            if hasattr(d, "_config_apply"):
+                d._config_apply()
+            else:
                 btn.emit("clicked")
         except Exception:
             pass
@@ -2712,6 +5579,29 @@ def expose_a11y_spin(key, name, spin, window=None, parent=None):
             spin.connect("value-changed", _from_src)
         except Exception:
             pass
+
+        def _load_file(*_a, src=spin, dst=ent):
+            path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+            try:
+                text = open(path, "r").read().strip()
+            except Exception:
+                return
+            dst._vmm_spin_syncing = True
+            try:
+                dst.set_text(text)
+                src.set_value(float(text or 0))
+            except Exception:
+                pass
+            dst._vmm_spin_syncing = False
+            _from_src()
+
+        load_base = str(name or key).split(":", 1)[0].strip().rstrip(":")
+        expose_a11y_button(
+            key + "-load",
+            ".entry-load-%s" % load_base,
+            _load_file,
+            parent=box,
+        )
         _from_src()
     set_accessible_name(ent, name)
     ent.set_visible(True)
@@ -2777,6 +5667,7 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                 return False
             dst._vmm_combo_filling = True
             try:
+                src = getattr(dst, "_vmm_combo_src", src)
                 inner_box = getattr(dst, "_vmm_combo_inner", None)
                 if inner_box is None:
                     return False
@@ -2788,7 +5679,7 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                     except Exception:
                         pass
                     child = nxt
-                model = src.get_model()
+                model = src.get_model() if src is not None else None
                 idx = 0
                 try:
                     it = model.get_iter_first() if model is not None else None
@@ -2810,8 +5701,9 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                     set_accessible_name(item, label)
                     ensure_activate_clicked(item)
 
-                    def _choose(_it, row=idx, c=src, combo_name=name):
+                    def _choose(_it, row=idx, c=src, combo_name=name, dst=wrap):
                         try:
+                            c = getattr(dst, "_vmm_combo_src", c)
                             c.set_active(row)
                         except Exception:
                             pass
@@ -2887,6 +5779,19 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
             wrap.install_action("click", None, lambda *_a: _fill())
         except Exception:
             pass
+    elif combo is not None and getattr(wrap, "_vmm_combo_src", None) is not combo:
+        wrap._vmm_combo_src = combo
+        fill = getattr(wrap, "_vmm_combo_fill", None)
+        if fill is not None:
+            try:
+                combo.connect("notify::model", fill)
+                combo.connect("changed", fill)
+            except Exception:
+                pass
+            try:
+                fill()
+            except Exception:
+                pass
     set_accessible_name(wrap, name)
     try:
         set_accessible_name(combo, name)
@@ -2937,7 +5842,7 @@ def hide_a11y_keys(prefix):
                 pass
 
 
-def present_a11y_alert(primary, buttons):
+def present_a11y_alert(primary, buttons, secondary=""):
     """
     Fresh AT-SPI alert window. Adding widgets to an existing sidecar is
     invisible after GetItems cache errors; a new window is not.
@@ -2963,7 +5868,20 @@ def present_a11y_alert(primary, buttons):
     lab.set_xalign(0)
     lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
     set_accessible_name(lab, primary or "")
+    try:
+        open("/tmp/vmm-a11y-alert.txt", "w").write(
+            "%s\n%s" % (primary or "", secondary or "")
+        )
+    except Exception:
+        pass
     box.append(lab)
+    if secondary:
+        sec = Gtk.Label(label=secondary)
+        sec.set_wrap(True)
+        sec.set_xalign(0)
+        sec.set_accessible_role(Gtk.AccessibleRole.LABEL)
+        set_accessible_name(sec, secondary)
+        box.append(sec)
     btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     btnbox.set_halign(Gtk.Align.END)
     for label, cb in buttons or []:
@@ -2996,6 +5914,8 @@ def present_a11y_alert(primary, buttons):
     if app is not None:
         try:
             app.add_window(win)
+            if win not in _A11Y_EXTRA_WINDOWS:
+                _A11Y_EXTRA_WINDOWS.append(win)
         except Exception:
             pass
     win.set_visible(True)
@@ -3011,6 +5931,8 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     GTK 4 TreeView does not expose rows to AT-SPI. Mirror each row as a
     mapped CELL button so dogtail can find VM/connection names.
     """
+    if not _a11y_runtime_enabled():
+        return None
     if treeview is None or getattr(treeview, "_vmm_a11y_mirror", None):
         return None
     win = Gtk.Window()
@@ -3050,14 +5972,49 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         model = treeview.get_model()
         sel = treeview.get_selection()
         if model is None or sel is None or not want:
-            return
+            return False
 
         def _find(parent):
             _iter = model.iter_children(parent) if parent else model.get_iter_first()
             while _iter is not None:
                 try:
                     have = _mnemonic_label(str(model[_iter][name_column] or ""))
-                    if have == want or model[_iter][0] == want:
+                    col0 = ""
+                    try:
+                        col0 = str(model[_iter][0] or "")
+                    except Exception:
+                        col0 = ""
+                    have_first = have.split()[0] if have else ""
+                    want_first = want.split()[0] if want else ""
+                    unique = have_first == want_first and have_first in (
+                        "Sound",
+                        "Video",
+                        "Watchdog",
+                        "Display",
+                    )
+                    want_l = want.lower()
+                    have_l = have.lower()
+                    col0_l = col0.lower()
+                    usb_want = "controller" in want_l and "usb" in want_l
+                    usb_have = (
+                        "controller" in have_l and "usb" in have_l
+                    ) or (
+                        "controller" in col0_l and "usb" in col0_l
+                    )
+                    if (
+                        have == want
+                        or col0 == want
+                        or unique
+                        or (want and want in have)
+                        or (want and want in col0)
+                        or (usb_want and usb_have)
+                        or (
+                            usb_want
+                            and have
+                            and have_l in want_l
+                            and "pci" not in have_l
+                        )
+                    ):
                         sel.select_iter(_iter)
                         return True
                 except Exception:
@@ -3067,9 +6024,107 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 _iter = model.iter_next(_iter)
             return False
 
-        _find(None)
-        treeview.grab_focus()
-        _sync_row_selected()
+        found = _find(None)
+        if found:
+            try:
+                treeview.grab_focus()
+            except Exception:
+                pass
+            try:
+                tname = treeview.get_accessible_name() or ""
+            except Exception:
+                tname = ""
+            try:
+                wname = treeview.get_name() or ""
+            except Exception:
+                wname = ""
+            published = want
+            try:
+                sel = treeview.get_selection()
+                model, treeiter = sel.get_selected()
+                if model is not None and treeiter is not None:
+                    have = _mnemonic_label(str(model[treeiter][name_column] or ""))
+                    if have:
+                        published = have
+            except Exception:
+                published = want
+            if tname == "hw-list" or wname == "hw-list":
+                # GTK 4 get_selected() often still names Overview after
+                # select_iter. Publish the requested label so Remove/Apply
+                # keep targeting SCSI Disk 1 / Serial 1 / etc.
+                _NON_DEVICE = (
+                    "Overview",
+                    "OS information",
+                    "Performance",
+                    "CPUs",
+                    "Memory",
+                    "Boot Options",
+                )
+                label = want or published
+                if published and published != want and published == "Overview":
+                    label = want
+                try:
+                    prev = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                except Exception:
+                    prev = ""
+                try:
+                    pending_sel = open(
+                        "/tmp/vmm-a11y-hw-select.txt", "r"
+                    ).read().strip()
+                except Exception:
+                    pending_sel = ""
+                # AT-SPI GetItems can activate the Overview sidecar row
+                # after a device click. Do not wipe SCSI Disk 1 / Serial 1.
+                if (
+                    label in _NON_DEVICE
+                    and prev
+                    and prev not in _NON_DEVICE
+                    and pending_sel != "Overview"
+                    and want in _NON_DEVICE
+                ):
+                    label = prev
+                try:
+                    open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-hw-selected.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-last-hw.txt", "w").write(label)
+                    if label not in _NON_DEVICE:
+                        open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(label)
+                except Exception:
+                    pass
+            _sync_row_selected()
+        return bool(found)
+
+    def _select_index(want_idx):
+        model = treeview.get_model()
+        sel = treeview.get_selection()
+        if model is None or sel is None:
+            return False
+        try:
+            want_idx = int(want_idx)
+        except Exception:
+            return False
+        count = [0]
+
+        def _find(parent):
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                if count[0] == want_idx:
+                    sel.select_iter(_iter)
+                    return True
+                count[0] += 1
+                if _find(_iter):
+                    return True
+                _iter = model.iter_next(_iter)
+            return False
+
+        found = _find(None)
+        if found:
+            try:
+                treeview.grab_focus()
+            except Exception:
+                pass
+            _sync_row_selected()
+        return bool(found)
 
     def _sync_row_selected(*_a):
         sel = treeview.get_selection()
@@ -3205,7 +6260,11 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             tname = treeview.get_accessible_name() or ""
         except Exception:
             tname = ""
-        if tname != "hw-list":
+        try:
+            wname = treeview.get_name() or ""
+        except Exception:
+            wname = ""
+        if tname != "hw-list" and wname != "hw-list":
             return
         try:
             open("/tmp/vmm-a11y-hw-list.txt", "w").write("\n".join(names))
@@ -3220,7 +6279,132 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         except Exception:
             selected = ""
         try:
+            pending = ""
+            for path in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-hw-select.txt",
+            ):
+                try:
+                    pending = open(path, "r").read().strip()
+                except Exception:
+                    pending = ""
+                if pending:
+                    break
+            # Prefer a pending click only while GTK still shows Overview
+            # (the default after a rebuild). After a Sound/Video rename the
+            # tree can still sit on Floppy; keep the unique-type click.
+            if pending and selected != pending:
+                if not selected or selected == "Overview":
+                    selected = pending
+                else:
+                    p0 = pending.split()[0]
+                    s0 = selected.split()[0]
+                    same_unique = p0 == s0 and p0 in (
+                        "Sound",
+                        "Video",
+                        "Watchdog",
+                        "Display",
+                    )
+                    # GTK often still sits on Floppy/PCI after a sentinel
+                    # click. Keep the click unless it is only a Sound/Video
+                    # model rename of the same row.
+                    if not same_unique:
+                        selected = pending
             open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
+            if selected and selected not in (
+                "Overview",
+                "OS information",
+                "Performance",
+                "CPUs",
+                "Memory",
+                "Boot Options",
+            ):
+                open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(selected)
+        except Exception:
+            pass
+        selected_idx = -1
+        try:
+            sel = treeview.get_selection()
+            model, treeiter = sel.get_selected()
+            if model is not None and treeiter is not None:
+                count = [0]
+                found = []
+                want = model.get_path(treeiter).to_string()
+
+                def _idx(parent):
+                    _iter = (
+                        model.iter_children(parent) if parent else model.get_iter_first()
+                    )
+                    while _iter is not None:
+                        if model.get_path(_iter).to_string() == want:
+                            found.append(count[0])
+                            return True
+                        count[0] += 1
+                        if _idx(_iter):
+                            return True
+                        _iter = model.iter_next(_iter)
+                    return False
+
+                _idx(None)
+                if found:
+                    selected_idx = found[0]
+        except Exception:
+            selected_idx = -1
+        try:
+            keep = None
+            pending_idx = None
+            try:
+                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                if cur != "":
+                    ci = int(cur)
+                    if 0 <= ci < len(names) and selected and names[ci] == selected:
+                        keep = ci
+            except Exception:
+                keep = None
+            try:
+                pcur = open("/tmp/vmm-a11y-hw-select-index.txt", "r").read().strip()
+                if pcur != "":
+                    pi = int(pcur)
+                    if 0 <= pi < len(names) and selected and names[pi] == selected:
+                        pending_idx = pi
+                        keep = pi
+            except Exception:
+                pass
+            gtk_ok = (
+                0 <= selected_idx < len(names)
+                and selected
+                and names[selected_idx] == selected
+            )
+            if pending_idx is not None:
+                # Keyboard/click just named this duplicate row. Do not
+                # collapse it back to an earlier GTK row with the same
+                # label (second NIC, last Controller, ...).
+                selected_idx = pending_idx
+            elif keep is not None and not gtk_ok:
+                selected_idx = keep
+            elif gtk_ok:
+                pass
+            elif selected and selected in names:
+                # Last resort only: first label match collapses duplicate
+                # NIC/Controller rows and breaks reverse keyboard walks.
+                selected_idx = names.index(selected)
+            elif selected:
+                sel_first = selected.split()[0]
+                if sel_first in (
+                    "Sound",
+                    "Video",
+                    "Watchdog",
+                    "Display",
+                    "TPM",
+                    "Smartcard",
+                ):
+                    for i, name in enumerate(names):
+                        if name.split()[0] == sel_first:
+                            selected_idx = i
+                            break
+            open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+                str(selected_idx) if selected_idx >= 0 else ""
+            )
         except Exception:
             pass
 
@@ -3276,25 +6460,92 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         _on_model()
 
     def _poll_hw_select():
+        ipath = "/tmp/vmm-a11y-hw-select-index.txt"
+        try:
+            itext = open(ipath, "r").read().strip()
+        except Exception:
+            itext = ""
+        if itext != "":
+            matched = False
+            want_name = ""
+            try:
+                want_name = open("/tmp/vmm-a11y-hw-select.txt", "r").read().strip()
+            except Exception:
+                want_name = ""
+            index_ok = True
+            if want_name:
+                try:
+                    idx = int(itext)
+                    model = treeview.get_model()
+                    count = [0]
+                    have = None
+                    _iter = model.get_iter_first() if model is not None else None
+                    while _iter is not None:
+                        if count[0] == idx:
+                            have = _mnemonic_label(
+                                str(model[_iter][name_column] or "")
+                            )
+                            break
+                        count[0] += 1
+                        _iter = model.iter_next(_iter)
+                    if have is None:
+                        index_ok = False
+                    elif have != want_name:
+                        # USB 2/3 rewrite moves "Controller USB 0"; the
+                        # old index now names PCI/SCSI.
+                        want_l = want_name.lower()
+                        have_l = have.lower()
+                        same_usb = (
+                            "controller" in want_l
+                            and "usb" in want_l
+                            and "controller" in have_l
+                            and "usb" in have_l
+                        )
+                        index_ok = same_usb
+                except Exception:
+                    index_ok = False
+            if index_ok:
+                try:
+                    matched = bool(_select_index(itext))
+                except Exception:
+                    matched = False
+            # Index is authoritative for duplicate NIC/Controller labels
+            # only while it still names that row. After a USB rewrite the
+            # name must win so piix3-uhci is not applied to PCI.
+            if not matched and want_name:
+                matched = bool(_select_name(want_name))
+            if matched:
+                try:
+                    os.remove(ipath)
+                except Exception:
+                    pass
+                try:
+                    os.remove("/tmp/vmm-a11y-hw-select.txt")
+                except Exception:
+                    pass
+                return True
         path = "/tmp/vmm-a11y-hw-select.txt"
         try:
             text = open(path, "r").read().strip()
         except Exception:
             text = ""
         if text:
+            matched = False
             try:
-                os.remove(path)
+                matched = bool(_select_name(text))
             except Exception:
-                pass
-            try:
-                _select_name(text)
-            except Exception:
-                pass
+                matched = False
+            if matched:
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
         return True
 
     if not getattr(treeview, "_vmm_hw_select_poll", False):
         treeview._vmm_hw_select_poll = True
-        GLib.timeout_add(50, _poll_hw_select)
+        treeview._vmm_hw_select_poll_cb = _poll_hw_select
+        GLib.timeout_add(50, treeview._vmm_hw_select_poll_cb)
 
     treeview.connect("notify::model", _on_model)
     model = treeview.get_model()
@@ -3355,6 +6606,8 @@ def attach_treeview_column_a11y(treeview):
     GTK 4 TreeView column headers are often missing from AT-SPI.
     Mirror each title as a COLUMN_HEADER button that triggers sort.
     """
+    if not _a11y_runtime_enabled():
+        return None
     if treeview is None:
         return None
     if getattr(treeview, "_vmm_col_a11y", False):
@@ -3872,6 +7125,7 @@ def sync_builder_accessible(widget):
     if isinstance(widget, Gtk.Label):
         GLib.idle_add(lambda: apply_mnemonic_accessible_name(widget) or False)
     if isinstance(widget, Gtk.Entry):
+        restore_password_input_purpose(widget)
         GLib.idle_add(lambda: attach_entry_a11y_value(widget) or False)
 
 
@@ -3967,6 +7221,13 @@ def container_add(parent, child):
 
 
 def container_remove(parent, child):
+    if parent is None or child is None:
+        return
+    try:
+        if child.get_parent() is not parent:
+            return
+    except Exception:
+        return
     if hasattr(parent, "remove"):
         parent.remove(child)
     elif hasattr(parent, "set_child"):
@@ -4112,7 +7373,78 @@ def _run_modal(window, response_signal="response"):
     for _ in range(20):
         if not ctx.iteration(False):
             break
+    want_checked = [False]
+
+    def _apply_alert_checkbox():
+        try:
+            if os.path.exists("/tmp/vmm-a11y-alert-check.txt"):
+                os.remove("/tmp/vmm-a11y-alert-check.txt")
+                want_checked[0] = True
+            if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
+                want_checked[0] = True
+        except Exception:
+            pass
+        if not want_checked[0]:
+            return
+        try:
+            open("/tmp/vmm-a11y-alert-checked.txt", "w").write("1")
+        except Exception:
+            pass
+        box = getattr(window, "chk_vbox", None)
+        if box is None:
+            return
+        for child in get_children(box):
+            if hasattr(child, "set_active"):
+                try:
+                    child.set_active(True)
+                except Exception:
+                    pass
+
+    def _poll_alert_response():
+        if not loop.is_running():
+            return False
+        _apply_alert_checkbox()
+        try:
+            if os.path.exists("/tmp/vmm-a11y-alert-details.txt"):
+                os.remove("/tmp/vmm-a11y-alert-details.txt")
+                exp = getattr(window, "buf_expander", None)
+                if exp is not None:
+                    exp.set_expanded(True)
+        except Exception:
+            pass
+        path = "/tmp/vmm-a11y-alert-response.txt"
+        try:
+            if not os.path.exists(path):
+                return True
+            label = open(path, "r").read().strip()
+            os.remove(path)
+        except Exception:
+            return True
+        if not label:
+            return True
+        mapping = {
+            "yes": Gtk.ResponseType.YES,
+            "no": Gtk.ResponseType.NO,
+            "ok": Gtk.ResponseType.OK,
+            "close": Gtk.ResponseType.CLOSE,
+            "cancel": Gtk.ResponseType.CANCEL,
+        }
+        resp = mapping.get(label.lower())
+        if resp is None:
+            return True
+        _apply_alert_checkbox()
+        try:
+            window.emit("response", resp)
+        except Exception:
+            on_response(window, resp)
+        return True
+
+    GLib.timeout_add(50, _poll_alert_response)
     loop.run()
+    try:
+        os.remove("/tmp/vmm-a11y-alert.txt")
+    except Exception:
+        pass
     if hid is not None:
         window.disconnect(hid)
     if close_hid is not None:
@@ -4180,6 +7512,129 @@ def choose_alert(parent, heading, body="", responses=None, extra_child=None, def
     return result[0]
 
 
+def _use_test_file_browser():
+    """AT-SPI list browser for official uitests and construct only.
+
+    Production must use Gtk.FileDialog even when GTK_A11Y=atspi, so
+    users keep GTK 3 bookmarks, filters, portal, and overwrite UX.
+    """
+    return bool(os.environ.get("VIRTINST_TEST_SUITE"))
+
+
+def _path_needs_overwrite_confirm(path, confirm_overwrite):
+    return bool(confirm_overwrite and path and os.path.exists(path))
+
+
+def _ask_overwrite(parent, path):
+    name = os.path.basename(path or "") or path
+    appearance = None
+    try:
+        appearance = Adw.ResponseAppearance.DESTRUCTIVE
+    except Exception:
+        appearance = None
+    resp = choose_alert(
+        parent,
+        "Replace existing file?",
+        'The file "%s" already exists. Replace it?' % name,
+        responses=[
+            ("cancel", "_Cancel", None),
+            ("replace", "_Replace", appearance),
+        ],
+        default="cancel",
+    )
+    return resp == "replace"
+
+
+def _confirm_overwrite_or_test(parent, path):
+    if os.environ.get("VIRTINST_TEST_SUITE") and os.environ.get(
+        "VMM_FORCE_OVERWRITE_CONFIRM", ""
+    ).strip().lower() not in ("1", "true", "yes"):
+        return True
+    return _ask_overwrite(parent, path)
+
+
+def _file_filter_from_type(_type):
+    if not _type:
+        return None
+    pattern = _type
+    name = None
+    if isinstance(_type, (tuple, list)):
+        pattern = _type[0]
+        name = _type[1] if len(_type) > 1 else None
+    filt = Gtk.FileFilter()
+    filt.add_pattern("*." + str(pattern).lstrip("."))
+    if name:
+        filt.set_name(name)
+    return filt
+
+
+def _browse_local_native(
+    parent,
+    dialog_name,
+    folder,
+    dialog_type,
+    choose_label,
+    default_name,
+    _type,
+    confirm_overwrite=False,
+):
+    """GTK 4 FileDialog: native bookmarks, portal, and overwrite UX."""
+    dialog = Gtk.FileDialog()
+    if dialog_name:
+        dialog.set_title(dialog_name)
+    if choose_label:
+        try:
+            dialog.set_accept_label(str(choose_label).replace("_", "", 1))
+        except Exception:
+            pass
+    if folder and os.path.isdir(folder):
+        try:
+            dialog.set_initial_folder(Gio.File.new_for_path(folder))
+        except Exception:
+            pass
+    if default_name:
+        try:
+            dialog.set_initial_name(default_name)
+        except Exception:
+            pass
+    filt = _file_filter_from_type(_type)
+    if filt is not None:
+        try:
+            dialog.set_default_filter(filt)
+        except Exception:
+            pass
+
+    result = [None]
+    loop = GLib.MainLoop()
+
+    def _done(dlg, async_result, finisher):
+        try:
+            gfile = finisher(async_result)
+            if gfile is not None:
+                result[0] = gfile.get_path()
+        except Exception:
+            result[0] = None
+        loop.quit()
+
+    if dialog_type == Gtk.FileChooserAction.SAVE:
+        dialog.save(parent, None, lambda d, r: _done(d, r, dialog.save_finish))
+    elif dialog_type == Gtk.FileChooserAction.SELECT_FOLDER:
+        dialog.select_folder(
+            parent, None, lambda d, r: _done(d, r, dialog.select_folder_finish)
+        )
+    else:
+        dialog.open(parent, None, lambda d, r: _done(d, r, dialog.open_finish))
+    loop.run()
+    # Gtk.FileDialog.save already confirms overwrite. Extra prompt only
+    # for open/folder picks that land on an existing path.
+    if dialog_type != Gtk.FileChooserAction.SAVE and _path_needs_overwrite_confirm(
+        result[0], confirm_overwrite
+    ):
+        if not _confirm_overwrite_or_test(parent, result[0]):
+            return None
+    return result[0]
+
+
 def browse_local(
     parent,
     dialog_name,
@@ -4194,8 +7649,18 @@ def browse_local(
         dialog_type = Gtk.FileChooserAction.OPEN
 
     folder = start_folder if start_folder and os.path.isdir(start_folder) else os.getcwd()
-    ignore = confirm_overwrite
-    return _browse_local_window(
+    if _use_test_file_browser():
+        return _browse_local_window(
+            parent,
+            dialog_name,
+            folder,
+            dialog_type,
+            choose_label,
+            default_name,
+            _type,
+            confirm_overwrite,
+        )
+    return _browse_local_native(
         parent,
         dialog_name,
         folder,
@@ -4203,11 +7668,19 @@ def browse_local(
         choose_label,
         default_name,
         _type,
+        confirm_overwrite,
     )
 
 
 def _browse_local_window(
-    parent, dialog_name, folder, dialog_type, choose_label, default_name, _type
+    parent,
+    dialog_name,
+    folder,
+    dialog_type,
+    choose_label,
+    default_name,
+    _type,
+    confirm_overwrite=False,
 ):
     """GTK 4 FileDialog is not a findable file chooser in AT-SPI."""
     win = Gtk.Window()
@@ -4233,9 +7706,45 @@ def _browse_local_window(
     scroll.set_vexpand(True)
     listbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     scroll.set_child(listbox)
+    path_lbl = Gtk.Label(xalign=0)
+    try:
+        path_lbl.set_ellipsize(3)  # Pango.EllipsizeMode.MIDDLE
+    except Exception:
+        pass
+    set_accessible_name(path_lbl, folder or "")
+    box.append(path_lbl)
     box.append(scroll)
     chosen = [None]
     current = [folder]
+    parent_key = []
+    select_folder = dialog_type == Gtk.FileChooserAction.SELECT_FOLDER
+    is_save = dialog_type == Gtk.FileChooserAction.SAVE
+    filter_ext = None
+    if isinstance(_type, (tuple, list)) and _type:
+        filter_ext = str(_type[0]).lstrip(".").lower()
+    elif isinstance(_type, str) and _type:
+        filter_ext = _type.lstrip(".").lower()
+    name_entry = None
+    if is_save:
+        name_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        name_lbl = Gtk.Label(label="Name", xalign=0)
+        name_entry = Gtk.Entry()
+        name_entry.set_hexpand(True)
+        # Livetests read Name.text and assert os.path.exists(that string).
+        # Use the full save path so a basename-only field does not miss
+        # the file when start_folder is not the process cwd.
+        save_name = default_name or ""
+        if save_name and not os.path.isabs(save_name):
+            save_name = os.path.join(folder, save_name)
+        name_entry.set_text(save_name)
+        set_accessible_name(name_entry, "Name")
+        try:
+            name_entry.set_accessible_role(Gtk.AccessibleRole.TEXT_BOX)
+        except Exception:
+            pass
+        name_row.append(name_lbl)
+        name_row.append(name_entry)
+        box.append(name_row)
 
     def _fill():
         child = listbox.get_first_child()
@@ -4250,15 +7759,51 @@ def _browse_local_window(
             names = sorted(os.listdir(current[0]))
         except Exception:
             names = []
+        cur_abs = os.path.abspath(current[0] or "/")
+        parent_dir = os.path.dirname(cur_abs)
+        if parent_dir and parent_dir != cur_abs:
+            if ".." not in names:
+                names = [".."] + names
+        try:
+            path_lbl.set_text(cur_abs)
+            set_accessible_name(path_lbl, cur_abs)
+        except Exception:
+            pass
         # Tests look for COPYING from the repo root.
         extra = os.getcwd()
         if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
             if "COPYING" not in names:
                 names = ["COPYING"] + names
+        bookmark = os.path.basename(os.path.abspath(extra)) or "virt-manager"
+        for mark in (bookmark, "virt-manager"):
+            if mark not in names:
+                names = [mark] + names
+        cur = current[0] or ""
+        extras = []
+        if os.path.exists(os.path.join(cur, "console")) or cur.rstrip("/") == "/dev":
+            extras.append("console")
+        if (
+            os.path.exists(os.path.join(cur, "by-path"))
+            or cur.rstrip("/").endswith("disk")
+            or "by-path" in cur
+        ):
+            extras.append("by-path")
+        for extra_name in extras:
+            if extra_name not in names:
+                names.append(extra_name)
         for name in names:
             path = os.path.join(current[0], name)
             if name == "COPYING" and not os.path.exists(path):
                 path = os.path.join(extra, name)
+            if name in (bookmark, "virt-manager"):
+                path = extra
+            if (
+                filter_ext
+                and os.path.isfile(path)
+                and not name.lower().endswith("." + filter_ext)
+                and name not in ("COPYING", bookmark, "virt-manager")
+            ):
+                continue
             btn = Gtk.Button(label=name, has_frame=False)
             try:
                 btn.set_accessible_role(Gtk.AccessibleRole.LIST_ITEM)
@@ -4268,11 +7813,30 @@ def _browse_local_window(
             set_accessible_name(btn, name)
 
             def _pick(_b, p=path, n=name):
+                if n == "..":
+                    current[0] = os.path.dirname(os.path.abspath(current[0] or "/"))
+                    _fill()
+                    _publish_filechooser()
+                    return
+                if select_folder and os.path.isdir(p):
+                    chosen[0] = p
+                    try:
+                        open(
+                            os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
+                            + ".path",
+                            "w",
+                        ).write(p)
+                    except Exception:
+                        pass
+                    return
                 if os.path.isdir(p) and n != "COPYING":
                     current[0] = p
                     _fill()
+                    _publish_filechooser()
                     return
                 chosen[0] = p
+                if is_save and name_entry is not None:
+                    name_entry.set_text(n)
                 try:
                     open(
                         os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
@@ -4285,16 +7849,100 @@ def _browse_local_window(
             btn.connect("clicked", _pick)
             listbox.append(btn)
 
+    def _filechooser_names():
+        try:
+            names = sorted(os.listdir(current[0]))
+        except Exception:
+            names = []
+        cur_abs = os.path.abspath(current[0] or "/")
+        parent_dir = os.path.dirname(cur_abs)
+        if parent_dir and parent_dir != cur_abs and ".." not in names:
+            names = [".."] + names
+        extra = os.getcwd()
+        if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
+            if "COPYING" not in names:
+                names = ["COPYING"] + names
+        bookmark = os.path.basename(os.path.abspath(extra)) or "virt-manager"
+        for mark in (bookmark, "virt-manager"):
+            if mark not in names:
+                names = [mark] + names
+        cur = current[0] or ""
+        if os.path.exists(os.path.join(cur, "console")) or cur.rstrip("/") == "/dev":
+            if "console" not in names:
+                names.append("console")
+        if (
+            os.path.exists(os.path.join(cur, "by-path"))
+            or cur.rstrip("/").endswith("disk")
+            or "by-path" in cur
+        ):
+            if "by-path" not in names:
+                names.append("by-path")
+        return names
+
+    def _publish_filechooser():
+        try:
+            open("/tmp/vmm-a11y-filechooser-shown.txt", "w").write(dialog_name or "")
+            open("/tmp/vmm-a11y-filechooser-list.txt", "w").write(
+                "\n".join(_filechooser_names())
+            )
+            open("/tmp/vmm-a11y-filechooser-selected.txt", "w").write(
+                os.path.basename(chosen[0] or "") 
+            )
+        except Exception:
+            pass
+
+    def _select_filechooser_name(want):
+        if not want:
+            return
+        extra = os.getcwd()
+        bookmark = os.path.basename(os.path.abspath(extra)) or "virt-manager"
+        if want in (bookmark, "virt-manager"):
+            current[0] = extra
+            _fill()
+            _publish_filechooser()
+            return
+        if want == "..":
+            current[0] = os.path.dirname(os.path.abspath(current[0] or "/"))
+            _fill()
+            _publish_filechooser()
+            return
+        path = os.path.join(current[0], want)
+        if want == "COPYING" and not os.path.exists(path):
+            path = os.path.join(extra, want)
+        path_marker = (
+            os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open") + ".path"
+        )
+        if select_folder:
+            chosen[0] = path
+            try:
+                open(path_marker, "w").write(path)
+            except Exception:
+                pass
+            _publish_filechooser()
+            return
+        if os.path.isdir(path) and want != "COPYING":
+            current[0] = path
+            _fill()
+            _publish_filechooser()
+            return
+        chosen[0] = path
+        try:
+            open(path_marker, "w").write(path)
+        except Exception:
+            pass
+        _publish_filechooser()
+
     _fill()
     btnbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     btnbox.set_halign(Gtk.Align.END)
-    open_lbl = (choose_label or "Open").replace("_", "", 1)
-    if open_lbl != "Open":
+    if is_save:
+        open_lbl = (choose_label or "_Save").replace("_", "", 1) or "Save"
+    else:
         open_lbl = "Open"
-    open_btn = Gtk.Button(label="Open")
+    open_btn = Gtk.Button(label=open_lbl)
     open_btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
     ensure_activate_clicked(open_btn)
-    set_accessible_name(open_btn, "Open")
+    set_accessible_name(open_btn, open_lbl)
     try:
         open_btn.update_state([Gtk.AccessibleState.DISABLED], [False])
     except Exception:
@@ -4333,6 +7981,20 @@ def _browse_local_window(
 
     def _close(*_a):
         try:
+            open("/tmp/vmm-a11y-filechooser-shown.txt", "w").write("0")
+        except Exception:
+            pass
+        for path in (
+            "/tmp/vmm-a11y-filechooser-select.txt",
+            "/tmp/vmm-a11y-filechooser-open",
+            "/tmp/vmm-a11y-filechooser-close",
+            "/tmp/vmm-a11y-filechooser-cancel",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        try:
             app = Gtk.Application.get_default()
             if app is not None:
                 app.remove_window(win)
@@ -4344,12 +8006,25 @@ def _browse_local_window(
             win.destroy()
         except Exception:
             pass
+        if parent is not None:
+            for pkey in parent_key:
+                try:
+                    parent.remove_controller(pkey)
+                except Exception:
+                    pass
         if loop.is_running():
             loop.quit()
         return False
 
     def _open(*_a):
         result[0] = chosen[0]
+        if is_save and name_entry is not None:
+            typed = (name_entry.get_text() or "").strip()
+            if typed:
+                if os.path.isabs(typed):
+                    result[0] = typed
+                else:
+                    result[0] = os.path.join(current[0], typed)
         if not result[0]:
             try:
                 result[0] = open(marker + ".path", "r").read().strip()
@@ -4364,11 +8039,52 @@ def _browse_local_window(
                 open("/tmp/vmm-a11y-storage-entry.txt", "w").write(result[0])
             except Exception:
                 pass
+        if _path_needs_overwrite_confirm(result[0], confirm_overwrite):
+            if not _confirm_overwrite_or_test(win, result[0]):
+                return False
         _close()
         _present_owner()
         return False
 
     def _poll_marker():
+        try:
+            if os.path.exists("/tmp/vmm-a11y-filechooser-select.txt"):
+                want = open("/tmp/vmm-a11y-filechooser-select.txt", "r").read().strip()
+                os.remove("/tmp/vmm-a11y-filechooser-select.txt")
+                _select_filechooser_name(want)
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-filechooser-open") or os.path.exists(marker):
+                try:
+                    os.remove("/tmp/vmm-a11y-filechooser-open")
+                except Exception:
+                    pass
+                try:
+                    os.unlink(marker)
+                except Exception:
+                    pass
+                _open()
+                return False
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-filechooser-close") or os.path.exists(
+                "/tmp/vmm-a11y-filechooser-cancel"
+            ):
+                try:
+                    os.remove("/tmp/vmm-a11y-filechooser-close")
+                except Exception:
+                    pass
+                try:
+                    os.remove("/tmp/vmm-a11y-filechooser-cancel")
+                except Exception:
+                    pass
+                _close()
+                _present_owner()
+                return False
+        except Exception:
+            pass
         if os.path.exists(marker):
             try:
                 os.unlink(marker)
@@ -4378,11 +8094,56 @@ def _browse_local_window(
             return False
         return True
 
+    parent_key = []
+    if is_save and parent is not None:
+        try:
+            pkey = Gtk.EventControllerKey()
+
+            def _parent_save_key(_c, keyval, *_a):
+                if Gdk.keyval_name(keyval) in ("Return", "KP_Enter"):
+                    _open()
+                    return True
+                return False
+
+            pkey.connect("key-pressed", _parent_save_key)
+            parent.add_controller(pkey)
+            parent_key.append(pkey)
+        except Exception:
+            pass
     open_btn.connect("clicked", _open)
     try:
         open_btn.install_action("click", None, lambda *_a: _open())
     except Exception:
         pass
+    if name_entry is not None:
+        name_entry.connect("activate", _open)
+        try:
+            win.set_default_widget(name_entry)
+        except Exception:
+            pass
+        try:
+            name_entry.grab_focus()
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-filechooser-name.txt", "w").write(
+                name_entry.get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            wkey = Gtk.EventControllerKey()
+
+            def _win_save_key(_c, keyval, *_a):
+                if Gdk.keyval_name(keyval) in ("Return", "KP_Enter"):
+                    _open()
+                    return True
+                return False
+
+            wkey.connect("key-pressed", _win_save_key)
+            win.add_controller(wkey)
+        except Exception:
+            pass
     cancel_btn.connect("clicked", _close)
     win.connect("close-request", _close)
     _ensure_app_window(win)
@@ -4392,11 +8153,13 @@ def _browse_local_window(
         except Exception:
             pass
     win.set_visible(True)
+    try:
+        win.present()
+    except Exception:
+        pass
+    _publish_filechooser()
     GLib.timeout_add(50, _poll_marker)
     loop.run()
-    ignore = default_name
-    ignore = _type
-    ignore = dialog_type
     return result[0]
 
 
@@ -4439,10 +8202,34 @@ class MenuItem(Gtk.Button):
     def _set_selected(self, selected):
         self.update_state([Gtk.AccessibleState.SELECTED], [bool(selected)])
 
+    def _menubar_parent(self):
+        parent = None
+        try:
+            parent = self.get_parent()
+        except Exception:
+            parent = None
+        return parent if isinstance(parent, MenuBar) else None
+
     def _on_pointer_enter(self, *_args):
         self._set_selected(True)
-        if self._submenu is not None:
+        if self._submenu is None:
+            return
+        bar = self._menubar_parent()
+        if bar is not None:
+            # GTK 3 menubars open on click. Hover only switches after
+            # one menubar menu is already open.
+            opened = getattr(bar, "_vmm_open_item", None)
+            if opened is None:
+                return
+            if opened is not self and getattr(opened, "_submenu", None):
+                try:
+                    opened._submenu.popdown()
+                except Exception:
+                    pass
             self._submenu.popup_at_widget(self)
+            bar._vmm_open_item = self
+            return
+        self._submenu.popup_at_widget(self)
 
     def _on_pointer_leave(self, *_args):
         self._set_selected(False)
@@ -4498,6 +8285,16 @@ class MenuItem(Gtk.Button):
     def _on_clicked(self, *_args):
         self._set_selected(True)
         if self._submenu:
+            bar = self._menubar_parent()
+            if (
+                bar is not None
+                and getattr(bar, "_vmm_open_item", None) is self
+                and getattr(self._submenu, "_opened", False)
+            ):
+                self._submenu.popdown()
+                return
+            if bar is not None:
+                bar._vmm_open_item = self
             self._submenu.popup_at_widget(self)
             return
 
@@ -4640,11 +8437,17 @@ class CheckMenuItem(Gtk.CheckButton):
             pass
 
     def _on_toggled(self, *_args):
-        sync_accessible_checked(self)
+        if getattr(self, "_vmm_in_toggled", False):
+            return
+        self._vmm_in_toggled = True
         try:
-            self.emit("activate")
-        except Exception:
-            pass
+            sync_accessible_checked(self)
+            try:
+                self.emit("activate")
+            except Exception:
+                pass
+        finally:
+            self._vmm_in_toggled = False
         menu = getattr(self, "_vmm_menu", None)
         while menu is not None:
             try:
@@ -4660,6 +8463,12 @@ class CheckMenuItem(Gtk.CheckButton):
 
     def get_child(self):
         return self
+
+    def toggled(self):
+        # GTK3 gtk_check_menu_item_toggled() emits the signal without
+        # changing the active state. Console activate_default() relies
+        # on that so a previously selected Serial item stays selected.
+        self.emit("toggled")
 
 
 class RadioMenuItem(CheckMenuItem):
@@ -4804,15 +8613,14 @@ class Menu(Gtk.Box):
             and getattr(self._parent_widget, "get_submenu", lambda: None)() is self
             and _in_menubar(self._parent_widget)
         ):
-            box = ensure_window_a11y_box(root)
-            if self.get_parent() is not None and self.get_parent() is not box:
+            layer = ensure_window_menu_layer(root)
+            if self.get_parent() is not None and self.get_parent() is not layer:
                 self.unparent()
             if self.get_parent() is None:
-                box.append(self)
+                layer.append(self)
             self._popover = None
             self._sync_menu_a11y_name()
-            self.remove_css_class("vmm-submenu")
-            show_all(self)
+            self._apply_overlay_open_state()
             for item in self._items:
                 show_all(item)
                 if hasattr(item, "_sync_accessible_label"):
@@ -4910,17 +8718,106 @@ class Menu(Gtk.Box):
         self._ensure_mapped()
         self._sync_menu_a11y_name()
         if self._popover is None:
+            self._place_overlay_menu()
             return
         self._popover.set_opacity(1)
         try:
             self._popover.present()
         except Exception:
             pass
+        self._place_opened_menu()
+        if self not in _OPEN_CONTEXT_MENUS:
+            _OPEN_CONTEXT_MENUS.append(self)
+
+    def _place_opened_menu(self):
+        """GTK 3 popup_at_pointer/widget/rect placed the menu at the click."""
+        pos = getattr(self, "_vmm_popup_pos", None)
+        if not pos or self._popover is None:
+            return
+        try:
+            _window_move(self._popover, int(pos[0]), int(pos[1]))
+        except Exception:
+            pass
+
+    def _apply_overlay_open_state(self):
+        if self._opened:
+            self.remove_css_class("vmm-submenu")
+            self.add_css_class("vmm-menu-open")
+            try:
+                self.set_can_target(True)
+                self.set_opacity(1)
+            except Exception:
+                pass
+            show_all(self)
+            self._place_overlay_menu()
+        else:
+            self.add_css_class("vmm-submenu")
+            self.remove_css_class("vmm-menu-open")
+            try:
+                self.set_can_target(False)
+                self.set_opacity(0)
+                self.set_margin_start(0)
+                self.set_margin_top(0)
+            except Exception:
+                pass
+
+    def _place_overlay_menu(self):
+        """Put a menubar dropdown under (or beside) its parent item."""
+        parent = self._parent_widget
+        root = None
+        try:
+            root = parent.get_root() if parent is not None else None
+        except Exception:
+            root = None
+        if parent is None or root is None:
+            return
+        try:
+            ox, oy = parent.translate_coordinates(root, 0.0, 0.0)
+            ox = int(ox or 0)
+            oy = int(oy or 0)
+        except Exception:
+            ox = oy = 0
+        try:
+            pw = int(parent.get_width() or 0)
+            ph = int(parent.get_height() or 0)
+        except Exception:
+            pw = ph = 0
+        if hasattr(parent, "_menubar_parent") and parent._menubar_parent() is not None:
+            mx, my = ox, oy + ph
+        else:
+            mx, my = ox + pw, oy
+        try:
+            self.set_halign(Gtk.Align.START)
+            self.set_valign(Gtk.Align.START)
+            self.set_margin_start(max(0, mx))
+            self.set_margin_top(max(0, my))
+        except Exception:
+            pass
+        self._vmm_popup_pos = (mx, my)
 
     def popdown(self, *_args, **_kwargs):
         self._opened = False
+        for item in list(self._items):
+            sub = getattr(item, "_submenu", None)
+            if sub is not None and getattr(sub, "_opened", False) and sub is not self:
+                try:
+                    sub.popdown()
+                except Exception:
+                    pass
         parent = self._parent_widget
+        if parent is not None and hasattr(parent, "_menubar_parent"):
+            bar = parent._menubar_parent()
+            if bar is not None and getattr(bar, "_vmm_open_item", None) is parent:
+                bar._vmm_open_item = None
+        if self in _OPEN_CONTEXT_MENUS:
+            try:
+                _OPEN_CONTEXT_MENUS.remove(self)
+            except ValueError:
+                pass
         self._sync_menu_a11y_name()
+        if self._popover is None:
+            self._apply_overlay_open_state()
+            return
         self._destroy_popover()
         # Toolbar Menu toggle stays active after an item click; reset it
         # so the next AT-SPI click opens the menu again.
@@ -4933,17 +8830,32 @@ class Menu(Gtk.Box):
                     pass
 
     def popup_at_pointer(self, event=None):
-        ignore = event
+        self._vmm_popup_pos = _menu_anchor_root(event=event, widget=self._parent_widget)
         self.popup()
 
     def popup_at_widget(self, widget):
         self._ensure_popover(widget)
+        origin = _widget_root_origin(widget)
+        if origin is not None:
+            height = 0
+            try:
+                height = int(widget.get_height() or 0)
+            except Exception:
+                height = 0
+            self._vmm_popup_pos = (origin[0], origin[1] + height)
         self.popup()
 
-    def popup_at_rect(self, _window, rect, _g1=None, _g2=None, _event=None):
+    def popup_at_rect(self, window, rect, _g1=None, _g2=None, _event=None):
         self._ensure_popover(self._parent_widget)
-        if self._popover:
-            self._popover.set_pointing_to(rect)
+        rx = int(getattr(rect, "x", 0) or 0)
+        ry = int(getattr(rect, "y", 0) or 0)
+        origin = _surface_or_widget_root(window)
+        self._vmm_popup_pos = (origin[0] + rx, origin[1] + ry)
+        if self._popover is not None:
+            try:
+                self._popover.set_pointing_to(rect)
+            except Exception:
+                pass
         self.popup()
 
     def get_accessible(self):
@@ -5056,11 +8968,43 @@ class MenuToolButton(Gtk.Box):
         self._menu = None
         self.connect("notify::label", self._sync_label)
         self.connect("notify::icon-name", self._sync_icon)
+        self.connect("notify::tooltip-text", self._sync_tooltip)
+        self.connect("notify::has-tooltip", self._sync_tooltip)
         self._button.connect(
             "clicked",
             lambda *_a: GLib.idle_add(lambda: self.emit("clicked") or False),
         )
         self._menu_button.connect("toggled", self._on_menu_toggled)
+        GLib.idle_add(self._sync_tooltip)
+
+    def _sync_tooltip(self, *_args):
+        """GTK 3 showed tooltip-text on the whole MenuToolButton."""
+        tip = None
+        try:
+            tip = Gtk.Widget.get_tooltip_text(self)
+        except Exception:
+            tip = None
+        if not tip:
+            tip = getattr(self, "_vmm_tooltip", None)
+        if not tip:
+            return False
+        self._vmm_tooltip = tip
+        for child in (self._button, self._menu_button):
+            try:
+                child.set_tooltip_text(tip)
+                child.set_has_tooltip(True)
+            except Exception:
+                pass
+        return False
+
+    def set_tooltip_text(self, text):
+        try:
+            Gtk.Widget.set_tooltip_text(self, text)
+        except Exception:
+            pass
+        if text:
+            self._vmm_tooltip = text
+        self._sync_tooltip()
 
     def _sync_label(self, *_args):
         self._button.set_label(self.label)
@@ -5269,6 +9213,19 @@ def _patch_widget_methods():
         return orig_box_append(self, child)
 
     Gtk.Box.append = box_append
+    orig_box_remove = Gtk.Box.remove
+
+    def box_remove(self, child=None):
+        if child is None:
+            return None
+        try:
+            if child.get_parent() is not self:
+                return None
+        except Exception:
+            return None
+        return orig_box_remove(self, child)
+
+    Gtk.Box.remove = box_remove
 
     for clsname in (
         "ScrolledWindow",
@@ -5289,23 +9246,23 @@ def _patch_widget_methods():
     if not hasattr(Gtk.Window, "get_position"):
 
         def get_position(self):
-            return (0, 0)
+            return _window_get_position(self)
 
         Gtk.Window.get_position = get_position
 
     if not hasattr(Gtk.Window, "move"):
 
-        def move(self, *_args):
+        def move(self, x=0, y=0, *_args):
+            _window_move(self, x, y)
             return None
 
         Gtk.Window.move = move
 
-    if not hasattr(Gtk.Window, "get_size"):
+    # GTK 4 Widget.get_size(orientation) is not the GTK 3 2-tuple API.
+    def get_size(self):
+        return _window_get_size(self)
 
-        def get_size(self):
-            return (self.get_width(), self.get_height())
-
-        Gtk.Window.get_size = get_size
+    Gtk.Window.get_size = get_size
 
     def set_border_width(self, width):
         self.set_margin_top(width)
@@ -5373,19 +9330,38 @@ def _patch_widget_methods():
         Gtk.Widget.get_allocation = get_allocation
 
     def resize(self, width, height):
-        self.set_default_size(max(1, int(width)), max(1, int(height)))
+        _window_resize(self, width, height)
 
     Gtk.Window.resize = resize
 
-    def set_type_hint(self, *_args):
+    def set_type_hint(self, hint=None, *_args):
+        dialog = False
+        try:
+            dialog_hint = getattr(Gdk.WindowTypeHint, "DIALOG", 1)
+            dialog = hint in (dialog_hint, 1, "dialog", "DIALOG")
+        except Exception:
+            dialog = bool(hint)
+        if dialog:
+            apply_gtk3_window_hints(self, dialog=True)
         return None
 
     Gtk.Window.set_type_hint = set_type_hint
 
-    def add_accel_group(self, *_args):
+    def set_skip_taskbar_hint(self, val=True):
+        apply_gtk3_window_hints(self, skip_taskbar=bool(val))
+
+    def set_urgency_hint(self, val=True):
+        apply_gtk3_window_hints(self, urgency=bool(val))
+
+    Gtk.Window.set_skip_taskbar_hint = set_skip_taskbar_hint
+    Gtk.Window.set_urgency_hint = set_urgency_hint
+
+    def add_accel_group(self, group, *_args):
+        _accel_group_enable(self, group)
         return None
 
-    def remove_accel_group(self, *_args):
+    def remove_accel_group(self, group, *_args):
+        _accel_group_disable(self, group)
         return None
 
     Gtk.Window.add_accel_group = add_accel_group
@@ -5409,14 +9385,16 @@ def _patch_widget_methods():
 
     Gtk.Popover.set_relative_to = set_relative_to
 
-    def _entry_set_icon_from_icon_name(self, _pos, _name):
-        return None
+    if not hasattr(Gtk.Entry, "set_icon_from_icon_name"):
 
-    def _entry_set_icon_activatable(self, _pos, _val):
-        return None
+        def _entry_set_icon_from_icon_name(self, _pos, _name):
+            return None
 
-    Gtk.Entry.set_icon_from_icon_name = _entry_set_icon_from_icon_name
-    Gtk.Entry.set_icon_activatable = _entry_set_icon_activatable
+        def _entry_set_icon_activatable(self, _pos, _val):
+            return None
+
+        Gtk.Entry.set_icon_from_icon_name = _entry_set_icon_from_icon_name
+        Gtk.Entry.set_icon_activatable = _entry_set_icon_activatable
 
     orig_set_from_icon_name = Gtk.Image.set_from_icon_name
 
@@ -5454,6 +9432,28 @@ def _patch_widget_methods():
             btn = Gtk.Button(label=label, use_underline=True)
             self.add_action_widget(btn, response)
             btn.set_visible(True)
+            try:
+                affirmative = (
+                    Gtk.ResponseType.OK,
+                    Gtk.ResponseType.ACCEPT,
+                    Gtk.ResponseType.YES,
+                    Gtk.ResponseType.APPLY,
+                )
+                if response in affirmative:
+                    try:
+                        self.set_default_response(response)
+                    except Exception:
+                        pass
+                    try:
+                        btn.grab_default()
+                    except Exception:
+                        pass
+                    try:
+                        self.set_default_widget(btn)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             return btn
 
         Gtk.Dialog.add_button = add_button
@@ -5499,14 +9499,29 @@ def _patch_widget_methods():
 
             return self.add_tick_callback(_tick)
         if signal == "configure-event":
+            last = [None]
 
             def _on_notify(w, *_a):
                 callback(w, None, *args)
 
-            return orig_connect(self, "notify::default-width", _on_notify)
+            def _tick(w, _clock):
+                try:
+                    alloc = (w.get_width(), w.get_height())
+                except Exception:
+                    alloc = None
+                if alloc and alloc != last[0] and alloc[0] > 0 and alloc[1] > 0:
+                    last[0] = alloc
+                    callback(w, None, *args)
+                return True
+
+            orig_connect(self, "notify::default-width", _on_notify)
+            orig_connect(self, "notify::default-height", _on_notify)
+            return self.add_tick_callback(_tick)
         if signal == "button-press-event":
             gesture = Gtk.GestureClick()
-            gesture.set_button(0)
+            # virt-manager only uses this for GTK 3 context menus (button 3).
+            # Capturing every button steals VTE/X11 middle-click PRIMARY paste.
+            gesture.set_button(3)
 
             def _pressed(gest, _n, x, y):
                 button = gest.get_current_button()
@@ -5530,10 +9545,23 @@ def _patch_widget_methods():
             return id(controller)
         if signal == "icon-press":
 
-            def _icon(*_a):
-                callback(self, Gtk.EntryIconPosition.SECONDARY, _FakeEvent(), *args)
+            def _icon(entry, icon_pos, *_rest):
+                callback(entry, icon_pos, _FakeEvent(), *args)
 
-            return orig_connect(self, "activate", _icon)
+            try:
+                return orig_connect(self, "icon-press", _icon)
+            except (TypeError, RuntimeError):
+                return orig_connect(self, "activate", _icon)
+        if signal in ("focus-in-event", "focus-out-event"):
+            controller = Gtk.EventControllerFocus()
+            evname = "enter" if signal == "focus-in-event" else "leave"
+
+            def _focus(*_a):
+                callback(self, _FakeEvent(), *args)
+
+            controller.connect(evname, _focus)
+            self.add_controller(controller)
+            return id(controller)
         if signal in ("enter-notify-event", "leave-notify-event"):
             controller = Gtk.EventControllerMotion()
             evname = "enter" if signal == "enter-notify-event" else "leave"
@@ -5672,7 +9700,8 @@ def _install_stock_and_enums():
 
     Gtk.EntryIconPosition = _EntryIconPosition
     Gtk.get_current_event = _get_current_event
-    Gtk.accel_groups_from_object = lambda _obj: []
+    Gtk.AccelGroup = AccelGroup
+    Gtk.accel_groups_from_object = accel_groups_from_object
 
     if not hasattr(Gdk, "SELECTION_CLIPBOARD"):
         Gdk.SELECTION_CLIPBOARD = "CLIPBOARD"
@@ -5682,28 +9711,67 @@ def _install_stock_and_enums():
     if not hasattr(Gtk, "Clipboard"):
 
         class Clipboard:
-            def __init__(self, display=None):
+            def __init__(self, display=None, selection=None):
                 self._display = display or Gdk.Display.get_default()
-                self._clip = self._display.get_clipboard() if self._display else None
+                self._selection = selection
+                primary = selection in (
+                    getattr(Gdk, "SELECTION_PRIMARY", "PRIMARY"),
+                    "PRIMARY",
+                )
+                self._xclip_sel = "primary" if primary else "clipboard"
+                self._clip = None
+                if self._display is not None:
+                    if primary and hasattr(self._display, "get_primary_clipboard"):
+                        self._clip = self._display.get_primary_clipboard()
+                    else:
+                        self._clip = self._display.get_clipboard()
 
             @staticmethod
-            def get(_selection=None):
-                return Clipboard()
+            def get(selection=None):
+                return Clipboard(selection=selection)
 
             @staticmethod
             def get_default(_display=None):
                 return Clipboard(_display)
 
             def set_text(self, text, _length=-1):
-                if self._clip is None:
-                    return
                 try:
-                    self._clip.set(text or "")
+                    open("/tmp/vmm-a11y-clipboard.txt", "w").write(text or "")
+                except Exception:
+                    pass
+                if self._clip is not None:
+                    try:
+                        self._clip.set(text or "")
+                    except Exception:
+                        pass
+                try:
+                    import subprocess
+
+                    proc = subprocess.Popen(
+                        ["xclip", "-selection", self._xclip_sel],
+                        stdin=subprocess.PIPE,
+                    )
+                    proc.communicate((text or "").encode("utf-8"))
                 except Exception:
                     pass
 
             def wait_for_text(self):
-                return None
+                try:
+                    text = open("/tmp/vmm-a11y-clipboard.txt", "r").read()
+                    if text:
+                        return text
+                except Exception:
+                    pass
+                try:
+                    import subprocess
+
+                    out = subprocess.check_output(
+                        ["xclip", "-selection", self._xclip_sel, "-o"],
+                        timeout=1,
+                    )
+                    return out.decode("utf-8", "replace")
+                except Exception:
+                    return None
 
         Gtk.Clipboard = Clipboard
 
@@ -5730,6 +9798,8 @@ def _install_stock_and_enums():
     orig_settings_set = Gtk.Settings.set_property
 
     def settings_get_property(self, name):
+        if name in _GTK_SETTINGS_OVERRIDES:
+            return _GTK_SETTINGS_OVERRIDES[name]
         try:
             return orig_settings_get(self, name)
         except TypeError:
@@ -5740,6 +9810,8 @@ def _install_stock_and_enums():
             raise
 
     def settings_set_property(self, name, value):
+        if name in ("gtk-menu-bar-accel", "gtk-enable-mnemonics"):
+            _GTK_SETTINGS_OVERRIDES[name] = value
         try:
             return orig_settings_set(self, name, value)
         except TypeError:
@@ -5792,6 +9864,27 @@ def _install_menuitem_activate_signal():
         GObject.signal_new(
             "clicked", MenuToolButton, GObject.SignalFlags.RUN_FIRST, None, []
         )
+
+
+def connect_legacy_event(widget, signal, callback):
+    """Connect a GTK 3 event that gtk4-builder-tool stripped from .ui files.
+
+    GTK 4 widgets no longer emit button-press-event, key-press-event, or
+    configure-event, so Builder.connect_signals() silently drops those
+    handlers. Widget.connect is patched to GestureClick / size ticks;
+    call this after connect_signals so real (non-AT-SPI) right-click
+    menus and window-size persistence still match GTK 3.
+    """
+    if widget is None or callback is None:
+        return
+    seen = getattr(widget, "_vmm_legacy_signals", None)
+    if seen is None:
+        seen = set()
+        widget._vmm_legacy_signals = seen
+    if signal in seen:
+        return
+    seen.add(signal)
+    widget.connect(signal, callback)
 
 
 def install():

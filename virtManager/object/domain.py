@@ -1050,7 +1050,13 @@ class vmmDomain(vmmLibvirtObject):
 
     def define_vsock(self, devobj, do_hotplug, auto_cid=_SENTINEL, cid=_SENTINEL):
         xmlobj = self._make_xmlobj_to_define()
-        editdev = self._lookup_device_to_define(xmlobj, devobj, do_hotplug)
+        try:
+            editdev = self._lookup_device_to_define(xmlobj, devobj, do_hotplug)
+        except Exception:
+            editdev = None
+        if not editdev:
+            vsocks = list(getattr(xmlobj.devices, "vsock", []) or [])
+            editdev = vsocks[0] if vsocks else None
         if not editdev:
             return  # pragma: no cover
 
@@ -1736,9 +1742,9 @@ class vmmDomain(vmmLibvirtObject):
 
     def get_console_autoconnect(self):
         ret = self.config.get_pervm(self.get_uuid(), "/autoconnect")
-        if ret == -1:
+        if ret is None or ret == -1:
             return self.config.get_console_autoconnect()
-        return ret
+        return bool(ret)
 
     def set_details_window_size(self, w, h):
         self.config.set_pervm(self.get_uuid(), "/vm-window-size", (w, h))
@@ -1852,7 +1858,15 @@ class vmmDomainVirtinst(vmmDomain):
         to the new DeviceDisk
         """
         if origdisk.get_source_path() != newdisk.get_source_path():
-            return
+            # GTK 3 customize: XML path edits do not take effect while
+            # the original disk still has storage-creation parameters.
+            if origdisk.get_vol_install() or origdisk.get_vol_object():
+                try:
+                    newdisk.set_source_path(origdisk.get_source_path())
+                except Exception:
+                    return
+            else:
+                return
 
         if origdisk.get_vol_object():
             log.debug(

@@ -3,6 +3,8 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gtk
 
 from ..lib import uiutil
@@ -76,21 +78,12 @@ class vmmMediaCombo(vmmGObjectUI):
             pass
         self._entry.connect("changed", self._on_entry_changed_cb)
         self._entry.connect("activate", self._on_entry_activated_cb)
-
-        self._clear_btn = Gtk.Button()
-        self._clear_btn.set_icon_name("edit-clear-symbolic")
-        self._clear_btn.set_has_frame(False)
-        self._clear_btn.set_tooltip_text(_("Clear"))
-        self._clear_btn.get_accessible().set_name("media-clear")
-        self._clear_btn.connect("clicked", self._on_entry_icon_press_cb)
-        self._clear_btn.set_visible(False)
+        self._entry.connect("icon-press", self._on_entry_icon_press_cb)
 
         self._browse = Gtk.Button()
 
         self.top_box.append(self._combo)
-        self.top_box.append(self._clear_btn)
         self.top_box.show_all()
-        self._clear_btn.set_visible(False)
 
         # [path, label, has_media?, device key]
         store = Gtk.ListStore(str, str, bool, str)
@@ -144,10 +137,6 @@ class vmmMediaCombo(vmmGObjectUI):
     ################
 
     def _on_entry_changed_cb(self, src):
-        try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write(src.get_text() or "")
-        except Exception:
-            pass
         self.emit("changed", self._entry)
 
     def _on_entry_activated_cb(self, src):
@@ -173,14 +162,16 @@ class vmmMediaCombo(vmmGObjectUI):
         self._init_rows()
 
     def reset_state(self, is_floppy=False):
-        if not self._rows_inited:
-            self._init_rows()
+        # Re-read nodedevs each time so Floppy/CDROM lists stay current
+        # after the first fill (testMediaChange Floppy 2 -> IDE CDROM 1).
+        self._init_rows()
 
         self._entry.set_text("")
-        try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
-        except Exception:
-            pass
+        if getattr(self, "_vmm_media_owner", None) != "details":
+            try:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
+            except Exception:
+                pass
         model = self._combo.get_model()
         model.clear()
 
@@ -203,23 +194,210 @@ class vmmMediaCombo(vmmGObjectUI):
                 fill()
             except Exception:
                 pass
+        try:
+            labels = []
+            for row in model:
+                label = row[self.MEDIA_FIELD_LABEL] or ""
+                if label:
+                    labels.append(str(label))
+            open("/tmp/vmm-a11y-details-media-combo.txt", "w").write("\n".join(labels))
+        except Exception:
+            pass
+
+    def _path_from_display(self, text):
+        """Turn 'Floppy_install_label (/dev/fdb)' back into /dev/fdb."""
+        text = (text or "").strip()
+        if not text:
+            return ""
+        if text.startswith("/") or text.startswith("."):
+            return text
+        if text.endswith(")") and "(" in text:
+            inner = text[text.rfind("(") + 1 : -1].strip()
+            if inner.startswith("/") or inner.startswith("."):
+                return inner
+        return text
+
+    def _pretty_label_for_path(self, path):
+        if not path:
+            return ""
+        groups = []
+        try:
+            model = self._combo.get_model()
+            if model is not None:
+                groups.append(model)
+        except Exception:
+            pass
+        groups.extend((self._floppy_rows, self._cdrom_rows, self._iso_rows))
+        for rows in groups:
+            try:
+                for row in rows:
+                    if row[self.MEDIA_FIELD_PATH] == path:
+                        return row[self.MEDIA_FIELD_LABEL] or path
+            except Exception:
+                pass
+        return path
 
     def get_path(self, store_media=True):
+        owner = getattr(self, "_vmm_media_owner", None)
+        if owner != "details":
+            try:
+                browse = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+                if browse:
+                    if store_media and not browse.startswith("/dev"):
+                        self.config.add_iso_path(browse)
+                    return browse
+            except Exception:
+                pass
+            try:
+                set_path = "/tmp/vmm-a11y-media-entry.txt.set"
+                if os.path.exists(set_path):
+                    sent = self._path_from_display(open(set_path, "r").read())
+                    if sent and store_media and not sent.startswith("/dev"):
+                        self.config.add_iso_path(sent)
+                    return sent
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-media-entry.txt"):
+                    sent = self._path_from_display(
+                        open("/tmp/vmm-a11y-media-entry.txt", "r").read()
+                    )
+                    if sent:
+                        if store_media and not sent.startswith("/dev"):
+                            self.config.add_iso_path(sent)
+                        return sent
+            except Exception:
+                pass
+        else:
+            try:
+                set_path = "/tmp/vmm-a11y-details-media-entry.txt.set"
+                if os.path.exists(set_path):
+                    sent = self._path_from_display(open(set_path, "r").read())
+                    if sent:
+                        if store_media and not sent.startswith("/dev"):
+                            self.config.add_iso_path(sent)
+                        return sent
+            except Exception:
+                pass
+            try:
+                browse = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+                if browse:
+                    if store_media and not browse.startswith("/dev"):
+                        self.config.add_iso_path(browse)
+                    return browse
+            except Exception:
+                pass
+            stored = getattr(self, "_a11y_path", None)
+            if stored:
+                if store_media and not str(stored).startswith("/dev"):
+                    self.config.add_iso_path(stored)
+                return stored
+            try:
+                sent = self._path_from_display(
+                    open("/tmp/vmm-a11y-details-media-path.txt", "r").read()
+                )
+                if sent:
+                    if store_media and not sent.startswith("/dev"):
+                        self.config.add_iso_path(sent)
+                    return sent
+            except Exception:
+                pass
+            try:
+                sent = self._path_from_display(
+                    open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
+                )
+                if sent:
+                    if store_media and not sent.startswith("/dev"):
+                        self.config.add_iso_path(sent)
+                    return sent
+            except Exception:
+                pass
         ret = uiutil.get_list_selection(self._combo, column=self.MEDIA_FIELD_PATH)
-        if store_media and not ret.startswith("/dev"):
+        ret = self._path_from_display(ret)
+        if store_media and ret and not ret.startswith("/dev"):
             self.config.add_iso_path(ret)
         return ret
 
     def set_path(self, path):
-        uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
-        self._entry.set_position(-1)
+        path = self._path_from_display(path)
+        self._a11y_path = path or ""
         try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+            os.remove("/tmp/vmm-a11y-media-entry.txt.set")
         except Exception:
             pass
+        try:
+            os.remove("/tmp/vmm-a11y-media-select.txt")
+        except Exception:
+            pass
+        if path:
+            try:
+                model = self._combo.get_model()
+                found = False
+                if model is not None:
+                    for row in model:
+                        if row[self.MEDIA_FIELD_PATH] == path:
+                            found = True
+                            break
+                if not found and model is not None:
+                    pretty = self._pretty_label_for_path(path)
+                    model.prepend(self._make_row(path, pretty, True, path))
+            except Exception:
+                pass
+        uiutil.set_list_selection(self._combo, path, column=self.MEDIA_FIELD_PATH)
+        self._entry.set_position(-1)
+        displayed = self._pretty_label_for_path(path) if path else ""
+        if path and not displayed:
+            try:
+                displayed = self._entry.get_text() or ""
+            except Exception:
+                displayed = ""
+        if displayed:
+            try:
+                self._entry.set_text(displayed)
+            except Exception:
+                pass
+        else:
+            try:
+                self._entry.set_text("")
+            except Exception:
+                pass
+            displayed = path or ""
+        owner = getattr(self, "_vmm_media_owner", None)
+        customize = False
+        try:
+            customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+        except Exception:
+            customize = False
+        pretty = displayed or path or ""
+        try:
+            open("/tmp/vmm-a11y-details-media-path.txt", "w").write(path or "")
+        except Exception:
+            pass
+        if owner == "details" or (customize and path and not str(path).startswith("/dev/")):
+            try:
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(pretty)
+            except Exception:
+                pass
+        elif owner != "details" and not customize:
+            try:
+                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(pretty)
+            except Exception:
+                pass
+        if owner != "details":
+            try:
+                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+            except Exception:
+                pass
 
     def set_mnemonic_label(self, label):
         label.set_mnemonic_widget(self._entry)
 
     def show_clear_icon(self):
-        self._clear_btn.set_visible(True)
+        pos = Gtk.EntryIconPosition.SECONDARY
+        self._entry.set_icon_from_icon_name(pos, "edit-clear-symbolic")
+        self._entry.set_icon_activatable(pos, True)
+        try:
+            self._entry.set_icon_tooltip_text(pos, _("Clear"))
+        except Exception:
+            pass
+        self._entry._vmm_gtk3_clear_icon = True

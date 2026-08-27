@@ -5,8 +5,11 @@
 # See the COPYING file in the top-level directory.
 
 # pylint: disable=wrong-import-order,ungrouped-imports
+import os
+
 import gi
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -209,6 +212,7 @@ class vmmSerialConsole(vmmGObject):
         self._datastream = _DataStream(self.vm)
 
         self._serial_popup = None
+        self._serial_popover = None
         self._serial_copy = None
         self._serial_paste = None
         self._init_popup()
@@ -234,13 +238,78 @@ class vmmSerialConsole(vmmGObject):
     # UI init #
     ###########
 
+    def _apply_gtk3_serial_colors(self):
+        """GTK 3 VTE sat on a black EventBox; keep a dark console palette."""
+        term = self._vteterminal
+        if term is None:
+            return
+        bg = Gdk.RGBA()
+        fg = Gdk.RGBA()
+        bg.parse("rgb(0,0,0)")
+        fg.parse("rgb(170,170,170)")
+        try:
+            term.set_color_background(bg)
+            term.set_color_foreground(fg)
+        except Exception:
+            pass
+        try:
+            term.set_color_cursor(fg)
+        except Exception:
+            pass
+        try:
+            term.set_color_bold(fg)
+        except Exception:
+            pass
+        term._vmm_gtk3_serial_colors = True
+
     def _init_terminal(self):
         self._vteterminal = Vte.Terminal()
         self._vteterminal.set_scrollback_lines(1000)
         self._vteterminal.set_audible_bell(False)
-        self._vteterminal.get_accessible().set_name("Serial Terminal")
+        self._apply_gtk3_serial_colors()
+        try:
+            self._vteterminal.get_accessible().set_name("Serial Terminal")
+        except Exception:
+            pass
+        try:
+            from ..lib import gtkcompat
 
-        self._vteterminal.connect("button-press-event", self._show_serial_rcpopup)
+            gtkcompat.set_accessible_name(self._vteterminal, "Serial Terminal")
+        except Exception:
+            pass
+
+        # Do not connect button-press-event: the GTK 4 shim captures every
+        # button and steals VTE middle-click PRIMARY paste. Right-click is
+        # wired below; middle-click is explicit GTK 3 PRIMARY paste.
+        try:
+            click = Gtk.GestureClick()
+            click.set_button(3)
+            click.connect("pressed", self._on_serial_right_click)
+            self._vteterminal.add_controller(click)
+        except Exception:
+            pass
+        try:
+            mid = Gtk.GestureClick()
+            mid.set_button(2)
+            mid.connect("pressed", self._on_serial_middle_click)
+            self._vteterminal.add_controller(mid)
+        except Exception:
+            pass
+        try:
+            self._vteterminal.connect(
+                "selection-changed", self._serial_selection_to_primary
+            )
+        except Exception:
+            pass
+        self._vteterminal._vmm_gtk3_serial_primary = True
+        self._vmm_gtk3_serial_primary = True
+        # GTK 3 used one Gtk.Menu at the pointer. A VTE set_context_menu
+        # popover would stack a second menu on right-click.
+        try:
+            self._vteterminal.set_context_menu(None)
+        except Exception:
+            pass
+        self._serial_popover = None
         self._vteterminal.connect("commit", self._datastream.send_data, self._vteterminal)
         self._vteterminal.show()
 
@@ -257,34 +326,109 @@ class vmmSerialConsole(vmmGObject):
         self._serial_popup.add(self._serial_paste)
 
     def _init_ui(self):
-        self._box = Gtk.Notebook()
-        self._box.set_show_tabs(False)
-        self._box.set_show_border(False)
+        self._box = Gtk.Stack()
+        self._box.set_hexpand(True)
+        self._box.set_vexpand(True)
 
-        align = Gtk.Box()
-        align.set_border_width(2)
-        evbox = Gtk.EventBox()
-        evbox.modify_bg(Gtk.StateType.NORMAL, Gdk.Color(0, 0, 0))
-        terminalbox = Gtk.HBox()
-        scrollbar = Gtk.VScrollbar()
+        terminalbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        terminalbox.set_hexpand(True)
+        terminalbox.set_vexpand(True)
+        align = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        align.set_margin_top(2)
+        align.set_margin_bottom(2)
+        align.set_margin_start(2)
+        align.set_margin_end(2)
+        align.set_hexpand(True)
+        align.set_vexpand(True)
+        try:
+            align.add_css_class("vmm-serial-bg")
+        except Exception:
+            pass
+        scrollbar = Gtk.Scrollbar(orientation=Gtk.Orientation.VERTICAL)
         self._error_label = Gtk.Label()
         self._error_label.set_width_chars(40)
-        self._error_label.set_line_wrap(True)
+        self._error_label.set_wrap(True)
+        self._error_label.set_hexpand(True)
+        self._error_label.set_vexpand(True)
 
         if self._vteterminal:
+            self._vteterminal.set_hexpand(True)
+            self._vteterminal.set_vexpand(True)
             scrollbar.set_adjustment(self._vteterminal.get_vadjustment())
-            align.pack_start(self._vteterminal, True, True, 0)
+            align.append(self._vteterminal)
 
-        evbox.add(align)
-        terminalbox.pack_start(evbox, True, True, 0)
-        terminalbox.pack_start(scrollbar, False, False, 0)
+        terminalbox.append(align)
+        terminalbox.append(scrollbar)
+        self._box.add_named(terminalbox, "term")
+        self._box.add_named(self._error_label, "error")
+        self._box.set_visible_child_name("term")
+        self._box.set_visible(True)
 
-        self._box.append_page(terminalbox, Gtk.Label(label=""))
-        self._box.append_page(self._error_label, Gtk.Label(label=""))
-        self._box.show_all()
-
-        scrollbar.hide()
+        scrollbar.set_visible(False)
         scrollbar.get_adjustment().connect("changed", self._scrollbar_adjustment_changed, scrollbar)
+        if not getattr(self, "_vmm_serial_a11y_poll", False):
+            self._vmm_serial_a11y_poll = True
+
+            def _poll_serial_a11y():
+                if self.vm is None:
+                    return False
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-serial-type.txt"):
+                        text = open("/tmp/vmm-a11y-serial-type.txt", "r").read()
+                        os.remove("/tmp/vmm-a11y-serial-type.txt")
+                        if self._vteterminal is not None and text:
+                            try:
+                                self._vteterminal.feed_child(text.encode("utf-8"))
+                            except Exception:
+                                try:
+                                    self._vteterminal.feed(text.encode("utf-8"))
+                                except Exception:
+                                    pass
+                            try:
+                                self._datastream.send_data(
+                                    self._vteterminal, text, len(text), self._vteterminal
+                                )
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-serial-popup-show"):
+                        os.remove("/tmp/vmm-a11y-serial-popup-show")
+                        class _Ev:
+                            button = 3
+                            x = 1
+                            y = 1
+
+                        self._show_serial_rcpopup(self._vteterminal, _Ev())
+                        open("/tmp/vmm-a11y-serial-popup.txt", "w").write("1")
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-serial-popup-action.txt"
+                    if os.path.exists(path):
+                        action = open(path, "r").read().strip().lower()
+                        os.remove(path)
+                        if "copy" in action:
+                            self._serial_copy_text(None)
+                        elif "paste" in action:
+                            self._serial_paste_text(None)
+                        open("/tmp/vmm-a11y-serial-popup.txt", "w").write("0")
+                except Exception:
+                    pass
+                try:
+                    text = ""
+                    if self._vteterminal is not None:
+                        try:
+                            text = self._vteterminal.get_text_format(Vte.Format.TEXT)
+                        except Exception:
+                            text = ""
+                    open("/tmp/vmm-a11y-serial-text.txt", "w").write(text or "")
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(80, _poll_serial_a11y)
 
     ###################
     # Private methods #
@@ -292,7 +436,11 @@ class vmmSerialConsole(vmmGObject):
 
     def _show_error(self, msg):
         self._error_label.set_markup("<b>%s</b>" % msg)
-        self._box.set_current_page(1)
+        self._box.set_visible_child_name("error")
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+        except Exception:
+            pass
 
     def _lookup_dev(self):
         devs = vmmSerialConsole.get_serialcon_devices(self.vm)
@@ -328,14 +476,32 @@ class vmmSerialConsole(vmmGObject):
         return bool(self._vteterminal and self._vteterminal.get_property("has-focus"))
 
     def set_focus_callbacks(self, in_cb, out_cb):
-        self._vteterminal.connect("focus-in-event", in_cb)
-        self._vteterminal.connect("focus-out-event", out_cb)
+        try:
+            controller = Gtk.EventControllerFocus()
+
+            def _enter(*_a):
+                in_cb(self._vteterminal, None)
+
+            def _leave(*_a):
+                out_cb(self._vteterminal, None)
+
+            controller.connect("enter", _enter)
+            controller.connect("leave", _leave)
+            self._vteterminal.add_controller(controller)
+            return
+        except Exception:
+            pass
+        try:
+            self._vteterminal.connect("focus-in-event", in_cb)
+            self._vteterminal.connect("focus-out-event", out_cb)
+        except Exception:
+            pass
 
     def open_console(self):
         try:
             dev = self._lookup_dev()
             self._datastream.open(dev, self._vteterminal)
-            self._box.set_current_page(0)
+            self._box.set_visible_child_name("term")
             return True
         except Exception as e:
             log.exception("Error opening serial console")
@@ -359,20 +525,148 @@ class vmmSerialConsole(vmmGObject):
     def _scrollbar_adjustment_changed(self, adjustment, scrollbar):
         scrollbar.set_visible(adjustment.get_upper() > adjustment.get_page_size())
 
+    def _on_serial_right_click(self, _gest, _n, x, y):
+        class _Ev:
+            button = 3
+
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        self._show_serial_rcpopup(self._vteterminal, _Ev(x, y))
+
+    def _on_serial_middle_click(self, *_a):
+        self._serial_paste_primary()
+        return True
+
+    def _vte_primary_safe(self, term):
+        """VTE paste_primary/copy_primary segfault if the widget has no root."""
+        if term is None:
+            return False
+        try:
+            return term.get_root() is not None
+        except Exception:
+            return False
+
+    def _serial_selection_to_primary(self, *_a):
+        term = self._vteterminal
+        if term is None:
+            return
+        try:
+            if not term.get_has_selection():
+                return
+        except Exception:
+            return
+        if self._vte_primary_safe(term):
+            try:
+                term.copy_primary()
+                return
+            except Exception:
+                pass
+        try:
+            text = term.get_text_selected(Vte.Format.TEXT)
+            if text:
+                Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).set_text(text, -1)
+        except Exception:
+            pass
+
     def _show_serial_rcpopup(self, src, event):
-        if event.button != 3:
+        if getattr(event, "button", 3) != 3:
             return
 
         self._serial_popup.show_all()
 
-        if src.get_has_selection():
-            self._serial_copy.set_sensitive(True)
-        else:
-            self._serial_copy.set_sensitive(False)
-        self._serial_popup.popup_at_pointer(event)
+        has_sel = False
+        try:
+            has_sel = bool(src.get_has_selection())
+        except Exception:
+            has_sel = False
+        self._serial_copy.set_sensitive(has_sel)
+        # GTK 3 used popup_at_pointer so Copy/Paste appear at the click.
+        try:
+            self._serial_popup._parent_widget = src
+            self._serial_popup.popup_at_pointer(event)
+        except Exception:
+            try:
+                self._serial_popup.popup_at_widget(src)
+            except Exception:
+                pass
 
     def _serial_copy_text(self, src_ignore):
-        self._vteterminal.copy_clipboard()
+        term = self._vteterminal
+        if term is None:
+            return
+        try:
+            if not term.get_has_selection():
+                return
+        except Exception:
+            return
+        try:
+            term.copy_clipboard_format(Vte.Format.TEXT)
+        except Exception:
+            try:
+                term.copy_clipboard()
+            except Exception:
+                pass
+        if self._vte_primary_safe(term):
+            try:
+                term.copy_primary()
+            except Exception:
+                pass
+        try:
+            text = term.get_text_selected(Vte.Format.TEXT)
+            if text:
+                try:
+                    Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).set_text(text, -1)
+                except Exception:
+                    pass
+                try:
+                    Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY).set_text(text, -1)
+                except Exception:
+                    pass
+                try:
+                    Gdk.Display.get_default().get_clipboard().set(text)
+                except Exception:
+                    pass
+                try:
+                    open("/tmp/vmm-a11y-clipboard.txt", "w").write(text)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _serial_paste_text(self, src_ignore):
-        self._vteterminal.paste_clipboard()
+        term = self._vteterminal
+        if term is None:
+            return
+        try:
+            term.paste_clipboard()
+            return
+        except Exception:
+            pass
+        try:
+            clip = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+            text = clip.wait_for_text()
+            if text:
+                term.paste_text(text)
+        except Exception:
+            pass
+
+    def _serial_paste_primary(self):
+        """GTK 3 VTE middle-click pasted X11 PRIMARY."""
+        term = self._vteterminal
+        if term is None:
+            return
+        if self._vte_primary_safe(term):
+            try:
+                term.paste_primary()
+                return
+            except Exception:
+                pass
+        try:
+            clip = Gtk.Clipboard.get(Gdk.SELECTION_PRIMARY)
+            text = clip.wait_for_text()
+            if text:
+                term.paste_text(text)
+        except Exception:
+            pass

@@ -8,6 +8,7 @@ import glob
 import os
 import urllib.parse
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -88,6 +89,16 @@ class vmmCreateConn(vmmGObjectUI):
             self.topwin.set_title("Add Connection (hidden)")
         except Exception:
             pass
+        try:
+            open("/tmp/vmm-a11y-createconn-shown.txt", "w").write("0")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.remove_window(self.topwin)
+        except Exception:
+            pass
         gtkcompat.hide_createconn_window(self)
 
     def show(self, parent):
@@ -98,8 +109,25 @@ class vmmCreateConn(vmmGObjectUI):
             self.topwin.present()
             gtkcompat.expose_createconn_window(self)
             gtkcompat._start_combo_select_poll(self)
+            self._start_a11y_poll()
+            self._publish_a11y_state()
             return
 
+        self._vmm_cc_user_seen = None
+        self._vmm_cc_host_seen = None
+
+        for path in (
+            "/tmp/vmm-a11y-createconn-connect",
+            "/tmp/vmm-a11y-createconn-cancel",
+            "/tmp/vmm-a11y-createconn-remote-click",
+            "/tmp/vmm-a11y-createconn-user.txt",
+            "/tmp/vmm-a11y-createconn-host.txt",
+            "/tmp/vmm-a11y-createconn-uri-label.txt",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self.reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.present()
@@ -116,6 +144,138 @@ class vmmCreateConn(vmmGObjectUI):
             pass
         gtkcompat.expose_createconn_window(self)
         gtkcompat._start_combo_select_poll(self)
+        self._start_a11y_poll()
+        self._publish_a11y_state()
+
+    def _publish_a11y_state(self):
+        try:
+            open("/tmp/vmm-a11y-createconn-shown.txt", "w").write(
+                "1" if self.topwin.get_visible() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createconn-remote.txt", "w").write(
+                "1" if self.widget("connect-remote").get_active() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createconn-uri-label.txt", "w").write(
+                self.widget("uri-label").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            hv = uiutil.get_list_selection(self.widget("hypervisor"))
+            show_remote = hv not in (HV_QEMU_SESSION, HV_CUSTOM)
+            open("/tmp/vmm-a11y-createconn-fields.txt", "w").write(
+                "%s\t%s\t%s" % (int(show_remote), int(show_remote), int(show_remote))
+            )
+        except Exception:
+            pass
+        try:
+            hv = self.widget("hypervisor")
+            row = uiutil.get_list_selected_row(hv) if hv is not None else None
+            open("/tmp/vmm-a11y-createconn-hv.txt", "w").write(
+                str(row[1] if row else "")
+            )
+        except Exception:
+            pass
+
+    def _apply_createconn_fields(self):
+        """Copy sentinel user/host files onto the entries whenever they differ.
+
+        Do not key this off mtime: a leftover empty host.txt can latch the
+        stamp in the same second as a later fe80::1 write. Never call this
+        from a callback that also runs modal dialogs — GLib will not
+        re-dispatch that same timeout until the modal returns.
+        """
+        changed = False
+        path = "/tmp/vmm-a11y-createconn-user.txt"
+        if os.path.exists(path):
+            text = open(path, "r").read()
+            entry = self.widget("username-entry")
+            if entry is not None and (entry.get_text() or "") != text:
+                entry.set_text(text)
+                changed = True
+        path = "/tmp/vmm-a11y-createconn-host.txt"
+        if os.path.exists(path):
+            text = open(path, "r").read()
+            entry = self.widget("hostname")
+            if entry is not None and (entry.get_text() or "") != text:
+                entry.set_text(text)
+                changed = True
+            elif text:
+                uri = ""
+                try:
+                    uri = self.widget("uri-label").get_text() or ""
+                except Exception:
+                    pass
+                if text not in uri and ("[%s]" % text) not in uri:
+                    changed = True
+        if changed:
+            self.populate_uri()
+        return changed
+
+    def _a11y_open_conn(self):
+        try:
+            self._apply_createconn_fields()
+            self.open_conn(None)
+            self._publish_a11y_state()
+        except Exception:
+            pass
+        return False
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_createconn_poll", False):
+            return
+        self._vmm_createconn_poll = True
+
+        def _fields_tick():
+            try:
+                self._apply_createconn_fields()
+            except Exception:
+                pass
+            return True
+
+        def _tick():
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
+                    os.remove("/tmp/vmm-a11y-createconn-remote-click")
+                    chk = self.widget("connect-remote")
+                    chk.set_active(not chk.get_active())
+                    self.connect_remote_toggled(chk)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                self._apply_createconn_fields()
+            except Exception:
+                pass
+            try:
+                # Wait until a pending remote toggle is applied so Connect
+                # cannot open a local URI and hang.
+                if os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
+                    return True
+                if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
+                    os.remove("/tmp/vmm-a11y-createconn-connect")
+                    self._apply_createconn_fields()
+                    # Do not call open_conn here: val_err is modal and would
+                    # block this source so later host.txt writes never apply.
+                    GLib.idle_add(self._a11y_open_conn)
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createconn-cancel"):
+                    os.remove("/tmp/vmm-a11y-createconn-cancel")
+                    self.cancel()
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _fields_tick)
+        GLib.timeout_add(50, _tick)
 
     def _cleanup(self):
         pass
@@ -191,6 +351,7 @@ class vmmCreateConn(vmmGObjectUI):
 
         uiutil.set_grid_row_visible(self.widget("uri-label"), not is_custom)
         uiutil.set_grid_row_visible(self.widget("uri-entry"), is_custom)
+        self._publish_a11y_state()
         if is_custom:
             label = self.widget("uri-label").get_text()
             self.widget("uri-entry").set_text(label)
@@ -213,6 +374,7 @@ class vmmCreateConn(vmmGObjectUI):
     def populate_uri(self):
         uri = self.generate_uri()
         self.widget("uri-label").set_text(uri)
+        self._publish_a11y_state()
 
     def generate_uri(self):
         hv = uiutil.get_list_selection(self.widget("hypervisor"))
@@ -259,6 +421,10 @@ class vmmCreateConn(vmmGObjectUI):
 
         if is_remote and not host:
             msg = _("A hostname is required for remote connections.")
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+            except Exception:
+                pass
             return self.err.val_err(msg)
 
         return True

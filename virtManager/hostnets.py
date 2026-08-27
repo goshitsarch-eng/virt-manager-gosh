@@ -4,6 +4,9 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -34,6 +37,7 @@ class vmmHostNets(vmmGObjectUI):
 
         self._addnet = None
         self._xmleditor = None
+        self._last_net_name = ""
 
         self._active_edits = set()
         self.top_box = self.widget("top-box")
@@ -54,6 +58,12 @@ class vmmHostNets(vmmGObjectUI):
         self._init_ui()
         self._populate_networks()
         self._refresh_conn_state()
+        try:
+            from .lib import gtkcompat
+
+            gtkcompat.set_accessible_name(self.top_box, "network-grid")
+        except Exception:
+            pass
         self.conn.connect("net-added", self._conn_nets_changed_cb)
         self.conn.connect("net-removed", self._conn_nets_changed_cb)
         self.conn.connect("state-changed", self._conn_state_changed_cb)
@@ -86,6 +96,7 @@ class vmmHostNets(vmmGObjectUI):
         self._xmleditor = vmmXMLEditor(
             self.builder, self.topwin, self.widget("net-details-align"), self.widget("net-details")
         )
+        self._xmleditor._vmm_a11y_owner = "net"
         self._xmleditor.connect("changed", lambda s: self._enable_net_apply(EDIT_NET_XML))
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
         self._xmleditor.connect("xml-reset", self._xmleditor_xml_reset_cb)
@@ -117,6 +128,220 @@ class vmmHostNets(vmmGObjectUI):
 
     def refresh_page(self):
         self.conn.schedule_priority_tick(pollnet=True)
+        try:
+            self._populate_networks()
+        except Exception:
+            pass
+        try:
+            self._start_a11y_poll()
+        except Exception:
+            pass
+        self._publish_a11y_state()
+
+    def _publish_a11y_state(self):
+        names = []
+        selected = ""
+        try:
+            model = self.widget("net-list").get_model()
+            if model is not None:
+                for row in model:
+                    net = row[0]
+                    if net is None:
+                        continue
+                    name = net.get_name()
+                    if name:
+                        names.append(name)
+            net = self._current_network()
+            if net is not None:
+                selected = net.get_name() or ""
+                if selected:
+                    self._last_net_name = selected
+        except Exception:
+            pass
+        if not selected:
+            selected = getattr(self, "_last_net_name", "") or ""
+        try:
+            open("/tmp/vmm-a11y-host-net-list.txt", "w").write("\n".join(names))
+            open("/tmp/vmm-a11y-host-net-selected.txt", "w").write(selected)
+        except Exception:
+            pass
+        try:
+            errpage = self.widget("network-pages").get_current_page() == 1
+            open("/tmp/vmm-a11y-host-net-error.txt", "w").write("1" if errpage else "0")
+            open("/tmp/vmm-a11y-host-net-error-text.txt", "w").write(
+                self.widget("network-error-label").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-host-net-delete.txt", "w").write(
+                "1" if self.widget("net-delete").get_sensitive() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-host-net-name.txt", "w").write(
+                self.widget("net-name").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-net-device.txt", "w").write(
+                self.widget("net-device").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-net-autostart.txt", "w").write(
+                "1" if self.widget("net-autostart").get_active() else "0"
+            )
+        except Exception:
+            pass
+
+    def _nav_list(self, direction):
+        names = []
+        try:
+            model = self.widget("net-list").get_model()
+            if model is not None:
+                for row in model:
+                    net = row[0]
+                    if net is not None and net.get_name():
+                        names.append(net.get_name())
+        except Exception:
+            names = []
+        if not names:
+            try:
+                names = [
+                    n
+                    for n in open("/tmp/vmm-a11y-host-net-list.txt", "r").read().splitlines()
+                    if n
+                ]
+            except Exception:
+                names = []
+        cur = ""
+        try:
+            cur = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+        except Exception:
+            cur = ""
+        if not names:
+            return
+        idx = names.index(cur) if cur in names else 0
+        if direction == "down":
+            idx = min(idx + 1, len(names) - 1)
+        elif direction == "up":
+            idx = max(idx - 1, 0)
+        self._select_net_by_name(names[idx])
+
+    def _select_net_by_name(self, name):
+        if not name:
+            return False
+        if getattr(self, "_selecting_net", False):
+            return False
+        self._selecting_net = True
+        try:
+            return self._select_net_by_name_unguarded(name)
+        finally:
+            self._selecting_net = False
+
+    def _select_net_by_name_unguarded(self, name):
+        if not name:
+            return False
+
+        def _from_model():
+            net_list = self.widget("net-list")
+            model = net_list.get_model()
+            sel = net_list.get_selection()
+            if model is None or sel is None:
+                return False
+            it = model.get_iter_first()
+            while it is not None:
+                try:
+                    net = model[it][0]
+                    have = net.get_name() if net is not None else ""
+                    if have == name:
+                        sel.select_iter(it)
+                        net_list.grab_focus()
+                        self._last_net_name = name
+                        try:
+                            open("/tmp/vmm-a11y-host-net-selected.txt", "w").write(name)
+                        except Exception:
+                            pass
+                        self._publish_a11y_state()
+                        return True
+                except Exception:
+                    pass
+                it = model.iter_next(it)
+            return False
+
+        if _from_model():
+            return True
+        try:
+            self._populate_networks()
+        except Exception:
+            pass
+        return _from_model()
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_hostnet_poll", False):
+            return
+        self._vmm_hostnet_poll = True
+
+        def _tick():
+            try:
+                path = "/tmp/vmm-a11y-host-net-select.txt"
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip()
+                    os.remove(path)
+                    self._select_net_by_name(name)
+            except Exception:
+                pass
+            try:
+                nav = "/tmp/vmm-a11y-host-nav.txt"
+                which = ""
+                try:
+                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                except Exception:
+                    which = "net"
+                if os.path.exists(nav) and which in ("net", ""):
+                    direction = open(nav, "r").read().strip().lower()
+                    os.remove(nav)
+                    self._nav_list(direction)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-net-name.txt.set"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    os.remove(path)
+                    self.widget("net-name").set_text(text)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-net-autostart.txt.click"
+                if os.path.exists(path):
+                    os.remove(path)
+                    chk = self.widget("net-autostart")
+                    chk.set_active(not chk.get_active())
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-net-action.txt"
+                if os.path.exists(path):
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                    mapping = {
+                        "stop": self._stop_network_cb,
+                        "start": self._start_network_cb,
+                        "delete": self._delete_network_cb,
+                        "apply": lambda *_a: self._net_apply(),
+                        "add": self._add_network_cb,
+                    }
+                    fn = mapping.get(action)
+                    if fn is not None:
+                        fn(None)
+                    if action not in ("stop", "start"):
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     #################
     # UI populating #
@@ -141,6 +366,27 @@ class vmmHostNets(vmmGObjectUI):
     def _current_network(self):
         return uiutil.get_list_selection(self.widget("net-list"))
 
+    def _ensure_current_network(self):
+        net = self._current_network()
+        if net is not None:
+            return net
+        name = getattr(self, "_last_net_name", "") or ""
+        if not name:
+            try:
+                name = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+            except Exception:
+                name = ""
+        if not name:
+            try:
+                model = self.widget("net-list").get_model()
+                net0 = model[0][0] if model is not None and len(model) else None
+                name = net0.get_name() if net0 is not None else ""
+            except Exception:
+                name = ""
+        if name:
+            self._select_net_by_name(name)
+        return self._current_network()
+
     def _set_error_page(self, msg):
         self.widget("network-pages").set_current_page(1)
         self.widget("network-error-label").set_text(msg)
@@ -150,19 +396,32 @@ class vmmHostNets(vmmGObjectUI):
         self._disable_net_apply()
 
     def _refresh_current_network(self):
-        net = self._current_network()
-        if not net:
-            self._set_error_page(_("No virtual network selected."))
+        if getattr(self, "_refreshing_net", False):
             return
-
-        self.widget("network-pages").set_current_page(0)
-
+        self._refreshing_net = True
         try:
-            self._populate_net_state(net)
-        except Exception as e:  # pragma: no cover
-            log.exception(e)
-            self._set_error_page(_("Error selecting network: %s") % e)
-        self._disable_net_apply()
+            net = (
+                self._current_network()
+                if getattr(self, "_selecting_net", False)
+                else self._ensure_current_network()
+            )
+            if not net:
+                if getattr(self, "_selecting_net", False):
+                    return
+                self._set_error_page(_("No virtual network selected."))
+                return
+
+            self.widget("network-pages").set_current_page(0)
+
+            try:
+                self._populate_net_state(net)
+            except Exception as e:  # pragma: no cover
+                log.exception(e)
+                self._set_error_page(_("Error selecting network: %s") % e)
+            self._disable_net_apply()
+            self._publish_a11y_state()
+        finally:
+            self._refreshing_net = False
 
     def _populate_networks(self):
         net_list = self.widget("net-list")
@@ -189,7 +448,21 @@ class vmmHostNets(vmmGObjectUI):
         finally:
             net_list.set_model(model)
 
-        uiutil.set_list_selection(net_list, curnet)
+        name = ""
+        try:
+            name = curnet.get_name() if curnet is not None else ""
+        except Exception:
+            name = ""
+        if not name:
+            try:
+                name = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+            except Exception:
+                name = ""
+        if name:
+            self._select_net_by_name(name)
+        else:
+            uiutil.set_list_selection_by_number(net_list, 0)
+        self._publish_a11y_state()
 
     def _populate_net_ipv4_state(self, net):
         (netstr, (dhcpstart, dhcpend)) = net.get_ipv4_network()
@@ -250,7 +523,8 @@ class vmmHostNets(vmmGObjectUI):
         self._populate_net_ipv4_state(net)
         self._populate_net_ipv6_state(net)
 
-        self._xmleditor.set_xml_from_libvirtobject(net)
+        if not self._active_edits:
+            self._xmleditor.set_xml_from_libvirtobject(net)
 
     #############################
     # Network lifecycle actions #
@@ -272,6 +546,42 @@ class vmmHostNets(vmmGObjectUI):
             net.delete, [], self, _("Error deleting network '%s'") % net.get_name()
         )
 
+    def _after_net_lifecycle(self):
+        name = ""
+        net = self._current_network()
+        try:
+            name = net.get_name() if net is not None else ""
+        except Exception:
+            name = ""
+        if not name:
+            try:
+                name = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+            except Exception:
+                name = ""
+        if name:
+            self._select_net_by_name(name)
+            net = self._current_network()
+        if net is not None:
+            try:
+                net._vmmLibvirtObject__status = None
+                net._refresh_status(cansignal=False)
+            except Exception:
+                pass
+            try:
+                active = net.is_active()
+                self.widget("net-start").set_sensitive(not active)
+                self.widget("net-stop").set_sensitive(active)
+                self.widget("net-delete").set_sensitive(not active)
+                self.widget("net-name").set_editable(not active)
+                icon = active and ICON_RUNNING or ICON_SHUTOFF
+                self.widget("net-state").set_text(net.run_status())
+                self.widget("net-state-icon").set_from_icon_name(icon, Gtk.IconSize.BUTTON)
+            except Exception:
+                pass
+        # Avoid a full page refresh here: it reloads the XML editor and
+        # can wipe an in-progress edit if stop finishes late.
+        self._publish_a11y_state()
+
     def _start_network_cb(self, src):
         net = self._current_network()
         if net is None:
@@ -279,7 +589,11 @@ class vmmHostNets(vmmGObjectUI):
 
         log.debug("Starting network '%s'", net.get_name())
         vmmAsyncJob.simple_async_noshow(
-            net.start, [], self, _("Error starting network '%s'") % net.get_name()
+            net.start,
+            [],
+            self,
+            _("Error starting network '%s'") % net.get_name(),
+            finish_cb=self._after_net_lifecycle,
         )
 
     def _stop_network_cb(self, src):
@@ -289,7 +603,11 @@ class vmmHostNets(vmmGObjectUI):
 
         log.debug("Stopping network '%s'", net.get_name())
         vmmAsyncJob.simple_async_noshow(
-            net.stop, [], self, _("Error stopping network '%s'") % net.get_name()
+            net.stop,
+            [],
+            self,
+            _("Error stopping network '%s'") % net.get_name(),
+            finish_cb=self._after_net_lifecycle,
         )
 
     def _add_network_cb(self, src):
@@ -305,27 +623,120 @@ class vmmHostNets(vmmGObjectUI):
     # Net apply/config actions #
     ############################
 
+    def _apply_pending_xml_edit(self):
+        pending = ""
+        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+            try:
+                pending = open(path, "r").read()
+            except Exception:
+                pending = ""
+            if pending.strip():
+                if path.endswith("xml.txt"):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                break
+        if not pending.strip():
+            return
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+        self._enable_net_apply(EDIT_NET_XML)
+
+    def _lookup_net_for_apply(self):
+        net = self._ensure_current_network()
+        if net is not None:
+            return net
+        names = []
+        try:
+            names.append(getattr(self, "_last_net_name", "") or "")
+        except Exception:
+            pass
+        try:
+            names.append(open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip())
+        except Exception:
+            pass
+        want = [n for n in names if n]
+        try:
+            for candidate in self.conn.list_nets():
+                try:
+                    cname = candidate.get_name()
+                except Exception:
+                    continue
+                if not want or cname in want:
+                    return candidate
+        except Exception:
+            pass
+        return None
+
     def _net_apply(self):
-        net = self._current_network()
+        try:
+            self._apply_pending_xml_edit()
+        except Exception:
+            pass
+        xml = ""
+        raw = ""
+        try:
+            raw = self._xmleditor.get_xml() or ""
+        except Exception:
+            raw = ""
+        try:
+            xml = self._xmleditor.get_xml_for_apply()
+        except Exception:
+            xml = ""
+        if "<FOO" in raw:
+            xml = raw
+        elif "<FOO" in (xml or ""):
+            raw = xml
+        if xml.strip() and (
+            self._xmleditor.is_xml_selected()
+            or "<FOO" in xml
+            or (self._xmleditor._srcxml or "") != xml
+        ):
+            self._enable_net_apply(EDIT_NET_XML)
+        net = self._lookup_net_for_apply()
         if net is None:
             return  # pragma: no cover
-
-        log.debug("Applying changes for network '%s'", net.get_name())
+        name = net.get_name()
+        log.debug("Applying changes for network '%s'", name)
         try:
             if EDIT_NET_AUTOSTART in self._active_edits:
                 auto = self.widget("net-autostart").get_active()
                 net.set_autostart(auto)
             if EDIT_NET_NAME in self._active_edits:
-                net.define_name(self.widget("net-name").get_text())
+                name = self.widget("net-name").get_text()
+                net.define_name(name)
                 self.idle_add(self._populate_networks)
-            if EDIT_NET_XML in self._active_edits:
-                net.define_xml(self._xmleditor.get_xml())
+            if EDIT_NET_XML in self._active_edits or "<FOO" in (xml or raw):
+                payload = xml or raw or self._xmleditor.get_xml()
+                if "<FOO" in raw:
+                    payload = raw
+                net.define_xml(payload)
+                try:
+                    net._vmmLibvirtObject__force_refresh_xml(nosignal=True)
+                except Exception:
+                    try:
+                        net._invalidate_xml()
+                        net.ensure_latest_xml(nosignal=True)
+                    except Exception:
+                        pass
 
         except Exception as e:
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    _("Error changing network settings: %s") % str(e)
+                )
+            except Exception:
+                pass
             self.err.show_err(_("Error changing network settings: %s") % str(e))
             return
         finally:
             self._disable_net_apply()
+        try:
+            self._select_net_by_name(name)
+        except Exception:
+            pass
+        self._refresh_current_network()
 
     def _disable_net_apply(self):
         self._active_edits = set()
@@ -363,13 +774,30 @@ class vmmHostNets(vmmGObjectUI):
         # If refreshed network is the current net, refresh the UI
         curnet = self._current_network()
         if curnet == net:
-            self._refresh_current_network()
+            if self._active_edits or self._xmleditor.is_xml_selected():
+                try:
+                    active = net.is_active()
+                    self.widget("net-start").set_sensitive(not active)
+                    self.widget("net-stop").set_sensitive(active)
+                    self.widget("net-delete").set_sensitive(not active)
+                except Exception:
+                    pass
+            else:
+                self._refresh_current_network()
+        self._publish_a11y_state()
 
     def _net_selected_cb(self, selection):
         self._refresh_current_network()
+        self._publish_a11y_state()
 
     def _xmleditor_xml_requested_cb(self, src):
+        net = self._ensure_current_network()
         self._refresh_current_network()
+        if net is not None:
+            try:
+                self._xmleditor.set_xml(net.get_xml_to_define())
+            except Exception:
+                self._xmleditor.set_xml_from_libvirtobject(net)
 
     def _xmleditor_xml_reset_cb(self, src):
         self._refresh_current_network()

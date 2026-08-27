@@ -41,6 +41,7 @@
                 <property name="focusable">1</property>
                 <property name="halign">start</property>
                 <property name="visibility">0</property>
+                <property name="input-purpose">password</property>
                 <signal name="changed" handler="on_graphics_password_changed" swapped="no" />
                 </object>
             </child>

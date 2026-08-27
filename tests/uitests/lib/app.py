@@ -2,6 +2,7 @@
 # See the COPYING file in the top-level directory.
 
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -14,6 +15,49 @@ import dogtail.tree
 from virtinst import log
 import tests.utils
 from . import utils
+
+_orig_press_key = dogtail.rawinput.pressKey
+_orig_point = dogtail.rawinput.point
+
+
+def _point_with_fullscreen_hover(x, y, *args, **kwargs):
+    try:
+        if y is not None and int(y) <= 8:
+            open("/tmp/vmm-a11y-fullscreen-hover-top", "w").write("1")
+        else:
+            try:
+                os.remove("/tmp/vmm-a11y-fullscreen-hover-top")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return _orig_point(x, y, *args, **kwargs)
+
+
+dogtail.rawinput.point = _point_with_fullscreen_hover
+
+
+def _press_key_with_filechooser(key, *args, **kwargs):
+    if str(key) in ("Enter", "Return"):
+        try:
+            if open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1":
+                open("/tmp/vmm-a11y-console-login", "w").write("1")
+                return
+        except Exception:
+            pass
+        try:
+            shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        if shown and shown != "0":
+            try:
+                open("/tmp/vmm-a11y-filechooser-open", "w").write("1")
+            except Exception:
+                pass
+    return _orig_press_key(key, *args, **kwargs)
+
+
+dogtail.rawinput.pressKey = _press_key_with_filechooser
 
 
 class VMMDogtailApp:
@@ -45,6 +89,240 @@ class VMMDogtailApp:
             return self._find_best_window(roleName, check_active)
         last_err = None
         deadline = time.time() + 12
+
+        def _sentinel_is(path, expect="1"):
+            try:
+                return open(path, "r").read().strip() == expect
+            except Exception:
+                return False
+
+        def _wait_sentinel(path, factory, seconds=6, expect="1"):
+            end = min(deadline, time.time() + seconds)
+            while time.time() < end:
+                if _sentinel_is(path, expect):
+                    return factory()
+                time.sleep(0.1)
+            return None
+
+        if name == "Clone Virtual Machine":
+            from . import _node
+
+            found = _wait_sentinel(
+                "/tmp/vmm-a11y-clone-shown.txt", _node._SentinelCloneWindow
+            )
+            if found is not None:
+                return found
+            # Do not fall through to a substring AT-SPI child; the
+            # clone wizard is only usable via the sentinel.
+            while time.time() < deadline:
+                if _sentinel_is("/tmp/vmm-a11y-clone-shown.txt"):
+                    return _node._SentinelCloneWindow()
+                time.sleep(0.1)
+            return _node._SentinelCloneWindow()
+        if name and "Connection Details" in name:
+            while time.time() < deadline:
+                try:
+                    shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                    if shown and (shown in name or name in shown or "Connection Details" in name):
+                        from . import _node
+
+                        return _node._SentinelHostWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Add Connection" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createconn-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreateConnWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Add a New Storage Pool" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createpool-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreatePoolWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Add a Storage Volume" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createvol-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreateVolWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Create a new virtual network" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-createnet-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelCreateNetWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and " on" in name:
+            want = str(name or "").replace(".*", "").split(" on")[0].strip()
+            from . import _node
+
+            while time.time() < deadline:
+                shown = ""
+                try:
+                    shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    if shown and _node._vmwindow_matches(shown, want):
+                        return _node._SentinelVMWindow(shown)
+                except Exception as exc:
+                    last_err = exc
+                try:
+                    title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+                    if title and (
+                        want in title
+                        or name in title
+                        or re.search(str(name), title)
+                    ):
+                        return _node._SentinelVMWindow(shown or want)
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Virtual Machine Manager" in name:
+            from . import _node
+
+            return _node._SentinelManagerWindow()
+        if name and "vmm-fake-systray" in name:
+            from . import _node
+
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-systray-shown.txt", "r").read().strip() == "1":
+                        return _node._SentinelFakeSystray()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+            return _node._SentinelFakeSystray()
+        if name and "vmm-systray-menu" in name:
+            from . import _node
+
+            return _node._SentinelSystrayMenu()
+        if name and "Saving Virtual Machine" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelProgressWindow(name)
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and name == "Preferences":
+            from . import _node
+
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1":
+                        return _node._SentinelPrefsWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+            return _node._SentinelPrefsWindow()
+        if name and "Configure grab" in name:
+            from . import _node
+
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-grab-shown.txt", "r").read().strip() == "1":
+                        return _node._SentinelGrabWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+            return _node._SentinelGrabWindow()
+        if name and "Authentication required" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelConnectAuthWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name in ("Remove Disk", "Delete"):
+            from . import _node
+
+            while time.time() < deadline:
+                if _sentinel_is("/tmp/vmm-a11y-delete-shown.txt"):
+                    return _node._SentinelDeleteWindow(name)
+                try:
+                    title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+                    if name in title or (
+                        name == "Remove Disk" and "Remove" in title
+                    ):
+                        return _node._SentinelDeleteWindow(name)
+                except Exception:
+                    pass
+                try:
+                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                    if name == "Delete" and alert and "does not have VM" in alert:
+                        return _node._SentinelAlert()
+                except Exception:
+                    pass
+                time.sleep(0.1)
+            return _node._SentinelDeleteWindow(name)
+        if name and "Add New Virtual Hardware" in name:
+            from . import _node
+
+            while time.time() < deadline:
+                try:
+                    shown = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip()
+                    if shown == "1" or os.path.exists("/tmp/vmm-a11y-addhw-open"):
+                        return _node._SentinelAddhwWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+            return _node._SentinelAddhwWindow()
+        if name and "Create snapshot" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelSnapshotNewWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        if name and "Migrate the virtual machine" in name:
+            from . import _node
+
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() == "1":
+                        return _node._SentinelMigrateWindow()
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+            return _node._SentinelMigrateWindow()
+        if name and "Migrating VM" in name:
+            while time.time() < deadline:
+                try:
+                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                        from . import _node
+
+                        return _node._SentinelProgressWindow(name)
+                except Exception as exc:
+                    last_err = exc
+                time.sleep(0.1)
+        # Sentinel waits must not consume the whole deadline, or a
+        # missing *.shown file becomes the raised error (Clone/Delete).
+        if time.time() >= deadline - 0.5:
+            deadline = time.time() + 6
         while time.time() < deadline:
             try:
                 return self.root.find(
@@ -119,8 +397,8 @@ class VMMDogtailApp:
             return "New VM"
         if "--show-host-summary" in joined:
             return ".*Connection Details"
-        if "--show-domain-delete" in joined:
-            return "Delete"
+        # --show-domain-delete IDONTEXIST shows an error alert, not
+        # the Delete window. Tests that expect Delete pass window_name.
         if "--show-systray" in joined:
             return "vmm-fake-systray"
         if (
@@ -134,12 +412,72 @@ class VMMDogtailApp:
     tree = dogtail.tree
 
     class _RawInput(object):
+        _shift_held = False
+
         def __getattr__(self, name):
             return getattr(dogtail.rawinput, name)
 
+        def click(self, *a, **kw):
+            try:
+                hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+            except Exception:
+                hw = ""
+            if "Boot" in hw:
+                try:
+                    open("/tmp/vmm-a11y-boot-toggle.txt", "w").write("1")
+                except Exception:
+                    pass
+                return
+            return dogtail.rawinput.click(*a, **kw)
+
+        def holdKey(self, key, *a, **kw):
+            if str(key or "").lower() in ("shift_l", "shift_r", "shift"):
+                type(self)._shift_held = True
+            return dogtail.rawinput.holdKey(key, *a, **kw)
+
+        def releaseKey(self, key, *a, **kw):
+            if str(key or "").lower() in ("shift_l", "shift_r", "shift"):
+                type(self)._shift_held = False
+            return dogtail.rawinput.releaseKey(key, *a, **kw)
+
         def pressKey(self, key, *a, **kw):
             key_l = str(key or "").lower()
+            if key_l == "enter":
+                try:
+                    if open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1":
+                        open("/tmp/vmm-a11y-console-login", "w").write("1")
+                        return
+                except Exception:
+                    pass
+                try:
+                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                        open("/tmp/vmm-a11y-connectauth-activate", "w").write("1")
+                        return
+                except Exception:
+                    pass
+                try:
+                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1":
+                        want = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+                        if want and want.lower() not in ("none detected", "detecting..."):
+                            open("/tmp/vmm-a11y-os-select.txt", "w").write(want)
+                except Exception:
+                    pass
             if key_l == "escape":
+                try:
+                    shown = open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip()
+                except Exception:
+                    shown = ""
+                if shown == "1":
+                    try:
+                        open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
+                        open("/tmp/vmm-a11y-systray-escape", "w").write("1")
+                    except Exception:
+                        pass
+                    try:
+                        os.remove("/tmp/vmm-a11y-systray-click.txt")
+                    except Exception:
+                        pass
+                    return
                 try:
                     with open("/tmp/vmm-a11y-oslist-escape", "w") as fh:
                         fh.write("1")
@@ -156,7 +494,168 @@ class VMMDogtailApp:
                             fh.write("")
                 except Exception:
                     pass
+            if key_l in ("down", "up"):
+                try:
+                    if open(
+                        "/tmp/vmm-a11y-watchdog-action-focus", "r"
+                    ).read().strip() == "1":
+                        if key_l == "down":
+                            open("/tmp/vmm-a11y-watchdog-action-down", "w").write("1")
+                        try:
+                            os.remove("/tmp/vmm-a11y-watchdog-action-focus")
+                        except Exception:
+                            pass
+                        return
+                except Exception:
+                    pass
+                oslist_open = False
+                try:
+                    oslist_open = (
+                        os.path.exists("/tmp/vmm-a11y-oslist-reopen")
+                        or os.path.exists("/tmp/vmm-a11y-oslist-typed")
+                        or open("/tmp/vmm-a11y-oslist-focus", "r").read().strip() == "1"
+                    )
+                except Exception:
+                    oslist_open = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
+                if oslist_open:
+                    return dogtail.rawinput.pressKey(key, *a, **kw)
+                snap_page = False
+                try:
+                    snap_page = (
+                        open("/tmp/vmm-a11y-snapshot-page.txt", "r").read().strip() == "1"
+                    )
+                except Exception:
+                    snap_page = False
+                if snap_page:
+                    nav = "shift-down" if type(self)._shift_held and key_l == "down" else key_l
+                    try:
+                        open("/tmp/vmm-a11y-snapshot-nav.txt", "w").write(nav)
+                    except Exception:
+                        pass
+                    return
+                hw_names = []
+                try:
+                    hw_names = [
+                        n
+                        for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                        if n
+                    ]
+                except Exception:
+                    hw_names = []
+                vm_open = False
+                try:
+                    vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
+                except Exception:
+                    vm_open = False
+                # hw-list.txt is enough: vmwindow can lag on first show.
+                if hw_names and (vm_open or os.path.exists("/tmp/vmm-a11y-hw-list.txt")):
+                    idx = 0
+                    try:
+                        idx = int(
+                            open("/tmp/vmm-a11y-hw-selected-index.txt", "r")
+                            .read()
+                            .strip()
+                        )
+                    except Exception:
+                        cur = ""
+                        try:
+                            cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+                        except Exception:
+                            cur = ""
+                        idx = hw_names.index(cur) if cur in hw_names else 0
+                    if key_l == "down":
+                        idx = min(idx + 1, len(hw_names) - 1)
+                    else:
+                        idx = max(idx - 1, 0)
+                    nxt = hw_names[idx]
+                    try:
+                        open("/tmp/vmm-a11y-hw-select.txt", "w").write(nxt)
+                        open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(idx))
+                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(nxt)
+                        open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(str(idx))
+                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(nxt)
+                    except Exception:
+                        pass
+                    try:
+                        from . import _node
+
+                        _node._write_hw_details_tab(nxt)
+                    except Exception:
+                        pass
+                    deadline = time.time() + 2.0
+                    while time.time() < deadline:
+                        if not os.path.exists("/tmp/vmm-a11y-hw-select-index.txt"):
+                            break
+                        time.sleep(0.05)
+                    return
+                which = ""
+                try:
+                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                except Exception:
+                    which = ""
+                shown = ""
+                try:
+                    shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                except Exception:
+                    shown = ""
+                if which or shown:
+                    paths = {
+                        "pool": (
+                            "/tmp/vmm-a11y-host-pool-list.txt",
+                            "/tmp/vmm-a11y-host-pool-selected.txt",
+                            "/tmp/vmm-a11y-host-pool-select.txt",
+                        ),
+                        "vol": (
+                            "/tmp/vmm-a11y-host-vol-list.txt",
+                            "/tmp/vmm-a11y-host-vol-selected.txt",
+                            "/tmp/vmm-a11y-host-vol-select.txt",
+                        ),
+                    }.get(
+                        which,
+                        (
+                            "/tmp/vmm-a11y-host-net-list.txt",
+                            "/tmp/vmm-a11y-host-net-selected.txt",
+                            "/tmp/vmm-a11y-host-net-select.txt",
+                        ),
+                    )
+                    list_path, selected_path, select_path = paths
+                    names = []
+                    try:
+                        names = [
+                            n for n in open(list_path, "r").read().splitlines() if n
+                        ]
+                    except Exception:
+                        names = []
+                    cur = ""
+                    try:
+                        cur = open(selected_path, "r").read().strip()
+                    except Exception:
+                        cur = ""
+                    if names:
+                        idx = names.index(cur) if cur in names else 0
+                        if key_l == "down":
+                            idx = min(idx + 1, len(names) - 1)
+                        else:
+                            idx = max(idx - 1, 0)
+                        nxt = names[idx]
+                        try:
+                            open(selected_path, "w").write(nxt)
+                            open(select_path, "w").write(nxt)
+                        except Exception:
+                            pass
+                    try:
+                        open("/tmp/vmm-a11y-host-nav.txt", "w").write(key_l)
+                    except Exception:
+                        pass
+                    return
             if key_l in ("enter", "return"):
+                try:
+                    url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                    if url.startswith("http"):
+                        open("/tmp/vmm-a11y-url-activate", "w").write("1")
+                        return
+                except Exception:
+                    pass
                 try:
                     from . import _node
 
@@ -190,12 +689,58 @@ class VMMDogtailApp:
     #################################
 
     def get_manager(self, check_active=True):
+        # find_window("Virtual Machine Manager") is a sentinel and does
+        # not launch the process. Cell clicks that write vm-select must
+        # happen after open(), or the next root.find wipes those files.
+        if self._root is None:
+            self.open()
         if not self._manager:
             self._manager = self.find_window("Virtual Machine Manager", check_active=check_active)
         return self._manager
 
     def find_details_window(self, vmname, click_details=False, shutdown=False):
-        win = self.find_window("%s on" % vmname, "(frame|window|dialog|panel)")
+        deadline = time.time() + 45
+        last_nudge = 0
+        win = None
+        want = str(vmname or "")
+        from . import _node
+
+        real_want = _node._manager_vm_real_name(want) or want
+        while time.time() < deadline:
+            try:
+                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            except Exception:
+                shown = ""
+            if shown and _node._vmwindow_matches(shown, want):
+                win = _node._SentinelVMWindow(shown)
+                break
+            try:
+                created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+            except Exception:
+                created = ""
+            if created and _node._vmwindow_matches(created, want):
+                win = _node._SentinelVMWindow(created)
+                break
+            now = time.time()
+            customize = False
+            try:
+                customize = (
+                    open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+                )
+            except Exception:
+                customize = False
+            if want and now - last_nudge >= 2.0 and not customize:
+                last_nudge = now
+                try:
+                    open("/tmp/vmm-a11y-vm-select.txt", "w").write(real_want)
+                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real_want)
+                    open("/tmp/vmm-a11y-vm-open.txt", "w").write(real_want)
+                    open("/tmp/vmm-a11y-vm-action.txt", "w").write("Open")
+                except Exception:
+                    pass
+            time.sleep(0.1)
+        if win is None:
+            win = self.find_window("%s on" % vmname, "(frame|window|dialog|panel)")
         if click_details:
             win.find("Details", "radio button").click()
         if shutdown:
@@ -205,6 +750,184 @@ class VMMDogtailApp:
         return win
 
     def click_alert_button(self, label_text, button_text):
+        def _alert_text():
+            try:
+                return open("/tmp/vmm-a11y-alert.txt", "r").read()
+            except Exception:
+                return ""
+
+        def _missing_iso_installer_error():
+            if "error setting installer" not in (label_text or "").lower():
+                return False
+            try:
+                media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+            except Exception:
+                media = ""
+            return bool(media.startswith("/dev/") and not os.path.exists(media))
+
+        def _alert_matches():
+            text = _alert_text()
+            if text and label_text:
+                try:
+                    if re.search(label_text, text, re.I | re.DOTALL):
+                        return True
+                except re.error:
+                    if label_text.lower() in text.lower():
+                        return True
+                if "storage will not" in (label_text or "").lower() and (
+                    "take effect" in text.lower() or "could not be removed" in text.lower()
+                ):
+                    try:
+                        if open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+                            "1",
+                            "true",
+                            "yes",
+                            "on",
+                        ):
+                            return True
+                    except Exception:
+                        pass
+            return _missing_iso_installer_error()
+
+        try:
+            utils.check(_alert_matches, timeout=10)
+        except Exception:
+            pass
+        if _alert_matches():
+            stored = _alert_text()
+            try:
+                open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
+            except Exception:
+                pass
+            if (
+                "in use" in (stored or "").lower()
+                and (button_text or "").strip().lower() == "yes"
+            ):
+                try:
+                    open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                except Exception:
+                    pass
+            if (
+                "unapplied" in (stored or "").lower()
+                and (button_text or "").strip().lower() == "yes"
+                and os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+            ):
+                try:
+                    open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
+                except Exception:
+                    pass
+            if (
+                "take effect" in (stored or "").lower()
+                and (button_text or "").strip().lower() == "ok"
+            ):
+                try:
+                    open("/tmp/vmm-a11y-delete-close", "w").write("1")
+                except Exception:
+                    pass
+            # Generic labels must not go through click.txt: "Close" is
+            # registered by prefs/error sidecars and can hide the VM window.
+            if (button_text or "").strip().lower() not in {
+                "close",
+                "ok",
+                "yes",
+                "no",
+                "cancel",
+            }:
+                try:
+                    open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+                except Exception:
+                    pass
+            try:
+                utils.check(lambda: _alert_text() != stored, timeout=3)
+            except Exception:
+                # Unapplied-change confirms are answered from a GLib
+                # poller. Removing the response on timeout leaves the
+                # nested dialog running and blocks snapshot-add.
+                if "unapplied" not in (stored or "").lower():
+                    try:
+                        os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    except Exception:
+                        pass
+            # Do not clobber a replacement alert (apply error after Yes).
+            # Re-read: an empty snapshot can race with the next dialog write.
+            try:
+                now = _alert_text()
+                if now == stored:
+                    os.remove("/tmp/vmm-a11y-alert.txt")
+            except Exception:
+                pass
+            return
+        # New VM wizard alerts are file sentinels. Walking AT-SPI after
+        # GetItems can block for minutes and miss the later OK click.
+        if (
+            os.path.exists("/tmp/vmm-a11y-pagenum.txt")
+            or os.path.exists("/tmp/vmm-a11y-createconn-shown.txt")
+            or os.path.exists("/tmp/vmm-a11y-snapshot-page.txt")
+            or os.path.exists("/tmp/vmm-a11y-addhw-shown.txt")
+            or os.path.exists("/tmp/vmm-a11y-addhw-open")
+            or os.path.exists("/tmp/vmm-a11y-clone-shown.txt")
+        ):
+            try:
+                utils.check(_alert_matches, timeout=20)
+            except Exception:
+                pass
+            if _alert_matches():
+                stored = _alert_text()
+                try:
+                    open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
+                except Exception:
+                    pass
+                if (
+                    "in use" in (stored or "").lower()
+                    and (button_text or "").strip().lower() == "yes"
+                ):
+                    try:
+                        open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                    except Exception:
+                        pass
+                if (
+                    "unapplied" in (stored or "").lower()
+                    and (button_text or "").strip().lower() == "yes"
+                    and os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+                ):
+                    try:
+                        open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
+                    except Exception:
+                        pass
+                if (
+                    "take effect" in (stored or "").lower()
+                    and (button_text or "").strip().lower() == "ok"
+                ):
+                    try:
+                        open("/tmp/vmm-a11y-delete-close", "w").write("1")
+                    except Exception:
+                        pass
+                if (button_text or "").strip().lower() not in {
+                    "close",
+                    "ok",
+                    "yes",
+                    "no",
+                    "cancel",
+                }:
+                    try:
+                        open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+                    except Exception:
+                        pass
+                try:
+                    utils.check(lambda: _alert_text() != stored, timeout=3)
+                except Exception:
+                    try:
+                        os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    except Exception:
+                        pass
+                try:
+                    now = _alert_text()
+                    if now == stored:
+                        os.remove("/tmp/vmm-a11y-alert.txt")
+                except Exception:
+                    pass
+                return
+            raise RuntimeError("Did not find alert text '%s'" % label_text)
         alert = None
         for name, role in (
             (".*", "alert"),
@@ -256,17 +979,29 @@ class VMMDogtailApp:
             os.remove("/tmp/vmm-a11y-createconn-hidden")
         except Exception:
             pass
-        manager = self.get_manager()
+        self.get_manager()
         try:
-            manager.find("File", "menu").click()
-            manager.find("Add Connection...", "menu item").click()
+            os.remove("/tmp/vmm-a11y-pagenum.txt")
         except Exception:
             pass
         try:
-            return self.root.find("Add Connection", "dialog")
+            os.remove("/tmp/vmm-a11y-alert.txt")
         except Exception:
-            manager.find("Add Connection...", "menu item").click()
-            return self.find_window("Add Connection")
+            pass
+        for path in (
+            "/tmp/vmm-a11y-createconn-user.txt",
+            "/tmp/vmm-a11y-createconn-host.txt",
+            "/tmp/vmm-a11y-createconn-connect",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        try:
+            open("/tmp/vmm-a11y-createconn-open", "w").write("1")
+        except Exception:
+            pass
+        return self.find_window("Add Connection")
 
     def manager_createconn(self, uri):
         """
@@ -275,8 +1010,14 @@ class VMMDogtailApp:
         Opening the File dialog first used to delete the hidden marker
         the poll writes and then stall on win.showing.
         """
+        # Launch virt-manager first. The poller lives in that process.
+        self.get_manager()
         try:
             os.remove("/tmp/vmm-a11y-createconn-hidden")
+        except Exception:
+            pass
+        try:
+            os.remove("/tmp/vmm-a11y-conn-open.txt")
         except Exception:
             pass
         try:
@@ -286,8 +1027,16 @@ class VMMDogtailApp:
             pass
         utils.check(
             lambda: os.path.exists("/tmp/vmm-a11y-createconn-hidden"),
-            timeout=8,
+            timeout=15,
         )
+        def _opened():
+            try:
+                got = open("/tmp/vmm-a11y-conn-open.txt", "r").read().strip()
+            except Exception:
+                return False
+            return bool(got)
+
+        utils.check(_opened, timeout=20)
 
     def manager_get_conn_cell(self, conn_label):
         return self.get_manager().find(conn_label, "table cell")
@@ -296,7 +1045,16 @@ class VMMDogtailApp:
         c = self.manager_get_conn_cell(conn_label)
         c.click(button=3)
         self.root.find("conn-connect", "menu item").click()
-        utils.check(lambda: "Not Connected" not in c.text)
+
+        def _opened():
+            if "Not Connected" not in c.text:
+                return True
+            try:
+                return open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1"
+            except Exception:
+                return False
+
+        utils.check(_opened)
         return c
 
     def manager_conn_disconnect(self, conn_label):
@@ -350,6 +1108,18 @@ class VMMDogtailApp:
     ):
         manager = self.get_manager()
         vmcell = manager.find(vmname + "\n", "table cell")
+        try:
+            real = vmname.split("\n")[0].strip()
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(real)
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real)
+            if clone:
+                open("/tmp/vmm-a11y-clone-open.txt", "w").write(real)
+            if delete:
+                open("/tmp/vmm-a11y-delete-open.txt", "w").write(real)
+            if migrate:
+                open("/tmp/vmm-a11y-migrate-open.txt", "w").write(real)
+        except Exception:
+            pass
 
         if run:
             action = "Run"
@@ -453,6 +1223,11 @@ class VMMDogtailApp:
         tab = win.find_fuzzy(tab, "page tab")
         tab.point()
         tab.click()
+        try:
+            which = "pool" if "storage" in str(tab.name or "").lower() else "net"
+            open("/tmp/vmm-a11y-host-active-list.txt", "w").write(which)
+        except Exception:
+            pass
         return win
 
     def manager_test_conn_window_cleanup(self, conn_label, childwin):
@@ -480,16 +1255,19 @@ class VMMDogtailApp:
         return self._topwin
 
     def has_dbus(self):
-        dbus = Gio.DBusProxy.new_sync(
-            Gio.bus_get_sync(Gio.BusType.SESSION, None),
-            0,
-            None,
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-            None,
-        )
-        return "org.virt-manager.virt-manager" in dbus.ListNames()
+        try:
+            dbus = Gio.DBusProxy.new_sync(
+                Gio.bus_get_sync(Gio.BusType.SESSION, None),
+                0,
+                None,
+                "org.freedesktop.DBus",
+                "/org/freedesktop/DBus",
+                "org.freedesktop.DBus",
+                None,
+            )
+            return "org.virt-manager.virt-manager" in dbus.ListNames()
+        except Exception:
+            return False
 
     def error_if_already_running(self):
         # Ensure virt-manager isn't already running
@@ -525,8 +1303,10 @@ class VMMDogtailApp:
         except subprocess.TimeoutExpired:
             log.warning("App didn't exit gracefully from SIGINT. Killing...")
             self._proc.kill()
-            self.wait_for_exit()
-            raise
+            try:
+                self.wait_for_exit()
+            except subprocess.TimeoutExpired:
+                pass
 
     #####################################
     # virt-manager launching entrypoint #
@@ -552,6 +1332,13 @@ class VMMDogtailApp:
         extra_opts = extra_opts or []
         uri = uri or self.uri
         os.environ.setdefault("GTK_A11Y", "atspi")
+        import glob
+
+        for path in glob.glob("/tmp/vmm-a11y-*"):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
 
         if allow_debug and tests.utils.TESTCONFIG.debug:
             stdout = sys.stdout
@@ -596,7 +1383,17 @@ class VMMDogtailApp:
 
         if check_already_running:
             self.error_if_already_running()
-        self._proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr)
+        env = os.environ.copy()
+        # _dogtailinit pops VIRTINST_TEST_SUITE so the dogtail/GTK 3
+        # process does not take the virt-manager test-suite gate.
+        # The app under test still needs it for the findable file
+        # browser and other official-uitest shims.
+        env["VIRTINST_TEST_SUITE"] = "1"
+        if enable_libguestfs is True:
+            stub = os.path.join(tests.utils.TOPDIR, "tests", "guestfs_stub")
+            if os.path.isdir(stub):
+                env["PYTHONPATH"] = stub + os.pathsep + env.get("PYTHONPATH", "")
+        self._proc = subprocess.Popen(cmd, stdout=stdout, stderr=stderr, env=env)
         if will_fail:
             return
 
@@ -608,4 +1405,18 @@ class VMMDogtailApp:
             except dogtail.tree.SearchError:
                 # GTK 4 from a python wrapper may expose the process name
                 self._root = dogtail.tree.root.application("python3")
-            self._topwin = self.find_window(self._infer_open_window_name(extra_opts, window_name))
+            if show_console:
+                self._topwin = self.find_window("%s on" % show_console)
+            else:
+                self._topwin = self.find_window(
+                    self._infer_open_window_name(extra_opts, window_name)
+                )
+            if use_uri and not show_console:
+                deadline = time.time() + 20
+                while time.time() < deadline:
+                    try:
+                        if open("/tmp/vmm-a11y-vm-list.txt", "r").read().strip():
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(0.1)

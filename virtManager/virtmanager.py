@@ -10,7 +10,8 @@ import signal
 import sys
 import traceback
 
-# GTK 4 defaults to a11y backends that dogtail/AT-SPI cannot see.
+# Prefer AT-SPI so dogtail and assistive tech can see windows. File
+# picking still uses Gtk.FileDialog unless VIRTINST_TEST_SUITE is set.
 os.environ.setdefault("GTK_A11Y", "atspi")
 
 import gi

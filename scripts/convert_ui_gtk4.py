@@ -15,12 +15,10 @@ UI_DIR = ROOT / "ui"
 REMOVE_PROPS = {
     "gravity",
     "type-hint",
-    "border-width",
     "can-default",
     "can-focus",
     "show-arrow",
     "is-important",
-    "label-xalign",
     "shadow-type",
     "layout-style",
     "has-separator",
@@ -133,7 +131,29 @@ def cleanup_xml(src: pathlib.Path, dest: pathlib.Path) -> None:
     for obj in root.iter("object"):
         for prop in list(obj.findall("property")):
             name = prop.get("name")
-            if name in REMOVE_PROPS:
+            if name == "border-width":
+                val = (prop.text or "").strip()
+                obj.remove(prop)
+                if val and val not in ("0", "0.0"):
+                    have = {p.get("name") for p in obj.findall("property")}
+                    for mname in (
+                        "margin-top",
+                        "margin-bottom",
+                        "margin-start",
+                        "margin-end",
+                    ):
+                        if mname not in have:
+                            extra = ET.SubElement(obj, "property", {"name": mname})
+                            extra.text = val
+            elif name == "shadow-type":
+                val = (prop.text or "").strip()
+                obj.remove(prop)
+                if val and val not in ("none", "None"):
+                    have = {p.get("name") for p in obj.findall("property")}
+                    if "css-classes" not in have:
+                        extra = ET.SubElement(obj, "property", {"name": "css-classes"})
+                        extra.text = "vmm-scroll-shadow"
+            elif name in REMOVE_PROPS:
                 obj.remove(prop)
             elif name == "visible" and (prop.text or "").lower() in ("true", "1", "yes"):
                 # GTK4 widgets are visible by default; keep anyway

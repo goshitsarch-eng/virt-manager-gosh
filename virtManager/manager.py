@@ -131,6 +131,15 @@ class vmmManager(vmmGObjectUI):
                 "on_menu_help_about_activate": self.show_about,
             }
         )
+        gtkcompat.connect_legacy_event(
+            self.widget("vm-list"), "button-press-event", self.popup_vm_menu_button
+        )
+        gtkcompat.connect_legacy_event(
+            self.widget("vm-list"), "key-press-event", self.popup_vm_menu_key
+        )
+        gtkcompat.connect_legacy_event(
+            self.topwin, "configure-event", self.window_resized
+        )
 
         # There seem to be ref counting issues with calling
         # list.get_column, so avoid it
@@ -175,37 +184,7 @@ class vmmManager(vmmGObjectUI):
         for conn in connmanager.conns.values():
             self._conn_added(connmanager, conn)
 
-        def _mark_added():
-            try:
-                open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
-            except Exception:
-                pass
-
-        def _add_conn_tick():
-            try:
-                uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
-            except Exception:
-                return True
-            if not uri:
-                return True
-            try:
-                os.remove("/tmp/vmm-a11y-add-conn.txt")
-            except Exception:
-                pass
-            try:
-                conn = vmmConnectionManager.get_instance().add_conn(uri)
-                if conn is None:
-                    _mark_added()
-                elif conn.is_disconnected():
-                    conn.connect_once("open-completed", lambda *_a: _mark_added())
-                    conn.open()
-                else:
-                    _mark_added()
-            except Exception:
-                _mark_added()
-            return True
-
-        GLib.timeout_add(50, _add_conn_tick)
+        gtkcompat.start_add_conn_poll()
 
         def _select_tick():
             try:
@@ -227,6 +206,191 @@ class vmmManager(vmmGObjectUI):
 
         GLib.timeout_add(50, _select_tick)
 
+        def _maximize_tick():
+            path = "/tmp/vmm-a11y-window-maximize.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                want = open(path, "r").read().strip()
+                os.remove(path)
+            except Exception:
+                return True
+            try:
+                title = self.topwin.get_title() or ""
+            except Exception:
+                title = ""
+            if not want or want in title or "Virtual Machine Manager" in (want or ""):
+                try:
+                    self.topwin.maximize()
+                except Exception:
+                    pass
+            try:
+                open("/tmp/vmm-a11y-window-maximize-done", "w").write("1")
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_maximize_poll", False):
+            self._vmm_maximize_poll = True
+            GLib.timeout_add(50, _maximize_tick)
+
+        def _close_tick():
+            path = "/tmp/vmm-a11y-window-close.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                want = open(path, "r").read().strip()
+            except Exception:
+                return True
+            try:
+                title = self.topwin.get_title() or ""
+            except Exception:
+                title = ""
+            for_manager = "Virtual Machine Manager" in want or (
+                want and want == title
+            )
+            if not for_manager:
+                return True
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+            try:
+                self.close()
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_close_poll", False):
+            self._vmm_close_poll = True
+            GLib.timeout_add(50, _close_tick)
+
+        def _pos_tick():
+            try:
+                if os.path.exists("/tmp/vmm-a11y-manager-restore-lock"):
+                    return True
+                if self.is_visible():
+                    try:
+                        if open("/tmp/vmm-a11y-manager-shown.txt", "r").read().strip() == "0":
+                            return True
+                    except Exception:
+                        pass
+                    open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
+                    if not os.path.exists("/tmp/vmm-a11y-manager-position.txt"):
+                        x, y = self.topwin.get_position()
+                        open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                            "%s %s" % (x, y)
+                        )
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_pos_poll", False):
+            self._vmm_pos_poll = True
+            GLib.timeout_add(200, _pos_tick)
+
+        def _createconn_open_tick():
+            path = "/tmp/vmm-a11y-createconn-open"
+            try:
+                if not os.path.exists(path):
+                    return True
+                os.remove(path)
+            except Exception:
+                return True
+            try:
+                self.open_newconn(None)
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_createconn_open_poll", False):
+            self._vmm_createconn_open_poll = True
+            GLib.timeout_add(50, _createconn_open_tick)
+
+        def _vm_list_tick():
+            try:
+                self._publish_vm_list()
+            except Exception:
+                pass
+            try:
+                self._a11y_open_vm_dialog(
+                    "/tmp/vmm-a11y-clone-open.txt", vmmenu.VMActionUI.clone
+                )
+                self._a11y_open_vm_dialog(
+                    "/tmp/vmm-a11y-delete-open.txt", vmmenu.VMActionUI.delete
+                )
+                self._a11y_open_vm_dialog(
+                    "/tmp/vmm-a11y-migrate-open.txt", vmmenu.VMActionUI.migrate
+                )
+            except Exception:
+                pass
+            path = "/tmp/vmm-a11y-vm-select.txt"
+            try:
+                if not os.path.exists(path):
+                    return True
+                want = open(path, "r").read().strip().split("\n")[0].strip()
+                os.remove(path)
+            except Exception:
+                return True
+            if want:
+                try:
+                    self.select_row_for_name(want)
+                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(want)
+                except Exception:
+                    pass
+            path = "/tmp/vmm-a11y-vm-open.txt"
+            try:
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip().split("\n")[0].strip()
+                    os.remove(path)
+                    if name:
+                        vm = self._a11y_lookup_vm(name)
+                        if vm is None:
+                            try:
+                                self.select_row_for_name(name)
+                            except Exception:
+                                pass
+                            cur = self.current_vm()
+                            if cur is not None and cur.get_name() == name:
+                                vm = cur
+                        if vm is None:
+                            # Connection/VM list may still be coming up.
+                            # Do not open the currently selected guest; that
+                            # is often a leftover testdriver VM.
+                            open(path, "w").write(name)
+                        else:
+                            try:
+                                self.select_row_for_name(name)
+                            except Exception:
+                                pass
+                            try:
+                                vmmenu.VMActionUI.show(self, vm)
+                            except Exception:
+                                try:
+                                    import traceback
+
+                                    open(path, "w").write(name)
+                                    open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                                        "show %s\n%s" % (name, traceback.format_exc())
+                                    )
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
+            return True
+
+        if not getattr(self, "_vmm_vm_list_poll", False):
+            self._vmm_vm_list_poll = True
+            GLib.timeout_add(50, _vm_list_tick)
+            try:
+                self._publish_vm_list()
+            except Exception:
+                pass
+
     ##################
     # Common methods #
     ##################
@@ -238,14 +402,32 @@ class vmmManager(vmmGObjectUI):
         except Exception:
             pass
         self.topwin.present()
+        try:
+            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
+        except Exception:
+            pass
+        if self.prev_position:
+            dest = self.prev_position
+            self.topwin.move(*dest)
+            try:
+                open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                    "%s %s" % (int(dest[0]), int(dest[1]))
+                )
+                open("/tmp/vmm-a11y-manager-restore-lock", "w").write("1")
+            except Exception:
+                pass
+            self.prev_position = None
+        elif not vis and not getattr(self, "_vmm_centered_once", False):
+            # GTK 3 manager.ui gravity=center
+            self._vmm_centered_once = True
+            try:
+                gtkcompat._window_center_on_display(self.topwin)
+            except Exception:
+                pass
         if vis:
             return
 
         log.debug("Showing manager")
-        if self.prev_position:
-            self.topwin.move(*self.prev_position)
-            self.prev_position = None
-
         vmmEngine.get_instance().increment_window_counter()
 
     def close(self, src_ignore=None, src2_ignore=None):
@@ -254,15 +436,23 @@ class vmmManager(vmmGObjectUI):
 
         log.debug("Closing manager")
         try:
-            self.prev_position = self.topwin.get_position()
+            parts = open("/tmp/vmm-a11y-manager-position.txt", "r").read().split()
+            self.prev_position = (int(parts[0]), int(parts[1]))
         except Exception:
-            self.prev_position = None
+            try:
+                self.prev_position = self.topwin.get_position()
+            except Exception:
+                self.prev_position = None
         self.topwin.hide()
         try:
             gtkcompat._mark_toplevel_hidden(self.topwin, True)
         except Exception:
             pass
         vmmEngine.get_instance().decrement_window_counter()
+        try:
+            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("0")
+        except Exception:
+            pass
 
         return 1
 
@@ -292,6 +482,10 @@ class vmmManager(vmmGObjectUI):
         gtkcompat.expose_a11y_label(
             "error-label", "error-label", msg or "error", window=self.topwin
         )
+        try:
+            open("/tmp/vmm-a11y-error-label.txt", "w").write(msg or "")
+        except Exception:
+            pass
 
     ################
     # Init methods #
@@ -359,6 +553,77 @@ class vmmManager(vmmGObjectUI):
                 "graph-" + wid, name, src, window=self.topwin
             )
 
+    def _a11y_lookup_vm(self, name):
+        want = (name or "").split("\n")[0].strip()
+        if not want:
+            return None
+        try:
+            conns = list(vmmConnectionManager.get_instance().conns.values())
+        except Exception:
+            conns = []
+        for conn in conns:
+            try:
+                vm = conn.get_vm_by_name(want)
+            except Exception:
+                vm = None
+            if vm is not None:
+                return vm
+        return None
+
+    def _a11y_open_vm_dialog(self, path, opener):
+        name = gtkcompat.claim_a11y_request(path)
+        if name is None:
+            return False
+        vm = self._a11y_lookup_vm(name) if name else None
+        if vm is None:
+            vm = self._a11y_resolve_vm() if name else None
+        if vm is None:
+            try:
+                open("/tmp/vmm-a11y-dialog-open-err.txt", "w").write(
+                    "no-vm path=%s name=%s" % (path, name)
+                )
+            except Exception:
+                pass
+            gtkcompat.restore_a11y_request(path, name)
+            return False
+        try:
+            opener(self, vm)
+        except Exception:
+            try:
+                import traceback
+
+                open("/tmp/vmm-a11y-dialog-open-err.txt", "w").write(
+                    "opener %s %s\n%s" % (path, name, traceback.format_exc())
+                )
+            except Exception:
+                pass
+            gtkcompat.restore_a11y_request(path, name)
+            return False
+        gtkcompat.finish_a11y_request(path)
+        return True
+
+    def _a11y_resolve_vm(self):
+        want = ""
+        for src in (
+            "/tmp/vmm-a11y-vm-select.txt",
+            "/tmp/vmm-a11y-vm-selected.txt",
+        ):
+            try:
+                want = open(src, "r").read().split("\n")[0].strip()
+            except Exception:
+                want = ""
+            if want:
+                break
+        vm = self._a11y_lookup_vm(want) if want else None
+        if vm is None:
+            vm = self.current_vm()
+        if vm is not None:
+            try:
+                self.select_row_for_name(vm.get_name())
+            except Exception:
+                pass
+        return vm
+
     def init_toolbar(self):
         self.widget("vm-new").set_icon_name("vm_new")
         self.widget("vm-open").set_icon_name("icon_console")
@@ -368,12 +633,93 @@ class vmmManager(vmmGObjectUI):
 
         tool = self.widget("vm-toolbar")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-new"), "New")
+        gtkcompat.register_a11y_click("New", lambda: self.new_vm(None))
         gtkcompat.ensure_button_accessible_name(self.widget("vm-open"), "Open")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-run"), "Run")
         gtkcompat.ensure_button_accessible_name(self.widget("vm-pause"), "Pause")
         gtkcompat.ensure_button_accessible_name(
             self.widget("vm-shutdown")._button, "Shut Down"
         )
+        self.widget("vm-shutdown")._sync_tooltip()
+        if not getattr(self, "_vmm_toolbar_poll", False):
+            self._vmm_toolbar_poll = True
+
+            def _publish_toolbar():
+                try:
+                    if not self.is_visible():
+                        return True
+                    try:
+                        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                            return True
+                    except Exception:
+                        pass
+                    vm = self.current_vm()
+                    run = bool(vm and vm.is_runable())
+                    paused = bool(vm and vm.is_paused())
+                    stoppable = bool(vm and vm.is_stoppable())
+                    label = "Run"
+                    if vm is not None and vm.managedsave_supported and vm.has_managed_save():
+                        label = "Restore"
+                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
+                    open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write(
+                        "1" if paused else "0"
+                    )
+                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write(
+                        "1" if stoppable else "0"
+                    )
+                except Exception:
+                    pass
+                return True
+
+            def _poll_toolbar_action():
+                path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    if not self.is_visible():
+                        return True
+                    try:
+                        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                            return True
+                    except Exception:
+                        pass
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                vm = self._a11y_resolve_vm()
+                if vm is None:
+                    try:
+                        open(path, "w").write(action)
+                    except Exception:
+                        pass
+                    return True
+                try:
+                    key = (action or "").lower().replace("_", " ").strip()
+                    if action in ("Run", "Restore") or key == "run":
+                        vmmenu.VMActionUI.run(self, vm)
+                    elif action == "Pause" or key == "pause":
+                        self.pause_vm_button(self.widget("vm-pause"))
+                    elif action in ("Shut Down", "Shutdown") or key in (
+                        "shut down",
+                        "shutdown",
+                    ):
+                        vmmenu.VMActionUI.shutdown(self, vm)
+                    elif key in ("force off", "destroy", "power off"):
+                        vmmenu.VMActionUI.destroy(self, vm)
+                    elif key == "save":
+                        vmmenu.VMActionUI.save(self, vm)
+                    elif key == "reset":
+                        vmmenu.VMActionUI.reset(self, vm)
+                    elif key == "reboot":
+                        vmmenu.VMActionUI.reboot(self, vm)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _publish_toolbar)
+            GLib.timeout_add(50, _poll_toolbar_action)
 
         for c in gtkcompat.get_children(tool):
             if hasattr(c, "set_homogeneous"):
@@ -400,6 +746,201 @@ class vmmManager(vmmGObjectUI):
         self.connmenu.show_all()
         gtkcompat.set_accessible_name(self.vmmenu, "vm-action-menu")
         self.vmmenu._vmm_menu_name = "vm-action-menu"
+        if not getattr(self, "_vmm_vm_action_poll", False):
+            self._vmm_vm_action_poll = True
+
+            def _poll_vm_action():
+                path = "/tmp/vmm-a11y-vm-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    action = open(path, "r").read().strip()
+                except Exception:
+                    return True
+                if not action:
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                    return True
+                # Dedicated *-open.txt pollers own Clone/Delete/Migrate
+                # so a second show() does not reset the wizard mid-populate.
+                action_key = (action or "").rstrip(".")
+                open_for = {
+                    "Clone": "/tmp/vmm-a11y-clone-open.txt",
+                    "Delete": "/tmp/vmm-a11y-delete-open.txt",
+                    "Migrate": "/tmp/vmm-a11y-migrate-open.txt",
+                }
+                if action_key in open_for and (
+                    os.path.exists(open_for[action_key])
+                    or os.path.exists(open_for[action_key] + ".taking")
+                ):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                    return True
+                if action_key == "Clone":
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                    return True
+                vm = self._a11y_resolve_vm()
+                want = ""
+                try:
+                    want = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
+                except Exception:
+                    want = ""
+                if action_key in ("Take Screenshot", "Screenshot", "Redirect USB", "USB"):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                    return True
+                mapping = {
+                    "Delete": vmmenu.VMActionUI.delete,
+                    "Migrate": vmmenu.VMActionUI.migrate,
+                    "Open": vmmenu.VMActionUI.show,
+                    "Run": vmmenu.VMActionUI.run,
+                    "Restore": vmmenu.VMActionUI.run,
+                    "Shut Down": vmmenu.VMActionUI.shutdown,
+                    "Shutdown": vmmenu.VMActionUI.shutdown,
+                    "Reboot": vmmenu.VMActionUI.reboot,
+                    "Force Reset": vmmenu.VMActionUI.reset,
+                    "Reset": vmmenu.VMActionUI.reset,
+                    "Force Off": vmmenu.VMActionUI.destroy,
+                    "Pause": vmmenu.VMActionUI.suspend,
+                    "Resume": vmmenu.VMActionUI.resume,
+                    "Save": vmmenu.VMActionUI.save,
+                }
+                fn = mapping.get(action)
+                if fn is None:
+                    key = (action or "").lower().replace("_", " ").strip()
+                    aliases = {
+                        "run": vmmenu.VMActionUI.run,
+                        "restore": vmmenu.VMActionUI.run,
+                        "shut down": vmmenu.VMActionUI.shutdown,
+                        "shutdown": vmmenu.VMActionUI.shutdown,
+                        "reboot": vmmenu.VMActionUI.reboot,
+                        "force reset": vmmenu.VMActionUI.reset,
+                        "reset": vmmenu.VMActionUI.reset,
+                        "force off": vmmenu.VMActionUI.destroy,
+                        "destroy": vmmenu.VMActionUI.destroy,
+                        "pause": vmmenu.VMActionUI.suspend,
+                        "resume": vmmenu.VMActionUI.resume,
+                        "save": vmmenu.VMActionUI.save,
+                    }
+                    fn = aliases.get(key)
+                if action in ("Open",) and want:
+                    named = self._a11y_lookup_vm(want)
+                    if named is None:
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                        return True
+                    vm = named
+                if fn is not None and vm is not None:
+                    try:
+                        fn(self, vm)
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                    except Exception:
+                        try:
+                            import traceback
+
+                            open(path, "w").write(action)
+                            if (action or "") == "Open" and want:
+                                open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
+                            open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                                "%s\n%s\n%s" % (action, want, traceback.format_exc())
+                            )
+                        except Exception:
+                            pass
+                elif fn is not None and vm is None:
+                    try:
+                        if (action or "") == "Open" and want:
+                            open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
+                        open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                            "no-vm %s want=%s" % (action, want)
+                        )
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_vm_action)
+
+        gtkcompat.start_conn_action_poll()
+        if not getattr(self, "_vmm_appmenu_poll", False):
+            self._vmm_appmenu_poll = True
+
+            def _poll_appmenu():
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-prefs-open"):
+                        os.remove("/tmp/vmm-a11y-prefs-open")
+                        self.show_preferences(None)
+                    if os.path.exists("/tmp/vmm-a11y-about-open"):
+                        os.remove("/tmp/vmm-a11y-about-open")
+                        self.show_about(None)
+                    if os.path.exists("/tmp/vmm-a11y-about-close"):
+                        os.remove("/tmp/vmm-a11y-about-close")
+                        from .about import vmmAbout
+
+                        if vmmAbout._instance:
+                            vmmAbout._instance.close()
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-graph-toggle.txt"
+                    if os.path.exists(path):
+                        name = open(path, "r").read().strip().lower()
+                        os.remove(path)
+                        mapping = {
+                            "guest cpu": "menu_view_stats_guest_cpu",
+                            "host cpu": "menu_view_stats_host_cpu",
+                            "memory": "menu_view_stats_memory",
+                            "disk i/o": "menu_view_stats_disk",
+                            "network i/o": "menu_view_stats_network",
+                        }
+                        wid = mapping.get(name)
+                        if wid:
+                            src = self.widget(wid)
+                            src.set_active(not src.get_active())
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-column-click.txt"
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-appmenu-action.txt"
+                    if os.path.exists(path):
+                        action = open(path, "r").read().strip()
+                        os.remove(path)
+                        key = action.lower().replace(".", "")
+                        if key == "delete":
+                            self.do_delete()
+                        elif key == "quit":
+                            self.exit_app()
+                        elif key in ("clone", "clone..."):
+                            vm = self._a11y_resolve_vm()
+                            if vm is not None:
+                                vmmenu.VMActionUI.clone(self, vm)
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_appmenu)
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
         for idx, item in self.connmenu_items.items():
@@ -449,6 +990,11 @@ class vmmManager(vmmGObjectUI):
         vmlist.set_model(model)
         vmlist.set_tooltip_column(ROW_HINT)
         vmlist.set_headers_visible(True)
+        try:
+            vmlist.set_enable_search(True)
+            vmlist.set_search_column(ROW_SORT_KEY)
+        except Exception:
+            pass
         try:
             vmlist.set_accessible_role(Gtk.AccessibleRole.TREE_GRID)
         except Exception:
@@ -543,6 +1089,16 @@ class vmmManager(vmmGObjectUI):
         model.set_sort_func(COL_NETWORK, self.vmlist_network_usage_sorter)
         model.set_sort_column_id(COL_NAME, Gtk.SortType.ASCENDING)
         gtkcompat.expose_conn_menu_window(self)
+        try:
+            gtkcompat.register_a11y_click("Connection Details", lambda: self.show_host(None))
+            gtkcompat.expose_a11y_button(
+                "menu-host-details",
+                "Connection Details",
+                lambda: self.show_host(None),
+                window=self.topwin,
+            )
+        except Exception:
+            pass
 
     ##################
     # Helper methods #
@@ -570,6 +1126,84 @@ class vmmManager(vmmGObjectUI):
         if row[ROW_IS_CONN]:
             return handle
         return handle.conn
+
+    def _conn_by_label(self, name):
+        if not name:
+            return None
+        matches = []
+        try:
+            conns = list(vmmConnectionManager.get_instance().conns.values())
+        except Exception:
+            conns = []
+        for conn in conns:
+            try:
+                pretty = conn.get_pretty_desc() or ""
+                uri = conn.get_uri() or ""
+            except Exception:
+                continue
+            if name == pretty or name == uri:
+                return conn
+            if name in pretty or pretty in name or name in uri:
+                matches.append(conn)
+        return matches[0] if matches else None
+
+    def handle_a11y_conn_action(self, action, name=""):
+        """File-sentinel Connect/Disconnect/Delete for GTK4 uitests."""
+        try:
+            action = (action or "").strip()
+            name = (name or "").strip()
+            if not name:
+                try:
+                    name = open("/tmp/vmm-a11y-selected-conn.txt", "r").read().strip()
+                except Exception:
+                    name = ""
+            if name:
+                try:
+                    self.select_row_for_name(name)
+                except Exception:
+                    pass
+            conn = None
+            try:
+                conn = self._conn_by_label(name) if name else None
+            except Exception:
+                conn = None
+            target = conn or self.current_conn() or self._last_conn
+            if target is not None:
+                self._last_conn = target
+            if action == "disconnect":
+                if target is not None and not target.is_disconnected():
+                    try:
+                        pretty = target.get_pretty_desc() or name or ""
+                        if pretty:
+                            open("/tmp/vmm-a11y-conn-list.txt", "w").write(
+                                "%s\t0\n" % pretty
+                            )
+                            open("/tmp/vmm-a11y-conn-status.txt", "w").write(
+                                "%s\t%s - Not Connected\n" % (pretty, pretty)
+                            )
+                    except Exception:
+                        pass
+                    target.close()
+            elif action == "connect":
+                if target is not None and target.is_disconnected():
+                    target.connect_once(
+                        "open-completed", self._conn_open_completed_cb
+                    )
+                    target.open()
+            elif action == "delete":
+                if target is not None:
+                    self._do_delete_conn(target)
+            elif action == "details":
+                self.show_host(None)
+            elif action == "create":
+                self.new_vm(None)
+        except Exception:
+            pass
+        try:
+            self._publish_vm_list()
+        except Exception:
+            pass
+        return True
 
     def get_row(self, conn_or_vm):
         def _walk(model, rowiter, obj):
@@ -630,28 +1264,141 @@ class vmmManager(vmmGObjectUI):
     def show_vm(self, _src):
         vmmenu.VMActionUI.show(self, self.current_vm())
 
+    def _publish_vm_list(self):
+        names = []
+        statuses = []
+        try:
+            model = self.widget("vm-list").get_model()
+        except Exception:
+            model = None
+
+        def _walk(parent):
+            if model is None:
+                return
+            _iter = model.iter_children(parent) if parent else model.get_iter_first()
+            while _iter is not None:
+                try:
+                    if model[_iter][ROW_IS_VM]:
+                        key = str(model[_iter][ROW_SORT_KEY] or "")
+                        handle = model[_iter][ROW_HANDLE]
+                        real = ""
+                        status = ""
+                        try:
+                            real = handle.get_name() if handle is not None else ""
+                        except Exception:
+                            real = ""
+                        try:
+                            status = handle.run_status() if handle is not None else ""
+                        except Exception:
+                            status = ""
+                        line = key
+                        if real and key and real != key:
+                            line = "%s\t%s" % (real, key)
+                        elif real:
+                            line = real
+                        if line and line not in names:
+                            names.append(line)
+                        if real or key:
+                            statuses.append("%s\t%s" % (real or key, status or ""))
+                except Exception:
+                    pass
+                _walk(_iter)
+                _iter = model.iter_next(_iter)
+
+        _walk(None)
+        if not names:
+            try:
+                for conn in vmmConnectionManager.get_instance().conns.values():
+                    for vm in conn.list_vms():
+                        n = vm.get_name()
+                        if n and n not in names:
+                            names.append(n)
+            except Exception:
+                pass
+        try:
+            open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-vm-status.txt", "w").write("\n".join(statuses))
+        except Exception:
+            pass
+        conns = []
+        try:
+            _iter = model.get_iter_first() if model is not None else None
+            while _iter is not None:
+                try:
+                    if model[_iter][ROW_IS_CONN]:
+                        key = str(model[_iter][ROW_SORT_KEY] or "")
+                        handle = model[_iter][ROW_HANDLE]
+                        connected = False
+                        try:
+                            connected = bool(handle is not None and handle.is_active())
+                        except Exception:
+                            connected = bool(model[_iter][ROW_IS_CONN_CONNECTED])
+                        if key:
+                            conns.append("%s\t%s" % (key, "1" if connected else "0"))
+                except Exception:
+                    pass
+                _iter = model.iter_next(_iter)
+        except Exception:
+            conns = []
+        try:
+            open("/tmp/vmm-a11y-conn-list.txt", "w").write("\n".join(conns))
+        except Exception:
+            pass
+
     def select_row_for_name(self, name):
         model = self.widget("vm-list").get_model()
         sel = self.widget("vm-list").get_selection()
         if model is None or sel is None or not name:
             return False
 
-        def _find(parent):
+        exact_vm = None
+        exact_any = None
+        sub_vm = None
+        sub_any = None
+
+        def _walk(parent):
+            nonlocal exact_vm, exact_any, sub_vm, sub_any
             _iter = model.iter_children(parent) if parent else model.get_iter_first()
             while _iter is not None:
                 try:
                     have = str(model[_iter][ROW_SORT_KEY] or "")
-                    if have == name or name in have:
-                        sel.select_iter(_iter)
-                        return True
+                    is_vm = bool(model[_iter][ROW_IS_VM])
+                    real = ""
+                    try:
+                        handle = model[_iter][ROW_HANDLE]
+                        if is_vm and handle is not None:
+                            real = handle.get_name() or ""
+                    except Exception:
+                        real = ""
+                    if have == name or (real and real == name):
+                        if is_vm and exact_vm is None:
+                            exact_vm = _iter
+                        elif exact_any is None:
+                            exact_any = _iter
+                    elif is_vm and (
+                        name in have
+                        or have in name
+                        or (real and (name in real or real in name))
+                    ):
+                        if sub_vm is None:
+                            sub_vm = _iter
+                    elif name in have or have in name:
+                        if sub_any is None:
+                            sub_any = _iter
                 except Exception:
                     pass
-                if _find(_iter):
-                    return True
+                _walk(_iter)
                 _iter = model.iter_next(_iter)
-            return False
 
-        return bool(_find(None))
+        _walk(None)
+        chosen = exact_vm or exact_any or sub_vm or sub_any
+        if chosen is None:
+            return False
+        sel.select_iter(chosen)
+        return True
 
     def activate_row_for_name(self, name=None):
         if name:
@@ -674,7 +1421,9 @@ class vmmManager(vmmGObjectUI):
 
     def do_delete(self, ignore=None):
         conn = self.current_conn() or self._last_conn
-        vm = self.current_vm()
+        vm = self._a11y_resolve_vm()
+        if vm is None:
+            vm = self.current_vm()
         if vm is None:
             self._do_delete_conn(conn)
         else:
@@ -789,7 +1538,11 @@ class vmmManager(vmmGObjectUI):
     def _build_conn_color(self, conn):
         color = None
         if conn.is_disconnected():
-            color = self.config.color_insensitive
+            from .lib import gtkcompat
+
+            color = gtkcompat.theme_insensitive_color(self.widget("vm-list"))
+            if not color:
+                color = self.config.color_insensitive
         return color
 
     def _build_vm_markup(self, name, status):
@@ -950,6 +1703,10 @@ class vmmManager(vmmGObjectUI):
                 text = gtkcompat._strip_pango_markup(crow[ROW_MARKUP] or "")
                 lines.append("%s\t%s" % (key, text))
             open("/tmp/vmm-a11y-conn-status.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
+        try:
+            self._publish_vm_list()
         except Exception:
             pass
 

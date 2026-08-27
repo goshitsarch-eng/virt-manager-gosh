@@ -4,15 +4,32 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
 from virtinst import StorageVolume, StoragePool
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .xmleditor import vmmXMLEditor
+
+_CREATEVOL_SHOWN = "/tmp/vmm-a11y-createvol-shown.txt"
+_CREATEVOL_NAME = "/tmp/vmm-a11y-createvol-name.txt"
+_CREATEVOL_FORMAT = "/tmp/vmm-a11y-createvol-format.txt"
+_CREATEVOL_ALLOCATE = "/tmp/vmm-a11y-createvol-allocate.txt"
+_CREATEVOL_ALLOCATE_VIS = "/tmp/vmm-a11y-createvol-allocate-vis.txt"
+_CREATEVOL_BACKING = "/tmp/vmm-a11y-createvol-backing.txt"
+_CREATEVOL_BACKING_VIS = "/tmp/vmm-a11y-createvol-backing-vis.txt"
+_CREATEVOL_FINISH = "/tmp/vmm-a11y-createvol-finish"
+_CREATEVOL_CANCEL = "/tmp/vmm-a11y-createvol-cancel"
+_CREATEVOL_BROWSE = "/tmp/vmm-a11y-createvol-browse"
+_CREATEVOL_EXPAND = "/tmp/vmm-a11y-createvol-expand"
+_CREATEVOL_COMBO = "/tmp/vmm-a11y-combo-select.txt"
 
 
 class vmmCreateVolume(vmmGObjectUI):
@@ -31,6 +48,7 @@ class vmmCreateVolume(vmmGObjectUI):
         self._xmleditor = vmmXMLEditor(
             self.builder, self.topwin, self.widget("details-box-align"), self.widget("details-box")
         )
+        self._xmleditor._vmm_a11y_owner = "createvol"
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
 
         self.builder.connect_signals(
@@ -59,9 +77,41 @@ class vmmCreateVolume(vmmGObjectUI):
             parent_xml = None
 
         log.debug("Showing new volume wizard for parent_pool=\n%s", parent_xml)
+        if self.is_visible():
+            self.topwin.present()
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+            return
+        for path in (
+            _CREATEVOL_FINISH,
+            _CREATEVOL_CANCEL,
+            _CREATEVOL_BROWSE,
+            _CREATEVOL_EXPAND,
+            _CREATEVOL_NAME + ".set",
+            _CREATEVOL_BACKING + ".set",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self._reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.present()
+        try:
+            from .lib import gtkcompat
+
+            gtkcompat.set_accessible_name(self.topwin, "Add a Storage Volume")
+            self.topwin.set_title("Add a Storage Volume")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
+        self._start_a11y_poll()
+        self._publish_a11y_state()
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing new volume wizard")
@@ -69,6 +119,16 @@ class vmmCreateVolume(vmmGObjectUI):
         if self._storage_browser:
             self._storage_browser.close()
         self.set_modal(False)
+        try:
+            open(_CREATEVOL_SHOWN, "w").write("0")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.remove_window(self.topwin)
+        except Exception:
+            pass
         return 1
 
     def _cleanup(self):
@@ -105,6 +165,12 @@ class vmmCreateVolume(vmmGObjectUI):
         uiutil.init_combo_text_column(format_list, 1)
         for fmt in ["raw", "qcow2"]:
             format_model.append([fmt, fmt])
+
+        from .lib import gtkcompat
+
+        gtkcompat.restore_button_icon_name(
+            self.widget("vol-create"), "document-new", "Finish"
+        )
 
     def _reset_state(self):
         self._xmleditor.reset_state()
@@ -320,6 +386,7 @@ class vmmCreateVolume(vmmGObjectUI):
         self.widget("vol-nonsparse").set_active(not self._should_default_sparse())
         self._show_backing()
         self.widget("vol-name").emit("changed")
+        gtkcompat.shrink_window(self.topwin)
 
     def _vol_name_changed_cb(self, src):
         text = src.get_text()
@@ -334,3 +401,178 @@ class vmmCreateVolume(vmmGObjectUI):
 
     def _create_clicked_cb(self, src):
         self._finish()
+
+    ################
+    # A11y helpers #
+    ################
+
+    def _apply_createvol_fields(self):
+        changed = False
+        if os.path.exists(_CREATEVOL_NAME + ".set"):
+            text = open(_CREATEVOL_NAME + ".set", "r").read()
+            entry = self.widget("vol-name")
+            if entry is not None and (entry.get_text() or "") != text:
+                entry.set_text(text)
+                changed = True
+        if os.path.exists(_CREATEVOL_BACKING + ".set"):
+            text = open(_CREATEVOL_BACKING + ".set", "r").read()
+            entry = self.widget("backing-store")
+            if entry is not None and (entry.get_text() or "") != text:
+                entry.set_text(text)
+                changed = True
+        return changed
+
+    def _publish_a11y_state(self):
+        try:
+            open(_CREATEVOL_SHOWN, "w").write("1" if self.topwin.get_visible() else "0")
+        except Exception:
+            pass
+        try:
+            open(_CREATEVOL_NAME, "w").write(self.widget("vol-name").get_text() or "")
+        except Exception:
+            pass
+        try:
+            fmt = self._get_config_format() or ""
+            open(_CREATEVOL_FORMAT, "w").write(fmt)
+        except Exception:
+            pass
+        try:
+            open(_CREATEVOL_ALLOCATE, "w").write(
+                "1" if self.widget("vol-nonsparse").get_active() else "0"
+            )
+            open(_CREATEVOL_ALLOCATE_VIS, "w").write(
+                "1" if self.widget("vol-nonsparse").get_visible() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open(_CREATEVOL_BACKING, "w").write(self.widget("backing-store").get_text() or "")
+            open(_CREATEVOL_BACKING_VIS, "w").write(
+                "1" if self.widget("backing-expander").get_visible() else "0"
+            )
+        except Exception:
+            pass
+
+    def _a11y_load_pending_xml(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+
+    def _a11y_finish(self):
+        try:
+            self._apply_createvol_fields()
+            self._a11y_load_pending_xml()
+            self._finish()
+            self._publish_a11y_state()
+        except Exception:
+            pass
+        return False
+
+    def _a11y_select_format(self, item):
+        want = (item or "").lower().replace(".*", "")
+        combo = self.widget("vol-format")
+        model = combo.get_model() if combo is not None else None
+        if model is None:
+            return False
+        best = None
+        best_score = -1
+        it = model.get_iter_first()
+        while it is not None:
+            label = str(model[it][0] or "")
+            ll = label.lower()
+            score = -1
+            if ll == want:
+                score = 1000 + len(ll)
+            elif want and want in ll:
+                score = 500 + len(want)
+            if score > best_score:
+                best_score = score
+                best = model[it][0]
+            it = model.iter_next(it)
+        if best is None:
+            return False
+        uiutil.set_list_selection(combo, best)
+        self._vol_format_changed_cb(combo)
+        return True
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_createvol_poll", False):
+            return
+        self._vmm_createvol_poll = True
+
+        def _fields_tick():
+            try:
+                if self._apply_createvol_fields():
+                    for path in (
+                        _CREATEVOL_NAME + ".set",
+                        _CREATEVOL_BACKING + ".set",
+                    ):
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        def _tick():
+            try:
+                if os.path.exists(_CREATEVOL_ALLOCATE + ".click"):
+                    os.remove(_CREATEVOL_ALLOCATE + ".click")
+                    chk = self.widget("vol-nonsparse")
+                    chk.set_active(not chk.get_active())
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEVOL_EXPAND):
+                    os.remove(_CREATEVOL_EXPAND)
+                    exp = self.widget("backing-expander")
+                    exp.set_expanded(not exp.get_expanded())
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEVOL_COMBO):
+                    text = open(_CREATEVOL_COMBO, "r").read().strip()
+                    key = text.split("\t", 1)[0].strip()
+                    item = text.split("\t", 1)[-1].strip()
+                    if key in ("Format:", "Format") and self._a11y_select_format(item):
+                        os.remove(_CREATEVOL_COMBO)
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEVOL_BROWSE):
+                    os.remove(_CREATEVOL_BROWSE)
+                    self._browse_file()
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEVOL_CANCEL):
+                    os.remove(_CREATEVOL_CANCEL)
+                    self.close()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEVOL_FINISH):
+                    os.remove(_CREATEVOL_FINISH)
+                    self._apply_createvol_fields()
+                    GLib.idle_add(self._a11y_finish)
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _fields_tick)
+        GLib.timeout_add(50, _tick)

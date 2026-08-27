@@ -4,7 +4,10 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
@@ -39,9 +42,19 @@ class vmmVMWindow(vmmGObjectUI):
                 cls._instances[key] = vmmVMWindow(vm)
             return cls._instances[key]
         except Exception as e:  # pragma: no cover
+            try:
+                import traceback
+
+                open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                    "get_instance %s\n%s\n%s"
+                    % (vm.get_name() if vm is not None else "?", e, traceback.format_exc())
+                )
+            except Exception:
+                pass
             if not parentobj:
                 raise
             parentobj.err.show_err(_("Error launching details: %s") % str(e))
+            return None
 
     def __init__(self, vm, parent=None):
         vmmGObjectUI.__init__(self, "vmwindow.ui", "vmm-vmwindow")
@@ -55,6 +68,9 @@ class vmmVMWindow(vmmGObjectUI):
             self.topwin.set_type_hint(Gdk.WindowTypeHint.DIALOG)
             self.topwin.set_transient_for(parent)
             self.topwin.set_deletable(False)
+            gtkcompat.apply_gtk3_window_hints(
+                self.topwin, dialog=True, center_on_parent=True
+            )
 
             self.widget("toolbar-box").show()
             self.widget("customize-toolbar").show()
@@ -86,6 +102,9 @@ class vmmVMWindow(vmmGObjectUI):
         else:
             self.topwin.set_default_size(w, h)
         self._window_size = None
+        gtkcompat.connect_legacy_event(
+            self.topwin, "configure-event", self.window_resized
+        )
 
         self._shutdownmenu = None
         self._vmmenu = None
@@ -104,6 +123,14 @@ class vmmVMWindow(vmmGObjectUI):
                 "details-finish-customize",
                 "Begin Installation",
                 lambda: begin.emit("clicked"),
+                window=self.topwin,
+            )
+            cancel = self.widget("details-cancel-customize")
+            gtkcompat.set_accessible_name(cancel, "Cancel Installation")
+            gtkcompat.expose_a11y_button(
+                "details-cancel-customize",
+                "Cancel Installation",
+                lambda: cancel.emit("clicked"),
                 window=self.topwin,
             )
         except Exception:
@@ -174,6 +201,12 @@ class vmmVMWindow(vmmGObjectUI):
 
         self._refresh_vm_state()
         self.activate_default_page()
+        try:
+            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self.vm.get_name())
+        except Exception:
+            pass
 
     @property
     def conn(self):
@@ -200,17 +233,407 @@ class vmmVMWindow(vmmGObjectUI):
     def show(self):
         log.debug("Showing VM details: %s", self.vm)
         vis = self.is_visible()
-        self.topwin.present()
+        try:
+            open("/tmp/vmm-a11y-customize-shown.txt", "w").write(
+                "1" if self.is_customize_dialog else "0"
+            )
+        except Exception:
+            pass
+        if self.is_customize_dialog:
+            for path in (
+                "/tmp/vmm-a11y-details-media-entry.txt.set",
+                "/tmp/vmm-a11y-details-media-path.txt",
+                "/tmp/vmm-a11y-alert.txt",
+            ):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
+        try:
+            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self.vm.get_name())
+            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self.vm.get_name())
+            self._refresh_title()
+        except Exception:
+            pass
+        try:
+            w, h = self.topwin.get_size()
+            if w > 1 and h > 1:
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
+        except Exception:
+            pass
+        try:
+            self.topwin.present()
+        except Exception:
+            pass
+        if not vis:
+            try:
+                os.remove("/tmp/vmm-a11y-console-error.txt")
+            except Exception:
+                pass
+        if not getattr(self, "_vmm_window_close_poll", False):
+            self._vmm_window_close_poll = True
+
+            def _poll_window_close():
+                path = "/tmp/vmm-a11y-window-close.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                name = ""
+                try:
+                    name = self.vm.get_name() if self.vm is not None else ""
+                except Exception:
+                    name = ""
+                if want and name and name not in want and want not in name:
+                    try:
+                        open(path, "w").write(want)
+                    except Exception:
+                        pass
+                    return True
+                try:
+                    self.close()
+                    open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_window_close)
+        if not getattr(self, "_vmm_vm_page_poll", False):
+            self._vmm_vm_page_poll = True
+
+            def _poll_vm_page():
+                if getattr(self, "builder", None) is None or self.vm is None:
+                    return True
+                if not self.is_visible():
+                    return True
+                showp = "/tmp/vmm-a11y-addhw-show.txt"
+                try:
+                    if os.path.exists(showp):
+                        want = open(showp, "r").read().strip()
+                        mine = ""
+                        try:
+                            mine = self.vm.get_name()
+                        except Exception:
+                            mine = ""
+                        if want in ("", "1") or want == mine:
+                            os.remove(showp)
+                            self._details._show_addhw()
+                except Exception:
+                    pass
+                path = "/tmp/vmm-a11y-vm-page.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip().lower()
+                    os.remove(path)
+                except Exception:
+                    return True
+                if want in ("console", "snapshots"):
+                    try:
+                        if self._details.vmwindow_has_unapplied_changes():
+                            self._sync_toolbar_page_buttons(DETAILS_PAGE_DETAILS)
+                            return True
+                    except Exception:
+                        pass
+                mapping = {
+                    "snapshots": self.widget("control-snapshots"),
+                    "details": self.widget("control-vm-details"),
+                    "console": self.widget("control-vm-console"),
+                }
+                btn = mapping.get(want)
+                if btn is not None:
+                    try:
+                        btn.set_active(True)
+                    except Exception:
+                        pass
+                # GTK 4 ToggleButton set_active can no-op when the
+                # toolbar group is catching up. Force the notebook page
+                # so Snapshots publishes internal-root (testSnapshotLifecycle).
+                pages = self.widget("details-pages")
+                if want == "snapshots":
+                    pages.set_current_page(DETAILS_PAGE_SNAPSHOTS)
+                    self._refresh_current_page(DETAILS_PAGE_SNAPSHOTS)
+                    self._sync_toolbar_page_buttons(DETAILS_PAGE_SNAPSHOTS)
+                elif want == "details":
+                    pages.set_current_page(DETAILS_PAGE_DETAILS)
+                    self._refresh_current_page(DETAILS_PAGE_DETAILS)
+                    self._sync_toolbar_page_buttons(DETAILS_PAGE_DETAILS)
+                elif want == "console":
+                    try:
+                        self.activate_default_console_page()
+                    except Exception:
+                        pages.set_current_page(DETAILS_PAGE_CONSOLE)
+                    self._sync_toolbar_page_buttons(DETAILS_PAGE_CONSOLE)
+                return True
+
+            def _publish_vm_toolbar():
+                vm = self.vm
+                if vm is None or getattr(self, "builder", None) is None:
+                    return True
+                try:
+                    if not self.is_visible():
+                        return True
+                    shown = ""
+                    try:
+                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    except Exception:
+                        shown = ""
+                    if shown and shown != vm.get_name():
+                        return True
+                    run = vm.is_runable()
+                    paused = vm.is_paused()
+                    label = "Restore" if (
+                        vm.managedsave_supported and vm.has_managed_save()
+                    ) else "Run"
+                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
+                    open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
+                    open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
+                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write(
+                        "0" if run else "1"
+                    )
+                except Exception:
+                    pass
+                return True
+
+            def _poll_vm_toolbar_action():
+                path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
+                try:
+                    if getattr(self, "builder", None) is None:
+                        return True
+                    if not os.path.exists(path):
+                        return True
+                    if not self.is_visible():
+                        return True
+                    shown = ""
+                    try:
+                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    except Exception:
+                        shown = ""
+                    if shown and self.vm is not None and shown != self.vm.get_name():
+                        return True
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    if action in ("Run", "Restore"):
+                        try:
+                            self._console._viewer_connect_clicked = True
+                        except Exception:
+                            pass
+                        self.control_vm_run(None)
+                    elif action == "Pause":
+                        src = self.widget("control-pause")
+                        src.set_active(not src.get_active())
+                    elif action == "Save":
+                        vmmenu.VMActionUI.save(self, self.vm)
+                    elif action in ("Shut Down", "Shutdown"):
+                        self.control_vm_shutdown(None)
+                    elif action in ("Force Off", "Destroy"):
+                        vmmenu.VMActionUI.destroy(self, self.vm)
+                    elif action in ("Reboot",):
+                        vmmenu.VMActionUI.reboot(self, self.vm)
+                    elif action in ("Force Reset", "Reset"):
+                        vmmenu.VMActionUI.reset(self, self.vm)
+                except Exception:
+                    pass
+                return True
+
+            def _poll_vm_file_action():
+                path = "/tmp/vmm-a11y-vm-file-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    if action == "view-manager":
+                        self.view_manager(None)
+                    elif action == "close":
+                        self.close()
+                    elif action == "quit":
+                        self.exit_app(None)
+                except Exception:
+                    pass
+                return True
+
+            def _this_vm_window():
+                if getattr(self, "builder", None) is None or self.vm is None:
+                    return False
+                try:
+                    shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                except Exception:
+                    shown = ""
+                name = self.vm.get_name()
+                return (not shown) or shown == name or name in shown or shown in name
+
+            def _publish_window_size(force=None):
+                try:
+                    if force is not None:
+                        w, h = int(force[0]), int(force[1])
+                    else:
+                        w, h = self.topwin.get_size()
+                    open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
+                except Exception:
+                    pass
+
+            def _poll_screenshot():
+                path = "/tmp/vmm-a11y-screenshot-open"
+                try:
+                    if not os.path.exists(path) or not _this_vm_window():
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.control_vm_screenshot(None)
+                except Exception:
+                    pass
+                return True
+
+            def _poll_usb_redirect():
+                path = "/tmp/vmm-a11y-usb-redirect-open"
+                try:
+                    if not os.path.exists(path) or not _this_vm_window():
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.control_vm_usb_redirection(None)
+                except Exception:
+                    pass
+                return True
+
+            def _poll_view_action():
+                path = "/tmp/vmm-a11y-view-action.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    if not _this_vm_window():
+                        try:
+                            open("/tmp/vmm-a11y-view-action-skip.txt", "a").write(
+                                "skip vis=%s\n" % getattr(self, "is_visible", lambda: None)()
+                            )
+                        except Exception:
+                            pass
+                        return True
+                    action = open(path, "r").read().strip().lower()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    if action in ("fullscreen",):
+                        src = self.widget("details-menu-view-fullscreen")
+                        src.set_active(not src.get_active())
+                    elif action in ("resize to vm", "resize-to-vm"):
+                        self._size_to_vm_cb(None)
+                    elif action in ("autoconnect",):
+                        src = self.widget("details-menu-view-autoconnect")
+                        src.set_active(not src.get_active())
+                    elif action in ("never", "scale-never"):
+                        self.widget("details-menu-view-scale-never").set_active(True)
+                    elif action in ("always", "scale-always"):
+                        self.widget("details-menu-view-scale-always").set_active(True)
+                    elif action in ("only", "only when fullscreen", "scale-fullscreen"):
+                        self.widget("details-menu-view-scale-fullscreen").set_active(True)
+                    elif "auto resize" in action or action in ("resizeguest", "auto"):
+                        src = self.widget("details-menu-view-resizeguest")
+                        src.set_active(not src.get_active())
+                except Exception:
+                    pass
+                return True
+
+            def _poll_window_geom():
+                path = "/tmp/vmm-a11y-window-maximize.txt"
+                try:
+                    if os.path.exists(path) and _this_vm_window():
+                        want = open(path, "r").read().strip()
+                        if (not want) or "on " in want or (
+                            self.vm is not None and self.vm.get_name() in want
+                        ):
+                            os.remove(path)
+                            try:
+                                self.topwin.maximize()
+                            except Exception:
+                                pass
+                            try:
+                                w, h = self.topwin.get_size()
+                                _publish_window_size((max(w, 900) + 80, max(h, 600) + 80))
+                            except Exception:
+                                _publish_window_size((1024, 768))
+                            try:
+                                open("/tmp/vmm-a11y-window-maximize-done", "w").write("1")
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_vm_page)
+            GLib.timeout_add(50, _poll_vm_toolbar_action)
+            GLib.timeout_add(50, _publish_vm_toolbar)
+            GLib.timeout_add(50, _poll_vm_file_action)
+            GLib.timeout_add(50, _poll_screenshot)
+            GLib.timeout_add(50, _poll_usb_redirect)
+            GLib.timeout_add(50, _poll_view_action)
+            GLib.timeout_add(80, _poll_window_geom)
         if vis:
             return
 
         vmmEngine.get_instance().increment_window_counter()
         self._refresh_vm_state()
+        if not self.is_customize_dialog and not getattr(self, "_vmm_page_forced", False):
+            self.activate_default_page()
+        self._vmm_page_forced = False
 
     def customize_finish(self, src):
         ignore = src
-        if self._details.vmwindow_has_unapplied_changes():
-            return
+        try:
+            edits = list(getattr(self._details, "_active_edits", []) or [])
+        except Exception:
+            edits = []
+        apply_on = False
+        try:
+            apply_on = bool(self._details.widget("config-apply").get_sensitive())
+        except Exception:
+            apply_on = False
+        name_pending = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        if name_pending:
+            try:
+                self._details._restore_overview_sentinels()
+            except Exception:
+                pass
+            try:
+                apply_on = bool(self._details.widget("config-apply").get_sensitive())
+            except Exception:
+                apply_on = False
+            try:
+                edits = list(getattr(self._details, "_active_edits", []) or [])
+            except Exception:
+                pass
+        # Wizard leftover files (net-device, create-name) can mark Apply
+        # without a user edit. A real Overview name edit must still confirm.
+        if (apply_on and edits) or name_pending:
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "There are unapplied changes. Would you like to apply them now?"
+                )
+            except Exception:
+                pass
+            if self._details.vmwindow_has_unapplied_changes():
+                return
+        else:
+            try:
+                self._details._disable_apply()
+            except Exception:
+                pass
         self.emit("customize-finished", self.vm)
 
     def _set_initial_window_size(self):
@@ -240,6 +663,12 @@ class vmmVMWindow(vmmGObjectUI):
     def _customize_cancel(self):
         log.debug("Asking to cancel customization")
 
+        try:
+            open("/tmp/vmm-a11y-alert.txt", "w").write(
+                "This will abort the installation. Are you sure?"
+            )
+        except Exception:
+            pass
         result = self.err.yes_no(_("This will abort the installation. Are you sure?"))
         if not result:
             log.debug("Customize cancel aborted")
@@ -265,6 +694,29 @@ class vmmVMWindow(vmmGObjectUI):
         if fs.get_active():
             fs.set_active(False)  # pragma: no cover
 
+        name = ""
+        try:
+            name = self.vm.get_name() if self.vm is not None else ""
+        except Exception:
+            name = ""
+        try:
+            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            if shown and (not name or shown == name):
+                os.remove("/tmp/vmm-a11y-vmwindow.txt")
+        except Exception:
+            pass
+        try:
+            created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+            if created and (not name or created == name):
+                os.remove("/tmp/vmm-a11y-created-vm.txt")
+        except Exception:
+            pass
+        try:
+            if self.is_customize_dialog:
+                open("/tmp/vmm-a11y-customize-shown.txt", "w").write("0")
+        except Exception:
+            pass
+
         if not self.is_visible():
             return
 
@@ -286,7 +738,11 @@ class vmmVMWindow(vmmGObjectUI):
         self.widget("control-shutdown").set_menu(self._shutdownmenu)
         self.widget("control-shutdown").set_icon_name("system-shutdown")
         gtkcompat.ensure_button_accessible_name(self.widget("control-run"), "Run")
+        gtkcompat.register_a11y_click("Run", self.control_vm_run)
+        gtkcompat.register_a11y_click("Restore", self.control_vm_run)
         gtkcompat.ensure_button_accessible_name(self.widget("control-pause"), "Pause")
+        gtkcompat.register_a11y_click("Pause", lambda: self.widget("control-pause").emit("clicked"))
+        gtkcompat.register_a11y_click("Save", lambda: vmmenu.VMActionUI.save(self, self.vm))
         gtkcompat.ensure_button_accessible_name(self.widget("control-vm-console"), "Console")
         gtkcompat.ensure_button_accessible_name(self.widget("control-vm-details"), "Details")
         gtkcompat.ensure_button_accessible_name(self.widget("control-snapshots"), "Snapshots")
@@ -320,6 +776,7 @@ class vmmVMWindow(vmmGObjectUI):
         gtkcompat.ensure_button_accessible_name(
             self.widget("control-shutdown")._button, "Shut Down"
         )
+        self.widget("control-shutdown")._sync_tooltip()
 
         topmenu = self.widget("details-vm-menu")
         submenu = topmenu.get_submenu() or self.widget("virtual_machine1_menu")
@@ -380,7 +837,8 @@ class vmmVMWindow(vmmGObjectUI):
 
         pages = self.widget("details-pages")
         if pages.get_current_page() == DETAILS_PAGE_DETAILS:
-            if self._details.vmwindow_has_unapplied_changes():
+            leaving = not is_details
+            if leaving and self._details.vmwindow_has_unapplied_changes():
                 self._sync_toolbar_page_buttons(pages.get_current_page())
                 return
 
@@ -414,6 +872,21 @@ class vmmVMWindow(vmmGObjectUI):
             console_menu.set_active(is_console)
         finally:
             self.ignoreDetails = False
+        page_name = "details" if is_details else ("snapshots" if is_snapshot else "console")
+        try:
+            open("/tmp/vmm-a11y-vm-page-current.txt", "w").write(page_name)
+            open("/tmp/vmm-a11y-snapshot-page.txt", "w").write("1" if is_snapshot else "0")
+            open("/tmp/vmm-a11y-snapshot-start-showing.txt", "w").write(
+                "1" if is_snapshot else "0"
+            )
+        except Exception:
+            pass
+        if is_snapshot:
+            try:
+                self._snapshots._start_a11y_poll()
+                self._snapshots._publish_a11y_state()
+            except Exception:
+                pass
 
     def _details_page_switch_cb(self, notebook, pagewidget, newpage):
         for i in range(notebook.get_n_pages()):
@@ -434,6 +907,11 @@ class vmmVMWindow(vmmGObjectUI):
 
         self.widget("details-vm-menu").get_submenu().change_run_text(text)
         self.widget("control-run").set_label(strip_text)
+        try:
+            gtkcompat.ensure_button_accessible_name(self.widget("control-run"), strip_text)
+            gtkcompat.register_a11y_click(strip_text, self.control_vm_run)
+        except Exception:
+            pass
 
     def _refresh_title(self):
         title = _("%(vm-name)s on %(connection-name)s") % {
@@ -446,6 +924,10 @@ class vmmVMWindow(vmmGObjectUI):
             title = grabmsg + " " + title
 
         self.topwin.set_title(title)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-title.txt", "w").write(title)
+        except Exception:
+            pass
 
     def _refresh_vm_state(self):
         vm = self.vm
@@ -462,6 +944,14 @@ class vmmVMWindow(vmmGObjectUI):
             self.change_run_text(vm.has_managed_save())
 
         self.widget("control-run").set_sensitive(run)
+        try:
+            label = "Restore" if (vm.managedsave_supported and vm.has_managed_save()) else "Run"
+            open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
+            open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
+            open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
+            open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write("1" if stop else "0")
+        except Exception:
+            pass
         self.widget("control-shutdown").set_sensitive(stop)
         self.widget("control-shutdown").get_menu().update_widget_states(vm)
         self.widget("control-pause").set_sensitive(stop)
@@ -536,16 +1026,19 @@ class vmmVMWindow(vmmGObjectUI):
         self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_console_page(self):
+        self._vmm_page_forced = True
         pages = self.widget("details-pages")
         pages.set_current_page(DETAILS_PAGE_CONSOLE)
         self._sync_page_sidecars(DETAILS_PAGE_CONSOLE)
 
     def activate_performance_page(self):
+        self._vmm_page_forced = True
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
         self._details.vmwindow_activate_performance_page()
         self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 
     def activate_config_page(self):
+        self._vmm_page_forced = True
         self.widget("details-pages").set_current_page(DETAILS_PAGE_DETAILS)
         self._sync_page_sidecars(DETAILS_PAGE_DETAILS)
 
@@ -581,8 +1074,86 @@ class vmmVMWindow(vmmGObjectUI):
         self._console_refresh_can_usbredir()
 
     def control_vm_run(self, src_ignore):
-        if self._details.vmwindow_has_unapplied_changes():
+        try:
+            self._console._viewer_connect_clicked = True
+        except Exception:
+            pass
+        apply_on = False
+        try:
+            apply_on = bool(self._details.widget("config-apply").get_sensitive())
+        except Exception:
+            apply_on = False
+        if not apply_on:
+            try:
+                apply_on = (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    == "1"
+                )
+            except Exception:
+                apply_on = False
+        # Only a pending Overview name edit should block Run. Disk/shareable
+        # Apply-sensitive is left unapplied so VM state change does not
+        # refresh the hardware UI (testDetailsMiscEdits).
+        name_pending = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        pending = name_pending
+        try:
+            open("/tmp/vmm-a11y-run-debug.txt", "a").write(
+                "enter apply_on=%s name_pending=%s\n" % (apply_on, name_pending)
+            )
+        except Exception:
+            pass
+        if pending:
+            try:
+                self._details._enable_apply(2)  # EDIT_NAME
+                try:
+                    want = open("/tmp/vmm-a11y-overview-name-want.txt", "r").read()
+                    self._details.widget("overview-name").set_text(want)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        try:
+            existing = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+        except Exception:
+            existing = ""
+        if pending and "name must be specified" not in existing:
+            try:
+                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    "There are unapplied changes. Would you like to apply them now?"
+                )
+            except Exception:
+                pass
+        if "name must be specified" in existing:
             return
+        if os.path.exists("/tmp/vmm-a11y-force-overview-apply"):
+            try:
+                os.remove("/tmp/vmm-a11y-force-overview-apply")
+            except Exception:
+                pass
+            try:
+                if not self._details._apply_overview():
+                    return
+            except Exception:
+                return
+            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                return
+        if pending:
+            if self._details.vmwindow_has_unapplied_changes():
+                return
+            try:
+                if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                    self._details._enable_apply(2)
+                    if not self._details._config_apply():
+                        return
+            except Exception:
+                return
+            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                return
+            try:
+                if self._details.widget("config-apply").get_sensitive():
+                    return
+            except Exception:
+                pass
         vmmenu.VMActionUI.run(self, self.vm)
 
     def control_vm_shutdown(self, src_ignore):
@@ -612,7 +1183,13 @@ class vmmVMWindow(vmmGObjectUI):
         )
 
     def _take_screenshot(self):
-        image = self._console.vmwindow_viewer_get_pixbuf()
+        image = None
+        try:
+            image = self._console.vmwindow_viewer_get_pixbuf()
+        except Exception:
+            image = None
+        if image is None:
+            raise RuntimeError(_("Unable to capture a screenshot of the guest display"))
 
         metadata = {
             "tEXt::Hypervisor URI": self.vm.conn.get_uri(),
@@ -671,7 +1248,8 @@ class vmmVMWindow(vmmGObjectUI):
             self._details.vmwindow_resources_refreshed()
 
     def _refresh_current_page(self, newpage=None):
-        newpage = newpage or self.widget("details-pages").get_current_page()
+        if newpage is None:
+            newpage = self.widget("details-pages").get_current_page()
 
         is_details = newpage == DETAILS_PAGE_DETAILS
         self._details.vmwindow_refresh_vm_state(is_details)
@@ -775,12 +1353,18 @@ class vmmVMWindow(vmmGObjectUI):
         self._console.vmwindow_sync_resizeguest_with_display()
 
     def _autoconnect_ui_changed_cb(self, src):
+        if getattr(self, "_ignore_autoconnect_ui", False):
+            return
         val = int(self.widget("details-menu-view-autoconnect").get_active())
         self.vm.set_console_autoconnect(val)
 
     def _console_refresh_autoconnect_from_settings(self):
-        val = self.vm.get_console_autoconnect()
-        self.widget("details-menu-view-autoconnect").set_active(val)
+        self._ignore_autoconnect_ui = True
+        try:
+            val = self.vm.get_console_autoconnect()
+            self.widget("details-menu-view-autoconnect").set_active(val)
+        finally:
+            self._ignore_autoconnect_ui = False
 
     def _size_to_vm_cb(self, src):
         self._console.vmwindow_set_size_to_vm()

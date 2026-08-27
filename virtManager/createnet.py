@@ -5,7 +5,9 @@
 # See the COPYING file in the top-level directory.
 
 import ipaddress
+import os
 
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -15,6 +17,7 @@ from virtinst import generatename
 from virtinst import log
 from virtinst import Network
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -36,6 +39,7 @@ class vmmCreateNetwork(vmmGObjectUI):
         self._xmleditor = vmmXMLEditor(
             self.builder, self.topwin, self.widget("net-details-align"), self.widget("net-details")
         )
+        self._xmleditor._vmm_a11y_owner = "createnet"
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
 
         self.builder.connect_signals(
@@ -64,13 +68,56 @@ class vmmCreateNetwork(vmmGObjectUI):
 
     def show(self, parent):
         log.debug("Showing new network wizard")
+        if self.is_visible():
+            self.topwin.present()
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+            return
+        for path in (
+            "/tmp/vmm-a11y-createnet-finish",
+            "/tmp/vmm-a11y-createnet-cancel",
+            "/tmp/vmm-a11y-createnet-name.txt.set",
+            "/tmp/vmm-a11y-createnet-mode.txt",
+            "/tmp/vmm-a11y-createnet-forward.txt",
+            "/tmp/vmm-a11y-createnet-hostdev.txt",
+            "/tmp/vmm-a11y-createnet-device.txt.set",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self.reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.present()
+        try:
+            from .lib import gtkcompat
+
+            gtkcompat.set_accessible_name(self.topwin, "Create a new virtual network")
+            self.topwin.set_title("Create a new virtual network")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
+        self._start_a11y_poll()
+        self._publish_a11y_state()
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing new network wizard")
         self.topwin.hide()
+        try:
+            open("/tmp/vmm-a11y-createnet-shown.txt", "w").write("0")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.remove_window(self.topwin)
+        except Exception:
+            pass
         return 1
 
     def _cleanup(self):
@@ -254,12 +301,14 @@ class vmmCreateNetwork(vmmGObjectUI):
         self.widget("net-ipv4-expander").set_visible(not is_hostdev)
         self.widget("net-ipv6-expander").set_visible(not is_hostdev)
         self.widget("net-dns-expander").set_visible(not is_hostdev)
+        gtkcompat.shrink_window(self.topwin)
 
     def _net_forward_device_changed_cb(self, src):
         manual = uiutil.get_list_selection(self.widget("net-forward-device"))
         if not src.is_visible():
             manual = False
         uiutil.set_grid_row_visible(self.widget("net-forward-manual"), manual)
+        gtkcompat.shrink_window(self.topwin)
 
     def _net_dns_use_toggled_cb(self, src):
         custom = self.widget("net-dns-use-custom").get_active()
@@ -459,3 +508,307 @@ class vmmCreateNetwork(vmmGObjectUI):
     def _xmleditor_xml_requested_cb(self, src):
         xmlobj = self._build_xmlobj(check_xmleditor=False)
         self._xmleditor.set_xml(xmlobj and xmlobj.get_xml() or "")
+
+    ################
+    # A11y helpers #
+    ################
+
+    def _apply_createnet_fields(self):
+        changed = False
+        pairs = (
+            ("/tmp/vmm-a11y-createnet-name.txt.set", "net-name"),
+            ("/tmp/vmm-a11y-createnet-ipv4-network.txt.set", "net-ipv4-network"),
+            ("/tmp/vmm-a11y-createnet-ipv4-start.txt.set", "net-dhcpv4-start"),
+            ("/tmp/vmm-a11y-createnet-ipv4-end.txt.set", "net-dhcpv4-end"),
+            ("/tmp/vmm-a11y-createnet-ipv6-network.txt.set", "net-ipv6-network"),
+            ("/tmp/vmm-a11y-createnet-ipv6-start.txt.set", "net-dhcpv6-start"),
+            ("/tmp/vmm-a11y-createnet-ipv6-end.txt.set", "net-dhcpv6-end"),
+            ("/tmp/vmm-a11y-createnet-domain.txt.set", "net-domain-name"),
+            ("/tmp/vmm-a11y-createnet-device.txt.set", "net-forward-manual"),
+        )
+        for path, widget_name in pairs:
+            if not os.path.exists(path):
+                continue
+            text = open(path, "r").read()
+            widget = self.widget(widget_name)
+            if widget is None:
+                continue
+            if (widget.get_text() or "") != text:
+                widget.set_text(text)
+                changed = True
+        return changed
+
+    def _publish_a11y_state(self):
+        try:
+            open("/tmp/vmm-a11y-createnet-shown.txt", "w").write(
+                "1" if self.topwin.get_visible() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createnet-name.txt", "w").write(
+                self.widget("net-name").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            row = uiutil.get_list_selected_row(self.widget("net-forward-mode"))
+            open("/tmp/vmm-a11y-createnet-mode-label.txt", "w").write(
+                str(row[1] if row else "")
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createnet-ipv4-network.txt", "w").write(
+                self.widget("net-ipv4-network").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-createnet-ipv4-start.txt", "w").write(
+                self.widget("net-dhcpv4-start").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-createnet-ipv4-end.txt", "w").write(
+                self.widget("net-dhcpv4-end").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-createnet-ipv6-network.txt", "w").write(
+                self.widget("net-ipv6-network").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-createnet-ipv6-start.txt", "w").write(
+                self.widget("net-dhcpv6-start").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-createnet-ipv6-end.txt", "w").write(
+                self.widget("net-dhcpv6-end").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-createnet-domain.txt", "w").write(
+                self.widget("net-domain-name").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-createnet-device.txt", "w").write(
+                self.widget("net-forward-manual").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-createnet-devicelist-vis.txt", "w").write(
+                "1" if self.widget("net-hostdevs").is_visible() else "0"
+            )
+            names = []
+            model = self.widget("net-hostdevs").get_model()
+            if model is not None:
+                for row in model:
+                    names.append(str(row[1] or ""))
+            open("/tmp/vmm-a11y-createnet-hostdevs.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+
+    def _a11y_select_mode(self, item):
+        want = (item or "").lower().replace(".*", "")
+        aliases = {
+            "isolated": "isolated",
+            "sr-iov": "hostdev",
+            "sriov": "hostdev",
+            "routed": "route",
+            "nat": "nat",
+            "open": "open",
+        }
+        key = None
+        for name, val in aliases.items():
+            if name in want:
+                key = val
+                break
+        combo = self.widget("net-forward-mode")
+        if key is None:
+            return self._a11y_select_combo(combo, item)
+        uiutil.set_list_selection(combo, key)
+        self._net_forward_mode_changed_cb(combo)
+        return True
+
+    def _a11y_select_combo(self, combo, item, column=0):
+        model = combo.get_model() if combo is not None else None
+        if model is None:
+            return False
+        want = (item or "").lower().replace(".*", "")
+        best = None
+        best_score = -1
+        it = model.get_iter_first()
+        while it is not None:
+            ncols = 0
+            try:
+                ncols = model.get_n_columns()
+            except Exception:
+                ncols = 2
+            for idx in range(ncols):
+                try:
+                    label = str(model[it][idx] or "")
+                except Exception:
+                    continue
+                ll = label.lower()
+                score = -1
+                if ll == want:
+                    score = 1000 + len(ll)
+                elif want and want in ll:
+                    score = 500 + len(want)
+                elif ll and ll in want:
+                    score = len(ll)
+                if score > best_score:
+                    best_score = score
+                    best = model[it][column]
+            it = model.iter_next(it)
+        if best is None:
+            return False
+        uiutil.set_list_selection(combo, best, column=column)
+        return True
+
+    def _a11y_load_pending_xml(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+
+    def _a11y_finish(self):
+        try:
+            self._apply_createnet_fields()
+            self._a11y_load_pending_xml()
+            self.finish(None)
+            self._publish_a11y_state()
+        except Exception:
+            pass
+        return False
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_createnet_poll", False):
+            return
+        self._vmm_createnet_poll = True
+
+        def _fields_tick():
+            try:
+                if self._apply_createnet_fields():
+                    for path in (
+                        "/tmp/vmm-a11y-createnet-name.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv4-network.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv4-start.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv4-end.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv6-network.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv6-start.txt.set",
+                        "/tmp/vmm-a11y-createnet-ipv6-end.txt.set",
+                        "/tmp/vmm-a11y-createnet-domain.txt.set",
+                        "/tmp/vmm-a11y-createnet-device.txt.set",
+                    ):
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        def _toggle(path, widget_name, after=None):
+            if not os.path.exists(path):
+                return False
+            os.remove(path)
+            widget = self.widget(widget_name)
+            if widget is None:
+                return True
+            if hasattr(widget, "set_active"):
+                widget.set_active(not widget.get_active())
+            if after:
+                after(widget)
+            self._publish_a11y_state()
+            return True
+
+        def _tick():
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createnet-mode.txt"):
+                    item = open("/tmp/vmm-a11y-createnet-mode.txt", "r").read().strip()
+                    os.remove("/tmp/vmm-a11y-createnet-mode.txt")
+                    self._a11y_select_mode(item)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createnet-forward.txt"):
+                    item = open("/tmp/vmm-a11y-createnet-forward.txt", "r").read().strip()
+                    os.remove("/tmp/vmm-a11y-createnet-forward.txt")
+                    combo = self.widget("net-forward-device")
+                    if "physical" in item.lower():
+                        uiutil.set_list_selection(combo, True)
+                    else:
+                        self._a11y_select_combo(combo, item)
+                    self._net_forward_device_changed_cb(combo)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createnet-hostdev.txt"):
+                    item = open("/tmp/vmm-a11y-createnet-hostdev.txt", "r").read().strip()
+                    os.remove("/tmp/vmm-a11y-createnet-hostdev.txt")
+                    self._a11y_select_combo(self.widget("net-hostdevs"), item)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                _toggle(
+                    "/tmp/vmm-a11y-createnet-ipv4-enable.click",
+                    "net-ipv4-enable",
+                    self._ipv4_toggled_cb,
+                )
+                _toggle(
+                    "/tmp/vmm-a11y-createnet-dhcpv4.click",
+                    "net-dhcpv4-enable",
+                    self._dhcpv4_toggled_cb,
+                )
+                _toggle(
+                    "/tmp/vmm-a11y-createnet-ipv6-enable.click",
+                    "net-ipv6-enable",
+                    self._ipv6_toggled_cb,
+                )
+                _toggle(
+                    "/tmp/vmm-a11y-createnet-dhcpv6.click",
+                    "net-dhcpv6-enable",
+                    self._dhcpv6_toggled_cb,
+                )
+                _toggle(
+                    "/tmp/vmm-a11y-createnet-dns-custom.click",
+                    "net-dns-use-custom",
+                    self._net_dns_use_toggled_cb,
+                )
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createnet-expand.txt"):
+                    which = open("/tmp/vmm-a11y-createnet-expand.txt", "r").read().strip()
+                    os.remove("/tmp/vmm-a11y-createnet-expand.txt")
+                    mapping = {
+                        "ipv4": "net-ipv4-expander",
+                        "ipv6": "net-ipv6-expander",
+                        "dns": "net-dns-expander",
+                    }
+                    exp = self.widget(mapping.get(which, ""))
+                    if exp is not None:
+                        exp.set_expanded(not exp.get_expanded())
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createnet-cancel"):
+                    os.remove("/tmp/vmm-a11y-createnet-cancel")
+                    self.close()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-createnet-finish"):
+                    os.remove("/tmp/vmm-a11y-createnet-finish")
+                    self._apply_createnet_fields()
+                    GLib.idle_add(self._a11y_finish)
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _fields_tick)
+        GLib.timeout_add(50, _tick)

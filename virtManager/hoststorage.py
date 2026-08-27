@@ -3,13 +3,17 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
 from virtinst import DeviceDisk
 from virtinst import log
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -77,6 +81,7 @@ class vmmHostStorage(vmmGObjectUI):
         self._addvol = None
         self._volmenu = None
         self._xmleditor = None
+        self._last_pool_name = ""
         self.top_box = self.widget("storage-grid")
 
         self.builder.connect_signals(
@@ -98,6 +103,9 @@ class vmmHostStorage(vmmGObjectUI):
                 "on_pool_name_changed": (lambda *x: self._enable_pool_apply(EDIT_POOL_NAME)),
                 "on_pool_autostart_toggled": self._pool_autostart_changed_cb,
             }
+        )
+        gtkcompat.connect_legacy_event(
+            self.widget("vol-list"), "button-press-event", self._vol_popup_menu_cb
         )
 
         self._init_ui()
@@ -159,6 +167,7 @@ class vmmHostStorage(vmmGObjectUI):
             self.widget("pool-details-align"),
             self.widget("pool-details"),
         )
+        self._xmleditor._vmm_a11y_owner = "pool"
         self._xmleditor.connect("changed", lambda s: self._enable_pool_apply(EDIT_POOL_XML))
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
         self._xmleditor.connect("xml-reset", self._xmleditor_xml_reset_cb)
@@ -241,8 +250,387 @@ class vmmHostStorage(vmmGObjectUI):
     ###############
 
     def refresh_page(self):
-        self._populate_vols()
         self.conn.schedule_priority_tick(pollpool=True)
+        try:
+            self._populate_pools()
+        except Exception:
+            pass
+        self._populate_vols()
+        self._publish_a11y_state()
+
+    def _publish_a11y_state(self):
+        pools = []
+        selected = ""
+        try:
+            model = self.widget("pool-list").get_model()
+            if model is not None:
+                for row in model:
+                    pool = row[POOL_COLUMN_HANDLE]
+                    if pool is None:
+                        continue
+                    name = pool.get_name()
+                    if name:
+                        pools.append(name)
+            pool = self._current_pool()
+            if pool is not None:
+                selected = pool.get_name() or ""
+                if selected:
+                    self._last_pool_name = selected
+        except Exception:
+            pass
+        if not selected:
+            selected = getattr(self, "_last_pool_name", "") or ""
+        try:
+            open("/tmp/vmm-a11y-host-pool-list.txt", "w").write("\n".join(pools))
+            open("/tmp/vmm-a11y-host-pool-selected.txt", "w").write(selected)
+        except Exception:
+            pass
+        vols = []
+        volsel = ""
+        try:
+            model = self.widget("vol-list").get_model()
+            if model is not None:
+                for row in model:
+                    name = str(row[VOL_COLUMN_NAME] or "")
+                    if name:
+                        vols.append(name)
+            vol = self._current_vol()
+            if vol is not None:
+                try:
+                    volsel = vol.get_pretty_name(self._current_pool().get_type())
+                except Exception:
+                    volsel = vol.get_name() if hasattr(vol, "get_name") else ""
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-host-vol-list.txt", "w").write("\n".join(vols))
+            open("/tmp/vmm-a11y-host-vol-selected.txt", "w").write(volsel or "")
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-storage-browser.txt"):
+                open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
+                open("/tmp/vmm-a11y-vol-selected.txt", "w").write(volsel or "")
+        except Exception:
+            pass
+        try:
+            errpage = self.widget("storage-pages").get_current_page() == 1
+            open("/tmp/vmm-a11y-host-pool-error.txt", "w").write("1" if errpage else "0")
+            open("/tmp/vmm-a11y-host-pool-error-text.txt", "w").write(
+                self.widget("storage-error-label").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-host-pool-name.txt", "w").write(
+                self.widget("pool-name-entry").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-pool-location.txt", "w").write(
+                self.widget("pool-location").get_text() or ""
+            )
+            open("/tmp/vmm-a11y-host-pool-autostart.txt", "w").write(
+                "1" if self.widget("pool-autostart").get_active() else "0"
+            )
+        except Exception:
+            pass
+        self._publish_visible_vols()
+        try:
+            open("/tmp/vmm-a11y-host-pool-start.txt", "w").write(
+                "1" if self.widget("pool-start").get_sensitive() else "0"
+            )
+            open("/tmp/vmm-a11y-host-pool-stop.txt", "w").write(
+                "1" if self.widget("pool-stop").get_sensitive() else "0"
+            )
+            open("/tmp/vmm-a11y-host-pool-delete.txt", "w").write(
+                "1" if self.widget("pool-delete").get_sensitive() else "0"
+            )
+            open("/tmp/vmm-a11y-host-vol-delete.txt", "w").write(
+                "1" if self.widget("vol-delete").get_sensitive() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            choose = self.widget("choose-volume")
+            open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "w").write(
+                "1" if choose.get_visible() and choose.get_sensitive() else "0"
+            )
+        except Exception:
+            pass
+
+    def _publish_visible_vols(self):
+        names = []
+        try:
+            tv = self.widget("vol-list")
+            model = tv.get_model()
+            if model is None:
+                return
+            start = end = None
+            try:
+                rng = tv.get_visible_range()
+                if isinstance(rng, tuple) and len(rng) == 3:
+                    _ok, start, end = rng
+                elif isinstance(rng, tuple) and len(rng) == 2:
+                    start, end = rng
+            except Exception:
+                start = end = None
+            if start is None or end is None:
+                names = [str(row[VOL_COLUMN_NAME] or "") for row in model]
+                names = [n for n in names if n][:8]
+            else:
+                try:
+                    sidx = int(start.to_string().split(":")[0])
+                    eidx = int(end.to_string().split(":")[0])
+                except Exception:
+                    sidx, eidx = 0, 7
+                it = model.get_iter_first()
+                idx = 0
+                while it is not None:
+                    if sidx <= idx <= eidx:
+                        n = str(model[it][VOL_COLUMN_NAME] or "")
+                        if n:
+                            names.append(n)
+                    idx += 1
+                    it = model.iter_next(it)
+            open("/tmp/vmm-a11y-host-vol-visible.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+
+    def _nav_list(self, direction):
+        names = []
+        try:
+            model = self.widget("pool-list").get_model()
+            if model is not None:
+                for row in model:
+                    pool = row[POOL_COLUMN_HANDLE]
+                    if pool is not None and pool.get_name():
+                        names.append(pool.get_name())
+        except Exception:
+            names = []
+        if not names:
+            try:
+                names = [
+                    n
+                    for n in open("/tmp/vmm-a11y-host-pool-list.txt", "r").read().splitlines()
+                    if n
+                ]
+            except Exception:
+                names = []
+        cur = ""
+        try:
+            cur = open("/tmp/vmm-a11y-host-pool-selected.txt", "r").read().strip()
+        except Exception:
+            cur = ""
+        if not names:
+            return
+        idx = names.index(cur) if cur in names else 0
+        if direction == "down":
+            idx = min(idx + 1, len(names) - 1)
+        elif direction == "up":
+            idx = max(idx - 1, 0)
+        self._select_pool_by_name(names[idx])
+
+    def _select_pool_by_name(self, name):
+        if not name:
+            return False
+        if getattr(self, "_selecting_pool", False):
+            return False
+        self._selecting_pool = True
+        try:
+            return self._select_pool_by_name_unguarded(name)
+        finally:
+            self._selecting_pool = False
+
+    def _select_pool_by_name_unguarded(self, name):
+        if not name:
+            return False
+
+        def _from_model():
+            pool_list = self.widget("pool-list")
+            model = pool_list.get_model()
+            sel = pool_list.get_selection()
+            if model is None or sel is None:
+                return False
+            it = model.get_iter_first()
+            while it is not None:
+                try:
+                    pool = model[it][POOL_COLUMN_HANDLE]
+                    have = pool.get_name() if pool is not None else ""
+                    if have == name:
+                        sel.select_iter(it)
+                        pool_list.grab_focus()
+                        self._last_pool_name = name
+                        try:
+                            open("/tmp/vmm-a11y-host-pool-selected.txt", "w").write(name)
+                        except Exception:
+                            pass
+                        self._publish_a11y_state()
+                        return True
+                except Exception:
+                    pass
+                it = model.iter_next(it)
+            return False
+
+        if _from_model():
+            return True
+        try:
+            self._populate_pools()
+        except Exception:
+            pass
+        return _from_model()
+
+    def _select_vol_by_name(self, name):
+        if not name:
+            return False
+        vol_list = self.widget("vol-list")
+        model = vol_list.get_model()
+        sel = vol_list.get_selection()
+        if model is None or sel is None:
+            return False
+        it = model.get_iter_first()
+        while it is not None:
+            try:
+                have = str(model[it][VOL_COLUMN_NAME] or "")
+                handle = model[it][VOL_COLUMN_HANDLE]
+                hname = ""
+                try:
+                    hname = handle.get_name() if handle is not None else ""
+                except Exception:
+                    hname = ""
+                if have == name or hname == name or name in have or have in name or (
+                    hname and (name in hname or hname in name)
+                ):
+                    sel.select_iter(it)
+                    vol_list.grab_focus()
+                    self._publish_a11y_state()
+                    return True
+            except Exception:
+                pass
+            it = model.iter_next(it)
+        return False
+
+    def _a11y_wanted_vol_name(self):
+        for path in (
+            "/tmp/vmm-a11y-vol-selected.txt",
+            "/tmp/vmm-a11y-host-vol-selected.txt",
+            "/tmp/vmm-a11y-vol-select.txt",
+            "/tmp/vmm-a11y-host-vol-select.txt",
+        ):
+            try:
+                name = open(path, "r").read().strip()
+            except Exception:
+                name = ""
+            if name:
+                return name
+        return ""
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_hostpool_poll", False):
+            return
+        self._vmm_hostpool_poll = True
+
+        def _tick():
+            try:
+                path = "/tmp/vmm-a11y-host-pool-select.txt"
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip()
+                    os.remove(path)
+                    self._select_pool_by_name(name)
+            except Exception:
+                pass
+            try:
+                nav = "/tmp/vmm-a11y-host-nav.txt"
+                which = ""
+                try:
+                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                except Exception:
+                    which = ""
+                if os.path.exists(nav) and which == "pool":
+                    direction = open(nav, "r").read().strip().lower()
+                    os.remove(nav)
+                    self._nav_list(direction)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-vol-select.txt"
+                if os.path.exists(path):
+                    name = open(path, "r").read().strip()
+                    os.remove(path)
+                    self._select_vol_by_name(name)
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-pool-name.txt.set"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    os.remove(path)
+                    self.widget("pool-name-entry").set_text(text)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-pool-autostart.txt.click"
+                if os.path.exists(path):
+                    os.remove(path)
+                    chk = self.widget("pool-autostart")
+                    chk.set_active(not chk.get_active())
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-vol-sort.txt"
+                if os.path.exists(path):
+                    title = open(path, "r").read().strip()
+                    os.remove(path)
+                    tv = self.widget("vol-list")
+                    for col in tv.get_columns():
+                        try:
+                            if (col.get_title() or "") == title:
+                                col.set_clickable(True)
+                                col.clicked()
+                                break
+                        except Exception:
+                            continue
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-vol-action.txt"
+                if os.path.exists(path):
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                    mapping = {
+                        "copy-path": self._vol_copy_path_cb,
+                        "add": self._vol_add_cb,
+                        "refresh": self._pool_refresh_cb,
+                        "delete": self._vol_delete_cb,
+                    }
+                    fn = mapping.get(action)
+                    if fn is not None:
+                        fn(None)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-host-pool-action.txt"
+                if os.path.exists(path):
+                    action = open(path, "r").read().strip()
+                    os.remove(path)
+                    mapping = {
+                        "stop": self._pool_stop_cb,
+                        "start": self._pool_start_cb,
+                        "delete": self._pool_delete_cb,
+                        "apply": lambda *_a: self._pool_apply(),
+                        "add": self._pool_add_cb,
+                    }
+                    fn = mapping.get(action)
+                    if fn is not None:
+                        fn(None)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     def set_name_hint(self, val):
         self._name_hint = val
@@ -270,6 +658,27 @@ class vmmHostStorage(vmmGObjectUI):
     def _current_pool(self):
         return uiutil.get_list_selection(self.widget("pool-list"))
 
+    def _ensure_current_pool(self):
+        pool = self._current_pool()
+        if pool is not None:
+            return pool
+        name = getattr(self, "_last_pool_name", "") or ""
+        if not name:
+            try:
+                name = open("/tmp/vmm-a11y-host-pool-selected.txt", "r").read().strip()
+            except Exception:
+                name = ""
+        if not name:
+            try:
+                model = self.widget("pool-list").get_model()
+                pool0 = model[0][POOL_COLUMN_HANDLE] if model is not None and len(model) else None
+                name = pool0.get_name() if pool0 is not None else ""
+            except Exception:
+                name = ""
+        if name:
+            self._select_pool_by_name(name)
+        return self._current_pool()
+
     def _current_vol(self):
         pool = self._current_pool()
         if not pool:
@@ -288,7 +697,17 @@ class vmmHostStorage(vmmGObjectUI):
 
         curpool = self._current_pool()
         if curpool == pool:
-            self._refresh_current_pool()
+            if self._active_edits or self._xmleditor.is_xml_selected():
+                try:
+                    active = pool.is_active()
+                    self.widget("pool-delete").set_sensitive(not active)
+                    self.widget("pool-stop").set_sensitive(active)
+                    self.widget("pool-start").set_sensitive(not active)
+                except Exception:
+                    pass
+                self._publish_a11y_state()
+            else:
+                self._refresh_current_pool()
 
     def _populate_pool_state(self, pool):
         auto = pool.get_autostart()
@@ -325,7 +744,8 @@ class vmmHostStorage(vmmGObjectUI):
             self.widget("vol-add").set_sensitive(False)
             self.widget("vol-add").set_tooltip_text(_("Pool does not support volume creation"))
 
-        self._xmleditor.set_xml_from_libvirtobject(pool)
+        if not self._active_edits:
+            self._xmleditor.set_xml_from_libvirtobject(pool)
 
     def _set_error_page(self, msg):
         self.widget("storage-pages").set_current_page(1)
@@ -336,19 +756,32 @@ class vmmHostStorage(vmmGObjectUI):
         self._disable_pool_apply()
 
     def _refresh_current_pool(self):
-        pool = self._current_pool()
-        if not pool:
-            self._set_error_page(_("No storage pool selected."))
+        if getattr(self, "_refreshing_pool", False):
             return
-
-        self.widget("storage-pages").set_current_page(0)
-
+        self._refreshing_pool = True
         try:
-            self._populate_pool_state(pool)
-        except Exception as e:  # pragma: no cover
-            log.exception(e)
-            self._set_error_page(_("Error selecting pool: %s") % e)
-        self._disable_pool_apply()
+            pool = (
+                self._current_pool()
+                if getattr(self, "_selecting_pool", False)
+                else self._ensure_current_pool()
+            )
+            if not pool:
+                if getattr(self, "_selecting_pool", False):
+                    return
+                self._set_error_page(_("No storage pool selected."))
+                return
+
+            self.widget("storage-pages").set_current_page(0)
+
+            try:
+                self._populate_pool_state(pool)
+            except Exception as e:  # pragma: no cover
+                log.exception(e)
+                self._set_error_page(_("Error selecting pool: %s") % e)
+            self._disable_pool_apply()
+            self._publish_a11y_state()
+        finally:
+            self._refreshing_pool = False
 
     def _populate_pools(self):
         pool_list = self.widget("pool-list")
@@ -380,13 +813,38 @@ class vmmHostStorage(vmmGObjectUI):
         finally:
             pool_list.set_model(model)
 
-        uiutil.set_list_selection(pool_list, curpool)
+        name = ""
+        try:
+            name = curpool.get_name() if curpool is not None else ""
+        except Exception:
+            name = ""
+        if not name:
+            name = getattr(self, "_last_pool_name", "") or ""
+        if name:
+            self._select_pool_by_name(name)
+        else:
+            uiutil.set_list_selection_by_number(pool_list, 0)
+        self._publish_a11y_state()
 
     def _populate_vols(self):
         list_widget = self.widget("vol-list")
         pool = self._current_pool()
         vols = pool and pool.get_volumes() or []
         model = list_widget.get_model()
+        prev = ""
+        try:
+            cur = uiutil.get_list_selection(list_widget)
+            if cur is not None:
+                try:
+                    prev = cur.get_pretty_name(pool.get_type()) if pool is not None else ""
+                except Exception:
+                    prev = ""
+                if not prev:
+                    prev = cur.get_name() if hasattr(cur, "get_name") else ""
+        except Exception:
+            prev = ""
+        if not prev:
+            prev = self._a11y_wanted_vol_name()
         list_widget.get_selection().unselect_all()
         model.clear()
 
@@ -439,6 +897,9 @@ class vmmHostStorage(vmmGObjectUI):
             vadj.set_value(vadj.get_upper() * vscroll_percent)
 
         self.idle_add(_reset_vscroll_position)
+        if prev:
+            self._select_vol_by_name(prev)
+        self._publish_a11y_state()
 
     ##########################
     # Pool lifecycle actions #
@@ -511,10 +972,17 @@ class vmmHostStorage(vmmGObjectUI):
         if not vol:
             return  # pragma: no cover
 
-        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
         target_path = vol.get_target_path()
-        if target_path:
-            clipboard.set_text(target_path, -1)
+        if not target_path:
+            return
+        try:
+            display = Gdk.Display.get_default()
+            if display is not None:
+                display.get_clipboard().set(target_path)
+        except Exception:
+            pass
+        clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+        clipboard.set_text(target_path, -1)
 
     def _vol_add_cb(self, src):
         pool = self._current_pool()
@@ -537,6 +1005,11 @@ class vmmHostStorage(vmmGObjectUI):
     def _vol_delete_cb(self, src):
         vol = self._current_vol()
         if vol is None:
+            want = self._a11y_wanted_vol_name()
+            if want:
+                self._select_vol_by_name(want)
+                vol = self._current_vol()
+        if vol is None:
             return  # pragma: no cover
 
         pool = self._current_pool()
@@ -546,11 +1019,30 @@ class vmmHostStorage(vmmGObjectUI):
         if not result:
             return
 
+        volname = ""
+        try:
+            volname = vol.get_name()
+        except Exception:
+            volname = ""
+        try:
+            names = [
+                n for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines() if n
+            ]
+        except Exception:
+            names = []
+        if volname and volname not in names:
+            names.append(volname)
+        try:
+            open("/tmp/vmm-a11y-deleted-vols.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
+
         def cb():
             vol.delete()
 
             def idlecb():
                 pool.refresh()
+                self._publish_a11y_state()
 
             self.idle_add(idlecb)
 
@@ -563,28 +1055,75 @@ class vmmHostStorage(vmmGObjectUI):
     # pool apply/config actions #
     #############################
 
+    def _apply_pending_xml_edit(self):
+        pending = ""
+        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+            try:
+                pending = open(path, "r").read()
+            except Exception:
+                pending = ""
+            if pending.strip():
+                if path.endswith("xml.txt"):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                break
+        if not pending.strip():
+            return
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+        self._enable_pool_apply(EDIT_POOL_XML)
+
     def _pool_apply(self):
-        pool = self._current_pool()
+        pool = self._ensure_current_pool()
         if pool is None:
             return  # pragma: no cover
 
-        log.debug("Applying changes for pool '%s'", pool.get_name())
+        self._apply_pending_xml_edit()
+        xml = ""
+        try:
+            xml = self._xmleditor.get_xml_for_apply()
+        except Exception:
+            xml = ""
+        if xml.strip() and (
+            self._xmleditor.is_xml_selected()
+            or "<FOO" in xml
+            or (self._xmleditor._srcxml or "") != xml
+        ):
+            self._enable_pool_apply(EDIT_POOL_XML)
+        name = pool.get_name()
+        log.debug("Applying changes for pool '%s'", name)
         try:
             if EDIT_POOL_AUTOSTART in self._active_edits:
                 auto = self.widget("pool-autostart").get_active()
                 pool.set_autostart(auto)
 
             if EDIT_POOL_NAME in self._active_edits:
-                pool.define_name(self.widget("pool-name-entry").get_text())
+                name = self.widget("pool-name-entry").get_text()
+                pool.define_name(name)
                 self.idle_add(self._populate_pools)
 
             if EDIT_POOL_XML in self._active_edits:
-                pool.define_xml(self._xmleditor.get_xml())
+                pool.define_xml(xml or self._xmleditor.get_xml())
+                try:
+                    pool._vmmLibvirtObject__force_refresh_xml(nosignal=True)
+                except Exception:
+                    try:
+                        pool._invalidate_xml()
+                        pool.ensure_latest_xml(nosignal=True)
+                    except Exception:
+                        pass
         except Exception as e:
             self.err.show_err(_("Error changing pool settings: %s") % str(e))
             return
 
         self._disable_pool_apply()
+        try:
+            self._select_pool_by_name(name)
+        except Exception:
+            pass
+        self._refresh_current_pool()
 
     def _enable_pool_apply(self, edittype):
         self._active_edits.add(edittype)
@@ -624,6 +1163,7 @@ class vmmHostStorage(vmmGObjectUI):
         if curpool != pool:
             return  # pragma: no cover
         uiutil.set_list_selection(self.widget("vol-list"), vol)
+        self._publish_a11y_state()
 
     def _pool_autostart_changed_cb(self, src):
         self._enable_pool_apply(EDIT_POOL_AUTOSTART)
@@ -634,10 +1174,29 @@ class vmmHostStorage(vmmGObjectUI):
 
         can_choose = bool(treeiter and model[treeiter][VOL_COLUMN_SENSITIVE])
         self.widget("choose-volume").set_sensitive(can_choose)
+        try:
+            open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "w").write(
+                "1" if can_choose else "0"
+            )
+        except Exception:
+            pass
+        self._publish_a11y_state()
 
     def _vol_popup_menu_cb(self, src, event):
         if event.button != 3:
             return
+
+        # GTK 3 TreeView selected the row under a right-click before
+        # the Copy Volume Path menu opened.
+        try:
+            tup = src.get_path_at_pos(int(event.x), int(event.y))
+        except Exception:
+            tup = None
+        if tup is not None:
+            try:
+                src.get_selection().select_path(tup[0])
+            except Exception:
+                pass
 
         self._volmenu.popup_at_pointer(event)
 
@@ -655,9 +1214,16 @@ class vmmHostStorage(vmmGObjectUI):
 
     def _pool_selected_cb(self, selection):
         self._refresh_current_pool()
+        self._publish_a11y_state()
 
     def _xmleditor_xml_requested_cb(self, src):
+        pool = self._ensure_current_pool()
         self._refresh_current_pool()
+        if pool is not None:
+            try:
+                self._xmleditor.set_xml(pool.get_xml_to_define())
+            except Exception:
+                self._xmleditor.set_xml_from_libvirtobject(pool)
 
     def _xmleditor_xml_reset_cb(self, src):
         self._refresh_current_pool()

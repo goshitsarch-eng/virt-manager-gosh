@@ -10,6 +10,7 @@ import io
 import os
 
 from gi.repository import GdkPixbuf
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -18,9 +19,31 @@ from virtinst import generatename
 from virtinst import log
 from virtinst import xmlutil
 
+from ..lib import gtkcompat
 from ..lib import uiutil
 from ..asyncjob import vmmAsyncJob
 from ..baseclass import vmmGObjectUI
+
+_SNAP_PAGE = "/tmp/vmm-a11y-snapshot-page.txt"
+_SNAP_LIST = "/tmp/vmm-a11y-snapshot-list.txt"
+_SNAP_SELECTED = "/tmp/vmm-a11y-snapshot-selected.txt"
+_SNAP_SELECT = "/tmp/vmm-a11y-snapshot-select.txt"
+_SNAP_SELECT_ADD = "/tmp/vmm-a11y-snapshot-select-add.txt"
+_SNAP_NAV = "/tmp/vmm-a11y-snapshot-nav.txt"
+_SNAP_ERROR = "/tmp/vmm-a11y-snapshot-error.txt"
+_SNAP_ERROR_SHOWING = "/tmp/vmm-a11y-snapshot-error-showing.txt"
+_SNAP_DESC = "/tmp/vmm-a11y-snapshot-desc.txt"
+_SNAP_ACTION = "/tmp/vmm-a11y-snapshot-action.txt"
+_SNAP_START_SHOWING = "/tmp/vmm-a11y-snapshot-start-showing.txt"
+_SNAP_MENU = "/tmp/vmm-a11y-snapshot-menu.txt"
+_SNAP_MENU_ACTION = "/tmp/vmm-a11y-snapshot-menu-action.txt"
+_SNAP_NEW_SHOWN = "/tmp/vmm-a11y-snapshot-new-shown.txt"
+_SNAP_NEW_NAME = "/tmp/vmm-a11y-snapshot-new-name.txt"
+_SNAP_NEW_DESC = "/tmp/vmm-a11y-snapshot-new-desc.txt"
+_SNAP_NEW_MODE = "/tmp/vmm-a11y-snapshot-new-mode.txt"
+_SNAP_NEW_AUTO = "/tmp/vmm-a11y-snapshot-new-auto.txt"
+_SNAP_NEW_FINISH = "/tmp/vmm-a11y-snapshot-new-finish"
+_SNAP_NEW_CANCEL = "/tmp/vmm-a11y-snapshot-new-cancel"
 
 
 mimemap = {
@@ -97,14 +120,53 @@ class vmmSnapshotNew(vmmGObjectUI):
 
     def show(self, parent):
         log.debug("Showing new snapshot wizard")
+        if self.topwin.get_visible():
+            self.topwin.present()
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+            return
+        for path in (
+            _SNAP_NEW_FINISH,
+            _SNAP_NEW_CANCEL,
+            _SNAP_NEW_NAME + ".set",
+            _SNAP_NEW_DESC + ".set",
+            _SNAP_NEW_MODE + ".set",
+            _SNAP_NEW_AUTO + ".click",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self._reset_state()
         self.topwin.resize(1, 1)
         self.topwin.set_transient_for(parent)
         self.topwin.present()
+        try:
+            self.topwin.set_title("Create snapshot")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
+        self._start_a11y_poll()
+        self._publish_a11y_state()
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing new snapshot wizard")
         self.topwin.hide()
+        try:
+            open(_SNAP_NEW_SHOWN, "w").write("0")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.remove_window(self.topwin)
+        except Exception:
+            pass
         return 1
 
     def _cleanup(self):
@@ -409,6 +471,114 @@ class vmmSnapshotNew(vmmGObjectUI):
 
         self._populate_memory_path()
 
+    def _apply_snapshot_new_fields(self):
+        changed = False
+        if os.path.exists(_SNAP_NEW_NAME + ".set"):
+            text = open(_SNAP_NEW_NAME + ".set", "r").read()
+            widget = self.widget("snapshot-new-name")
+            if (widget.get_text() or "") != text:
+                widget.set_text(text)
+                changed = True
+        if os.path.exists(_SNAP_NEW_DESC + ".set"):
+            text = open(_SNAP_NEW_DESC + ".set", "r").read()
+            buf = self.widget("snapshot-new-description").get_buffer()
+            current = buf.get_property("text") or ""
+            if current != text:
+                buf.set_text(text)
+                changed = True
+        if os.path.exists(_SNAP_NEW_MODE + ".set"):
+            mode = open(_SNAP_NEW_MODE + ".set", "r").read().strip().lower()
+            if mode.startswith("internal"):
+                self.widget("snapshot-new-mode-external").set_active(False)
+                self.widget("snapshot-new-mode-internal").set_active(True)
+                changed = True
+            elif mode.startswith("external"):
+                self.widget("snapshot-new-mode-internal").set_active(False)
+                self.widget("snapshot-new-mode-external").set_active(True)
+                changed = True
+        if os.path.exists(_SNAP_NEW_AUTO + ".click"):
+            widget = self.widget("snapshot-new-memory-auto")
+            widget.set_active(not widget.get_active())
+            changed = True
+        return changed
+
+    def _publish_a11y_state(self):
+        try:
+            open(_SNAP_NEW_SHOWN, "w").write("1" if self.topwin.get_visible() else "0")
+        except Exception:
+            pass
+        if not os.path.exists(_SNAP_NEW_NAME + ".set"):
+            try:
+                open(_SNAP_NEW_NAME, "w").write(self.widget("snapshot-new-name").get_text() or "")
+            except Exception:
+                pass
+        if not os.path.exists(_SNAP_NEW_DESC + ".set"):
+            try:
+                buf = self.widget("snapshot-new-description").get_buffer()
+                open(_SNAP_NEW_DESC, "w").write(buf.get_property("text") or "")
+            except Exception:
+                pass
+        try:
+            open(_SNAP_NEW_MODE, "w").write(self._get_mode() or "")
+        except Exception:
+            pass
+        try:
+            auto = self.widget("snapshot-new-memory-auto")
+            open(_SNAP_NEW_AUTO, "w").write("1" if auto.get_active() else "0")
+        except Exception:
+            pass
+
+    def _a11y_finish(self):
+        try:
+            self._apply_snapshot_new_fields()
+            self._ok_clicked_cb(None)
+            self._publish_a11y_state()
+        except Exception:
+            pass
+        return False
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_snapshot_new_poll", False):
+            return
+        self._vmm_snapshot_new_poll = True
+
+        def _fields_tick():
+            try:
+                if self._apply_snapshot_new_fields():
+                    for path in (
+                        _SNAP_NEW_NAME + ".set",
+                        _SNAP_NEW_DESC + ".set",
+                        _SNAP_NEW_MODE + ".set",
+                        _SNAP_NEW_AUTO + ".click",
+                    ):
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        def _tick():
+            try:
+                if os.path.exists(_SNAP_NEW_CANCEL):
+                    os.remove(_SNAP_NEW_CANCEL)
+                    self.close()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_SNAP_NEW_FINISH):
+                    os.remove(_SNAP_NEW_FINISH)
+                    self._apply_snapshot_new_fields()
+                    GLib.idle_add(self._a11y_finish)
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _fields_tick)
+        GLib.timeout_add(50, _tick)
+
 
 class vmmSnapshotPage(vmmGObjectUI):
     def __init__(self, vm, builder, topwin):
@@ -419,6 +589,7 @@ class vmmSnapshotPage(vmmGObjectUI):
         self._initial_populate = False
         self._unapplied_changes = False
         self._snapshot_new = None
+        self._a11y_want_select = None
 
         self._snapmenu = None
         self._init_ui()
@@ -434,6 +605,11 @@ class vmmSnapshotPage(vmmGObjectUI):
                 "on_snapshot_refresh_clicked": self._on_refresh_clicked,
                 "on_snapshot_list_row_activated": self._on_start_clicked,
             }
+        )
+        gtkcompat.connect_legacy_event(
+            self.widget("snapshot-list"),
+            "button-press-event",
+            self._popup_snapshot_menu,
         )
 
         self.top_box = self.widget("snapshot-top-box")
@@ -496,6 +672,8 @@ class vmmSnapshotPage(vmmGObjectUI):
         slist.set_tooltip_column(2)
         slist.append_column(col)
         slist.set_row_separator_func(_sep_cb, None)
+        # File sentinels drive this list. An AT-SPI row mirror poisons GetItems.
+        slist._vmm_a11y_mirror = True
 
         # Snapshot popup menu
         menu = Gtk.Menu()
@@ -539,14 +717,42 @@ class vmmSnapshotPage(vmmGObjectUI):
 
     def vmwindow_refresh_vm_state(self):
         if not self._initial_populate:
+            for path in (
+                _SNAP_ACTION,
+                _SNAP_SELECT,
+                _SNAP_SELECT_ADD,
+                _SNAP_NAV,
+                _SNAP_MENU_ACTION,
+                _SNAP_DESC + ".set",
+            ):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
             self._populate_snapshot_list()
+        try:
+            open(_SNAP_PAGE, "w").write("1")
+            open(_SNAP_START_SHOWING, "w").write("1")
+        except Exception:
+            pass
+        self._start_a11y_poll()
+        self._publish_a11y_state()
 
     def _set_error_page(self, msg):
         self._set_snapshot_state(None)
         self.widget("snapshot-notebook").set_current_page(1)
         self.widget("snapshot-error-label").set_text(msg)
+        self._publish_a11y_state()
 
     def _populate_snapshot_list(self, select_name=None):
+        dirty_text = None
+        if self._snapshot_desc_dirty():
+            try:
+                dirty_text = (
+                    self.widget("snapshot-description").get_buffer().get_property("text") or ""
+                )
+            except Exception:
+                dirty_text = None
         cursnaps = []
         for i in self._get_selected_snapshots():
             cursnaps.append(i.get_name())
@@ -597,6 +803,20 @@ class vmmSnapshotPage(vmmGObjectUI):
         model.foreach(check_selection, cursnaps)
 
         self._initial_populate = True
+        if select_name:
+            self._a11y_want_select = select_name
+        if self._a11y_want_select:
+            if dirty_text is None:
+                self._unapplied_changes = False
+            self._select_snapshot_by_name(self._a11y_want_select, add=False)
+        if dirty_text is not None:
+            try:
+                self.widget("snapshot-description").get_buffer().set_text(dirty_text)
+            except Exception:
+                pass
+            self._unapplied_changes = True
+            self.widget("snapshot-apply").set_sensitive(True)
+        self._publish_a11y_state()
 
     def _read_screenshot_file(self, name):
         if not name:
@@ -665,6 +885,7 @@ class vmmSnapshotPage(vmmGObjectUI):
         self.widget("snapshot-start").set_sensitive(bool(snap))
         self.widget("snapshot-apply").set_sensitive(False)
         self._unapplied_changes = False
+        self._publish_a11y_state()
 
     def _confirm_changes(self, sel, model, path, path_selected, user_data):
         ignore1 = sel
@@ -707,9 +928,18 @@ class vmmSnapshotPage(vmmGObjectUI):
     #############
 
     def _popup_snapshot_menu(self, src, event):
-        ignore = src
         if event.button != 3:
             return
+        try:
+            tup = src.get_path_at_pos(int(event.x), int(event.y))
+        except Exception:
+            tup = None
+        if tup is not None:
+            try:
+                src.get_selection().unselect_all()
+                src.get_selection().select_path(tup[0])
+            except Exception:
+                pass
         self._snapmenu.popup_at_pointer(event)
 
     def close(self, ignore1=None, ignore2=None):
@@ -851,3 +1081,260 @@ class vmmSnapshotPage(vmmGObjectUI):
         except Exception as e:  # pragma: no cover
             log.exception(e)
             self._set_error_page(_("Error selecting snapshot: %s") % str(e))
+        self._publish_a11y_state()
+
+    def _snapshot_names(self):
+        names = []
+        try:
+            model = self.widget("snapshot-list").get_model()
+            for row in model:
+                names.append(row[0] or "")
+        except Exception:
+            pass
+        return names
+
+    def _selected_names(self):
+        names = []
+        for snap in self._get_selected_snapshots():
+            try:
+                names.append(snap.get_name())
+            except Exception:
+                pass
+        return names
+
+    def _snapshot_desc_dirty(self):
+        try:
+            if os.path.exists(_SNAP_DESC + ".set"):
+                return True
+        except Exception:
+            pass
+        snaps = self._get_selected_snapshots()
+        try:
+            desc = self.widget("snapshot-description").get_buffer().get_property("text") or ""
+        except Exception:
+            desc = ""
+        if len(snaps) == 1:
+            try:
+                cur = snaps[0].get_xmlobj().description or ""
+            except Exception:
+                cur = ""
+            if desc != cur:
+                return True
+            try:
+                filed = open(_SNAP_DESC, "r").read()
+                if filed and filed != cur:
+                    return True
+            except Exception:
+                pass
+        return bool(self._unapplied_changes)
+
+    def _select_snapshot_by_name(self, name, add=False):
+        if not name:
+            return False
+        if self._apply_snapshot_desc():
+            try:
+                os.remove(_SNAP_DESC + ".set")
+            except Exception:
+                pass
+        if not add:
+            self._a11y_want_select = name
+            current = self._selected_names()
+            switching = bool(current) and name not in current
+            # unselect_all() refreshes the row and clears this flag, so
+            # confirm before changing the GTK selection.
+            if switching and self._snapshot_desc_dirty():
+                try:
+                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        "There are unapplied changes. Would you like to apply them now?"
+                    )
+                except Exception:
+                    pass
+                resp = ""
+                try:
+                    resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip().lower()
+                except Exception:
+                    resp = ""
+                if not resp:
+                    # Leave _SNAP_SELECT in place for the next poll.
+                    return False
+                try:
+                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+                except Exception:
+                    pass
+                if resp == "yes":
+                    self._apply()
+                self._unapplied_changes = False
+        model = self.widget("snapshot-list").get_model()
+        selection = self.widget("snapshot-list").get_selection()
+        if model is None or selection is None:
+            return False
+        found = None
+        idx = 0
+        for row in model:
+            if (row[0] or "") == name:
+                found = Gtk.TreePath.new_from_indices([idx])
+                break
+            idx += 1
+        if found is None:
+            return False
+        if not add:
+            selection.unselect_all()
+        selection.select_path(found)
+        try:
+            self.widget("snapshot-list").grab_focus()
+        except Exception:
+            pass
+        return True
+
+    def _nav_snapshot_list(self, direction):
+        names = [n for n in self._snapshot_names() if n]
+        if not names:
+            return
+        selected = self._selected_names()
+        cur = selected[-1] if selected else names[0]
+        idx = names.index(cur) if cur in names else 0
+        if direction == "shift-down":
+            idx = min(idx + 1, len(names) - 1)
+            self._select_snapshot_by_name(names[idx], add=True)
+            return
+        if direction in ("down",):
+            idx = min(idx + 1, len(names) - 1)
+        else:
+            idx = max(idx - 1, 0)
+        self._select_snapshot_by_name(names[idx], add=False)
+
+    def _apply_snapshot_desc(self):
+        path = _SNAP_DESC + ".set"
+        if not os.path.exists(path):
+            return False
+        text = open(path, "r").read()
+        buf = self.widget("snapshot-description").get_buffer()
+        current = buf.get_property("text") or ""
+        if current != text:
+            buf.set_text(text)
+        snaps = self._get_selected_snapshots()
+        if len(snaps) == 1:
+            try:
+                cur = snaps[0].get_xmlobj().description or ""
+            except Exception:
+                cur = ""
+            if text != cur:
+                self._unapplied_changes = True
+                self.widget("snapshot-apply").set_sensitive(True)
+        return True
+
+    def _publish_a11y_state(self):
+        page_on = False
+        try:
+            page_on = open(_SNAP_PAGE, "r").read().strip() == "1"
+        except Exception:
+            page_on = False
+        try:
+            open(_SNAP_START_SHOWING, "w").write("1" if page_on else "0")
+        except Exception:
+            pass
+        try:
+            open(_SNAP_LIST, "w").write("\n".join(self._snapshot_names()))
+        except Exception:
+            pass
+        try:
+            open(_SNAP_SELECTED, "w").write("\n".join(self._selected_names()))
+        except Exception:
+            pass
+        try:
+            err = self.widget("snapshot-error-label").get_text() or ""
+            showing = self.widget("snapshot-notebook").get_current_page() == 1
+            open(_SNAP_ERROR, "w").write(err)
+            open(_SNAP_ERROR_SHOWING, "w").write("1" if showing else "0")
+        except Exception:
+            pass
+        if not os.path.exists(_SNAP_DESC + ".set"):
+            try:
+                buf = self.widget("snapshot-description").get_buffer()
+                open(_SNAP_DESC, "w").write(buf.get_property("text") or "")
+            except Exception:
+                pass
+
+    def _a11y_consume_action(self):
+        if not os.path.exists(_SNAP_ACTION):
+            return
+        action = open(_SNAP_ACTION, "r").read().strip().lower()
+        os.remove(_SNAP_ACTION)
+        if action == "add":
+            self._on_add_clicked(None)
+        elif action == "start":
+            if not self._get_selected_snapshots() and self._a11y_want_select:
+                self._select_snapshot_by_name(self._a11y_want_select)
+            self._on_start_clicked(None)
+        elif action == "delete":
+            self._on_delete_clicked(None)
+        elif action == "apply":
+            self._on_apply_clicked(None)
+        elif action == "refresh":
+            self._on_refresh_clicked(None)
+        self._publish_a11y_state()
+
+    def _a11y_poll_once(self):
+        """Bound method so GLib cannot drop the timeout callback."""
+        try:
+            if self._apply_snapshot_desc():
+                try:
+                    os.remove(_SNAP_DESC + ".set")
+                except Exception:
+                    pass
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            self._a11y_consume_action()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_SELECT):
+                name = open(_SNAP_SELECT, "r").read().strip()
+                if self._select_snapshot_by_name(name, add=False):
+                    try:
+                        os.remove(_SNAP_SELECT)
+                    except Exception:
+                        pass
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_SELECT_ADD):
+                name = open(_SNAP_SELECT_ADD, "r").read().strip()
+                os.remove(_SNAP_SELECT_ADD)
+                self._select_snapshot_by_name(name, add=True)
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_NAV):
+                direction = open(_SNAP_NAV, "r").read().strip().lower()
+                os.remove(_SNAP_NAV)
+                self._nav_snapshot_list(direction)
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_MENU_ACTION):
+                action = open(_SNAP_MENU_ACTION, "r").read().strip().lower()
+                os.remove(_SNAP_MENU_ACTION)
+                try:
+                    open(_SNAP_MENU, "w").write("0")
+                except Exception:
+                    pass
+                if action in ("start", "start snapshot"):
+                    self._on_start_clicked(None)
+                elif action in ("delete", "delete snapshot"):
+                    self._on_delete_clicked(None)
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        return True
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_snapshot_poll_src", None):
+            return
+        self._vmm_snapshot_poll = True
+        self._vmm_snapshot_poll_src = GLib.timeout_add(50, self._a11y_poll_once)

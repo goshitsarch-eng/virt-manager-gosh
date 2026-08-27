@@ -55,6 +55,8 @@ class _VmmBuilder:
         ret = self._builder.add_from_file(uifile)
         from .lib import gtkcompat
 
+        gtkcompat.apply_gtk3_border_widths(self._builder, uifile)
+        gtkcompat.apply_gtk3_builder_chrome(self._builder, uifile)
         for obj in self._builder.get_objects():
             gtkcompat.sync_builder_accessible(obj)
         return ret
@@ -409,10 +411,27 @@ class vmmGObjectUI(vmmGObject):
             try:
                 from .lib import gtkcompat
 
+                if filename and not self._external_topwin:
+                    gtkcompat.install_window_accelerators(
+                        self.builder, self.topwin, windowname
+                    )
+                    gtkcompat.apply_gtk3_dialog_from_name(self.topwin, windowname)
+                    gtkcompat.apply_gtk3_dialog_defaults(
+                        self.topwin, self.builder, windowname
+                    )
+                gtkcompat._apply_window_icon(self.topwin)
                 gtkcompat.ensure_window_a11y_box(self.topwin)
+                title = ""
+                try:
+                    title = self.topwin.get_title() or ""
+                except Exception:
+                    title = ""
+                # Do not register the generic name "Close": click_alert_button
+                # writes that label for error dialogs, and a fuzzy/exact
+                # match here would hide the manager and exit the app.
                 gtkcompat.expose_a11y_button(
                     "win-close-%s" % id(self.topwin),
-                    "Close",
+                    ".win-close-%s" % (title or "window"),
                     self.close,
                     window=self.topwin,
                 )
@@ -477,6 +496,15 @@ class vmmGObjectUI(vmmGObject):
         def close_on_escape(_controller, keyval, _keycode, state):
             name = Gdk.keyval_name(keyval) or ""
             if name == "Escape":
+                try:
+                    from .lib import gtkcompat
+
+                    if gtkcompat.popdown_window_menus(
+                        self.topwin, getattr(self, "builder", None)
+                    ):
+                        return True
+                except Exception:
+                    pass
                 self.close()
                 return True
             # Xvfb has no window manager, so Alt+F4 must be handled here.

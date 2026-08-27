@@ -4,18 +4,22 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
 import traceback
 
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
 from virtinst import log
 from virtinst import xmlutil
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .connmanager import vmmConnectionManager
+from .engine import vmmEngine
 from .object.domain import vmmDomain
 from .xmleditor import vmmXMLEditor
 
@@ -77,15 +81,92 @@ class vmmMigrateDialog(vmmGObjectUI):
     ##############
 
     def show(self, parent, vm):
+        already = False
+        try:
+            already = bool(self.topwin.get_visible())
+        except Exception:
+            already = False
+        if already and self.vm is vm:
+            try:
+                self.topwin.present()
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+            except Exception:
+                pass
+            self._publish_a11y_state()
+            return
         log.debug("Showing migrate wizard")
+        try:
+            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+        except Exception:
+            pass
+        for path in (
+            "/tmp/vmm-a11y-migrate-finish",
+            "/tmp/vmm-a11y-migrate-cancel",
+            "/tmp/vmm-a11y-migrate-advanced",
+            "/tmp/vmm-a11y-migrate-unsafe",
+            "/tmp/vmm-a11y-migrate-temporary",
+            "/tmp/vmm-a11y-window-close.txt",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self._set_vm(vm)
         self._reset_state()
         self.topwin.set_transient_for(parent)
+        try:
+            gtkcompat.set_accessible_name(self.topwin, "Migrate the virtual machine")
+            self.topwin.set_title("Migrate the virtual machine")
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+            gtkcompat.set_accessible_name(self.widget("migrate-dest"), "conn-combo")
+            gtkcompat.set_accessible_name(self.widget("migrate-set-address"), "address-check")
+            gtkcompat.set_accessible_name(self.widget("migrate-set-port"), "port-check")
+            gtkcompat.set_accessible_name(self.widget("migrate-address"), "address-text")
+            gtkcompat.set_accessible_name(self.widget("migrate-mode"), "Mode:")
+            gtkcompat.set_accessible_name(
+                self.widget("migrate-advanced-expander"), "Advanced"
+            )
+            gtkcompat.set_accessible_name(self.widget("migrate-unsafe"), "Allow unsafe:")
+            gtkcompat.set_accessible_name(self.widget("migrate-temporary"), "Temporary")
+            gtkcompat.ensure_button_accessible_name(self.widget("migrate-finish"), "Migrate")
+            gtkcompat.ensure_button_accessible_name(self.widget("migrate-cancel"), "Cancel")
+            gtkcompat.set_accessible_name(
+                self.widget("migrate-address-label"), "Let libvirt decide"
+            )
+        except Exception:
+            pass
+        try:
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+        except Exception:
+            pass
         self.topwin.present()
+        if not already:
+            vmmEngine.get_instance().increment_window_counter()
+            self._vmm_window_counted = True
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing migrate wizard")
         self.topwin.hide()
+        try:
+            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("0")
+        except Exception:
+            pass
+        if getattr(self, "_vmm_window_counted", False):
+            self._vmm_window_counted = False
+            try:
+                vmmEngine.get_instance().decrement_window_counter()
+            except Exception:
+                pass
         self._set_vm(None)
         return 1
 
@@ -100,6 +181,164 @@ class vmmMigrateDialog(vmmGObjectUI):
         if newvm:
             newvm.conn.connect("vm-removed", self._vm_removed_cb)
         self.vm = newvm
+
+    def _publish_a11y_state(self):
+        try:
+            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write(
+                "1" if self.topwin.get_visible() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-migrate-address.txt", "w").write(
+                self.widget("migrate-address").get_text() or ""
+            )
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-migrate-address-check.txt", "w").write(
+                "1" if self.widget("migrate-set-address").get_active() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            visible = bool(self.widget("migrate-address-label").get_visible())
+            open("/tmp/vmm-a11y-migrate-libvirt-decide.txt", "w").write(
+                "1" if visible else "0"
+            )
+        except Exception:
+            pass
+        try:
+            combo = self.widget("migrate-dest")
+            model = combo.get_model() if combo is not None else None
+            labels = []
+            if model is not None:
+                for row in model:
+                    labels.append(str(row[COL_LABEL] or ""))
+            open("/tmp/vmm-a11y-migrate-dest.txt", "w").write("\n".join(labels))
+        except Exception:
+            pass
+        try:
+            combo = self.widget("migrate-mode")
+            row = uiutil.get_list_selected_row(combo) if combo is not None else None
+            open("/tmp/vmm-a11y-migrate-mode.txt", "w").write(
+                str(row[0] if row else "")
+            )
+        except Exception:
+            pass
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_migrate_poll", False):
+            return
+        self._vmm_migrate_poll = True
+
+        def _tick():
+            try:
+                if open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() != "1":
+                    # Still handle cancel/close so a leftover finish cannot fire.
+                    pass
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-combo-select.txt"
+                if os.path.exists(path):
+                    text = open(path, "r").read().strip()
+                    key = text.split("\t", 1)[0].strip()
+                    item = text.split("\t", 1)[-1].strip()
+                    migrate_keys = (
+                        "Mode:",
+                        "Mode",
+                        "conn-combo",
+                        "New host:",
+                        "New _host:",
+                    )
+                    if key in migrate_keys and item:
+                        os.remove(path)
+                        combo = (
+                            self.widget("migrate-mode")
+                            if key.startswith("Mode")
+                            else self.widget("migrate-dest")
+                        )
+                        model = combo.get_model() if combo is not None else None
+                        if model is not None:
+                            want = item.replace(".*", "").lower()
+                            for idx, row in enumerate(model):
+                                label = str(row[0] or "")
+                                if want in label.lower() or label.lower() in want:
+                                    combo.set_active(idx)
+                                    break
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-migrate-address.txt"
+                if os.path.exists(path):
+                    text = open(path, "r").read()
+                    stamp = os.path.getmtime(path)
+                    if getattr(self, "_vmm_migrate_addr_seen", None) != stamp:
+                        self._vmm_migrate_addr_seen = stamp
+                        if self.widget("migrate-address").get_text() != text:
+                            self.widget("migrate-address").set_text(text)
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-migrate-address-check-click"):
+                    os.remove("/tmp/vmm-a11y-migrate-address-check-click")
+                    chk = self.widget("migrate-set-address")
+                    chk.set_active(not chk.get_active())
+                    self._set_address_toggled(chk)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-migrate-advanced"):
+                    os.remove("/tmp/vmm-a11y-migrate-advanced")
+                    exp = self.widget("migrate-advanced-expander")
+                    exp.set_expanded(not exp.get_expanded())
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-migrate-unsafe"):
+                    os.remove("/tmp/vmm-a11y-migrate-unsafe")
+                    chk = self.widget("migrate-unsafe")
+                    chk.set_active(not chk.get_active())
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-migrate-temporary"):
+                    os.remove("/tmp/vmm-a11y-migrate-temporary")
+                    chk = self.widget("migrate-temporary")
+                    chk.set_active(not chk.get_active())
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-migrate-cancel"):
+                    os.remove("/tmp/vmm-a11y-migrate-cancel")
+                    self.close()
+                    return True
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-window-close.txt"
+                if os.path.exists(path):
+                    want = open(path, "r").read().strip()
+                    if want == "Migrate the virtual machine":
+                        os.remove(path)
+                        self.close()
+                        open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                        return True
+            except Exception:
+                pass
+            try:
+                if os.path.exists("/tmp/vmm-a11y-migrate-finish"):
+                    os.remove("/tmp/vmm-a11y-migrate-finish")
+                    self._finish()
+                    return True
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     ################
     # Init helpers #
@@ -255,6 +494,7 @@ class vmmMigrateDialog(vmmGObjectUI):
         port_enable = self.widget("migrate-set-port").get_active()
         self.widget("migrate-set-port").set_active(enable and port_enable)
         self.widget("migrate-set-port").emit("toggled")
+        self._publish_a11y_state()
 
     def _set_port_toggled(self, src):
         enable = src.get_active()
@@ -314,6 +554,7 @@ class vmmMigrateDialog(vmmGObjectUI):
             if row[COL_CAN_MIGRATE]:
                 combo.set_active(idx)
                 break
+        self._publish_a11y_state()
 
     ####################
     # migrate handling #

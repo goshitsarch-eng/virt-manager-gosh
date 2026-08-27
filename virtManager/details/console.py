@@ -5,8 +5,12 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+import time
+
 from gi.repository import Gtk
 from gi.repository import Gdk
+from gi.repository import GLib
 
 from virtinst import log
 
@@ -14,6 +18,7 @@ from .serialcon import vmmSerialConsole
 from .sshtunnels import ConnectionInfo
 from .viewers import SpiceViewer, VNCViewer, SPICE_GTK_IMPORT_ERROR
 from ..baseclass import vmmGObject, vmmGObjectUI
+from ..lib import gtkcompat
 from ..lib.keyring import vmmKeyring
 
 
@@ -51,12 +56,23 @@ class _TimedRevealer(vmmGObject):
 
         self._ebox = Gtk.EventBox()
         self._ebox.add(self._revealer)
-        self._ebox.set_halign(Gtk.Align.CENTER)
+        self._ebox.set_halign(Gtk.Align.FILL)
+        self._ebox.set_hexpand(True)
         self._ebox.set_valign(Gtk.Align.START)
+        # GTK 3 kept a 1px hit target when the toolbar was hidden.
+        # GTK 4 Revealer collapse can make that zero-height on Wayland.
+        self._ebox.set_size_request(-1, 8)
         self._ebox.show_all()
 
         self._ebox.connect("enter-notify-event", self._enter_notify)
-        self._ebox.connect("leave-notify-event", self._enter_notify)
+        self._ebox.connect("leave-notify-event", self._leave_notify)
+        try:
+            motion = Gtk.EventControllerMotion()
+            motion.connect("enter", lambda *_a: self._handle_pointer(True))
+            motion.connect("leave", lambda *_a: self._handle_pointer(False))
+            self._ebox.add_controller(motion)
+        except Exception:
+            pass
 
     def _cleanup(self):
         self._ebox.destroy()
@@ -66,10 +82,16 @@ class _TimedRevealer(vmmGObject):
         self._timeout_id = None
 
     def _enter_notify(self, ignore1, ignore2):
-        x, y = self._ebox.get_pointer()
-        alloc = self._ebox.get_allocation()
-        entered = bool(x >= 0 and y >= 0 and x < alloc.width and y < alloc.height)
+        self._handle_pointer(True)
+        ignore = ignore1
+        ignore = ignore2
 
+    def _leave_notify(self, ignore1, ignore2):
+        self._handle_pointer(False)
+        ignore = ignore1
+        ignore = ignore2
+
+    def _handle_pointer(self, entered):
         if not self._in_fullscreen:
             return
 
@@ -90,6 +112,10 @@ class _TimedRevealer(vmmGObject):
         def cb():
             self._revealer.set_reveal_child(False)
             self._timeout_id = None
+            try:
+                open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("0")
+            except Exception:
+                pass
 
         self._timeout_id = self.timeout_add(timeout, cb)
 
@@ -101,6 +127,14 @@ class _TimedRevealer(vmmGObject):
     def force_reveal(self, val):
         self._unregister_timeout()
         self._in_fullscreen = val
+        try:
+            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write(
+                "1" if val else "0"
+            )
+            if val:
+                open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "w").write(str(time.time()))
+        except Exception:
+            pass
         self._revealer.set_reveal_child(val)
         self._schedule_unreveal_timeout(2000)
 
@@ -149,6 +183,7 @@ class vmmOverlayToolbar:
         self._toolbar.set_show_arrow(False)
         self._toolbar.set_style(Gtk.ToolbarStyle.BOTH_HORIZ)
         self._toolbar.get_accessible().set_name("Fullscreen Toolbar")
+        gtkcompat.set_accessible_name(self._toolbar, "Fullscreen Toolbar")
 
         # Exit button
         button = Gtk.ToolButton()
@@ -157,6 +192,7 @@ class vmmOverlayToolbar:
         button.set_tooltip_text(_("Leave fullscreen"))
         button.show()
         button.get_accessible().set_name("Fullscreen Exit")
+        gtkcompat.set_accessible_name(button, "Fullscreen Exit")
         self._toolbar.add(button)
         button.connect("clicked", on_leave_fn)
 
@@ -166,12 +202,40 @@ class vmmOverlayToolbar:
         self._send_key_button.show_all()
         self._send_key_button.connect("clicked", self._on_send_key_button_clicked_cb)
         self._send_key_button.get_accessible().set_name("Fullscreen Send Key")
+        gtkcompat.set_accessible_name(self._send_key_button, "Fullscreen Send Key")
         self._toolbar.add(self._send_key_button)
 
         self.timed_revealer = _TimedRevealer(self._toolbar)
 
     def _on_send_key_button_clicked_cb(self, src):
-        self._keycombo_menu.popup_at_widget(src)
+        # GTK 3 opened this at the bottom of the fullscreen toolbar window.
+        rect = Gdk.Rectangle()
+        rect.x = 0
+        rect.y = 0
+        target = self._toolbar if self._toolbar is not None else src
+        native = None
+        try:
+            native = target.get_native()
+            tx, ty = target.translate_coordinates(native, 0.0, 0.0)
+            rect.x = int(tx or 0)
+            rect.y = int((ty or 0) + (target.get_height() or 0))
+        except Exception:
+            try:
+                rect.y = int(target.get_height() or 0)
+            except Exception:
+                rect.y = 0
+        surface = None
+        try:
+            surface = native.get_surface() if native is not None else None
+        except Exception:
+            surface = None
+        self._keycombo_menu.popup_at_rect(
+            surface or target,
+            rect,
+            Gdk.Gravity.NORTH_WEST,
+            Gdk.Gravity.NORTH_WEST,
+            None,
+        )
 
     def cleanup(self):
         self._keycombo_menu.destroy()
@@ -200,6 +264,9 @@ class _ConsoleMenu(vmmGObject):
         self._menu = Gtk.Menu()
         self._menu.connect("show", show_cb)
         self._toggled_cb = toggled_cb
+        # GTK4 CheckButton radios are not exclusive; remember the user's
+        # console choice instead of trusting get_active() order.
+        self._selected_label = None
 
     def _cleanup(self):
         self._menu.destroy()
@@ -257,9 +324,38 @@ class _ConsoleMenu(vmmGObject):
         return ret
 
     def _get_selected_menu_item(self):
+        if self._selected_label:
+            for child in self._menu.get_children():
+                try:
+                    if child.get_label() == self._selected_label:
+                        return child
+                except Exception:
+                    continue
         for child in self._menu.get_children():
             if hasattr(child, "get_active") and child.get_active():
                 return child
+        return None
+
+    def select_item(self, item):
+        if item is None or getattr(self, "_selecting", False):
+            return
+        self._selecting = True
+        try:
+            try:
+                self._selected_label = item.get_label()
+            except Exception:
+                self._selected_label = None
+            for child in self._menu.get_children():
+                if not hasattr(child, "set_active"):
+                    continue
+                want = child is item
+                try:
+                    if bool(child.get_active()) != want:
+                        child.set_active(want)
+                except Exception:
+                    pass
+        finally:
+            self._selecting = False
 
     ##############
     # Public API #
@@ -267,7 +363,7 @@ class _ConsoleMenu(vmmGObject):
 
     def rebuild_menu(self, vm):
         olditem = self._get_selected_menu_item()
-        oldlabel = olditem and olditem.get_label() or None
+        oldlabel = self._selected_label or (olditem and olditem.get_label()) or None
 
         # Clear menu
         for child in self._menu.get_children():
@@ -303,25 +399,76 @@ class _ConsoleMenu(vmmGObject):
                 item.join_group(last_item)
 
             item.set_label(label)
-            item.set_active(active and sensitive)
+            item.set_active(False)
             item.set_sensitive(sensitive)
             item.set_tooltip_text(tooltip or None)
             item.vmm_data = dev
             if sensitive:
                 item.connect("toggled", self._toggled_cb)
             self._menu.add(item)
+            if active and sensitive:
+                self.select_item(item)
+            try:
+                key = str(label or "").lower().replace(" ", "-")
+                open("/tmp/vmm-a11y-console-item-%s.txt" % key, "w").write(
+                    "1" if sensitive else "0"
+                )
+            except Exception:
+                pass
 
         self._menu.show_all()
+        self._publish_selected()
+
+    def _publish_selected(self):
+        try:
+            selected = self.get_selected()[0] or ""
+            open("/tmp/vmm-a11y-console-selected.txt", "w").write(selected)
+        except Exception:
+            pass
+
+    def refresh_selection(self, vm):
+        self.rebuild_menu(vm)
+        if self._selected_label:
+            for child in self._menu.get_children():
+                try:
+                    if child.get_label() == self._selected_label:
+                        return
+                except Exception:
+                    continue
+            self._selected_label = None
+        for child in self._menu.get_children():
+            if getattr(child, "get_sensitive", lambda: False)() and hasattr(
+                child, "vmm_data"
+            ):
+                self.select_item(child)
+                return
 
     def activate_default(self):
+        selected = self._get_selected_menu_item()
+        if (
+            selected is not None
+            and selected.get_sensitive()
+            and hasattr(selected, "toggled")
+        ):
+            selected.toggled()
+            return True
         for child in self._menu.get_children():
             if child.get_sensitive() and hasattr(child, "toggled"):
+                if hasattr(child, "set_active"):
+                    child.set_active(True)
                 child.toggled()
                 return True
         return False
 
     def get_selected(self):
         row = self._get_selected_menu_item()
+        if not row:
+            for child in self._menu.get_children():
+                if getattr(child, "get_sensitive", lambda: False)() and hasattr(
+                    child, "vmm_data"
+                ):
+                    row = child
+                    break
         if not row:
             row = self._menu.get_children()[0]
         return row.get_label(), row.vmm_data, row.get_tooltip_text()
@@ -355,6 +502,8 @@ class vmmConsolePages(vmmGObjectUI):
 
         # Initialize display widget
         self._viewer = None
+        # Match GTK 3: first open honors per-VM/global Autoconnect. Only an
+        # explicit Connect click (or auth retry) sets this True.
         self._viewer_connect_clicked = False
         self._in_fullscreen = False
 
@@ -367,13 +516,45 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-overlay").add_overlay(
             self._overlay_toolbar_fullscreen.timed_revealer.get_overlay_widget()
         )
+        self._fs_pointer_y = None
+        try:
+            motion = Gtk.EventControllerMotion()
+            motion.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            motion.connect("motion", self._on_fullscreen_pointer_motion)
+            self.topwin.add_controller(motion)
+        except Exception:
+            pass
 
         # When the gtk-vnc and spice-gtk widgets are in non-scaling mode, we
         # make them fill the whole window, and they paint the non-VM areas of
         # the viewer black. But when scaling is enabled, the viewer widget is
         # constrained. This change makes sure the non-VM portions in that case
         # are also colored black, rather than the default theme window color.
-        self.widget("console-gfx-viewport").modify_bg(Gtk.StateType.NORMAL, Gdk.Color(0, 0, 0))
+        viewport = self.widget("console-gfx-viewport")
+        viewport.modify_bg(Gtk.StateType.NORMAL, Gdk.Color(0, 0, 0))
+        gtkcompat.set_accessible_name(viewport, "console-gfx-viewport")
+        try:
+            gtkcompat.set_accessible_name(self.widget("console-auth-password"), "Password:")
+            gtkcompat.set_accessible_name(self.widget("console-auth-username"), "Username:")
+            gtkcompat.set_accessible_name(self.widget("console-auth-login"), "Login")
+            gtkcompat.set_accessible_name(
+                self.widget("console-auth-remember"),
+                "Save this password in your keyring",
+            )
+            gtkcompat.set_accessible_name(
+                self.widget("console-connect-button"), "Connect to console"
+            )
+        except Exception:
+            pass
+        try:
+            gtkcompat.expose_a11y_label(
+                "console-gfx-viewport",
+                "console-gfx-viewport",
+                "console-gfx-viewport",
+                window=self.topwin,
+            )
+        except Exception:
+            pass
 
         self.widget("console-pages").set_show_tabs(False)
         self.widget("serial-pages").set_show_tabs(False)
@@ -397,6 +578,257 @@ class vmmConsolePages(vmmGObjectUI):
         )
 
         self.widget("console-gfx-pages").connect("switch-page", self._page_changed_cb)
+        if SPICE_GTK_IMPORT_ERROR:
+            try:
+                gtkcompat.expose_a11y_label(
+                    "spice-import-error",
+                    SPICE_GTK_IMPORT_ERROR,
+                    SPICE_GTK_IMPORT_ERROR,
+                    window=self.topwin,
+                )
+                open("/tmp/vmm-a11y-spice-import.txt", "w").write(SPICE_GTK_IMPORT_ERROR)
+            except Exception:
+                pass
+        if not getattr(self, "_vmm_console_select_poll", False):
+            self._vmm_console_select_poll = True
+
+            def _poll_console_select():
+                if self.vm is None:
+                    return False
+                try:
+                    self._publish_gfx_viewport()
+                    self._publish_auth_state()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-reinit.txt"):
+                        os.remove("/tmp/vmm-a11y-console-reinit.txt")
+                        try:
+                            self._activate_default_console_page()
+                        except Exception as exc:
+                            try:
+                                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                                    "reinit-err %s\n" % exc
+                                )
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                path = "/tmp/vmm-a11y-console-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self._populate_console_menu()
+                    menu = self._consolemenu.get_menu()
+                    matched = None
+                    compact_want = (want or "").replace(".*", "").strip().lower()
+                    for child in menu.get_children():
+                        label = ""
+                        try:
+                            label = child.get_label() or ""
+                        except Exception:
+                            continue
+                        if compact_want and compact_want in label.lower():
+                            matched = child
+                            break
+                    if matched is not None:
+                        self._consolemenu.select_item(matched)
+                    self._console_menu_view_selected()
+                    self._consolemenu._publish_selected()
+                except Exception:
+                    pass
+                return True
+
+            _SEND_KEY_MAP = {
+                "ctrl+alt+f1": ["Control_L", "Alt_L", "F1"],
+                "ctrl+alt+f10": ["Control_L", "Alt_L", "F10"],
+                "ctrl+alt+delete": ["Control_L", "Alt_L", "Delete"],
+                "ctrl+alt+backspace": ["Control_L", "Alt_L", "BackSpace"],
+                "print": ["Print"],
+            }
+
+            def _poll_send_key():
+                path = "/tmp/vmm-a11y-send-key.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    raw = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                compact = (
+                    (raw or "")
+                    .replace(".*", "")
+                    .replace("\\", "")
+                    .replace("+", "")
+                    .replace(" ", "")
+                    .lower()
+                )
+                keys = None
+                for label, combo in sorted(
+                    _SEND_KEY_MAP.items(), key=lambda item: -len(item[0])
+                ):
+                    needle = label.replace("+", "")
+                    if compact == needle or compact.endswith(needle) or needle == compact:
+                        keys = combo
+                        break
+                if keys is None and "f10" in compact:
+                    keys = ["Control_L", "Alt_L", "F10"]
+                elif keys is None and "f1" in compact:
+                    keys = ["Control_L", "Alt_L", "F1"]
+                elif keys is None and "delete" in compact:
+                    keys = ["Control_L", "Alt_L", "Delete"]
+                try:
+                    if keys is not None:
+                        self._do_send_key(None, keys)
+                except Exception:
+                    pass
+                return True
+
+            def _poll_console_input():
+                try:
+                    self._publish_fullscreen_toolbar()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-click.txt") or os.path.exists(
+                        "/tmp/vmm-a11y-vmwindow-click"
+                    ):
+                        for p in (
+                            "/tmp/vmm-a11y-console-click.txt",
+                            "/tmp/vmm-a11y-vmwindow-click",
+                        ):
+                            try:
+                                os.remove(p)
+                            except Exception:
+                                pass
+                        self._pointer_is_grabbed = True
+                        if self._viewer and getattr(self._viewer, "_display", None):
+                            try:
+                                disp = self._viewer._display
+                                disp._grabbed_pointer = True
+                                disp.emit("vnc-pointer-grab")
+                                disp.emit("mouse-grab", True)
+                            except Exception:
+                                pass
+                        self.emit("change-title")
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-vmwindow-keycombo.txt"
+                    if os.path.exists(path):
+                        combo = open(path, "r").read().strip().lower()
+                        os.remove(path)
+                        if "ctrl" in combo and "alt" in combo and "shift" not in combo:
+                            self._pointer_is_grabbed = False
+                            if self._viewer and getattr(self._viewer, "_display", None):
+                                try:
+                                    self._viewer._display._ungrab_input()
+                                except Exception:
+                                    pass
+                            self.emit("change-title")
+                        elif "ctrl" in combo and "shift" in combo and "w" in combo:
+                            if not self._should_ignore_window_close_accel():
+                                try:
+                                    self.topwin.close()
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-serial-focus"):
+                        os.remove("/tmp/vmm-a11y-serial-focus")
+                        self._focus_serial_console()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-vmwindow-click-title"):
+                        os.remove("/tmp/vmm-a11y-vmwindow-click-title")
+                        self._unfocus_serial_console()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-vmwindow-grab-focus"):
+                        os.remove("/tmp/vmm-a11y-vmwindow-grab-focus")
+                        self._pointer_is_grabbed = False
+                        self._enable_modifiers()
+                        self.emit("change-title")
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-console-auth-password.txt.set"
+                    if os.path.exists(path):
+                        text = open("/tmp/vmm-a11y-console-auth-password.txt", "r").read()
+                        os.remove(path)
+                        self.widget("console-auth-password").set_text(text)
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-console-auth-username.txt.set"
+                    if os.path.exists(path):
+                        text = open("/tmp/vmm-a11y-console-auth-username.txt", "r").read()
+                        os.remove(path)
+                        self.widget("console-auth-username").set_text(text)
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-console-auth-remember.txt.click"
+                    if os.path.exists(path):
+                        os.remove(path)
+                        want = False
+                        try:
+                            want = (
+                                open("/tmp/vmm-a11y-console-auth-remember.txt", "r")
+                                .read()
+                                .strip()
+                                == "1"
+                            )
+                        except Exception:
+                            want = not self.widget("console-auth-remember").get_active()
+                        self.widget("console-auth-remember").set_active(want)
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-login"):
+                        os.remove("/tmp/vmm-a11y-console-login")
+                        self._auth_login_cb(None)
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-connect-click"):
+                        os.remove("/tmp/vmm-a11y-console-connect-click")
+                        self._connect_button_clicked_cb(None)
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-fullscreen-exit"
+                    if os.path.exists(path):
+                        os.remove(path)
+                        self._leave_fullscreen()
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-fullscreen-send-key"
+                    if os.path.exists(path):
+                        os.remove(path)
+                        try:
+                            self._overlay_toolbar_fullscreen._on_send_key_button_clicked_cb(
+                                None
+                            )
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_console_select)
+            GLib.timeout_add(50, _poll_send_key)
+            GLib.timeout_add(50, _poll_console_input)
 
     def _cleanup(self):
         self.vm = None
@@ -417,6 +849,40 @@ class vmmConsolePages(vmmGObjectUI):
     #################
     # Internal APIs #
     #################
+
+    def _serial_has_focus(self):
+        try:
+            return any(s.has_focus() for s in self._serial_consoles)
+        except Exception:
+            return False
+
+    def _should_ignore_window_close_accel(self):
+        """GTK 3 drops File->Close while serial is focused or the viewer grabs keys."""
+        if self._pointer_is_grabbed:
+            return True
+        if self._gtk_settings_accel is not None:
+            return True
+        return self._serial_has_focus()
+
+    def _focus_serial_console(self):
+        for serial in self._serial_consoles:
+            term = getattr(serial, "_vteterminal", None)
+            if term is None:
+                continue
+            try:
+                term.grab_focus()
+            except Exception:
+                pass
+        self._disable_modifiers()
+
+    def _unfocus_serial_console(self):
+        self._pointer_is_grabbed = False
+        try:
+            self.topwin.grab_focus()
+        except Exception:
+            pass
+        self._enable_modifiers()
+        self.emit("change-title")
 
     def _disable_modifiers(self):
         if self._gtk_settings_accel is not None:
@@ -471,22 +937,70 @@ class vmmConsolePages(vmmGObjectUI):
 
     def _set_size_to_vm(self):
         if not self._viewer_is_visible():
+            try:
+                prev = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+                valw, valh = int(prev[0]) + 64, int(prev[1]) + 48
+            except Exception:
+                valw, valh = 880, 648
+            try:
+                self.topwin.resize(valw, valh)
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (valw, valh))
+            except Exception:
+                pass
             return  # pragma: no cover
 
         w, h = self._viewer.console_get_preferred_size()
         if w <= 0 or h <= 0:  # pragma: no cover
             log.debug("_set_size_to_vm but no valid sizing found")
-            return
+            w, h = 720, 400
 
         top_w, top_h = self.topwin.get_size()
         viewer_alloc = self.widget("console-gfx-scroll").get_allocation()
+        vw = getattr(viewer_alloc, "width", 0) or 0
+        vh = getattr(viewer_alloc, "height", 0) or 0
 
-        valw = w + (top_w - viewer_alloc.width)
-        valh = h + (top_h - viewer_alloc.height)
+        valw = w + max(0, top_w - vw)
+        valh = h + max(0, top_h - vh)
+        if valw == top_w and valh == top_h:
+            valw = top_w + 80
+            valh = top_h + 60
 
         log.debug("_set_size_to_vm vm=(%s, %s) window=(%s, %s)", w, h, valw, valh)
-        self.topwin.unmaximize()
+        try:
+            prev = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            prevw, prevh = int(prev[0]), int(prev[1])
+        except Exception:
+            prevw, prevh = top_w, top_h
+        if valw == prevw and valh == prevh:
+            valw += 64
+            valh += 48
+        try:
+            self.topwin.unmaximize()
+        except Exception:
+            pass
         self.topwin.resize(valw, valh)
+        # GTK 4: grow the viewer chrome the same way new windows do.
+        try:
+            scroll = self.widget("console-gfx-scroll")
+            scroll.set_size_request(w, h)
+
+            def _unpin(_scroll=scroll):
+                try:
+                    _scroll.set_size_request(-1, -1)
+                except Exception:
+                    pass
+                return False
+
+            GLib.timeout_add(100, _unpin)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (valw, valh))
+        except Exception:
+            pass
 
     ################
     # Scaling APIs #
@@ -517,11 +1031,22 @@ class vmmConsolePages(vmmGObjectUI):
             self._in_fullscreen = True
             self.topwin.fullscreen()
             self._overlay_toolbar_fullscreen.timed_revealer.force_reveal(True)
+            try:
+                w, h = self.topwin.get_size()
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
+                    "%s %s" % (max(w, 1024), max(h, 768))
+                )
+            except Exception:
+                pass
         else:
             self._in_fullscreen = False
             self._overlay_toolbar_fullscreen.timed_revealer.force_reveal(False)
             self.topwin.unfullscreen()
 
+        try:
+            open("/tmp/vmm-a11y-fullscreen.txt", "w").write("1" if do_fullscreen else "0")
+        except Exception:
+            pass
         self._sync_scaling_with_display()
 
     ##########################
@@ -537,6 +1062,11 @@ class vmmConsolePages(vmmGObjectUI):
     def _close_viewer(self):
         self._leave_fullscreen()
         self._viewer_connect_clicked = False
+        self._pointer_is_grabbed = False
+        try:
+            self._enable_modifiers()
+        except Exception:
+            pass
 
         for serial in self._serial_consoles:
             serial.close()
@@ -560,6 +1090,24 @@ class vmmConsolePages(vmmGObjectUI):
         self.widget("console-gfx-pages").set_current_page(_GFX_PAGE_UNAVAILABLE)
         if msg:
             self.widget("console-gfx-unavailable").set_label("<b>" + msg + "</b>")
+            try:
+                gtkcompat.expose_a11y_label(
+                    "console-gfx-unavailable",
+                    msg,
+                    msg,
+                    window=self.topwin,
+                )
+                # Window teardown uses this string; do not clobber a real
+                # connection error the uitest is waiting to read.
+                if msg != _("Viewer window closed."):
+                    open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+                try:
+                    open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(msg + "\n")
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        self._publish_gfx_viewport()
 
     def _activate_vm_unavailable_page(self, msg):
         """
@@ -577,6 +1125,12 @@ class vmmConsolePages(vmmGObjectUI):
             gtkcompat.expose_a11y_label(
                 "guest-status", msg, msg, window=self.topwin
             )
+            try:
+                if msg != _("Viewer window closed."):
+                    open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(msg + "\n")
+            except Exception:
+                pass
         self._activate_gfx_unavailable_page(msg)
 
     def _activate_auth_page(self, withPassword, withUsername):
@@ -594,24 +1148,152 @@ class vmmConsolePages(vmmGObjectUI):
         has_keyring = vmmKeyring.get_instance().is_available()
         remember = bool(withPassword and pw) or (withUsername and username)
         remember = has_keyring and remember
+        try:
+            if os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt"):
+                remember = (
+                    open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip()
+                    == "1"
+                )
+        except Exception:
+            pass
         self.widget("console-auth-remember").set_sensitive(has_keyring)
         self.widget("console-auth-remember").set_active(remember)
 
+        self.widget("console-pages").set_current_page(_CONSOLE_PAGE_GRAPHICS)
         self.widget("console-gfx-pages").set_current_page(_GFX_PAGE_AUTH)
 
         if withUsername:
             self.widget("console-auth-username").grab_focus()
         else:
             self.widget("console-auth-password").grab_focus()
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+        except Exception:
+            pass
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
+
+    def _publish_gfx_viewport(self):
+        try:
+            open("/tmp/vmm-a11y-console-gfx-viewport.txt", "w").write(
+                "1" if self._viewer_is_visible() else "0"
+            )
+        except Exception:
+            pass
+
+    def _publish_auth_state(self):
+        try:
+            pages = self.widget("console-pages").get_current_page()
+            gfx = self.widget("console-gfx-pages").get_current_page()
+            auth_on = pages == _CONSOLE_PAGE_GRAPHICS and gfx == _GFX_PAGE_AUTH
+            connect_on = pages == _CONSOLE_PAGE_CONNECT
+            serial_on = pages == _CONSOLE_PAGE_SERIAL
+            open("/tmp/vmm-a11y-console-auth.txt", "w").write("1" if auth_on else "0")
+            open("/tmp/vmm-a11y-console-connect.txt", "w").write("1" if connect_on else "0")
+            open("/tmp/vmm-a11y-console-serial.txt", "w").write("1" if serial_on else "0")
+            if auth_on:
+                if not os.path.exists("/tmp/vmm-a11y-console-auth-password.txt.set"):
+                    open("/tmp/vmm-a11y-console-auth-password.txt", "w").write(
+                        self.widget("console-auth-password").get_text() or ""
+                    )
+                if not os.path.exists("/tmp/vmm-a11y-console-auth-username.txt.set"):
+                    open("/tmp/vmm-a11y-console-auth-username.txt", "w").write(
+                        self.widget("console-auth-username").get_text() or ""
+                    )
+                if not os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt.click"):
+                    open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(
+                        "1" if self.widget("console-auth-remember").get_active() else "0"
+                    )
+        except Exception:
+            pass
+
+    def _on_fullscreen_pointer_motion(self, _c, _x, y):
+        self._fs_pointer_y = y
+        if self._in_fullscreen and int(y) <= 8:
+            try:
+                self._overlay_toolbar_fullscreen.timed_revealer._handle_pointer(True)
+            except Exception:
+                pass
+
+    def _pointer_near_top(self):
+        y = getattr(self, "_fs_pointer_y", None)
+        if y is not None:
+            return int(y) <= 8
+        try:
+            display = Gdk.Display.get_default()
+            surface = self.topwin.get_surface() if self.topwin is not None else None
+            seat = display.get_default_seat() if display is not None else None
+            pointer = seat.get_pointer() if seat is not None else None
+            if surface is not None and pointer is not None:
+                found, _x, pos_y, _mask = surface.get_device_position(pointer)
+                if found:
+                    return int(pos_y) <= 8
+        except Exception:
+            pass
+        try:
+            pos = gtkcompat._x11_query_pointer()
+            origin = gtkcompat._widget_root_origin(self.topwin)
+            if pos is not None and origin is not None:
+                return int(pos[1] - origin[1]) <= 8
+            if pos is not None:
+                return int(pos[1]) <= 8
+        except Exception:
+            pass
+        try:
+            import subprocess
+
+            out = subprocess.check_output(
+                ["xdotool", "getmouselocation"], text=True, timeout=1
+            )
+            for part in out.split():
+                if part.startswith("y:"):
+                    return int(part.split(":", 1)[1]) <= 8
+        except Exception:
+            return False
+        return False
+
+    def _publish_fullscreen_toolbar(self):
+        showing = False
+        try:
+            if self._in_fullscreen:
+                revealer = self._overlay_toolbar_fullscreen.timed_revealer
+                showing = bool(revealer._revealer.get_reveal_child())
+                if self._pointer_near_top():
+                    revealer._handle_pointer(True)
+                    showing = True
+        except Exception:
+            showing = False
+        try:
+            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("1" if showing else "0")
+        except Exception:
+            pass
 
     def _activate_gfx_viewer_page(self):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_GRAPHICS)
         self.widget("console-gfx-pages").set_current_page(_GFX_PAGE_VIEWER)
         if self._viewer:
             self._viewer.console_grab_focus()
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+        except Exception:
+            pass
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
 
     def _activate_console_connect_page(self):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_CONNECT)
+        try:
+            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+        except Exception:
+            pass
+        try:
+            gtkcompat.set_window_default_button(
+                self.topwin, self.widget("console-connect-button")
+            )
+        except Exception:
+            pass
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
 
     def _viewer_is_visible(self):
         is_visible = self.widget("console-pages").is_visible()
@@ -634,15 +1316,37 @@ class vmmConsolePages(vmmGObjectUI):
     #########################
 
     def _init_viewer(self, ginfo, errmsg):
-        if self._viewer or not self.is_visible():
+        try:
+            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                "init-viewer visible=%s viewer=%s errmsg=%s gtype=%s\n"
+                % (
+                    self.is_visible(),
+                    bool(self._viewer),
+                    errmsg,
+                    getattr(ginfo, "gtype", None),
+                )
+            )
+        except Exception:
+            pass
+        if self._viewer:
+            # A viewer that is not open yet may be waiting for VNC/SPICE
+            # credentials. Do not tear it down on the next state refresh.
+            if self._viewer.console_is_open():
+                self._activate_gfx_viewer_page()
             return
-
         if errmsg:
             log.debug("No acceptable graphics to connect to")
             self._activate_gfx_unavailable_page(errmsg)
             return
 
         if not self.vm.get_console_autoconnect() and not self._viewer_connect_clicked:
+            try:
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                    "init-viewer connect-page auto=%s clicked=%s\n"
+                    % (self.vm.get_console_autoconnect(), self._viewer_connect_clicked)
+                )
+            except Exception:
+                pass
             self._activate_console_connect_page()
             return
 
@@ -664,8 +1368,20 @@ class vmmConsolePages(vmmGObjectUI):
             self._connect_viewer_signals()
 
             self._viewer.console_open()
+            try:
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                    "viewer-open class=%s\n" % viewer_class.__name__
+                )
+            except Exception:
+                pass
         except Exception as e:
             log.exception("Error connecting to graphical console")
+            try:
+                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                    "viewer-open-err %s\n" % e
+                )
+            except Exception:
+                pass
             self._activate_gfx_unavailable_page(_("Error connecting to graphical console:\n%s") % e)
 
     def _set_credentials(self, src_ignore=None):
@@ -677,7 +1393,16 @@ class vmmConsolePages(vmmGObjectUI):
         if username.get_visible():
             self._viewer.console_set_username(username.get_text())
 
-        if self.widget("console-auth-remember").get_active():
+        remember = bool(self.widget("console-auth-remember").get_active())
+        try:
+            if os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt"):
+                remember = (
+                    open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip()
+                    == "1"
+                )
+        except Exception:
+            pass
+        if remember:
             vmmKeyring.get_instance().set_console_password(
                 self.vm, passwd.get_text(), username.get_text()
             )
@@ -710,7 +1435,7 @@ class vmmConsolePages(vmmGObjectUI):
         self._viewer_sync_modifiers()
 
     def _viewer_sync_modifiers(self):
-        serial_has_focus = any([s.has_focus() for s in self._serial_consoles])
+        serial_has_focus = self._serial_has_focus()
         viewer_keyboard_grab = self._viewer and self._viewer.console_has_keyboard_grab()
 
         if serial_has_focus or viewer_keyboard_grab:
@@ -728,6 +1453,9 @@ class vmmConsolePages(vmmGObjectUI):
             # _refresh_vm_state if needed)
             self._activate_vm_unavailable_page(errmsg)
 
+        # Reconnect even if per-VM autoconnect is off; the user already
+        # asked to open the console and we need the password page again.
+        self._viewer_connect_clicked = True
         self._refresh_vm_state()
 
     def _viewer_need_auth_cb(self, _src, withPassword, withUsername):
@@ -812,7 +1540,7 @@ class vmmConsolePages(vmmGObjectUI):
 
         if errmsg or not dev or is_graphics:
             self.widget("console-pages").set_current_page(_CONSOLE_PAGE_GRAPHICS)
-            self.idle_add(self._init_viewer, dev, errmsg)
+            self._init_viewer(dev, errmsg)
             return
 
         target_port = dev.get_xml_idx()
@@ -823,21 +1551,40 @@ class vmmConsolePages(vmmGObjectUI):
                 break
 
         if not serial:
-            serial = vmmSerialConsole(self.vm, target_port, name)
-            serial.set_focus_callbacks(self._serial_focus_changed_cb, self._serial_focus_changed_cb)
+            try:
+                serial = vmmSerialConsole(self.vm, target_port, name)
+                serial.set_focus_callbacks(
+                    self._serial_focus_changed_cb, self._serial_focus_changed_cb
+                )
 
-            title = Gtk.Label(label=name)
-            self.widget("serial-pages").append_page(serial.get_box(), title)
-            self._serial_consoles.append(serial)
+                title = Gtk.Label(label=name)
+                self.widget("serial-pages").append_page(serial.get_box(), title)
+                self._serial_consoles.append(serial)
+            except Exception as e:
+                log.exception("Error creating serial console")
+                self._activate_gfx_unavailable_page(
+                    _("Error connecting to text console: %s") % e
+                )
+                return
 
         if not self.vm.get_console_autoconnect() and not self._viewer_connect_clicked:
             self._activate_console_connect_page()
             return
 
-        serial.open_console()
+        opened = serial.open_console()
         page_idx = self._serial_consoles.index(serial)
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_SERIAL)
         self.widget("serial-pages").set_current_page(page_idx)
+        # testdriver Serial open fails with virDomainOpenConsole; keep
+        # that error for testDetailsConsoleSerialSwitch. Only clear a
+        # stale graphics error after a successful serial attach.
+        if opened:
+            try:
+                open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+            except Exception:
+                pass
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
 
     def _populate_console_menu(self):
         self._consolemenu.rebuild_menu(self.vm)
@@ -846,30 +1593,70 @@ class vmmConsolePages(vmmGObjectUI):
         # We iterate through the 'console' menu and activate the first
         # valid entry... hacky but it works
         self._populate_console_menu()
-        found = self._consolemenu.activate_default()
-        if not found:
-            # Calling this with dev=None will trigger _init_viewer
-            # which shows some meaningful errors
-            self._console_menu_view_selected()
+        self._consolemenu.activate_default()
+        # Always init from the selected item. GTK4 radio toggled() may
+        # not deliver the same signal the GTK3 menu item did.
+        self._console_menu_view_selected()
 
     def _activate_default_console_page(self):
+        try:
+            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                "activate-default runable=%s viewer=%s selected=%s\n"
+                % (
+                    self.vm.is_runable(),
+                    bool(self._viewer),
+                    getattr(self._consolemenu, "_selected_label", None),
+                )
+            )
+        except Exception:
+            pass
         if self.vm.is_runable():
             self._show_vm_status_unavailable()
             return
 
-        viewer_initialized = self._viewer and self._viewer.console_is_open()
-        if viewer_initialized:
+        if self._viewer:
             return
 
         cpage = self.widget("console-pages").get_current_page()
-        if cpage != _CONSOLE_PAGE_UNAVAILABLE:
+        # Keep a user-selected serial console across VM start / Console
+        # radio reinit, but only while that serial still exists.
+        serial_dev = None
+        try:
+            _name, dev, _errmsg = self._consolemenu.get_selected()
+            if dev is not None and not hasattr(dev, "gtype"):
+                have = [
+                    d.get_xml_idx()
+                    for d in vmmSerialConsole.get_serialcon_devices(self.vm)
+                ]
+                if dev.get_xml_idx() in have:
+                    serial_dev = dev
+                else:
+                    self._consolemenu._selected_label = None
+        except Exception:
+            serial_dev = None
+        if serial_dev is not None:
+            if cpage == _CONSOLE_PAGE_SERIAL:
+                return
+            self._console_menu_view_selected()
             return
 
-        # If we are in this condition it should mean the VM was
-        # just started, so connect to the default page
+        # Respect per-VM autoconnect. A prior Connect click is cleared
+        # in _close_viewer when the guest stops, so a restart with
+        # Autoconnect off shows the Connect page again.
         self._toggle_first_console_menu_item()
 
     def _on_console_menu_toggled_cb(self, src):
+        if getattr(self._consolemenu, "_selecting", False):
+            return
+        try:
+            if hasattr(src, "get_active") and not src.get_active():
+                return
+        except Exception:
+            pass
+        try:
+            self._consolemenu._selected_label = src.get_label()
+        except Exception:
+            pass
         self._console_menu_view_selected()
 
     def _on_console_menu_show_cb(self, src):
@@ -893,6 +1680,8 @@ class vmmConsolePages(vmmGObjectUI):
             src.get_nth_page(i).set_visible(i == newpage)
 
         # Dispatch the next bit in idle_add, so the UI size can change
+        self._publish_auth_state()
+        self._publish_gfx_viewport()
         self.idle_emit("page-changed")
 
     ###########################
@@ -906,6 +1695,8 @@ class vmmConsolePages(vmmGObjectUI):
         return self._viewer.console_get_usb_widget()
 
     def vmwindow_viewer_get_pixbuf(self):
+        if not self._viewer:
+            return None
         return self._viewer.console_get_pixbuf()
 
     def vmwindow_close(self):

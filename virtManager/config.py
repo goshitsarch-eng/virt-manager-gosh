@@ -15,9 +15,10 @@ from .lib.inspection import vmmInspection
 
 
 CSSDATA = """
-/* Lighter colored text in some wizard summary fields */
+/* Lighter colored text in some wizard summary fields.
+   GTK 3 used @insensitive_fg_color; Adwaita GTK 4 does not define that token. */
 .vmm-lighter {
-    color: @insensitive_fg_color;
+    color: alpha(@window_fg_color, 0.55);
 }
 
 /* Text on the blue header in our wizards */
@@ -41,6 +42,25 @@ CSSDATA = """
     min-height: 0;
     padding: 0;
     margin: 0;
+}
+
+/* Open overlay dropdown: GTK 3 menubar menu chrome */
+.vmm-menu-open {
+    opacity: 1;
+    background-color: @window_bg_color;
+    border: 1px solid alpha(@window_fg_color, 0.25);
+    padding: 4px;
+    min-width: 140px;
+}
+
+/* GTK 3 serial console sat on a black EventBox */
+.vmm-serial-bg {
+    background-color: #000000;
+}
+
+/* GTK 3 ScrolledWindow shadow-type=in / etched-in */
+.vmm-scroll-shadow {
+    border: 1px solid alpha(@window_fg_color, 0.2);
 }
 
 /* Visually hide labels that exist only so AT-SPI sees GTK 3 button names */
@@ -211,8 +231,19 @@ class vmmConfig:
             display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
         )
 
-        # Adwaita does not expose theme colors via StyleContext.lookup_color
-        self.color_insensitive = "rgb(154,153,150)"
+        self._refresh_theme_colors()
+        try:
+            from gi.repository import Adw
+
+            sm = Adw.StyleManager.get_default()
+            sm.connect("notify::dark", lambda *_a: self._refresh_theme_colors())
+        except Exception:
+            pass
+
+    def _refresh_theme_colors(self, widget=None):
+        from .lib import gtkcompat
+
+        self.color_insensitive = gtkcompat.theme_insensitive_color(widget)
 
     # General app wide helpers (gsettings agnostic)
 
@@ -358,7 +389,10 @@ class vmmConfig:
 
     # Confirmation preferences
     def get_confirm_forcepoweroff(self):
-        return self.conf.get("/confirm/forcepoweroff")
+        val = self.conf.get("/confirm/forcepoweroff")
+        if val is None:
+            return True
+        return bool(val)
 
     def get_confirm_poweroff(self):
         return self.conf.get("/confirm/poweroff")
@@ -495,7 +529,10 @@ class vmmConfig:
         self.conf.set("/console/auto-redirect", state)
 
     def get_console_autoconnect(self):
-        return bool(self.conf.get("/console/autoconnect"))
+        val = self.conf.get("/console/autoconnect")
+        if val is None:
+            return True
+        return bool(val)
 
     def set_console_autoconnect(self, val):
         return self.conf.set("/console/autoconnect", val)

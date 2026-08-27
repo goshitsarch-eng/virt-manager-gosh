@@ -4,6 +4,9 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import json
+import os
+
 from gi.repository import Gio
 from gi.repository import GLib
 
@@ -177,34 +180,74 @@ class vmmKeyring(vmmGObject):
     ##############
 
     def is_available(self):
-        return self._collection is not None
+        # File fallback keeps "Save this password" usable without Secret Service.
+        return True
+
+    def _file_store_path(self):
+        return os.path.join(GLib.get_user_config_dir(), "virt-manager", "console-keyring.json")
+
+    def _file_key(self, vm):
+        return "%s|%s" % (vm.get_uuid(), vm.conn.get_uri())
+
+    def _file_load(self):
+        path = self._file_store_path()
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            log.debug("Error loading file keyring", exc_info=True)
+            return {}
+
+    def _file_save(self, data):
+        path = self._file_store_path()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            os.replace(tmp, path)
+        except Exception:
+            log.debug("Error saving file keyring", exc_info=True)
 
     def _get_secret_name(self, vm):
         return "vm-console-" + vm.get_uuid()
 
     def get_console_password(self, vm):
-        if not self.is_available():
-            return ("", "")  # pragma: no cover
+        if self._collection is not None:
+            try:
+                secret = self._get_secret(vm.get_uuid(), vm.conn.get_uri())
+                if secret is not None:
+                    return (secret.get_secret(), vm.get_console_username() or "")
+            except Exception:
+                log.debug("Error fetching libsecret password", exc_info=True)
 
-        secret = self._get_secret(vm.get_uuid(), vm.conn.get_uri())
-        if secret is None:
-            return ("", "")  # pragma: no cover
-
-        return (secret.get_secret(), vm.get_console_username() or "")
+        rec = self._file_load().get(self._file_key(vm))
+        if isinstance(rec, dict):
+            return (rec.get("password") or "", rec.get("username") or vm.get_console_username() or "")
+        if isinstance(rec, str):
+            return (rec, vm.get_console_username() or "")
+        return ("", "")
 
     def set_console_password(self, vm, password, username=""):
-        if not self.is_available():
-            return  # pragma: no cover
-
-        secret = _vmmSecret(
-            self._get_secret_name(vm), password, {"uuid": vm.get_uuid(), "hvuri": vm.conn.get_uri()}
-        )
         vm.set_console_username(username)
-        self._add_secret(secret)
+        if self._collection is not None:
+            secret = _vmmSecret(
+                self._get_secret_name(vm),
+                password,
+                {"uuid": vm.get_uuid(), "hvuri": vm.conn.get_uri()},
+            )
+            self._add_secret(secret)
+        data = self._file_load()
+        data[self._file_key(vm)] = {"password": password, "username": username}
+        self._file_save(data)
 
     def del_console_password(self, vm):
-        if not self.is_available():
-            return  # pragma: no cover
-
-        self._del_secret(vm.get_uuid(), vm.conn.get_uri())
+        if self._collection is not None:
+            self._del_secret(vm.get_uuid(), vm.conn.get_uri())
         vm.del_console_username()
+        data = self._file_load()
+        data.pop(self._file_key(vm), None)
+        self._file_save(data)

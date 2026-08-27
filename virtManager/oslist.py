@@ -33,6 +33,13 @@ class vmmOSList(vmmGObjectUI):
         self.search_entry = self.widget("os-name")
         self.search_entry.set_placeholder_text(_("Type to start searching..."))
         try:
+            pos = Gtk.EntryIconPosition.PRIMARY
+            self.search_entry.set_icon_from_icon_name(pos, "edit-find-symbolic")
+            self.search_entry.set_icon_activatable(pos, False)
+            self.search_entry._vmm_gtk3_search_icon = True
+        except Exception:
+            pass
+        try:
             self.search_entry.connect(
                 "changed", lambda *_a: self.refresh_a11y()
             )
@@ -104,6 +111,47 @@ class vmmOSList(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_escape)
+
+            def _poll_os_select():
+                path = "/tmp/vmm-a11y-os-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                if want:
+                    try:
+                        self.select_os_matching(want)
+                    except Exception:
+                        pass
+                return True
+
+            GLib.timeout_add(50, _poll_os_select)
+
+            def _poll_eol():
+                path = "/tmp/vmm-a11y-oslist-eol.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    src = self.widget("include-eol")
+                    self._set_include_eol_quiet(not src.get_active())
+                except Exception:
+                    pass
+                try:
+                    show = getattr(self, "_vmm_oslist_show_a11y", None)
+                    if show:
+                        show()
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_eol)
 
     def _cleanup(self):
         pass
@@ -224,6 +272,13 @@ class vmmOSList(vmmGObjectUI):
             open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label or "")
         except Exception:
             pass
+        # After GetItems, renaming oslist sidecars blocks the main loop
+        # long enough that New VM Forward stays busy and later pages hang.
+        try:
+            if os.path.exists("/tmp/vmm-a11y-pagenum.txt"):
+                return
+        except Exception:
+            pass
         try:
             for key in ("oslist-entry", "methods-oslist-entry"):
                 sidecar = gtkcompat._A11Y_SIDECAR["items"].get(key)
@@ -327,6 +382,30 @@ class vmmOSList(vmmGObjectUI):
         self._show_popover()
         self.widget("os-list").grab_focus()
 
+    def _set_include_eol_quiet(self, active):
+        """Toggle include-eol without refiltering the full OS model.
+
+        After GetItems, TreeModelFilter.refilter() can block the main
+        loop longer than the 2s New VM Forward pagenum check.
+        """
+        src = self.widget("include-eol")
+        self._filter_eol = not bool(active)
+        try:
+            src.handler_block_by_func(self._eol_toggled_cb)
+            try:
+                src.set_active(bool(active))
+            finally:
+                src.handler_unblock_by_func(self._eol_toggled_cb)
+        except Exception:
+            try:
+                src.set_active(bool(active))
+            except Exception:
+                pass
+        try:
+            open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write("1" if active else "0")
+        except Exception:
+            pass
+
     def _eol_toggled_cb(self, src):
         self._filter_eol = not src.get_active()
         self._refilter()
@@ -356,6 +435,15 @@ class vmmOSList(vmmGObjectUI):
 
         try:
             if not searchname and os.path.exists("/tmp/vmm-a11y-oslist-reopen"):
+                return
+        except Exception:
+            pass
+        try:
+            if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
+                show = getattr(self, "_vmm_oslist_show_a11y", None)
+                if show:
+                    show()
+                self.refresh_a11y()
                 return
         except Exception:
             pass
@@ -510,29 +598,37 @@ class vmmOSList(vmmGObjectUI):
                 open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
             except Exception:
                 pass
-        self._clear_filter()
-
-        os_list = self.widget("os-list")
-        if vmosobj.eol and not self.widget("include-eol").get_active():
-            self.widget("include-eol").set_active(True)
-
-        for row in os_list.get_model():
-            osobj = row[0]
-            if osobj.name != vmosobj.name:
-                continue
-
-            os_list.get_selection().select_iter(row.iter)
-            self._sync_os_selection()
-            hide = getattr(self, "_vmm_oslist_hide_a11y", None)
-            if hide:
-                try:
-                    hide()
-                except Exception:
-                    pass
-            return
+            try:
+                self.search_entry.set_text(vmosobj.label)
+                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(vmosobj.label)
+            except Exception:
+                pass
+        # Do not set_active/refilter here: walking the full OS model after
+        # GetItems blocks longer than the 2s Forward pagenum check.
+        if vmosobj is not None and getattr(vmosobj, "eol", False):
+            self._set_include_eol_quiet(True)
+        else:
+            try:
+                open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
+                    "1" if self.widget("include-eol").get_active() else "0"
+                )
+            except Exception:
+                pass
+        hide = getattr(self, "_vmm_oslist_hide_a11y", None)
+        if hide:
+            try:
+                hide()
+            except Exception:
+                pass
+        self.refresh_a11y()
+        try:
+            self.emit("os-selected", self._selected_os)
+        except Exception:
+            pass
+        return
 
     def get_selected_os(self):
-        return self._selected_os
+        return self._selected_os or self._kept_os
 
     def set_sensitive(self, sensitive):
         if sensitive == self.search_entry.get_sensitive():

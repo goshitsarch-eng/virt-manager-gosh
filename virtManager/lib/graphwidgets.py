@@ -22,6 +22,46 @@ class _RGB:
     blue = 1.0
 
 
+def _adw_base_rgb():
+    """libadwaita window background when StyleContext named colors are missing."""
+    try:
+        from gi.repository import Adw
+
+        if Adw.StyleManager.get_default().get_dark():
+            return 0.18, 0.18, 0.18
+    except Exception:
+        pass
+    return 1.0, 1.0, 1.0
+
+
+def _theme_base_rgb(widget=None):
+    """GTK 3 used theme_base_color so sparklines match light/dark themes."""
+    ctx = None
+    if widget is not None and hasattr(widget, "get_style_context"):
+        try:
+            ctx = widget.get_style_context()
+        except Exception:
+            ctx = None
+    names = (
+        "theme_base_color",
+        "theme_bg_color",
+        "view_bg_color",
+        "window_bg_color",
+    )
+    if ctx is not None:
+        for name in names:
+            try:
+                found, color = ctx.lookup_color(name)
+            except Exception:
+                found, color = False, None
+            if found and color is not None:
+                try:
+                    return float(color.red), float(color.green), float(color.blue)
+                except Exception:
+                    continue
+    return _adw_base_rgb()
+
+
 BASECOLOR = _RGB()
 
 
@@ -143,7 +183,6 @@ class CellRendererSparkline(Gtk.CellRenderer):
         # background_area   : GdkRectangle: entire cell area
         # cell_area         : GdkRectangle: area normally rendered by cell
         # flags             : flags that affect rendering
-        ignore = widget
         ignore = background_area
         ignore = flags
 
@@ -193,8 +232,9 @@ class CellRendererSparkline(Gtk.CellRenderer):
         )
         cr.stroke()
 
-        # Fill in basecolor box inside graph outline
-        cr.set_source_rgb(BASECOLOR.red, BASECOLOR.green, BASECOLOR.blue)
+        # Fill in theme-base box inside graph outline (GTK 3 theme_base_color)
+        red, green, blue = _theme_base_rgb(widget)
+        cr.set_source_rgb(red, green, blue)
         cr.rectangle(
             cell_area.x + BORDER_PADDING,
             cell_area.y + BORDER_PADDING,

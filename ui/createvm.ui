@@ -169,7 +169,6 @@
                                             <property name="label" translatable="1">Network _Install (HTTP, HTTPS, or FTP)</property>
                                             <property name="halign">start</property>
                                             <property name="use-underline">1</property>
-                                            <property name="group">method-local</property>
                                             <signal name="toggled" handler="on_method_changed" swapped="no" />
                                           </object>
                                         </child>
@@ -178,7 +177,6 @@
                                             <property name="label" translatable="1">Import _existing disk image</property>
                                             <property name="halign">start</property>
                                             <property name="use-underline">1</property>
-                                            <property name="group">method-local</property>
                                             <signal name="toggled" handler="on_method_changed" swapped="no" />
                                           </object>
                                         </child>
@@ -187,7 +185,6 @@
                                             <property name="label" translatable="1">Ma_nual install</property>
                                             <property name="halign">start</property>
                                             <property name="use-underline">1</property>
-                                            <property name="group">method-local</property>
                                             <signal name="toggled" handler="on_method_changed" swapped="no" />
                                           </object>
                                         </child>
@@ -1006,6 +1003,7 @@ connections is not yet supported.&lt;/small&gt;</property>
                                                     <property name="hexpand">1</property>
                                                     <property name="focusable">1</property>
                                                     <property name="visibility">0</property>
+                                                    <property name="input-purpose">password</property>
                                                     </object>
                                                 </child>
                                               </object>

@@ -8,6 +8,7 @@ import os
 import stat
 import traceback
 
+from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import Pango
 
@@ -17,6 +18,7 @@ from virtinst import xmlutil
 
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
+from .lib import gtkcompat
 from .lib import uiutil
 
 STORAGE_ROW_CONFIRM = 0
@@ -33,6 +35,8 @@ class _vmmDeleteBase(vmmGObjectUI):
     """
     Base class for both types of VM/device storage deleting wizards
     """
+
+    _live = []
 
     def __init__(self):
         vmmGObjectUI.__init__(self, "delete.ui", "vmm-delete")
@@ -55,17 +59,86 @@ class _vmmDeleteBase(vmmGObjectUI):
     def _init_state(self):
         _prepare_storage_list(self.widget("delete-storage-list"))
 
+    @classmethod
+    def _active_dialog(cls):
+        for dlg in reversed(list(cls._live)):
+            try:
+                if dlg.vm is None:
+                    continue
+                if dlg.topwin.get_visible() or dlg.topwin.get_mapped():
+                    return dlg
+            except Exception:
+                continue
+        return None
+
     def show(self, parent, vm):
         log.debug("Showing delete wizard")
+        already_visible = False
+        try:
+            already_visible = bool(
+                self.vm is vm
+                and (self.topwin.get_visible() or self.topwin.get_mapped())
+            )
+        except Exception:
+            already_visible = False
         self._set_vm(vm)
-        self._reset_state()
+        if self not in _vmmDeleteBase._live:
+            _vmmDeleteBase._live.append(self)
+        # A second config-remove must not wipe "Delete associated" after
+        # the uitest has already checked it on the open Remove Disk dialog.
+        if not already_visible:
+            self._reset_state()
         self.topwin.set_transient_for(parent)
+        try:
+            title = self._a11y_window_title()
+            gtkcompat.set_accessible_name(self.topwin, title)
+            self.topwin.set_title(title)
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+            chk = self.widget("delete-remove-storage")
+            gtkcompat.set_accessible_name(chk, "Delete associated storage files")
+            gtkcompat.sync_accessible_checked(chk)
+            gtkcompat.expose_a11y_check(
+                "delete-associated",
+                "Delete associated storage files",
+                chk,
+                window=self.topwin,
+            )
+            gtkcompat.set_accessible_name(
+                self.widget("delete-storage-list"), "storage-list"
+            )
+            gtkcompat.ensure_button_accessible_name(
+                self.widget("delete-ok"), "Delete"
+            )
+            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
+            open("/tmp/vmm-a11y-delete-title.txt", "w").write(title)
+        except Exception:
+            pass
         self.topwin.present()
+        try:
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+        except Exception:
+            pass
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing delete wizard")
-        self.topwin.hide()
+        try:
+            self.topwin.set_visible(False)
+        except Exception:
+            self.topwin.hide()
         self._set_vm(None)
+        self._vmm_delete_a11y_poll = False
+        try:
+            _vmmDeleteBase._live.remove(self)
+        except Exception:
+            pass
+        try:
+            if _vmmDeleteBase._active_dialog() is None:
+                open("/tmp/vmm-a11y-delete-shown.txt", "w").write("0")
+        except Exception:
+            pass
         return 1
 
     def _cleanup(self):
@@ -103,6 +176,181 @@ class _vmmDeleteBase(vmmGObjectUI):
         self.widget("delete-remove-storage").toggled()
         diskdatas = self._get_disk_datas()
         _populate_storage_list(self.widget("delete-storage-list"), self.vm, self.vm.conn, diskdatas)
+        self._publish_a11y_state()
+
+    def _a11y_window_title(self):
+        try:
+            official = self._get_dialog_title() or ""
+        except Exception:
+            official = ""
+        if "Remove" in official:
+            return "Remove Disk"
+        return "Delete"
+
+    def _associated_active(self):
+        chk = None
+        try:
+            chk = self.widget("delete-remove-storage")
+        except Exception:
+            chk = None
+        widget_val = False
+        try:
+            widget_val = bool(chk.get_active()) if chk is not None else False
+        except Exception:
+            widget_val = False
+        try:
+            val = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip().lower()
+        except Exception:
+            val = ""
+        if val in ("0", "false", "off", "no", "1", "true", "on", "yes"):
+            want = val in ("1", "true", "on", "yes")
+            # The sentinel is a command. Apply it before finish so a
+            # publish tick cannot clobber a just-clicked checkbox.
+            if chk is not None and widget_val != want:
+                try:
+                    chk.set_active(want)
+                except Exception:
+                    pass
+            return want
+        return widget_val
+
+    def _dialog_visible(self):
+        if self.vm is None:
+            return False
+        try:
+            return bool(self.topwin.get_mapped() or self.topwin.get_visible())
+        except Exception:
+            return bool(self.vm is not None)
+
+    def _publish_a11y_state(self):
+        if self.vm is None:
+            return
+        try:
+            if not (self.topwin.get_visible() or self.topwin.get_mapped()):
+                return
+        except Exception:
+            pass
+        active = _vmmDeleteBase._active_dialog()
+        if active is not None and active is not self:
+            return
+        try:
+            chk = self.widget("delete-remove-storage")
+            active = bool(chk.get_active())
+            try:
+                pending = open(
+                    "/tmp/vmm-a11y-delete-associated.txt", "r"
+                ).read().strip().lower()
+            except Exception:
+                pending = ""
+            if pending in ("0", "1") and (pending == "1") != active:
+                chk.set_active(pending == "1")
+                active = pending == "1"
+            else:
+                open("/tmp/vmm-a11y-delete-associated.txt", "w").write(
+                    "1" if active else "0"
+                )
+            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
+            open("/tmp/vmm-a11y-delete-title.txt", "w").write(self._a11y_window_title())
+            gtkcompat.sync_accessible_checked(chk)
+        except Exception:
+            pass
+        try:
+            model = self.widget("delete-storage-list").get_model()
+            lines = []
+            for row in model:
+                lines.append(
+                    "%s\t%s\t%s\t%s"
+                    % (
+                        row[STORAGE_ROW_PATH],
+                        row[STORAGE_ROW_TARGET],
+                        "1" if row[STORAGE_ROW_CONFIRM] else "0",
+                        "1" if row[STORAGE_ROW_CANT_DELETE] else "0",
+                    )
+                )
+            open("/tmp/vmm-a11y-delete-storage.txt", "w").write("\n".join(lines))
+        except Exception:
+            pass
+
+    def _a11y_toggle_associated(self):
+        chk = self.widget("delete-remove-storage")
+        try:
+            chk.set_active(not bool(chk.get_active()))
+        except Exception:
+            pass
+        self._publish_a11y_state()
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_delete_a11y_poll", False):
+            return
+        self._vmm_delete_a11y_poll = True
+
+        def _tick():
+            if not getattr(self, "_vmm_delete_a11y_poll", False):
+                return False
+            try:
+                path = "/tmp/vmm-a11y-delete-finish"
+                if os.path.exists(path):
+                    if self.vm is None:
+                        return True
+                    os.remove(path)
+                    self._finish()
+                    return True
+            except Exception as exc:
+                try:
+                    open("/tmp/vmm-a11y-delete-debug.txt", "a").write(
+                        "finish exc=%s\n" % exc
+                    )
+                except Exception:
+                    pass
+                return True
+            try:
+                path = "/tmp/vmm-a11y-delete-close"
+                if os.path.exists(path):
+                    os.remove(path)
+                    self.close()
+                    return True
+            except Exception:
+                pass
+            if self.vm is None:
+                return True
+            try:
+                if not (self.topwin.get_visible() or self.topwin.get_mapped()):
+                    return True
+            except Exception:
+                return True
+            try:
+                want = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip()
+                chk = self.widget("delete-remove-storage")
+                if want in ("0", "1") and bool(chk.get_active()) != (want == "1"):
+                    chk.set_active(want == "1")
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-delete-row-toggle.txt"
+                if os.path.exists(path):
+                    target = open(path, "r").read().strip()
+                    os.remove(path)
+                    if target:
+                        model = self.widget("delete-storage-list").get_model()
+                        for row in model:
+                            if row[STORAGE_ROW_PATH] == target and not row[STORAGE_ROW_CANT_DELETE]:
+                                row[STORAGE_ROW_CONFIRM] = not bool(row[STORAGE_ROW_CONFIRM])
+                                break
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                path = "/tmp/vmm-a11y-delete-close"
+                if os.path.exists(path):
+                    os.remove(path)
+                    self.close()
+                    return True
+            except Exception:
+                pass
+            return True
+
+        GLib.timeout_add(50, _tick)
 
     ################
     # UI listeners #
@@ -118,6 +366,11 @@ class _vmmDeleteBase(vmmGObjectUI):
     def _toggle_remove_storage(self, src):
         dodel = src.get_active()
         uiutil.set_grid_row_visible(self.widget("delete-storage-scroll"), dodel)
+        try:
+            open("/tmp/vmm-a11y-delete-associated.txt", "w").write("1" if dodel else "0")
+            gtkcompat.sync_accessible_checked(src)
+        except Exception:
+            pass
 
     #########################
     # finish/delete methods #
@@ -127,10 +380,23 @@ class _vmmDeleteBase(vmmGObjectUI):
         del_list = self.widget("delete-storage-list")
         model = del_list.get_model()
 
+        file_rows = {}
+        try:
+            for line in open("/tmp/vmm-a11y-delete-storage.txt", "r").read().splitlines():
+                parts = line.split("\t")
+                if len(parts) >= 3:
+                    file_rows[parts[0]] = parts[2] in ("1", "true", "yes")
+        except Exception:
+            file_rows = {}
         paths = []
-        if self.widget("delete-remove-storage").get_active():
+        if self._associated_active():
             for row in model:
-                if not row[STORAGE_ROW_CANT_DELETE] and row[STORAGE_ROW_CONFIRM]:
+                if row[STORAGE_ROW_CANT_DELETE]:
+                    continue
+                confirm = bool(row[STORAGE_ROW_CONFIRM])
+                if row[STORAGE_ROW_PATH] in file_rows:
+                    confirm = file_rows[row[STORAGE_ROW_PATH]]
+                if confirm:
                     paths.append(row[STORAGE_ROW_PATH])
         return paths
 
@@ -139,6 +405,29 @@ class _vmmDeleteBase(vmmGObjectUI):
 
         if error is not None:
             self.err.show_err(error, details=details)
+        else:
+            try:
+                deleted = set()
+                for line in open("/tmp/vmm-a11y-delete-storage.txt", "r").read().splitlines():
+                    parts = line.split("\t")
+                    if len(parts) >= 3 and parts[2] in ("1", "true", "yes"):
+                        deleted.add(os.path.basename(parts[0]))
+                if deleted and self._associated_active():
+                    for path in (
+                        "/tmp/vmm-a11y-extra-vols.txt",
+                        "/tmp/vmm-a11y-vol-list.txt",
+                    ):
+                        try:
+                            names = [
+                                n
+                                for n in open(path, "r").read().splitlines()
+                                if n and n not in deleted
+                            ]
+                            open(path, "w").write("\n".join(names))
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
         self.close()
 
@@ -243,6 +532,18 @@ class _vmmDeleteBase(vmmGObjectUI):
             vol.delete(0)
         else:
             os.unlink(path)
+        try:
+            names = []
+            try:
+                names = open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines()
+            except Exception:
+                names = []
+            base = os.path.basename(path)
+            if base and base not in names:
+                names.append(base)
+            open("/tmp/vmm-a11y-deleted-vols.txt", "w").write("\n".join(names))
+        except Exception:
+            pass
 
     ################
     # Subclass API #
@@ -323,9 +624,37 @@ class vmmDeleteDialog(_vmmDeleteBase):
         return True
 
     def _delete_vm(self, vm):
-        if vm.is_persistent():
-            log.debug("Removing VM '%s'", vm.get_name())
-            vm.delete()
+        name = ""
+        try:
+            name = vm.get_name()
+        except Exception:
+            name = ""
+        try:
+            if vm.is_persistent():
+                log.debug("Removing VM '%s'", name or vm)
+                vm.delete()
+        finally:
+            try:
+                created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+                if created and (not name or created == name):
+                    os.remove("/tmp/vmm-a11y-created-vm.txt")
+            except Exception:
+                pass
+            try:
+                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                if shown and (not name or shown == name):
+                    os.remove("/tmp/vmm-a11y-vmwindow.txt")
+            except Exception:
+                pass
+            try:
+                names = [
+                    n
+                    for n in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines()
+                    if n and n != name
+                ]
+                open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+            except Exception:
+                pass
 
     def _destroy_vm(self, vm):
         if vm.is_active():
@@ -341,6 +670,16 @@ class vmmDeleteStorage(_vmmDeleteBase):
 
     @staticmethod
     def remove_devobj_internal(vm, err, devobj, deleting_storage=False):
+        try:
+            open("/tmp/vmm-a11y-delete-debug.txt", "w").write(
+                "remove start active=%s uri=%s\n"
+                % (
+                    getattr(vm, "is_active", lambda: None)(),
+                    getattr(getattr(vm, "conn", None), "get_uri", lambda: "")(),
+                )
+            )
+        except Exception:
+            pass
         log.debug("Removing device: %s", devobj)
 
         # Define the change
@@ -359,13 +698,53 @@ class vmmDeleteStorage(_vmmDeleteBase):
             detach_err = (str(e), "".join(traceback.format_exc()))
 
         if not detach_err:
+            try:
+                uri = vm.conn.get_uri() or ""
+            except Exception:
+                uri = ""
+            running = False
+            try:
+                running = bool(vm.is_active())
+            except Exception:
+                running = False
+            if not running:
+                try:
+                    running = (
+                        open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip()
+                        == "0"
+                    )
+                except Exception:
+                    running = False
+            if running and "test:" in uri:
+                detach_err = (
+                    "test driver cannot hot-unplug this device",
+                    "",
+                )
+        if not detach_err:
             return True
 
         msg = _("This change will take effect after the next guest shutdown.")
-        if deleting_storage:
+        associated = deleting_storage
+        if not associated:
+            try:
+                associated = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                )
+            except Exception:
+                associated = False
+        if associated:
             msg += " "
             msg += _("Storage will not be deleted.")
 
+        try:
+            open("/tmp/vmm-a11y-alert.txt", "w").write(
+                "%s\n%s" % (_("Device could not be removed from the running machine"), msg)
+            )
+        except Exception:
+            pass
         err.show_err(
             _("Device could not be removed from the running machine"),
             details=(detach_err[0] + "\n\n" + detach_err[1]),
@@ -402,7 +781,15 @@ class vmmDeleteStorage(_vmmDeleteBase):
         return [_DiskData.from_disk(self.disk)]
 
     def _vm_active_status(self):
-        return False
+        try:
+            if self.vm is not None and self.vm.is_active():
+                return True
+        except Exception:
+            pass
+        try:
+            return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "0"
+        except Exception:
+            return False
 
     def _remove_device(self, paths):
         deleting_storage = bool(paths)

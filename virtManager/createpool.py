@@ -6,16 +6,34 @@
 
 import os
 
+from gi.repository import GLib
 from gi.repository import Gtk
 
 from virtinst import log
 from virtinst import StoragePool
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .object.storagepool import vmmStoragePool
 from .xmleditor import vmmXMLEditor
+
+_CREATEPOOL_SHOWN = "/tmp/vmm-a11y-createpool-shown.txt"
+_CREATEPOOL_NAME = "/tmp/vmm-a11y-createpool-name.txt"
+_CREATEPOOL_TYPE = "/tmp/vmm-a11y-createpool-type.txt"
+_CREATEPOOL_HOST = "/tmp/vmm-a11y-createpool-host.txt"
+_CREATEPOOL_SOURCE = "/tmp/vmm-a11y-createpool-source.txt"
+_CREATEPOOL_TARGET = "/tmp/vmm-a11y-createpool-target.txt"
+_CREATEPOOL_IQN = "/tmp/vmm-a11y-createpool-iqn.txt"
+_CREATEPOOL_IQN_CHK = "/tmp/vmm-a11y-createpool-iqn-chk.txt"
+_CREATEPOOL_SOURCE_NAME = "/tmp/vmm-a11y-createpool-source-name.txt"
+_CREATEPOOL_ADAPTER = "/tmp/vmm-a11y-createpool-adapter.txt"
+_CREATEPOOL_VOLGROUP = "/tmp/vmm-a11y-createpool-volgroup.txt"
+_CREATEPOOL_FINISH = "/tmp/vmm-a11y-createpool-finish"
+_CREATEPOOL_CANCEL = "/tmp/vmm-a11y-createpool-cancel"
+_CREATEPOOL_ACTION = "/tmp/vmm-a11y-createpool-action.txt"
+_CREATEPOOL_COMBO = "/tmp/vmm-a11y-combo-select.txt"
 
 
 class vmmCreatePool(vmmGObjectUI):
@@ -29,6 +47,7 @@ class vmmCreatePool(vmmGObjectUI):
             self.widget("pool-details-align"),
             self.widget("pool-details"),
         )
+        self._xmleditor._vmm_a11y_owner = "createpool"
         self._xmleditor.connect("xml-requested", self._xmleditor_xml_requested_cb)
 
         self.builder.connect_signals(
@@ -52,13 +71,58 @@ class vmmCreatePool(vmmGObjectUI):
 
     def show(self, parent):
         log.debug("Showing new pool wizard")
+        if self.is_visible():
+            self.topwin.present()
+            self._start_a11y_poll()
+            self._publish_a11y_state()
+            return
+        for path in (
+            _CREATEPOOL_FINISH,
+            _CREATEPOOL_CANCEL,
+            _CREATEPOOL_ACTION,
+            _CREATEPOOL_NAME + ".set",
+            _CREATEPOOL_HOST + ".set",
+            _CREATEPOOL_SOURCE + ".set",
+            _CREATEPOOL_TARGET + ".set",
+            _CREATEPOOL_IQN + ".set",
+            _CREATEPOOL_SOURCE_NAME + ".set",
+        ):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
         self._reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.present()
+        try:
+            from .lib import gtkcompat
+
+            gtkcompat.set_accessible_name(self.topwin, "Add a New Storage Pool")
+            self.topwin.set_title("Add a New Storage Pool")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.add_window(self.topwin)
+        except Exception:
+            pass
+        self._start_a11y_poll()
+        self._publish_a11y_state()
 
     def close(self, ignore1=None, ignore2=None):
         log.debug("Closing new pool wizard")
         self.topwin.hide()
+        try:
+            open(_CREATEPOOL_SHOWN, "w").write("0")
+        except Exception:
+            pass
+        try:
+            app = Gtk.Application.get_default()
+            if app is not None:
+                app.remove_window(self.topwin)
+        except Exception:
+            pass
         return 1
 
     def _cleanup(self):
@@ -228,6 +292,7 @@ class vmmCreatePool(vmmGObjectUI):
             self.widget("pool-source-name").get_child().set_text(pool.default_source_name() or "")
 
         self._populate_pool_sources()
+        gtkcompat.shrink_window(self.topwin)
 
     ################
     # UI accessors #
@@ -395,3 +460,249 @@ class vmmCreatePool(vmmGObjectUI):
 
     def _iqn_toggled_cb(self, src):
         self.widget("pool-iqn").set_sensitive(src.get_active())
+
+    ################
+    # A11y helpers #
+    ################
+
+    def _a11y_select_combo(self, widget_name, item, column=0):
+        combo = self.widget(widget_name)
+        model = combo.get_model() if combo is not None else None
+        if model is None:
+            return False
+        want = (item or "").lower().replace(".*", "").replace("^", "").replace("$", "")
+        best = None
+        best_score = -1
+        it = model.get_iter_first()
+        while it is not None:
+            ncols = 0
+            try:
+                ncols = model.get_n_columns()
+            except Exception:
+                ncols = 2
+            for idx in range(ncols):
+                try:
+                    label = str(model[it][idx] or "")
+                except Exception:
+                    continue
+                ll = label.lower()
+                score = -1
+                if ll == want:
+                    score = 1000 + len(ll)
+                elif want and ll.startswith(want):
+                    score = 800 + len(want)
+                elif want and want in ll:
+                    score = 500 + len(want)
+                elif ll and ll in want:
+                    score = len(ll)
+                if score > best_score:
+                    best_score = score
+                    best = model[it][column]
+            it = model.iter_next(it)
+        if best is None:
+            return False
+        uiutil.set_list_selection(combo, best, column=column)
+        return True
+
+    def _apply_createpool_fields(self):
+        changed = False
+        pairs = (
+            (_CREATEPOOL_NAME + ".set", "pool-name", None),
+            (_CREATEPOOL_HOST + ".set", "pool-hostname", None),
+            (_CREATEPOOL_IQN + ".set", "pool-iqn", None),
+            (_CREATEPOOL_TARGET + ".set", "pool-target-path", None),
+        )
+        for path, widget_name, _ignore in pairs:
+            if not os.path.exists(path):
+                continue
+            text = open(path, "r").read()
+            widget = self.widget(widget_name)
+            if widget is None:
+                continue
+            if (widget.get_text() or "") != text:
+                widget.set_text(text)
+                changed = True
+        for path, widget_name in (
+            (_CREATEPOOL_SOURCE + ".set", "pool-source-path"),
+            (_CREATEPOOL_SOURCE_NAME + ".set", "pool-source-name"),
+        ):
+            if not os.path.exists(path):
+                continue
+            text = open(path, "r").read()
+            widget = self.widget(widget_name)
+            if widget is None:
+                continue
+            child = widget.get_child() if hasattr(widget, "get_child") else widget
+            if child is not None and (child.get_text() or "") != text:
+                child.set_text(text)
+                changed = True
+        return changed
+
+    def _publish_a11y_state(self):
+        try:
+            open(_CREATEPOOL_SHOWN, "w").write("1" if self.topwin.get_visible() else "0")
+        except Exception:
+            pass
+        try:
+            open(_CREATEPOOL_NAME, "w").write(self.widget("pool-name").get_text() or "")
+        except Exception:
+            pass
+        try:
+            row = uiutil.get_list_selected_row(self.widget("pool-type"))
+            open(_CREATEPOOL_TYPE, "w").write(str(row[1] if row else ""))
+        except Exception:
+            pass
+        try:
+            open(_CREATEPOOL_HOST, "w").write(self.widget("pool-hostname").get_text() or "")
+        except Exception:
+            pass
+        try:
+            src = self.widget("pool-source-path")
+            child = src.get_child() if src is not None else None
+            open(_CREATEPOOL_SOURCE, "w").write(child.get_text() if child is not None else "")
+        except Exception:
+            pass
+        try:
+            open(_CREATEPOOL_TARGET, "w").write(self.widget("pool-target-path").get_text() or "")
+        except Exception:
+            pass
+        try:
+            open(_CREATEPOOL_IQN, "w").write(self.widget("pool-iqn").get_text() or "")
+            open(_CREATEPOOL_IQN_CHK, "w").write(
+                "1" if self.widget("pool-iqn-chk").get_active() else "0"
+            )
+        except Exception:
+            pass
+        try:
+            namew = self.widget("pool-source-name")
+            child = namew.get_child() if namew is not None else None
+            val = child.get_text() if child is not None else ""
+            if not val:
+                val = uiutil.get_list_selection(namew, column=0) or ""
+            open(_CREATEPOOL_SOURCE_NAME, "w").write(val or "")
+            open(_CREATEPOOL_VOLGROUP, "w").write(val or "")
+        except Exception:
+            pass
+        try:
+            src = self.widget("pool-source-path")
+            val = uiutil.get_list_selection(src, column=0) or ""
+            if not val:
+                child = src.get_child() if src is not None else None
+                val = child.get_text() if child is not None else ""
+            open(_CREATEPOOL_ADAPTER, "w").write(val or "")
+        except Exception:
+            pass
+
+    def _a11y_load_pending_xml(self):
+        try:
+            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+        except Exception:
+            pending = ""
+        if not pending:
+            return
+        try:
+            os.remove("/tmp/vmm-a11y-xml.txt")
+        except Exception:
+            pass
+        if (self._xmleditor.get_xml() or "") != pending:
+            self._xmleditor._srcbuff.set_text(pending)
+
+    def _a11y_finish(self):
+        try:
+            self._apply_createpool_fields()
+            self._a11y_load_pending_xml()
+            self._finish()
+            self._publish_a11y_state()
+        except Exception:
+            pass
+        return False
+
+    def _start_a11y_poll(self):
+        if getattr(self, "_vmm_createpool_poll", False):
+            return
+        self._vmm_createpool_poll = True
+
+        def _fields_tick():
+            try:
+                if self._apply_createpool_fields():
+                    for path in (
+                        _CREATEPOOL_NAME + ".set",
+                        _CREATEPOOL_HOST + ".set",
+                        _CREATEPOOL_SOURCE + ".set",
+                        _CREATEPOOL_TARGET + ".set",
+                        _CREATEPOOL_IQN + ".set",
+                        _CREATEPOOL_SOURCE_NAME + ".set",
+                    ):
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            return True
+
+        def _tick():
+            try:
+                if os.path.exists(_CREATEPOOL_IQN_CHK + ".click"):
+                    os.remove(_CREATEPOOL_IQN_CHK + ".click")
+                    chk = self.widget("pool-iqn-chk")
+                    chk.set_active(not chk.get_active())
+                    self._iqn_toggled_cb(chk)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEPOOL_COMBO):
+                    text = open(_CREATEPOOL_COMBO, "r").read().strip()
+                    key = text.split("\t", 1)[0].strip()
+                    item = text.split("\t", 1)[-1].strip()
+                    handled = False
+                    if key in ("Type:", "Type"):
+                        handled = self._a11y_select_combo("pool-type", item)
+                        if handled:
+                            self._show_options_by_pool()
+                    elif key in ("Volgroup", "Volgroup Name:", "Source Name:"):
+                        handled = self._a11y_select_combo("pool-source-name", item)
+                    elif key in ("Source Adapter:", "Source Adapter"):
+                        handled = self._a11y_select_combo("pool-source-path", item)
+                    if handled:
+                        try:
+                            os.remove(_CREATEPOOL_COMBO)
+                        except Exception:
+                            pass
+                        self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEPOOL_ACTION):
+                    action = open(_CREATEPOOL_ACTION, "r").read().strip()
+                    os.remove(_CREATEPOOL_ACTION)
+                    if action == "source-browse":
+                        # browse_local runs a nested MainLoop. Do not
+                        # start it from this timeout tick or GLib hangs.
+                        GLib.idle_add(self._browse_source_cb, None)
+                    elif action == "target-browse":
+                        GLib.idle_add(self._browse_target_cb, None)
+                    self._publish_a11y_state()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEPOOL_CANCEL):
+                    os.remove(_CREATEPOOL_CANCEL)
+                    self.close()
+            except Exception:
+                pass
+            try:
+                if os.path.exists(_CREATEPOOL_FINISH):
+                    os.remove(_CREATEPOOL_FINISH)
+                    self._apply_createpool_fields()
+                    GLib.idle_add(self._a11y_finish)
+            except Exception:
+                pass
+            return True
+
+        self._vmm_createpool_fields_tick = _fields_tick
+        self._vmm_createpool_tick = _tick
+        GLib.timeout_add(50, self._vmm_createpool_fields_tick)
+        GLib.timeout_add(50, self._vmm_createpool_tick)

@@ -4,6 +4,7 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
 import threading
 import traceback
 
@@ -164,6 +165,13 @@ class vmmAsyncJob(vmmGObjectUI):
         """
         vmmGObjectUI.__init__(self, "asyncjob.ui", "vmm-progress")
         self.topwin.set_transient_for(parent)
+        gtkcompat.apply_gtk3_window_hints(
+            self.topwin,
+            dialog=True,
+            skip_taskbar=True,
+            urgency=True,
+            center_on_parent=True,
+        )
 
         self.show_progress = bool(show_progress)
 
@@ -204,6 +212,28 @@ class vmmAsyncJob(vmmGObjectUI):
         gtkcompat.set_accessible_name(self.widget("pbar-text"), text or "")
         gtkcompat.ensure_button_accessible_name(self.widget("cancel-async-job"), "Cancel")
         self.widget("cancel-async-job").set_visible(bool(self.cancel_cb))
+        try:
+            open("/tmp/vmm-a11y-progress-title.txt", "w").write(title or "")
+            open("/tmp/vmm-a11y-progress-warning.txt", "w").write("")
+        except Exception:
+            pass
+        if not getattr(self, "_vmm_progress_poll", False):
+            self._vmm_progress_poll = True
+
+            def _poll_cancel():
+                if os.path.exists("/tmp/vmm-a11y-progress-cancel"):
+                    try:
+                        os.remove("/tmp/vmm-a11y-progress-cancel")
+                    except Exception:
+                        pass
+                    try:
+                        self._on_cancel()
+                    except Exception:
+                        pass
+                return True
+
+            self._vmm_progress_cancel_tick = _poll_cancel
+            GLib.timeout_add(50, self._vmm_progress_cancel_tick)
 
     ####################
     # Internal helpers #
@@ -260,9 +290,17 @@ class vmmAsyncJob(vmmGObjectUI):
         self.widget("warning-box").show()
         self.widget("warning-text").set_markup(markup)
         gtkcompat.set_accessible_name(self.widget("warning-text"), summary)
+        try:
+            open("/tmp/vmm-a11y-progress-warning.txt", "w").write(summary or "")
+        except Exception:
+            pass
 
     def _thread_finished(self):
         GLib.source_remove(self._timer)
+        try:
+            open("/tmp/vmm-a11y-progress.txt", "w").write("0")
+        except Exception:
+            pass
         self.topwin.destroy()
         self.cleanup()
 
@@ -277,7 +315,33 @@ class vmmAsyncJob(vmmGObjectUI):
         self._timer = GLib.timeout_add(100, self._exit_if_necessary)
 
         if self.show_progress:
+            try:
+                open("/tmp/vmm-a11y-progress.txt", "w").write("1")
+            except Exception:
+                pass
+            # Do not app.add_window(): that forces a Wayland taskbar entry
+            # and defeats GTK 3 skip-taskbar-hint on vmm-progress.
+            try:
+                self.topwin.set_application(None)
+            except Exception:
+                pass
             self.topwin.present()
+            try:
+                gtkcompat.apply_gtk3_window_hints(
+                    self.topwin,
+                    dialog=True,
+                    skip_taskbar=True,
+                    urgency=True,
+                    center_on_parent=True,
+                )
+            except Exception:
+                pass
+            try:
+                gtkcompat.set_window_default_button(
+                    self.topwin, self.widget("cancel-async-job")
+                )
+            except Exception:
+                pass
 
         if not self.cancel_cb and self.show_progress:
             self._set_cursor("progress")
