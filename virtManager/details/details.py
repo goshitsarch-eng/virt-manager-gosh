@@ -1503,9 +1503,20 @@ class vmmDetails(vmmGObjectUI):
                     try:
                         os.remove(cpath)
                         w = self._addstorage.widget(wid)
-                        w.set_active(not w.get_active())
                         pub = cpath.replace(".click", "")
-                        open(pub, "w").write("1" if w.get_active() else "0")
+                        # Toggle the sentinel file, then force the
+                        # widget to match. After unapplied No the
+                        # checkbox can still be active because revert
+                        # does not set_active (that re-enables Apply).
+                        # Toggling the widget then unchecks Shareable
+                        # and Yes applies shareable=False.
+                        try:
+                            live = open(pub, "r").read().strip()
+                        except Exception:
+                            live = "0"
+                        want = live != "1"
+                        w.set_active(want)
+                        open(pub, "w").write("1" if want else "0")
                         # GTK 4 set_active may not emit the builder
                         # changed handler, so get_values() would omit
                         # shareable/readonly on Apply.
@@ -4002,6 +4013,16 @@ class vmmDetails(vmmGObjectUI):
             open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(val)
         except Exception:
             pass
+        try:
+            w = self._addstorage.widget("disk-shareable")
+            refreshing = getattr(self, "_ui_refreshing", False)
+            self._ui_refreshing = True
+            try:
+                w.set_active(val == "1")
+            finally:
+                self._ui_refreshing = refreshing
+        except Exception:
+            pass
 
     def _finish_unapplied_hw_nav(self, dest_label, dest_row=None):
         """Leave a dirty page after unapplied Yes/No (GTK already on dest)."""
@@ -4920,12 +4941,12 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 share_w = None
-            if share_s == "1" or share_w is True:
-                vals["shareable"] = True
-            elif share_edited or share_s == "0":
-                vals["shareable"] = False
+            if share_s in ("0", "1"):
+                vals["shareable"] = share_s == "1"
+            elif share_edited and share_w is not None:
+                vals["shareable"] = share_w
             kwargs.update(vals)
-            if "cache" not in kwargs and typed and (typed or cache_edited):
+            if "cache" not in kwargs and typed:
                 kwargs["cache"] = typed
 
         if self._edited(EDIT_DISK_BUS):
