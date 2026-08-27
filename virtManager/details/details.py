@@ -3394,6 +3394,29 @@ class vmmDetails(vmmGObjectUI):
             pass
         return guest
 
+    def _live_disk_for(self, disk):
+        """Running-config disk. define_disk mutates the inactive device; GTK 3
+        still shows live media until the guest actually stops."""
+        if disk is None or self.vm is None or not self.vm.is_active():
+            return disk
+        try:
+            live_xml = self.vm._XMLDesc(getattr(self.vm, "_active_xml_flags", 0))
+            live = self.vm._parseclass(self.vm.conn.get_backend(), parsexml=live_xml)
+            want_target = getattr(disk, "target", None)
+            want_id = None
+            try:
+                want_id = disk.get_xml_id()
+            except Exception:
+                want_id = None
+            for cand in live.devices.disk:
+                same_id = want_id is not None and cand.get_xml_id() == want_id
+                same_target = want_target and getattr(cand, "target", None) == want_target
+                if same_id or same_target:
+                    return cand
+        except Exception:
+            pass
+        return disk
+
     def _a11y_selected_hw_row(self):
         """GTK selection, or the hardware-list sentinel if they diverged."""
         row = self._get_hw_row()
@@ -6292,6 +6315,8 @@ class vmmDetails(vmmGObjectUI):
         self.widget("shared-memory").set_tooltip_text(shared_mem_err)
 
     def _refresh_disk_page(self, disk):
+        if disk is not None and self.vm is not None and self.vm.is_active():
+            disk = self._live_disk_for(disk)
         if disk is not None and self.vm is not None and not self.vm.is_active():
             try:
                 guest = self.vm.get_xmlobj(inactive=True)

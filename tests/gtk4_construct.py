@@ -2855,6 +2855,56 @@ def main():
             found = True
         assert found
 
+    def details_media_hotplug_deferred():
+        from virtManager.details.details import EDIT_DISK_PATH
+        from virtManager.details.details import HW_LIST_COL_DEVICE
+        from virtManager.details.details import HW_LIST_COL_TYPE
+        from virtManager.details.details import HW_LIST_TYPE_DISK
+        from virtManager.lib import uiutil
+        from virtManager.vmwindow import vmmVMWindow
+
+        vmobj = _named_vm("test-many-devices")
+        assert vmobj.is_active(), "test-many-devices must be running"
+        orig = bool(getattr(vmobj.config.CLITestOptions, "test_update_device_fail", False))
+        vmobj.config.CLITestOptions.test_update_device_fail = True
+        win = vmmVMWindow.get_instance(None, vmobj)
+        win.show()
+        details = win._details
+        _auto_confirm(details)
+        hwlist = details.widget("hw-list")
+        disk = None
+        for idx, row in enumerate(hwlist.get_model()):
+            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_DISK:
+                continue
+            dev = row[HW_LIST_COL_DEVICE]
+            if dev is None or not getattr(dev, "is_cdrom", lambda: False)():
+                continue
+            uiutil.set_list_selection_by_number(hwlist, idx)
+            details._hw_changed_cb(hwlist)
+            disk = dev
+            break
+        assert disk is not None, "test-many-devices has no CDROM"
+        try:
+            details._mediacombo.set_path("virt-install")
+            details._enable_apply(EDIT_DISK_PATH)
+            details._config_apply()
+            _pump(GLib, 0.3)
+            details._refresh_disk_page(disk)
+            live = details._live_disk_for(disk)
+            live_path = live.get_source_path() if live is not None else None
+            published = ""
+            try:
+                published = open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
+            except Exception:
+                published = ""
+            assert not live_path, "live CDROM should stay empty after deferred hotplug"
+            assert not (published or "").strip(), (
+                "deferred media apply must keep the running empty path, got %r"
+                % published
+            )
+        finally:
+            vmobj.config.CLITestOptions.test_update_device_fail = orig
+
     def snapshot_revert_delete():
         from virtManager.lib import uiutil
         from virtManager.vmwindow import vmmVMWindow
@@ -3087,6 +3137,7 @@ def main():
         ("createvm_finish", createvm_finish),
         ("details_apply_xml", details_apply_xml),
         ("media_change", media_change),
+        ("details_media_hotplug_deferred", details_media_hotplug_deferred),
         ("snapshot_revert_delete", snapshot_revert_delete),
         ("pool_start_stop", pool_start_stop),
         ("createpool_finish", createpool_finish),
