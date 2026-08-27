@@ -19,10 +19,12 @@ os.chdir(TOPDIR)
 
 os.environ.setdefault("GSETTINGS_BACKEND", "memory")
 os.environ.setdefault("VIRTINST_TEST_SUITE", "1")
-# Construct maps every dialog in one process. AT-SPI GetItems
-# wedges Gtk.Button() after a few dozen windows (details_refresh
-# on test-many-devices). Uitests still use GTK_A11Y=atspi.
-os.environ.setdefault("GTK_A11Y", "none")
+# Force-disable AT-SPI for this process. The login/uitest env often
+# already has GTK_A11Y=atspi; setdefault would leave it and GetItems
+# wedges Gtk.Button() after a few dozen mapped windows (details_refresh
+# on test-many-devices). Official uitests launch a separate process
+# with GTK_A11Y=atspi.
+os.environ["GTK_A11Y"] = "none"
 
 
 def _init_gtk():
