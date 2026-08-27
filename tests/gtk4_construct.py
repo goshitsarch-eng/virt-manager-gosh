@@ -3006,6 +3006,12 @@ def main():
         from virtManager.vmwindow import vmmVMWindow
 
         vmobj = _named_vm("test-many-devices")
+        if vmobj.is_active():
+            try:
+                vmobj.destroy()
+            except Exception:
+                pass
+            _pump(GLib, 0.4)
         win = vmmVMWindow.get_instance(None, vmobj)
         win.show()
         details = win._details
@@ -3039,7 +3045,7 @@ def main():
             "vsock CID apply must persist 7, xml=%s published=%r"
             % (getattr(vsock, "cid", None), published)
         )
-        xmlobj = vmobj.get_xmlobj()
+        xmlobj = vmobj.get_xmlobj(inactive=True)
         cids = [int(v.cid or 0) for v in xmlobj.devices.vsock]
         assert 7 in cids, cids
 

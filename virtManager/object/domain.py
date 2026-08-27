@@ -1050,7 +1050,13 @@ class vmmDomain(vmmLibvirtObject):
 
     def define_vsock(self, devobj, do_hotplug, auto_cid=_SENTINEL, cid=_SENTINEL):
         xmlobj = self._make_xmlobj_to_define()
-        editdev = self._lookup_device_to_define(xmlobj, devobj, do_hotplug)
+        try:
+            editdev = self._lookup_device_to_define(xmlobj, devobj, do_hotplug)
+        except Exception:
+            editdev = None
+        if not editdev:
+            vsocks = list(getattr(xmlobj.devices, "vsock", []) or [])
+            editdev = vsocks[0] if vsocks else None
         if not editdev:
             return  # pragma: no cover
 

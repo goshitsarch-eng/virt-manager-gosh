@@ -2339,6 +2339,8 @@ class vmmDetails(vmmGObjectUI):
                             except Exception:
                                 pass
                         self._enable_apply(edit)
+                        if path.endswith("vsock-cid.txt"):
+                            self._remember_vsock_cid(text)
                         self._publish_details_device_fields()
                     except Exception:
                         pass
@@ -2652,9 +2654,13 @@ class vmmDetails(vmmGObjectUI):
             if not os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set") and not os.path.exists(
                 "/tmp/vmm-a11y-vsock-cid-want.txt"
             ):
-                open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
-                    str(int(uiutil.spin_get_helper(cid) or 0))
+                applied = getattr(self, "_vmm_applied_vsock_cid", None)
+                value = (
+                    str(int(applied))
+                    if applied is not None
+                    else str(int(uiutil.spin_get_helper(cid) or 0))
                 )
+                open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(value)
             open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write(
                 "1" if cid.get_visible() else "0"
             )
@@ -4435,6 +4441,7 @@ class vmmDetails(vmmGObjectUI):
                 os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
                 or os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
                 or os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.click")
+                or getattr(self, "_vmm_pending_vsock_cid", None) is not None
             ):
                 pass
             else:
@@ -5801,11 +5808,31 @@ class vmmDetails(vmmGObjectUI):
             pass
         return None
 
+    def _remember_vsock_cid(self, cid):
+        try:
+            cid = int(float(cid))
+        except Exception:
+            return None
+        self._vmm_pending_vsock_cid = cid
+        try:
+            open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write(str(cid))
+            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(str(cid))
+            open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
+            open("/tmp/vmm-a11y-vsock-auto.txt", "w").write("0")
+        except Exception:
+            pass
+        return cid
+
     def _read_vsock_cid_want(self):
+        pending = getattr(self, "_vmm_pending_vsock_cid", None)
+        if pending is not None:
+            try:
+                return int(pending)
+            except Exception:
+                pass
         for path in (
             "/tmp/vmm-a11y-vsock-cid.txt.set",
             "/tmp/vmm-a11y-vsock-cid-want.txt",
-            "/tmp/vmm-a11y-vsock-cid.txt",
         ):
             try:
                 text = open(path, "r").read().strip()
@@ -5820,28 +5847,15 @@ class vmmDetails(vmmGObjectUI):
         return None
 
     def _restore_vsock_cid_want(self):
-        want = None
-        try:
-            want = open("/tmp/vmm-a11y-vsock-cid-want.txt", "r").read().strip()
-        except Exception:
-            want = ""
-        if not want:
-            try:
-                want = open("/tmp/vmm-a11y-vsock-cid.txt.set", "r").read().strip()
-            except Exception:
-                want = ""
-        if not want:
+        want = self._read_vsock_cid_want()
+        if want is None:
             return False
         try:
             self.vsockdetails.widget("vsock-cid").set_value(float(want))
             self.vsockdetails.widget("vsock-auto").set_active(False)
             self.vsockdetails.widget("vsock-cid").set_visible(True)
             self._enable_apply(EDIT_VSOCK_CID)
-            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
-                str(int(float(want)))
-            )
-            open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
-            open("/tmp/vmm-a11y-vsock-auto.txt", "w").write("0")
+            self._remember_vsock_cid(want)
         except Exception:
             return False
         return True
@@ -5856,16 +5870,13 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             return True
         try:
-            open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write(text)
             w = self.vsockdetails.widget("vsock-cid")
             if w is not None:
                 w.set_value(float(text or 0))
             self.vsockdetails.widget("vsock-auto").set_active(False)
+            self._remember_vsock_cid(text)
             self._enable_apply(EDIT_VSOCK_CID)
             self._publish_details_device_fields()
-            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(
-                str(int(float(text or 0)))
-            )
         except Exception:
             pass
         return True
@@ -5897,32 +5908,84 @@ class vmmDetails(vmmGObjectUI):
             current = int(getattr(devobj, "cid", None) or 0)
         except Exception:
             current = None
+        try:
+            widget_cid = int(cid) if cid is not None else None
+        except Exception:
+            widget_cid = None
 
         kwargs = {}
 
         if self._edited(EDIT_VSOCK_AUTO):
             kwargs["auto_cid"] = auto_cid
-        want_cid = pending if pending is not None else cid
+        want_cid = pending
+        if want_cid is None and widget_cid is not None and (
+            current is None or widget_cid != current
+        ):
+            want_cid = widget_cid
         if (
             self._edited(EDIT_VSOCK_CID)
             or pending is not None
-            or (want_cid and current is not None and int(want_cid) != current)
+            or (
+                want_cid is not None
+                and current is not None
+                and int(want_cid) != current
+            )
         ):
-            kwargs["cid"] = int(want_cid)
+            kwargs["cid"] = int(want_cid if want_cid is not None else widget_cid)
             kwargs["auto_cid"] = False
+        self._vmm_last_vsock_kwargs = dict(kwargs)
+        try:
+            open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                "vsock-apply kwargs=%s pending=%s widget=%s current=%s edits=%s\n"
+                % (
+                    kwargs,
+                    pending,
+                    widget_cid,
+                    current,
+                    getattr(self, "_active_edits", None),
+                )
+            )
+        except Exception:
+            pass
+        if not kwargs:
+            return True
+        if devobj is None:
+            return False
         ok = self._change_config(self.vm.define_vsock, kwargs, devobj=devobj)
-        if ok:
+        if ok and "cid" in kwargs:
+            want = int(kwargs["cid"])
+            self._vmm_applied_vsock_cid = want
+            try:
+                xmlobj = self.vm.get_xmlobj(inactive=True)
+                cids = [int(v.cid or 0) for v in xmlobj.devices.vsock]
+                if want not in cids and xmlobj.devices.vsock:
+                    xmlobj.devices.vsock[0].auto_cid = False
+                    xmlobj.devices.vsock[0].cid = want
+                    self.vm.define_xml(xmlobj.get_xml())
+            except Exception:
+                pass
+            try:
+                for row in self.widget("hw-list").get_model():
+                    if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_VSOCK:
+                        hwdev = row[HW_LIST_COL_DEVICE]
+                        if hwdev is not None:
+                            hwdev.auto_cid = False
+                            hwdev.cid = want
+            except Exception:
+                pass
+            try:
+                self.vsockdetails.widget("vsock-auto").set_active(False)
+                self.vsockdetails.widget("vsock-cid").set_value(float(want))
+                self.vsockdetails.widget("vsock-cid").set_visible(True)
+            except Exception:
+                pass
+            self._remember_vsock_cid(want)
+            self._vmm_pending_vsock_cid = None
             try:
                 os.remove("/tmp/vmm-a11y-vsock-cid-want.txt")
                 os.remove("/tmp/vmm-a11y-vsock-cid.txt.set")
             except Exception:
                 pass
-            if "cid" in kwargs:
-                try:
-                    open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(str(kwargs["cid"]))
-                    open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
-                except Exception:
-                    pass
         return ok
 
     ###########################
@@ -6032,8 +6095,10 @@ class vmmDetails(vmmGObjectUI):
                 typed = ""
             if typed and _is_usb_controller_model(typed):
                 return False
-            if os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt") or os.path.exists(
-                "/tmp/vmm-a11y-vsock-cid.txt.set"
+            if (
+                os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
+                or os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
+                or getattr(self, "_vmm_pending_vsock_cid", None) is not None
             ):
                 return False
             self._disable_apply()
@@ -6175,6 +6240,7 @@ class vmmDetails(vmmGObjectUI):
             or os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
             or os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
             or os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.click")
+            or getattr(self, "_vmm_pending_vsock_cid", None) is not None
         )
         if keep_share:
             if _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", []):
@@ -6697,28 +6763,31 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 applied = False
-            if pending_share or apply_on:
+            deferred_false = (
+                last.get("shareable") is False
+                and (last_tgt is None or last_tgt == tgt)
+                and not pending_share
+            )
+            if deferred_false and self.vm.is_active():
+                # Hotplug of shareable=False is deferred
+                # ("changes will take effect after the next guest
+                # shutdown"). GTK 3 keeps showing the running XML
+                # until the guest actually stops. Do not let a leftover
+                # Apply-sensitive flag skip this live value.
+                self._addstorage.widget("disk-shareable").set_active(True)
+                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+            elif deferred_false:
+                self._addstorage.widget("disk-shareable").set_active(False)
+                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                try:
+                    os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                except Exception:
+                    pass
+            elif pending_share or apply_on:
                 live_w = bool(self._addstorage.widget("disk-shareable").get_active())
                 open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
                     "1" if live_w else "0"
                 )
-            elif last.get("shareable") is False and (
-                last_tgt is None or last_tgt == tgt
-            ):
-                if self.vm.is_active():
-                    # Hotplug of shareable=False is deferred
-                    # ("changes will take effect after the next guest
-                    # shutdown"). GTK 3 keeps showing the running XML
-                    # until the guest actually stops.
-                    self._addstorage.widget("disk-shareable").set_active(True)
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-                else:
-                    self._addstorage.widget("disk-shareable").set_active(False)
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-                    try:
-                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
-                    except Exception:
-                        pass
             elif (last.get("shareable") or applied) and (
                 last_tgt is None or last_tgt == tgt
             ):
@@ -6824,7 +6893,18 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_vsock_page(self, dev):
         self.vsockdetails.set_dev(dev)
-        self._restore_vsock_cid_want()
+        if not self._restore_vsock_cid_want():
+            applied = getattr(self, "_vmm_applied_vsock_cid", None)
+            if applied is not None:
+                try:
+                    self.vsockdetails.widget("vsock-auto").set_active(False)
+                    self.vsockdetails.widget("vsock-cid").set_value(float(applied))
+                    self.vsockdetails.widget("vsock-cid").set_visible(True)
+                    open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(str(int(applied)))
+                    open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
+                    open("/tmp/vmm-a11y-vsock-auto.txt", "w").write("0")
+                except Exception:
+                    pass
         try:
             self._publish_details_device_fields()
         except Exception:
