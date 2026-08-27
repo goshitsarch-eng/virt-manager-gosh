@@ -2577,6 +2577,9 @@ def main():
 
         dlg = vmmCloneVM()
         src = _named_vm("test-many-devices")
+        if src.is_active():
+            src.destroy()
+            _pump(GLib, 0.3)
         dlg.show(None, src)
 
         def _ok_cancel(text1, text2=None, title=None):
