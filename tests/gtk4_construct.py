@@ -1119,6 +1119,12 @@ def main():
             4,
             4,
         )
+        # GtkVnc also keeps the session for unknown positive encodings
+        disp._read_fb_update(
+            FakeSock(b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 0, 0, 0, 0, 99)),
+            4,
+            4,
+        )
         disp._bells = 0
         disp._ring_bell()
         assert disp._bells == 1

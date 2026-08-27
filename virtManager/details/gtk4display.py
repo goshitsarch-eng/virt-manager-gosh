@@ -1432,7 +1432,10 @@ class VNCDisplay(_DisplayBase):
             elif enc < 0:
                 log.debug("Ignoring VNC pseudo-encoding %s", enc)
             else:
-                raise RuntimeError("Unsupported VNC encoding %s" % enc)
+                # GtkVnc skips unknown encodings instead of tearing down
+                # the RFB session. Keep the framebuffer and wait for the
+                # next update.
+                log.debug("Ignoring unsupported VNC encoding %s", enc)
         self._publish_fb(width, height)
         try:
             self._request_update(sock, width, height)
