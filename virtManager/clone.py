@@ -265,6 +265,7 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
         self._set_vm(vm)
+        self._vmm_clone_finishing = False
         self._reset_state()
         self.topwin.set_transient_for(parent)
         self.topwin.resize(1, 1)
@@ -630,31 +631,32 @@ class vmmCloneVM(vmmGObjectUI):
     # Finish routines #
     ###################
 
-    def _validate(self, cloner):
-        new_paths = []
+    def _confirm_shared_storage(self):
+        """Warn before the slow cloner rebuild so Cancel can see relative.sock."""
         warn_str = ""
-        for sinfo in self._storage_list.values():
+        for sinfo in (self._storage_list or {}).values():
             if sinfo.is_clone_requested():
-                new_paths.append(sinfo.get_new_disk_path())
                 continue
             if not sinfo.warn_about_sharing():
                 continue
             warn_str += "%s: %s\n" % (sinfo.get_target(), sinfo.get_orig_disk_path())
-
-        if warn_str:
-            res = self.err.ok_cancel(
-                _("Sharing storage may cause data to be overwritten."),
-                _(
-                    "The following disk devices will be shared with %(vmname)s:"
-                    "\n\n%(pathlist)s\n"
-                    "Running the new guest could overwrite data in these "
-                    "disk images."
-                )
-                % {"vmname": self.vm.get_name(), "pathlist": warn_str},
+        if not warn_str:
+            return True
+        res = self.err.ok_cancel(
+            _("Sharing storage may cause data to be overwritten."),
+            _(
+                "The following disk devices will be shared with %(vmname)s:"
+                "\n\n%(pathlist)s\n"
+                "Running the new guest could overwrite data in these "
+                "disk images."
             )
-            if not res:
-                return False
+            % {"vmname": self.vm.get_name(), "pathlist": warn_str},
+        )
+        if not res:
+            return False
+        return True
 
+    def _validate(self, cloner):
         for diskinfo in cloner.get_diskinfos():
             diskinfo.raise_error()
 
@@ -736,6 +738,8 @@ class vmmCloneVM(vmmGObjectUI):
             return
         self._vmm_clone_finishing = True
         try:
+            if self._confirm_shared_storage() is False:
+                return
             cloner = self._build_final_cloner()
             if not cloner:
                 return

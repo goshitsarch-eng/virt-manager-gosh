@@ -854,6 +854,7 @@ class VMMDogtailApp:
             or os.path.exists("/tmp/vmm-a11y-snapshot-page.txt")
             or os.path.exists("/tmp/vmm-a11y-addhw-shown.txt")
             or os.path.exists("/tmp/vmm-a11y-addhw-open")
+            or os.path.exists("/tmp/vmm-a11y-clone-shown.txt")
         ):
             try:
                 utils.check(_alert_matches, timeout=20)
