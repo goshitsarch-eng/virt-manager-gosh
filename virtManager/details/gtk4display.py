@@ -21,6 +21,7 @@ import threading
 
 import gi
 from gi.repository import Gdk
+from gi.repository import Gio
 from gi.repository import GLib
 from gi.repository import GObject
 from gi.repository import Gtk
@@ -3404,7 +3405,25 @@ class SpiceDisplay(_DisplayBase):
                 names.append(fobj.get_basename() or fobj.get_path() or _("file"))
             except Exception:
                 names.append(_("file"))
-        progress = _SpiceFileTransferWindow(names)
+        cancellable = Gio.Cancellable()
+        progress = _SpiceFileTransferWindow(names, cancellable=cancellable)
+        parent = None
+        try:
+            parent = self.get_root()
+        except Exception:
+            parent = None
+        if isinstance(parent, Gtk.Window):
+            try:
+                progress.set_transient_for(parent)
+                progress.set_modal(True)
+            except Exception:
+                pass
+            try:
+                app = parent.get_application()
+                if app is not None:
+                    app.add_window(progress)
+            except Exception:
+                pass
         progress.present()
 
         def _progress(_current, _total):
@@ -3416,6 +3435,9 @@ class SpiceDisplay(_DisplayBase):
                 pass
 
         def _done(_src, result):
+            if cancellable.is_cancelled():
+                progress.finish_cancelled()
+                return
             ok = True
             err = None
             try:
@@ -3433,7 +3455,7 @@ class SpiceDisplay(_DisplayBase):
                 main,
                 files,
                 0,
-                None,
+                cancellable,
                 _progress,
                 None,
                 _done,
@@ -3441,7 +3463,9 @@ class SpiceDisplay(_DisplayBase):
             return True
         except TypeError:
             try:
-                SpiceClientGLib.main_file_copy_async(main, files, 0, None, _done)
+                SpiceClientGLib.main_file_copy_async(
+                    main, files, 0, cancellable, _done
+                )
                 return True
             except Exception as exc:
                 progress.finish_error(str(exc))
@@ -3557,14 +3581,20 @@ def _cairo_from_spice_primary(primary):
 
 class _SpiceFileTransferWindow(Gtk.Window):
     """
-    spice-gtk Display shows in-guest file copy progress. Recreate that
-    on the GTK 4 DrawingArea path after a drag-and-drop.
+    spice-gtk Display shows in-guest file copy progress with Cancel.
+    Recreate that on the GTK 4 DrawingArea path after a drag-and-drop.
     """
 
-    def __init__(self, names, **kwargs):
+    def __init__(self, names, cancellable=None, **kwargs):
         title = _("File transfer")
         super().__init__(title=title, **kwargs)
-        self.set_default_size(360, 120)
+        self._cancellable = cancellable
+        self._closed = False
+        self.set_default_size(360, 160)
+        try:
+            self.set_accessible_role(Gtk.AccessibleRole.DIALOG)
+        except Exception:
+            pass
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_margin_top(12)
         box.set_margin_bottom(12)
@@ -3578,9 +3608,19 @@ class _SpiceFileTransferWindow(Gtk.Window):
         self._bar = Gtk.ProgressBar()
         self._bar.set_show_text(True)
         self._status = Gtk.Label(label=_("Copying to the guest…"), xalign=0)
+        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        btn_box.set_halign(Gtk.Align.END)
+        self._cancel = Gtk.Button(label=_("_Cancel"), use_underline=True)
+        try:
+            self._cancel.set_accessible_role(Gtk.AccessibleRole.BUTTON)
+        except Exception:
+            pass
+        self._cancel.connect("clicked", self._on_cancel)
+        btn_box.append(self._cancel)
         box.append(label)
         box.append(self._bar)
         box.append(self._status)
+        box.append(btn_box)
         self.set_child(box)
 
     def set_fraction(self, value):
@@ -3591,15 +3631,49 @@ class _SpiceFileTransferWindow(Gtk.Window):
         self._bar.set_fraction(frac)
         self._bar.set_text("%d%%" % int(frac * 100))
 
+    def _on_cancel(self, *_a):
+        if self._cancellable is not None:
+            try:
+                self._cancellable.cancel()
+            except Exception:
+                pass
+        self.finish_cancelled()
+
+    def finish_cancelled(self):
+        if self._closed:
+            return False
+        self._closed = True
+        self._status.set_text(_("Transfer cancelled"))
+        try:
+            self._cancel.set_sensitive(False)
+        except Exception:
+            pass
+        self.close()
+        return False
+
     def finish_ok(self):
+        if self._closed:
+            return False
+        self._closed = True
         self._bar.set_fraction(1.0)
         self._bar.set_text("100%")
         self._status.set_text(_("Transfer complete"))
+        try:
+            self._cancel.set_sensitive(False)
+        except Exception:
+            pass
         GLib.timeout_add(1200, self.close)
         return False
 
     def finish_error(self, message):
+        if self._closed:
+            return False
+        self._closed = True
         self._status.set_text(message or _("File transfer failed"))
+        try:
+            self._cancel.set_sensitive(False)
+        except Exception:
+            pass
         GLib.timeout_add(2500, self.close)
         return False
 

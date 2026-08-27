@@ -103,8 +103,41 @@ def _launch_dialog(
     if clone_a11y:
         gtkcompat.present_a11y_alert(primary_text, alert_buttons, secondary_text)
 
+    try:
+        dialog.set_modal(bool(modal))
+    except Exception:
+        pass
+
     if widget:
-        dialog.get_content_area().add(widget)
+        try:
+            widget.set_hexpand(True)
+            widget.set_vexpand(True)
+        except Exception:
+            pass
+        content = dialog.get_content_area()
+        # GTK 3 MessageDialog.get_content_area().add() places extras
+        # above the action buttons, not after Close/OK.
+        header = None
+        try:
+            header = content.get_first_child()
+        except Exception:
+            header = None
+        inserted = False
+        try:
+            if header is not None and hasattr(content, "insert_child_after"):
+                content.insert_child_after(widget, header)
+                inserted = True
+        except Exception:
+            inserted = False
+        if not inserted:
+            try:
+                content.append(widget)
+            except Exception:
+                content.add(widget)
+        try:
+            dialog.set_default_size(480, 360)
+        except Exception:
+            pass
 
     res = False
     if modal:
@@ -555,8 +588,8 @@ class _errorDialog(Gtk.Window):
     def init_chkbox(self):
         # Init check items
         self.chk_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.chk_vbox.set_visible(True)
         self.get_content_area().append(self.chk_vbox)
+        self.chk_vbox.set_visible(False)
 
     def init_details(self):
         # Init details buffer
@@ -583,7 +616,9 @@ class _errorDialog(Gtk.Window):
         sw.set_child(details)
         self.buf_expander.set_child(sw)
         self.get_content_area().append(self.buf_expander)
-        self.buf_expander.set_visible(True)
+        # Simple info/yes-no dialogs must not show an empty Details
+        # expander. show_dialog() reveals it only when details exist.
+        self.buf_expander.set_visible(False)
 
     def show_dialog(
         self,
@@ -611,7 +646,11 @@ class _errorDialog(Gtk.Window):
 
         if chktext:
             chkbox = Gtk.CheckButton(label=chktext)
-            self.chk_vbox.add(chkbox)
+            try:
+                self.chk_vbox.append(chkbox)
+            except Exception:
+                self.chk_vbox.add(chkbox)
+            self.chk_vbox.set_visible(True)
             chkbox.show()
             try:
                 os.remove("/tmp/vmm-a11y-alert-checked.txt")

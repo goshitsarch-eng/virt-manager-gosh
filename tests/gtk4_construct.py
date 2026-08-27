@@ -986,12 +986,22 @@ def main():
 
         err = vmmErrorDialog.get_instance()
         err.show_err("test error", details="details", title="t", modal=False, debug=False)
-        err.show_info("info", modal=False)
+        extra = Gtk.Label(label="USB extra widget")
+        err.show_info("info", widget=extra, modal=False)
+        assert extra.get_parent() is not None
+        assert extra.get_hexpand() is True
+        assert extra.get_vexpand() is True
+        # GTK 3 content_area.add() keeps extras above Close/OK.
+        nxt = extra.get_next_sibling()
+        assert nxt is not None
+        assert extra.get_parent().get_first_child() is not extra
 
         dlg = _errorDialog(message_type=Gtk.MessageType.ERROR)
         assert getattr(dlg, "_vmm_window_type_dialog", False)
         assert dlg._primary.get_selectable()
         assert dlg._secondary.get_selectable()
+        assert dlg.buf_expander.get_visible() is False
+        assert dlg.chk_vbox.get_visible() is False
         dlg._set_primary_text("boom <err>")
         markup = dlg._primary.get_label() or ""
         assert "bold" in markup and "boom" in markup
@@ -1861,7 +1871,14 @@ def main():
         xfer = gtk4display._SpiceFileTransferWindow(["demo.iso"])
         xfer.set_fraction(0.4)
         assert abs(xfer._bar.get_fraction() - 0.4) < 0.01
+        assert xfer._cancel.get_label() == "_Cancel"
+        assert xfer._cancel.get_sensitive() is True
         xfer.finish_error("nope")
+        assert xfer._cancel.get_sensitive() is False
+        cancel_xfer = gtk4display._SpiceFileTransferWindow(["demo.iso"])
+        cancel_xfer._on_cancel()
+        assert cancel_xfer._status.get_text() == "Transfer cancelled"
+        assert cancel_xfer._closed is True
         spice = gtk4display.SpiceDisplay(None)
         assert spice._on_file_drop(None, [], 0, 0) is False
         from gi.repository import Gdk
