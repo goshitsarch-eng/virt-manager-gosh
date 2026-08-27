@@ -923,6 +923,8 @@ class vmmDetails(vmmGObjectUI):
             )
 
             def _bus_from_text(*_a, combo=self.widget("disk-bus"), entry=bus_text):
+                if getattr(self, "_ui_refreshing", False):
+                    return
                 if getattr(entry, "_vmm_bus_syncing", False):
                     return
                 text = ""
@@ -3355,7 +3357,11 @@ class vmmDetails(vmmGObjectUI):
         self._refresh_vm_state()
         # GTK 4 ListStore cell updates can emit selection-changed and
         # wipe pending Shareable/cache edits (testDetailsMiscEdits).
-        if not apply_on:
+        # Still insert newly added devices so Customize → Add Hardware
+        # shows IDE Disk 2 while Apply is dirty from Copy host CPU.
+        if apply_on:
+            self._repopulate_hw_list(add_missing_only=True)
+        else:
             self._repopulate_hw_list()
 
         if apply_on:
@@ -4305,6 +4311,12 @@ class vmmDetails(vmmGObjectUI):
                 pagetype = HW_LIST_TYPE_DISK
             if pagetype is HW_LIST_TYPE_DISK and dev is None:
                 pending = self._pending_disk_apply_row()
+                if pending is None and "disk" in (want or "").lower():
+                    try:
+                        self._repopulate_hw_list()
+                    except Exception:
+                        pass
+                    pending = self._hw_row_for_label(want) if want else None
                 if pending is not None:
                     row = pending
                     dev = pending[HW_LIST_COL_DEVICE]
@@ -6467,7 +6479,7 @@ class vmmDetails(vmmGObjectUI):
         self._repopulate_hw_list()
         self._set_hw_selection(0)
 
-    def _repopulate_hw_list(self):
+    def _repopulate_hw_list(self, add_missing_only=False):
         """
         Refresh the hardware list entries with the latest VM config
         """
@@ -6499,6 +6511,8 @@ class vmmDetails(vmmGObjectUI):
             for row in hw_list_model:
                 rowdev = row[HW_LIST_COL_DEVICE]
                 if dev_cmp(rowdev, dev):
+                    if add_missing_only:
+                        return
                     # Update existing HW info
                     row[HW_LIST_COL_DEVICE] = dev
                     row[HW_LIST_COL_LABEL] = label
@@ -6569,6 +6583,9 @@ class vmmDetails(vmmGObjectUI):
             update_hwlist(HW_LIST_TYPE_PANIC, dev)
         for dev in self.vm.xmlobj.devices.vsock:
             update_hwlist(HW_LIST_TYPE_VSOCK, dev)
+
+        if add_missing_only:
+            return
 
         devs = list(range(len(hw_list_model)))
         devs.reverse()
