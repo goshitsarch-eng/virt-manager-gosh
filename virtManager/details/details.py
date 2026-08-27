@@ -3881,15 +3881,13 @@ class vmmDetails(vmmGObjectUI):
                 xml_page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip() == "1"
             except Exception:
                 xml_page = False
+            page_edits = [e for e in self._active_edits if e != EDIT_XML]
             if (
                 self._edited(EDIT_XML)
                 and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
                 and (
                     xml_page
-                    or (
-                        pagetype is not HW_LIST_TYPE_BOOT
-                        and tab != "boot-tab"
-                    )
+                    or not page_edits
                 )
             ):
                 if dev:
