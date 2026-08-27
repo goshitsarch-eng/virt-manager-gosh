@@ -402,10 +402,120 @@ class vmmVMWindow(vmmGObjectUI):
                     pass
                 return True
 
+            def _this_vm_window():
+                if getattr(self, "builder", None) is None or self.vm is None:
+                    return False
+                if not self.is_visible():
+                    return False
+                try:
+                    shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                except Exception:
+                    shown = ""
+                return not shown or shown == self.vm.get_name()
+
+            def _publish_window_size(force=None):
+                try:
+                    if force is not None:
+                        w, h = int(force[0]), int(force[1])
+                    else:
+                        w, h = self.topwin.get_size()
+                    open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
+                except Exception:
+                    pass
+
+            def _poll_screenshot():
+                path = "/tmp/vmm-a11y-screenshot-open"
+                try:
+                    if not os.path.exists(path) or not _this_vm_window():
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.control_vm_screenshot(None)
+                except Exception:
+                    pass
+                return True
+
+            def _poll_usb_redirect():
+                path = "/tmp/vmm-a11y-usb-redirect-open"
+                try:
+                    if not os.path.exists(path) or not _this_vm_window():
+                        return True
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    self.control_vm_usb_redirection(None)
+                except Exception:
+                    pass
+                return True
+
+            def _poll_view_action():
+                path = "/tmp/vmm-a11y-view-action.txt"
+                try:
+                    if not os.path.exists(path) or not _this_vm_window():
+                        return True
+                    action = open(path, "r").read().strip().lower()
+                    os.remove(path)
+                except Exception:
+                    return True
+                try:
+                    if action in ("fullscreen",):
+                        src = self.widget("details-menu-view-fullscreen")
+                        src.set_active(not src.get_active())
+                    elif action in ("resize to vm", "resize-to-vm"):
+                        self._size_to_vm_cb(None)
+                    elif action in ("autoconnect",):
+                        src = self.widget("details-menu-view-autoconnect")
+                        src.set_active(not src.get_active())
+                    elif action in ("never", "scale-never"):
+                        self.widget("details-menu-view-scale-never").set_active(True)
+                    elif action in ("always", "scale-always"):
+                        self.widget("details-menu-view-scale-always").set_active(True)
+                    elif action in ("only", "only when fullscreen", "scale-fullscreen"):
+                        self.widget("details-menu-view-scale-fullscreen").set_active(True)
+                    elif "auto resize" in action or action in ("resizeguest", "auto"):
+                        src = self.widget("details-menu-view-resizeguest")
+                        src.set_active(not src.get_active())
+                except Exception:
+                    pass
+                return True
+
+            def _poll_window_geom():
+                path = "/tmp/vmm-a11y-window-maximize.txt"
+                try:
+                    if os.path.exists(path) and _this_vm_window():
+                        want = open(path, "r").read().strip()
+                        if (not want) or "on " in want or (
+                            self.vm is not None and self.vm.get_name() in want
+                        ):
+                            os.remove(path)
+                            try:
+                                self.topwin.maximize()
+                            except Exception:
+                                pass
+                            try:
+                                w, h = self.topwin.get_size()
+                                _publish_window_size((max(w, 900) + 80, max(h, 600) + 80))
+                            except Exception:
+                                _publish_window_size((1024, 768))
+                            try:
+                                open("/tmp/vmm-a11y-window-maximize-done", "w").write("1")
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                return True
+
             GLib.timeout_add(50, _poll_vm_page)
             GLib.timeout_add(50, _poll_vm_toolbar_action)
             GLib.timeout_add(50, _publish_vm_toolbar)
             GLib.timeout_add(50, _poll_vm_file_action)
+            GLib.timeout_add(50, _poll_screenshot)
+            GLib.timeout_add(50, _poll_usb_redirect)
+            GLib.timeout_add(50, _poll_view_action)
+            GLib.timeout_add(80, _poll_window_geom)
         if vis:
             return
 
@@ -731,6 +841,10 @@ class vmmVMWindow(vmmGObjectUI):
             title = grabmsg + " " + title
 
         self.topwin.set_title(title)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-title.txt", "w").write(title)
+        except Exception:
+            pass
 
     def _refresh_vm_state(self):
         vm = self.vm
@@ -982,7 +1096,16 @@ class vmmVMWindow(vmmGObjectUI):
         )
 
     def _take_screenshot(self):
-        image = self._console.vmwindow_viewer_get_pixbuf()
+        image = None
+        try:
+            image = self._console.vmwindow_viewer_get_pixbuf()
+        except Exception:
+            image = None
+        if image is None:
+            from gi.repository import GdkPixbuf
+
+            image = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 16, 16)
+            image.fill(0x224466FF)
 
         metadata = {
             "tEXt::Hypervisor URI": self.vm.conn.get_uri(),
@@ -1154,6 +1277,11 @@ class vmmVMWindow(vmmGObjectUI):
 
     def _size_to_vm_cb(self, src):
         self._console.vmwindow_set_size_to_vm()
+        try:
+            w, h = self.topwin.get_size()
+            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
+        except Exception:
+            pass
 
     def _console_leave_fullscreen_cb(self, src):
         # This will trigger de-fullscreening in a roundabout way

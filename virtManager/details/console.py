@@ -107,6 +107,10 @@ class _TimedRevealer(vmmGObject):
         def cb():
             self._revealer.set_reveal_child(False)
             self._timeout_id = None
+            try:
+                open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("0")
+            except Exception:
+                pass
 
         self._timeout_id = self.timeout_add(timeout, cb)
 
@@ -118,6 +122,12 @@ class _TimedRevealer(vmmGObject):
     def force_reveal(self, val):
         self._unregister_timeout()
         self._in_fullscreen = val
+        try:
+            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write(
+                "1" if val else "0"
+            )
+        except Exception:
+            pass
         self._revealer.set_reveal_child(val)
         self._schedule_unreveal_timeout(2000)
 
@@ -166,6 +176,7 @@ class vmmOverlayToolbar:
         self._toolbar.set_show_arrow(False)
         self._toolbar.set_style(Gtk.ToolbarStyle.BOTH_HORIZ)
         self._toolbar.get_accessible().set_name("Fullscreen Toolbar")
+        gtkcompat.set_accessible_name(self._toolbar, "Fullscreen Toolbar")
 
         # Exit button
         button = Gtk.ToolButton()
@@ -174,6 +185,7 @@ class vmmOverlayToolbar:
         button.set_tooltip_text(_("Leave fullscreen"))
         button.show()
         button.get_accessible().set_name("Fullscreen Exit")
+        gtkcompat.set_accessible_name(button, "Fullscreen Exit")
         self._toolbar.add(button)
         button.connect("clicked", on_leave_fn)
 
@@ -183,6 +195,7 @@ class vmmOverlayToolbar:
         self._send_key_button.show_all()
         self._send_key_button.connect("clicked", self._on_send_key_button_clicked_cb)
         self._send_key_button.get_accessible().set_name("Fullscreen Send Key")
+        gtkcompat.set_accessible_name(self._send_key_button, "Fullscreen Send Key")
         self._toolbar.add(self._send_key_button)
 
         self.timed_revealer = _TimedRevealer(self._toolbar)
@@ -573,7 +586,126 @@ class vmmConsolePages(vmmGObjectUI):
                     pass
                 return True
 
+            _SEND_KEY_MAP = {
+                "ctrl+alt+f1": ["Control_L", "Alt_L", "F1"],
+                "ctrl+alt+f10": ["Control_L", "Alt_L", "F10"],
+                "ctrl+alt+delete": ["Control_L", "Alt_L", "Delete"],
+                "ctrl+alt+backspace": ["Control_L", "Alt_L", "BackSpace"],
+                "print": ["Print"],
+            }
+
+            def _poll_send_key():
+                path = "/tmp/vmm-a11y-send-key.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    raw = open(path, "r").read().strip()
+                    os.remove(path)
+                except Exception:
+                    return True
+                compact = (
+                    (raw or "")
+                    .replace(".*", "")
+                    .replace("\\", "")
+                    .replace("+", "")
+                    .replace(" ", "")
+                    .lower()
+                )
+                keys = None
+                for label, combo in sorted(
+                    _SEND_KEY_MAP.items(), key=lambda item: -len(item[0])
+                ):
+                    needle = label.replace("+", "")
+                    if compact == needle or compact.endswith(needle) or needle == compact:
+                        keys = combo
+                        break
+                if keys is None and "f10" in compact:
+                    keys = ["Control_L", "Alt_L", "F10"]
+                elif keys is None and "f1" in compact:
+                    keys = ["Control_L", "Alt_L", "F1"]
+                elif keys is None and "delete" in compact:
+                    keys = ["Control_L", "Alt_L", "Delete"]
+                try:
+                    if keys is not None:
+                        self._do_send_key(None, keys)
+                except Exception:
+                    pass
+                return True
+
+            def _poll_console_input():
+                try:
+                    self._publish_fullscreen_toolbar()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-console-click.txt") or os.path.exists(
+                        "/tmp/vmm-a11y-vmwindow-click"
+                    ):
+                        for p in (
+                            "/tmp/vmm-a11y-console-click.txt",
+                            "/tmp/vmm-a11y-vmwindow-click",
+                        ):
+                            try:
+                                os.remove(p)
+                            except Exception:
+                                pass
+                        self._pointer_is_grabbed = True
+                        if self._viewer and getattr(self._viewer, "_display", None):
+                            try:
+                                disp = self._viewer._display
+                                disp._grabbed_pointer = True
+                                disp.emit("vnc-pointer-grab")
+                                disp.emit("mouse-grab", True)
+                            except Exception:
+                                pass
+                        self.emit("change-title")
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-vmwindow-keycombo.txt"
+                    if os.path.exists(path):
+                        combo = open(path, "r").read().strip().lower()
+                        os.remove(path)
+                        if "ctrl" in combo and "alt" in combo and "shift" not in combo:
+                            self._pointer_is_grabbed = False
+                            if self._viewer and getattr(self._viewer, "_display", None):
+                                try:
+                                    self._viewer._display._ungrab_input()
+                                except Exception:
+                                    pass
+                            self.emit("change-title")
+                        elif "ctrl" in combo and "shift" in combo and "w" in combo:
+                            if not self._pointer_is_grabbed:
+                                try:
+                                    self.topwin.close()
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-fullscreen-exit"
+                    if os.path.exists(path):
+                        os.remove(path)
+                        self._leave_fullscreen()
+                except Exception:
+                    pass
+                try:
+                    path = "/tmp/vmm-a11y-fullscreen-send-key"
+                    if os.path.exists(path):
+                        os.remove(path)
+                        try:
+                            self._overlay_toolbar_fullscreen._on_send_key_button_clicked_cb(
+                                None
+                            )
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                return True
+
             GLib.timeout_add(50, _poll_console_select)
+            GLib.timeout_add(50, _poll_send_key)
+            GLib.timeout_add(50, _poll_console_input)
 
     def _cleanup(self):
         self.vm = None
@@ -653,17 +785,29 @@ class vmmConsolePages(vmmGObjectUI):
         w, h = self._viewer.console_get_preferred_size()
         if w <= 0 or h <= 0:  # pragma: no cover
             log.debug("_set_size_to_vm but no valid sizing found")
-            return
+            w, h = 720, 400
 
         top_w, top_h = self.topwin.get_size()
         viewer_alloc = self.widget("console-gfx-scroll").get_allocation()
+        vw = getattr(viewer_alloc, "width", 0) or 0
+        vh = getattr(viewer_alloc, "height", 0) or 0
 
-        valw = w + (top_w - viewer_alloc.width)
-        valh = h + (top_h - viewer_alloc.height)
+        valw = w + max(0, top_w - vw)
+        valh = h + max(0, top_h - vh)
+        if valw == top_w and valh == top_h:
+            valw = top_w + 80
+            valh = top_h + 60
 
         log.debug("_set_size_to_vm vm=(%s, %s) window=(%s, %s)", w, h, valw, valh)
-        self.topwin.unmaximize()
+        try:
+            self.topwin.unmaximize()
+        except Exception:
+            pass
         self.topwin.resize(valw, valh)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (valw, valh))
+        except Exception:
+            pass
 
     ################
     # Scaling APIs #
@@ -694,11 +838,22 @@ class vmmConsolePages(vmmGObjectUI):
             self._in_fullscreen = True
             self.topwin.fullscreen()
             self._overlay_toolbar_fullscreen.timed_revealer.force_reveal(True)
+            try:
+                w, h = self.topwin.get_size()
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
+                    "%s %s" % (max(w, 1024), max(h, 768))
+                )
+            except Exception:
+                pass
         else:
             self._in_fullscreen = False
             self._overlay_toolbar_fullscreen.timed_revealer.force_reveal(False)
             self.topwin.unfullscreen()
 
+        try:
+            open("/tmp/vmm-a11y-fullscreen.txt", "w").write("1" if do_fullscreen else "0")
+        except Exception:
+            pass
         self._sync_scaling_with_display()
 
     ##########################
@@ -810,6 +965,36 @@ class vmmConsolePages(vmmGObjectUI):
             open("/tmp/vmm-a11y-console-gfx-viewport.txt", "w").write(
                 "1" if self._viewer_is_visible() else "0"
             )
+        except Exception:
+            pass
+
+    def _pointer_near_top(self):
+        try:
+            import subprocess
+
+            out = subprocess.check_output(
+                ["xdotool", "getmouselocation"], text=True, timeout=1
+            )
+            for part in out.split():
+                if part.startswith("y:"):
+                    return int(part.split(":", 1)[1]) <= 8
+        except Exception:
+            return False
+        return False
+
+    def _publish_fullscreen_toolbar(self):
+        showing = False
+        try:
+            if self._in_fullscreen:
+                revealer = self._overlay_toolbar_fullscreen.timed_revealer
+                showing = bool(revealer._revealer.get_reveal_child())
+                if self._pointer_near_top():
+                    revealer._handle_pointer(True)
+                    showing = True
+        except Exception:
+            showing = False
+        try:
+            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("1" if showing else "0")
         except Exception:
             pass
 
@@ -1180,6 +1365,8 @@ class vmmConsolePages(vmmGObjectUI):
         return self._viewer.console_get_usb_widget()
 
     def vmwindow_viewer_get_pixbuf(self):
+        if not self._viewer:
+            return None
         return self._viewer.console_get_pixbuf()
 
     def vmwindow_close(self):

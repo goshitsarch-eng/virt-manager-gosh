@@ -775,6 +775,12 @@ class vmmManager(vmmGObjectUI):
                     want = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
                 except Exception:
                     want = ""
+                if action_key in ("Take Screenshot", "Screenshot", "Redirect USB", "USB"):
+                    try:
+                        os.remove(path)
+                    except Exception:
+                        pass
+                    return True
                 mapping = {
                     "Delete": vmmenu.VMActionUI.delete,
                     "Migrate": vmmenu.VMActionUI.migrate,

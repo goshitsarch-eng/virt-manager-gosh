@@ -6346,8 +6346,6 @@ def _browse_local_window(
         pass
     _publish_filechooser()
     GLib.timeout_add(50, _poll_marker)
-    if is_save and (default_name or "").startswith("Screenshot_"):
-        GLib.timeout_add(150, lambda: (_open() or False))
     loop.run()
     return result[0]
 

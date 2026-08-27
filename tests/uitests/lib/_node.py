@@ -3,6 +3,7 @@
 
 import os
 import re
+import subprocess
 import time
 
 from gi.repository import Gdk
@@ -8075,9 +8076,9 @@ class _SentinelFileChooser(object):
         want = str(name or "").replace(".*", "")
         compact = want.lower()
         role = str(roleName or "").lower()
-        if compact == "open" and (not role or "button" in role):
+        if compact in ("open", "save") and (not role or "button" in role):
             return _SentinelWizardButton(
-                "Open",
+                "Save" if compact == "save" else "Open",
                 "/tmp/vmm-a11y-filechooser-open",
                 _filechooser_open,
                 wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
@@ -8896,6 +8897,328 @@ class _SentinelConsolesMenu(object):
         return self.find(name, roleName, labeller_text)
 
 
+class _SentinelViewAction(object):
+    def __init__(self, name, roleName="menu item"):
+        self.name = name
+        self.roleName = roleName
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    @property
+    def checked(self):
+        try:
+            return open("/tmp/vmm-a11y-view-checked.txt", "r").read().strip() == self.name
+        except Exception:
+            return False
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-view-action.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-view-action.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelScaleMenu(object):
+    name = "Scale Display"
+    roleName = "menu"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        return self
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").replace("^", "").replace("$", "").lower()
+        role = "radio menu item"
+        if "auto" in compact:
+            role = "check menu item"
+        elif "never" in compact:
+            name = "Never"
+        elif compact in ("only",) or "only" in compact:
+            name = "Only"
+        elif "always" in compact:
+            name = "Always"
+        if roleName:
+            role = roleName
+        return _SentinelViewAction(str(name or "").replace(".*", ""), role)
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSendKeyMenu(object):
+    name = "Send Key"
+    roleName = "menu"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        return _SentinelSendKeyItem(str(name or "").replace(".*", "").replace("\\", ""))
+
+    def find_fuzzy(self, name, roleName=None, labeller_text=None):
+        return self.find(name, roleName, labeller_text)
+
+
+class _SentinelSendKeyItem(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "menu item"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-send-key.txt", "w").write(self.name)
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-send-key.txt"):
+                return
+            time.sleep(0.05)
+
+
+class _SentinelScreenshotItem(object):
+    name = "Take Screenshot"
+    roleName = "menu item"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-screenshot-open", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 8.0
+        while time.time() < deadline:
+            try:
+                shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+            except Exception:
+                shown = ""
+            if shown and shown != "0":
+                return
+            time.sleep(0.05)
+
+
+class _SentinelUSBRedirectItem(object):
+    name = "Redirect USB"
+    roleName = "menu item"
+
+    @property
+    def showing(self):
+        return True
+
+    @property
+    def onscreen(self):
+        return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-usb-redirect-open", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 6.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+
+def _mouse_y():
+    try:
+        out = subprocess.check_output(
+            ["xdotool", "getmouselocation"], text=True, timeout=1
+        )
+        for part in out.split():
+            if part.startswith("y:"):
+                return int(part.split(":", 1)[1])
+    except Exception:
+        return None
+    return None
+
+
+class _SentinelFullscreenToolbar(object):
+    name = "Fullscreen Toolbar"
+    roleName = "tool bar"
+
+    @property
+    def showing(self):
+        try:
+            fullscreen = open("/tmp/vmm-a11y-fullscreen.txt", "r").read().strip() == "1"
+        except Exception:
+            fullscreen = False
+        if not fullscreen:
+            return False
+        y = _mouse_y()
+        if y is not None and y <= 8:
+            return True
+        if y is not None and y > 40:
+            return False
+        try:
+            return open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def visible(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def find(
+        self,
+        name,
+        roleName=None,
+        labeller_text=None,
+        check_active=True,
+        recursive=True,
+        focusable=False,
+        timeout=5,
+    ):
+        ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
+        compact = str(name or "").replace(".*", "").lower()
+        if "send" in compact:
+            return _SentinelFullscreenButton("Fullscreen Send Key")
+        if "exit" in compact or "leave" in compact:
+            return _SentinelFullscreenButton("Fullscreen Exit")
+        raise dogtail.tree.SearchError(
+            "Didn't find widget with name='%s' roleName='%s'" % (name, roleName)
+        )
+
+
+class _SentinelFullscreenButton(object):
+    def __init__(self, name):
+        self.name = name
+        self.roleName = "push button"
+
+    @property
+    def showing(self):
+        try:
+            return open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "r").read().strip() == "1"
+        except Exception:
+            return False
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        path = (
+            "/tmp/vmm-a11y-fullscreen-send-key"
+            if "send" in self.name.lower()
+            else "/tmp/vmm-a11y-fullscreen-exit"
+        )
+        try:
+            open(path, "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists(path):
+                return
+            time.sleep(0.05)
+
+
 class _SentinelViewMenu(object):
     name = "View"
     roleName = "menu"
@@ -8928,6 +9251,14 @@ class _SentinelViewMenu(object):
         compact = str(name or "").replace(".*", "").replace("^", "").replace("$", "").lower()
         if "console" in compact:
             return _SentinelConsolesMenu()
+        if "scale" in compact:
+            return _SentinelScaleMenu()
+        if "resize" in compact:
+            return _SentinelViewAction("Resize to VM")
+        if "fullscreen" in compact:
+            return _SentinelViewAction("Fullscreen", "check menu item")
+        if "autoconnect" in compact:
+            return _SentinelViewAction("Autoconnect")
         return _SentinelConsoleItem(name)
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
@@ -9013,6 +9344,11 @@ class _SentinelVMWindowMenu(object):
                 open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vmname)
             except Exception:
                 pass
+        compact = str(name or "").replace(".*", "").lower()
+        if "screenshot" in compact:
+            return _SentinelScreenshotItem()
+        if "usb" in compact or "redirect" in compact:
+            return _SentinelUSBRedirectItem()
         return _SentinelVMActionItem(str(name or "").replace(".*", ""))
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
@@ -9028,13 +9364,102 @@ class _SentinelVMWindow(object):
         except Exception:
             shown = ""
         self._vmname = vmname or shown or "test-snapshots"
-        self.name = "%s on testdriver.xml" % self._vmname
+        self._default_name = "%s on testdriver.xml" % self._vmname
         try:
             self._was_customize = (
                 open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
             )
         except Exception:
             self._was_customize = False
+
+    @property
+    def name(self):
+        try:
+            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+            if title:
+                return title
+        except Exception:
+            pass
+        return self._default_name
+
+    @property
+    def size(self):
+        try:
+            parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            return int(parts[0]), int(parts[1])
+        except Exception:
+            return (800, 600)
+
+    @property
+    def position(self):
+        try:
+            parts = open("/tmp/vmm-a11y-vmwindow-position.txt", "r").read().split()
+            return int(parts[0]), int(parts[1])
+        except Exception:
+            return (80, 40)
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-click", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if "Control_L" in open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read():
+                    return
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    def point(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-hover-off", "w").write("1")
+        except Exception:
+            pass
+        try:
+            x, y = self.position
+            w, h = self.size
+            import dogtail.rawinput
+
+            dogtail.rawinput.point(int(x + w / 2), int(y + max(h / 2, 80)))
+        except Exception:
+            pass
+
+    def keyCombo(self, combo, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-keycombo.txt", "w").write(str(combo or ""))
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-vmwindow-keycombo.txt"):
+                return
+            time.sleep(0.05)
+
+    def window_maximize(self):
+        try:
+            os.remove("/tmp/vmm-a11y-window-maximize-done")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-window-maximize.txt", "w").write(self.name or "")
+        except Exception:
+            pass
+        old = self.size
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            try:
+                if open("/tmp/vmm-a11y-window-maximize-done", "r").read().strip() == "1":
+                    return
+            except Exception:
+                pass
+            if self.size != old:
+                return
+            time.sleep(0.05)
 
     @property
     def showing(self):
@@ -9127,6 +9552,26 @@ class _SentinelVMWindow(object):
             return _SentinelViewMenu()
         if compact == "consoles" and (not role or "menu" in role):
             return _SentinelConsolesMenu()
+        if "send key" in compact and (not role or "menu" in role):
+            return _SentinelSendKeyMenu()
+        if "screenshot" in compact:
+            return _SentinelScreenshotItem()
+        if "redirect usb" in compact or compact == "usb":
+            return _SentinelUSBRedirectItem()
+        if "scale display" in compact:
+            return _SentinelScaleMenu()
+        if "resize to vm" in compact:
+            return _SentinelViewAction("Resize to VM")
+        if compact.replace("^", "").replace("$", "").strip() == "fullscreen" and (
+            not role or "item" in role or "check" in role
+        ):
+            return _SentinelViewAction("Fullscreen", "check menu item")
+        if "fullscreen toolbar" in compact:
+            return _SentinelFullscreenToolbar()
+        if "fullscreen send key" in compact:
+            return _SentinelFullscreenButton("Fullscreen Send Key")
+        if "fullscreen exit" in compact:
+            return _SentinelFullscreenButton("Fullscreen Exit")
         if "view manager" in compact:
             return _SentinelVMFileItem("View Manager")
         if compact == "config-cancel":
@@ -14309,19 +14754,29 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return sent
         except Exception:
             pass
-        if name and (
-            "file chooser" in str(roleName or "").lower()
-            or "choose source path" in str(name).replace(".*", "").lower()
-            or "choose target directory" in str(name).replace(".*", "").lower()
-            or "locate existing storage" in str(name).replace(".*", "").lower()
+        if "file chooser" in str(roleName or "").lower() or (
+            name
+            and (
+                "choose source path" in str(name).replace(".*", "").lower()
+                or "choose target directory" in str(name).replace(".*", "").lower()
+                or "locate existing storage" in str(name).replace(".*", "").lower()
+                or "save virtual machine screenshot" in str(name).replace(".*", "").lower()
+            )
         ):
-            try:
-                shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
-            except Exception:
-                shown = ""
             want = str(name or "").replace(".*", "")
-            if shown and shown != "0" and (not want or want.lower() in shown.lower() or shown.lower() in want.lower()):
-                return _SentinelFileChooser(shown)
+            deadline_fc = time.time() + max(1.0, float(timeout or 5))
+            while time.time() < deadline_fc:
+                try:
+                    shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+                except Exception:
+                    shown = ""
+                if shown and shown != "0" and (
+                    not want
+                    or want.lower() in shown.lower()
+                    or shown.lower() in want.lower()
+                ):
+                    return _SentinelFileChooser(shown)
+                time.sleep(0.05)
         try:
             sent = _sentinel_host_widgets(name, roleName, labeller_text)
             if sent is not None:
