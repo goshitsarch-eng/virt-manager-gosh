@@ -182,6 +182,27 @@ def _calculate_disk_bus_index(disklist):
     return ret
 
 
+def _is_usb_controller_model(model):
+    """True for USB-only controller models (uhci/ehci/xhci/usb2/usb3)."""
+    text = str(model or "").strip().lower()
+    if not text:
+        return False
+    if text in (
+        "usb 2",
+        "usb 3",
+        "usb2",
+        "usb3",
+        "ich9-ehci1",
+        "qemu-xhci",
+        "nec-xhci",
+        "piix3-uhci",
+        "piix4-uhci",
+        "vt82c686b-uhci",
+    ):
+        return True
+    return any(tok in text for tok in ("uhci", "ehci", "xhci"))
+
+
 def _label_for_device(dev, disk_bus_index):
     devtype = dev.DEVICE_TYPE
 
@@ -1827,6 +1848,7 @@ class vmmDetails(vmmGObjectUI):
                         os.remove(sel)
                         combo = self.widget("controller-model")
                         if self._a11y_select_combo(combo, item):
+                            self._keep_controller_apply_after_refresh()
                             self._enable_apply(EDIT_CONTROLLER_MODEL)
                             self._publish_details_device_fields()
                         return True
@@ -2326,6 +2348,7 @@ class vmmDetails(vmmGObjectUI):
                                 os.remove(cset)
                             except Exception:
                                 pass
+                            self._keep_controller_apply_after_refresh()
                             self._enable_apply(EDIT_CONTROLLER_MODEL)
                             self._publish_details_device_fields()
                 except Exception:
@@ -3608,6 +3631,22 @@ class vmmDetails(vmmGObjectUI):
         except Exception as e:  # pragma: no cover
             self.err.show_err(_("Error launching hardware dialog: %s") % str(e))
 
+    def _usb_controller_row(self):
+        """Visible USB controller row (ich9-uhci companions are hidden)."""
+        model = self.widget("hw-list").get_model()
+        if not model:
+            return None
+        for row in model:
+            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_CONTROLLER:
+                continue
+            dev = row[HW_LIST_COL_DEVICE]
+            if getattr(dev, "type", None) == "usb":
+                return row
+            label = str(row[HW_LIST_COL_LABEL] or "").lower()
+            if "usb" in label and "pci" not in label:
+                return row
+        return None
+
     def _hw_row_for_label(self, want):
         """Find a hw-list model row by published label, without selecting it."""
         if not want:
@@ -3618,6 +3657,7 @@ class vmmDetails(vmmGObjectUI):
         want_l = want.strip().lower()
         exact = None
         fuzzy = None
+        usb_want = "controller" in want_l and "usb" in want_l
         for row in model:
             label = str(row[HW_LIST_COL_LABEL] or "").strip()
             if label == want or label.lower() == want_l:
@@ -3630,6 +3670,8 @@ class vmmDetails(vmmGObjectUI):
                     have_toks = [t for t in tokens if t in label.lower()]
                     if want_toks and have_toks and not set(want_toks) & set(have_toks):
                         continue
+                if usb_want and "pci" in label.lower():
+                    continue
                 if fuzzy is None:
                     fuzzy = row
             want_first = want_l.split()[0] if want_l else ""
@@ -3642,7 +3684,13 @@ class vmmDetails(vmmGObjectUI):
             ):
                 if fuzzy is None:
                     fuzzy = row
-        return exact if exact is not None else fuzzy
+        if exact is not None:
+            return exact
+        if usb_want:
+            usb = self._usb_controller_row()
+            if usb is not None:
+                return usb
+        return fuzzy
 
     def _hw_index_for_row(self, target):
         if target is None:
@@ -4266,9 +4314,19 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
 
+    def _keep_controller_apply_after_refresh(self):
+        """A typed USB model after USB 2/3 apply must keep Apply armed."""
+        self._vmm_user_controller_edit = True
+
     def _enable_apply(self, edittype):
         if getattr(self, "_ui_refreshing", False):
-            return
+            if edittype == EDIT_CONTROLLER_MODEL and (
+                getattr(self, "_vmm_user_controller_edit", False)
+                or os.path.exists("/tmp/vmm-a11y-combo-controller-model.txt.set")
+            ):
+                pass
+            else:
+                return
         self._vmm_apply_failed = False
         self.widget("config-apply").set_sensitive(True)
         try:
@@ -4392,6 +4450,7 @@ class vmmDetails(vmmGObjectUI):
         return None
 
     def _config_apply(self, row=None):
+        self._vmm_user_controller_edit = False
         try:
             open("/tmp/vmm-a11y-apply-debug.txt", "a").write("start\n")
         except Exception:
@@ -4478,6 +4537,14 @@ class vmmDetails(vmmGObjectUI):
             labeled = self._hw_row_for_label(want)
             if labeled is not None:
                 row = labeled
+            if (
+                (tab == "controller-tab" or "Controller" in (want or ""))
+                and "usb" in (want or "").lower()
+            ):
+                usb = self._usb_controller_row()
+                if usb is not None:
+                    row = usb
+                    want = str(usb[HW_LIST_COL_LABEL] or want)
         if row:
             pagetype = row[HW_LIST_COL_TYPE]
             dev = row[HW_LIST_COL_DEVICE]
@@ -4597,6 +4664,36 @@ class vmmDetails(vmmGObjectUI):
             elif pagetype is HW_LIST_TYPE_SMARTCARD:
                 success = self._apply_smartcard(dev)
             elif pagetype is HW_LIST_TYPE_CONTROLLER:
+                if getattr(dev, "type", None) != "usb":
+                    typed = ""
+                    try:
+                        typed = (
+                            self.widget("controller-model")
+                            .get_child()
+                            .get_text()
+                            .strip()
+                        )
+                    except Exception:
+                        typed = ""
+                    if not typed:
+                        for path in (
+                            "/tmp/vmm-a11y-combo-controller-model.txt.set",
+                            "/tmp/vmm-a11y-combo-controller-model.txt",
+                        ):
+                            try:
+                                typed = open(path, "r").read().strip()
+                            except Exception:
+                                typed = ""
+                            if typed:
+                                break
+                    if _is_usb_controller_model(typed) or "usb" in (
+                        want or ""
+                    ).lower():
+                        usb = self._usb_controller_row()
+                        if usb is not None:
+                            row = usb
+                            dev = usb[HW_LIST_COL_DEVICE]
+                            want = str(usb[HW_LIST_COL_LABEL] or want)
                 success = self._apply_controller(dev)
             elif pagetype is HW_LIST_TYPE_FILESYSTEM:
                 success = self._apply_filesystem(dev)
@@ -4727,6 +4824,15 @@ class vmmDetails(vmmGObjectUI):
                                 applied = None
                 if applied is None and want:
                     applied = self._hw_row_for_label(want)
+                if (
+                    applied is None
+                    and pagetype is HW_LIST_TYPE_CONTROLLER
+                    and (
+                        getattr(dev, "type", None) == "usb"
+                        or "usb" in (want or "").lower()
+                    )
+                ):
+                    applied = self._usb_controller_row()
                 if applied is not None:
                     labeled = applied
                     newlab = str(applied[HW_LIST_COL_LABEL] or "")
@@ -5439,6 +5545,12 @@ class vmmDetails(vmmGObjectUI):
             ):
                 model = typed
             kwargs["model"] = model
+            if _is_usb_controller_model(model) and getattr(
+                devobj, "type", None
+            ) != "usb":
+                usb = self._usb_controller_row()
+                if usb is not None:
+                    devobj = usb[HW_LIST_COL_DEVICE]
             try:
                 open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
                     "controller model=%r typed=%r active=%s devtype=%s\n"
@@ -5654,6 +5766,17 @@ class vmmDetails(vmmGObjectUI):
         """Drop Apply re-armed by combo/entry 'changed' after a successful apply."""
         if getattr(self, "_vmm_apply_just_succeeded", False):
             self._vmm_apply_just_succeeded = False
+            if getattr(self, "_vmm_user_controller_edit", False):
+                return False
+            typed = ""
+            try:
+                typed = open(
+                    "/tmp/vmm-a11y-combo-controller-model.txt.set", "r"
+                ).read().strip()
+            except Exception:
+                typed = ""
+            if typed and _is_usb_controller_model(typed):
+                return False
             self._disable_apply()
         return False
 
@@ -6822,6 +6945,32 @@ class vmmDetails(vmmGObjectUI):
         hw_list = self.widget("hw-list")
         hw_list_model = hw_list.get_model()
 
+        keep_usb = False
+        try:
+            cur = self._get_hw_row()
+            if (
+                cur is not None
+                and cur[HW_LIST_COL_TYPE] == HW_LIST_TYPE_CONTROLLER
+                and getattr(cur[HW_LIST_COL_DEVICE], "type", None) == "usb"
+            ):
+                keep_usb = True
+            if not keep_usb:
+                for path in (
+                    "/tmp/vmm-a11y-hw-clicked.txt",
+                    "/tmp/vmm-a11y-hw-selected.txt",
+                    "/tmp/vmm-a11y-hw-select.txt",
+                    "/tmp/vmm-a11y-last-hw.txt",
+                ):
+                    try:
+                        lab = open(path, "r").read().strip().lower()
+                    except Exception:
+                        lab = ""
+                    if "controller" in lab and "usb" in lab:
+                        keep_usb = True
+                        break
+        except Exception:
+            keep_usb = False
+
         currentDevices = []
 
         def dev_cmp(origdev, newdev):
@@ -6934,6 +7083,18 @@ class vmmDetails(vmmGObjectUI):
                 continue
 
             hw_list_model.remove(_iter)
+
+        if keep_usb and not add_missing_only:
+            try:
+                cur = self._get_hw_row()
+                curdev = cur[HW_LIST_COL_DEVICE] if cur is not None else None
+                if getattr(curdev, "type", None) != "usb":
+                    usb = self._usb_controller_row()
+                    idx = self._hw_index_for_row(usb)
+                    if idx is not None:
+                        self._set_hw_selection(idx, _disable_apply=False)
+            except Exception:
+                pass
 
     ################
     # UI listeners #

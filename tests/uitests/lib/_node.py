@@ -464,12 +464,24 @@ class _SentinelTableCell(object):
                 os.remove("/tmp/vmm-a11y-unapplied-prompt.txt")
             except Exception:
                 pass
+        wrote_index = False
         if self._index is not None:
-            try:
-                open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(self._index))
-                open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(str(self._index))
-            except Exception:
-                pass
+            names = _hw_list_names()
+            # After USB 2/3 rewrite the published index can still point at
+            # PCI while this cell is named Controller USB 0.
+            if 0 <= int(self._index) < len(names) and names[int(self._index)] == (
+                self.name or ""
+            ):
+                try:
+                    open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(
+                        str(self._index)
+                    )
+                    open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+                        str(self._index)
+                    )
+                    wrote_index = True
+                except Exception:
+                    pass
         try:
             _write_hw_details_tab(self.name or "")
         except Exception:
@@ -477,7 +489,7 @@ class _SentinelTableCell(object):
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                if self._index is not None:
+                if wrote_index:
                     cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
                     if cur != "" and int(cur) == int(self._index):
                         break
@@ -13656,15 +13668,34 @@ def _sentinel_hw_cell(name, roleName):
             rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
         except Exception:
             rows = []
+        exact = None
+        usb_alias = None
         for row in rows:
             if not row:
                 continue
             if row == name or row == want or (pat is not None and pat.search(row)):
-                matched = row
+                exact = row
                 break
+            if (
+                usb_alias is None
+                and "Controller USB" in want
+                and "Controller USB" in row
+                and "PCI" not in row
+            ):
+                usb_alias = row
+        matched = exact or usb_alias
         if matched:
             break
         time.sleep(0.05)
+    if matched is None and "Controller USB" in want:
+        try:
+            rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+        except Exception:
+            rows = []
+        for row in rows:
+            if row and "Controller USB" in row and "PCI" not in row:
+                matched = row
+                break
     if matched is None and any(
         key in want for key in ("Disk", "CDROM", "Floppy", "NIC")
     ):

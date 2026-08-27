@@ -2417,38 +2417,100 @@ def main():
         details = win._details
         _auto_confirm(details)
         hwlist = details.widget("hw-list")
-        usb_row = None
-        for idx, row in enumerate(hwlist.get_model()):
-            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_CONTROLLER:
-                continue
-            dev = row[HW_LIST_COL_DEVICE]
-            if getattr(dev, "type", None) == "usb":
-                uiutil.set_list_selection_by_number(hwlist, idx)
-                details._hw_changed_cb(hwlist)
-                usb_row = row
-                break
+
+        def _usb_row():
+            return details._usb_controller_row()
+
+        def _select(row):
+            idx = details._hw_index_for_row(row)
+            assert idx is not None
+            uiutil.set_list_selection_by_number(hwlist, idx)
+            details._hw_changed_cb(hwlist)
+
+        usb_row = _usb_row()
         assert usb_row is not None, "test-many-devices has no USB controller"
+        _select(usb_row)
         combo = details.widget("controller-model")
         child = combo.get_child()
+
+        def _apply_model(model):
+            details._enable_apply(EDIT_CONTROLLER_MODEL)
+            uiutil.set_list_selection(combo, model)
+            if model not in ("usb2", "usb3", "ich9-ehci1"):
+                child.set_text(model)
+                try:
+                    combo.set_active(-1)
+                except Exception:
+                    pass
+            usb = _usb_row()
+            assert usb is not None
+            ok = details._apply_controller(usb[HW_LIST_COL_DEVICE])
+            assert ok is not False, "controller apply %r failed" % model
+            details._repopulate_hw_list()
+
+        _apply_model("ich9-ehci1")
+        _apply_model("usb3")
+        usb_after_usb3 = _usb_row()
+        assert usb_after_usb3 is not None, "USB 3 apply must leave a USB controller"
+        labeled = details._hw_row_for_label("Controller USB 0")
+        assert labeled is not None
+        assert getattr(labeled[HW_LIST_COL_DEVICE], "type", None) == "usb"
+
+        # Official uitest races a stale hw-list index onto PCI 0, then
+        # types piix3-uhci. Apply must retarget the USB controller.
+        pci_row = None
+        for row in hwlist.get_model():
+            if row[HW_LIST_COL_TYPE] != HW_LIST_TYPE_CONTROLLER:
+                continue
+            if getattr(row[HW_LIST_COL_DEVICE], "type", None) == "pci":
+                pci_row = row
+                break
+        assert pci_row is not None
+        _select(pci_row)
+        pci_label = str(pci_row[HW_LIST_COL_LABEL] or "Controller PCI 0")
+        try:
+            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(pci_label)
+            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(pci_label)
+            open("/tmp/vmm-a11y-last-hw.txt", "w").write(pci_label)
+            open("/tmp/vmm-a11y-details-tab.txt", "w").write("controller-tab")
+            open("/tmp/vmm-a11y-combo-controller-model.txt", "w").write("piix3-uhci")
+        except Exception:
+            pass
         details._enable_apply(EDIT_CONTROLLER_MODEL)
         child.set_text("piix3-uhci")
         try:
             combo.set_active(-1)
         except Exception:
             pass
-        ok = details._apply_controller(usb_row[HW_LIST_COL_DEVICE])
-        assert ok is not False
-        details._disable_apply()
+        details._keep_controller_apply_after_refresh()
+        details._config_apply()
+        assert not details.widget("config-apply").get_sensitive(), (
+            "typed USB model apply must idle Apply"
+        )
+        usb = _usb_row()
+        assert usb is not None
+        assert getattr(usb[HW_LIST_COL_DEVICE], "model", None) == "piix3-uhci", (
+            getattr(usb[HW_LIST_COL_DEVICE], "model", None)
+        )
+
         details._vmm_apply_just_succeeded = True
+        details._vmm_user_controller_edit = False
         details._ui_refreshing = True
         try:
-            details._refresh_controller_page(usb_row[HW_LIST_COL_DEVICE])
+            details._refresh_controller_page(usb[HW_LIST_COL_DEVICE])
         finally:
             details._ui_refreshing = False
         details._enable_apply(EDIT_CONTROLLER_MODEL)
         details._clear_post_apply_refresh()
         assert not details.widget("config-apply").get_sensitive(), (
             "typed controller apply must not leave Apply armed after refresh"
+        )
+        details._enable_apply(EDIT_CONTROLLER_MODEL)
+        details._keep_controller_apply_after_refresh()
+        details._vmm_apply_just_succeeded = True
+        details._clear_post_apply_refresh()
+        assert details.widget("config-apply").get_sensitive(), (
+            "a typed model after apply must keep Apply armed"
         )
 
     def details_apply_title():

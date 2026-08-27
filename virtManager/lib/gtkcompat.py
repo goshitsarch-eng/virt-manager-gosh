@@ -4482,12 +4482,28 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                         "Watchdog",
                         "Display",
                     )
+                    want_l = want.lower()
+                    have_l = have.lower()
+                    col0_l = col0.lower()
+                    usb_want = "controller" in want_l and "usb" in want_l
+                    usb_have = (
+                        "controller" in have_l and "usb" in have_l
+                    ) or (
+                        "controller" in col0_l and "usb" in col0_l
+                    )
                     if (
                         have == want
                         or col0 == want
                         or unique
                         or (want and want in have)
                         or (want and want in col0)
+                        or (usb_want and usb_have)
+                        or (
+                            usb_want
+                            and have
+                            and have_l in want_l
+                            and "pci" not in have_l
+                        )
                     ):
                         sel.select_iter(_iter)
                         return True
@@ -4896,18 +4912,51 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             itext = ""
         if itext != "":
             matched = False
-            try:
-                matched = bool(_select_index(itext))
-            except Exception:
-                matched = False
             want_name = ""
             try:
                 want_name = open("/tmp/vmm-a11y-hw-select.txt", "r").read().strip()
             except Exception:
                 want_name = ""
-            # Index is authoritative for duplicate NIC/Controller labels.
-            # _select_name() always hits the first copy and undoes reverse
-            # walks / last-row clicks.
+            index_ok = True
+            if want_name:
+                try:
+                    idx = int(itext)
+                    model = treeview.get_model()
+                    count = [0]
+                    have = None
+                    _iter = model.get_iter_first() if model is not None else None
+                    while _iter is not None:
+                        if count[0] == idx:
+                            have = _mnemonic_label(
+                                str(model[_iter][name_column] or "")
+                            )
+                            break
+                        count[0] += 1
+                        _iter = model.iter_next(_iter)
+                    if have is None:
+                        index_ok = False
+                    elif have != want_name:
+                        # USB 2/3 rewrite moves "Controller USB 0"; the
+                        # old index now names PCI/SCSI.
+                        want_l = want_name.lower()
+                        have_l = have.lower()
+                        same_usb = (
+                            "controller" in want_l
+                            and "usb" in want_l
+                            and "controller" in have_l
+                            and "usb" in have_l
+                        )
+                        index_ok = same_usb
+                except Exception:
+                    index_ok = False
+            if index_ok:
+                try:
+                    matched = bool(_select_index(itext))
+                except Exception:
+                    matched = False
+            # Index is authoritative for duplicate NIC/Controller labels
+            # only while it still names that row. After a USB rewrite the
+            # name must win so piix3-uhci is not applied to PCI.
             if not matched and want_name:
                 matched = bool(_select_name(want_name))
             if matched:
