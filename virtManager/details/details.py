@@ -3173,10 +3173,25 @@ class vmmDetails(vmmGObjectUI):
             if _EDIT_SHARE in getattr(self._addstorage, "_active_edits", []):
                 dest = str(newrow[HW_LIST_COL_LABEL] or "")
                 dirty = getattr(self, "_vmm_dirty_hw", None)
+                a11y = ""
+                for path in (
+                    "/tmp/vmm-a11y-hw-selected.txt",
+                    "/tmp/vmm-a11y-hw-clicked.txt",
+                ):
+                    try:
+                        a11y = open(path, "r").read().strip()
+                    except Exception:
+                        a11y = ""
+                    if a11y:
+                        break
+                # GTK catching up to the disk page the user is already
+                # on. A real Don't-warn leave writes CPUs to the
+                # selected/clicked sentinels first.
                 if (
                     newrow[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK
                     and dirty
                     and dest == dirty
+                    and (not a11y or a11y == dest)
                 ):
                     self._oldhwkey = newrow[HW_LIST_COL_KEY]
                     return
@@ -4192,11 +4207,6 @@ class vmmDetails(vmmGObjectUI):
                 row = self._a11y_selected_hw_row()
             if row is not None:
                 dirty = str(row[HW_LIST_COL_LABEL] or "")
-                if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
-                    try:
-                        self._oldhwkey = row[HW_LIST_COL_KEY]
-                    except Exception:
-                        pass
             if not dirty:
                 dirty = getattr(self, "_vmm_last_refreshed_hw", None)
             if dirty:
