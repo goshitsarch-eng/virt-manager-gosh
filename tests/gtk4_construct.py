@@ -953,6 +953,10 @@ def main():
         cvol = vmmCreateVolume(conn, pool)
         btn = cvol.widget("vol-create")
         assert getattr(btn, "_vmm_icon_child", False), "Finish button lost document-new icon"
+        assert getattr(cvol.widget("vbox1"), "_vmm_gtk3_border_width", 0) == 12
+        child = dlg.topwin.get_child()
+        assert child is not None
+        assert child.get_margin_top() >= 12, child.get_margin_top()
         try:
             cvol.close()
         except Exception:
@@ -1194,6 +1198,12 @@ def main():
         serial = vmmSerialConsole(vm, port, name)
         assert serial._box is not None
         assert serial._box.get_visible_child_name() == "term"
+        term = serial._vteterminal
+        assert term is not None
+        assert getattr(term, "_vmm_gtk3_serial_colors", False)
+        parent = term.get_parent()
+        assert parent is not None
+        assert parent.has_css_class("vmm-serial-bg"), list(parent.get_css_classes())
         serial._show_error("gtk4 serial error")
         assert serial._box.get_visible_child_name() == "error"
         serial._serial_popup.show_all()

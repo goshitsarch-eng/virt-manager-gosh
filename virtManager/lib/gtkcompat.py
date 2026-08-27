@@ -765,6 +765,119 @@ def restore_button_icon_name(button, icon_name, accessible_name=None):
         set_accessible_name(button, name)
 
 
+# GTK 3 border-width values stripped by convert_ui_gtk4.py. GTK 4 has no
+# border-width; restore them as margins so dialogs are not cramped.
+_GTK3_BORDER_WIDTHS = {
+    "addhardware.ui": {"vbox23": 12},
+    "asyncjob.ui": {"vmm-progress": 12},
+    "clone.ui": {
+        "vmm-change-storage": 5,
+        "vbox2": 6,
+        "table3": 6,
+        "hbox77": 6,
+        "vbox4": 12,
+    },
+    "connectauth.ui": {"connectauth": 6},
+    "console.ui": {"console-auth": 6},
+    "createconn.ui": {"vmm-open-connection": 6},
+    "createnet.ui": {"box77": 6, "vbox23": 12},
+    "createpool.ui": {"hbox77": 6, "vbox2": 12},
+    "createvm.ui": {
+        "hbox77": 6,
+        "vbox2": 12,
+        "install-oscontainer-source": 10,
+    },
+    "createvol.ui": {"hbox77": 6, "vbox1": 12},
+    "delete.ui": {"hbox77": 6, "vbox1": 12},
+    "details.ui": {
+        "details-top-box": 12,
+        "table5": 3,
+        "table1": 3,
+        "table17": 3,
+        "table30": 3,
+        "table6": 3,
+        "table32": 3,
+        "table31": 3,
+        "table33": 3,
+        "table36": 3,
+        "table37": 3,
+        "table18": 3,
+        "table51": 3,
+        "table16": 3,
+    },
+    "host.ui": {"details-tabs": 6, "vbox2": 6},
+    "hostnets.ui": {"top-box": 3, "hpaned2": 3, "hbox15": 3},
+    "hoststorage.ui": {"storage-grid": 3, "hbox9": 3, "storage-pane": 3},
+    "migrate.ui": {"hbox77": 6, "vbox2": 12},
+    "oslist.ui": {"vmm-oslist": 6},
+    "preferences.ui": {
+        "vmm-preferences": 12,
+        "frame5": 12,
+        "frame1": 12,
+        "box3": 12,
+        "frame3": 12,
+        "frame6": 12,
+    },
+    "snapshots.ui": {"snapshot-top-box": 12},
+    "snapshotsnew.ui": {"hbox77": 6, "box3": 12},
+    "storagebrowse.ui": {"vmm-storage-browse": 6},
+}
+
+
+def apply_gtk3_border_width(widget, width):
+    """GTK 3 border-width as GTK 4 margins (windows apply to their child)."""
+    if widget is None:
+        return
+    try:
+        width = int(width)
+    except Exception:
+        return
+    if width <= 0:
+        return
+    target = widget
+    try:
+        if isinstance(widget, Gtk.Window):
+            child = widget.get_child()
+            if child is not None:
+                target = child
+        elif isinstance(widget, Gtk.Popover):
+            child = widget.get_child()
+            if child is not None:
+                target = child
+    except Exception:
+        target = widget
+    for name in ("margin-top", "margin-bottom", "margin-start", "margin-end"):
+        try:
+            getter = "get_" + name.replace("-", "_")
+            setter = "set_" + name.replace("-", "_")
+            current = 0
+            if hasattr(target, getter):
+                current = int(getattr(target, getter)() or 0)
+            getattr(target, setter)(max(current, width))
+        except Exception:
+            pass
+    target._vmm_gtk3_border_width = width
+
+
+def apply_gtk3_border_widths(builder, uifile):
+    if builder is None or not uifile:
+        return
+    mapping = _GTK3_BORDER_WIDTHS.get(os.path.basename(str(uifile)), {})
+    if not mapping:
+        return
+    getter = getattr(builder, "get_object", None)
+    if getter is None and hasattr(builder, "_builder"):
+        getter = builder._builder.get_object
+    if getter is None:
+        return
+    for oid, width in mapping.items():
+        try:
+            widget = getter(oid)
+        except Exception:
+            widget = None
+        apply_gtk3_border_width(widget, width)
+
+
 def restore_password_input_purpose(widget):
     """GTK 3 visibility=False entries were password fields to IM/a11y."""
     if widget is None or not isinstance(widget, Gtk.Entry):

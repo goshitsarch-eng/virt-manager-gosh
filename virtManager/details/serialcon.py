@@ -238,10 +238,35 @@ class vmmSerialConsole(vmmGObject):
     # UI init #
     ###########
 
+    def _apply_gtk3_serial_colors(self):
+        """GTK 3 VTE sat on a black EventBox; keep a dark console palette."""
+        term = self._vteterminal
+        if term is None:
+            return
+        bg = Gdk.RGBA()
+        fg = Gdk.RGBA()
+        bg.parse("rgb(0,0,0)")
+        fg.parse("rgb(170,170,170)")
+        try:
+            term.set_color_background(bg)
+            term.set_color_foreground(fg)
+        except Exception:
+            pass
+        try:
+            term.set_color_cursor(fg)
+        except Exception:
+            pass
+        try:
+            term.set_color_bold(fg)
+        except Exception:
+            pass
+        term._vmm_gtk3_serial_colors = True
+
     def _init_terminal(self):
         self._vteterminal = Vte.Terminal()
         self._vteterminal.set_scrollback_lines(1000)
         self._vteterminal.set_audible_bell(False)
+        self._apply_gtk3_serial_colors()
         try:
             self._vteterminal.get_accessible().set_name("Serial Terminal")
         except Exception:
@@ -309,7 +334,7 @@ class vmmSerialConsole(vmmGObject):
         align.set_hexpand(True)
         align.set_vexpand(True)
         try:
-            align.add_css_class("view")
+            align.add_css_class("vmm-serial-bg")
         except Exception:
             pass
         scrollbar = Gtk.Scrollbar(orientation=Gtk.Orientation.VERTICAL)

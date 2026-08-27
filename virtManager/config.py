@@ -44,6 +44,11 @@ CSSDATA = """
     margin: 0;
 }
 
+/* GTK 3 serial console sat on a black EventBox */
+.vmm-serial-bg {
+    background-color: #000000;
+}
+
 /* Visually hide labels that exist only so AT-SPI sees GTK 3 button names */
 .vmm-sr-only {
     min-width: 1px;
