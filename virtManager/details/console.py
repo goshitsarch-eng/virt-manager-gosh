@@ -1431,8 +1431,7 @@ class vmmConsolePages(vmmGObjectUI):
             self._show_vm_status_unavailable()
             return
 
-        viewer_initialized = self._viewer and self._viewer.console_is_open()
-        if viewer_initialized:
+        if self._viewer:
             return
 
         cpage = self.widget("console-pages").get_current_page()
