@@ -10765,6 +10765,16 @@ class _SentinelSnapshotNewRadio(object):
     def onscreen(self):
         return self.showing
 
+    @property
+    def isChecked(self):
+        try:
+            mode = open("/tmp/vmm-a11y-snapshot-new-mode.txt", "r").read().strip().lower()
+        except Exception:
+            mode = ""
+        if not mode:
+            return self._value == "external"
+        return mode.startswith(self._value)
+
     def check_onscreen(self):
         return True
 
