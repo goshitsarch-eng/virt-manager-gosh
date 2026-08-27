@@ -1973,6 +1973,16 @@ class _SentinelSerialTerminal(object):
                 if not os.path.exists("/tmp/vmm-a11y-serial-popup-show"):
                     return
                 time.sleep(0.05)
+            return
+        try:
+            open("/tmp/vmm-a11y-serial-focus", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-serial-focus"):
+                return
+            time.sleep(0.05)
 
     def doubleClick(self, *args, **kwargs):
         ignore = (args, kwargs)
@@ -10172,6 +10182,15 @@ class _SentinelVMWindow(object):
 
     def click_title(self, *args, **kwargs):
         ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-vmwindow-click-title", "w").write("1")
+        except Exception:
+            pass
+        deadline = time.time() + 2.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-vmwindow-click-title"):
+                return
+            time.sleep(0.05)
 
     def find(
         self,

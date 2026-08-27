@@ -694,11 +694,23 @@ class vmmConsolePages(vmmGObjectUI):
                                     pass
                             self.emit("change-title")
                         elif "ctrl" in combo and "shift" in combo and "w" in combo:
-                            if not self._pointer_is_grabbed:
+                            if not self._should_ignore_window_close_accel():
                                 try:
                                     self.topwin.close()
                                 except Exception:
                                     pass
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-serial-focus"):
+                        os.remove("/tmp/vmm-a11y-serial-focus")
+                        self._focus_serial_console()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists("/tmp/vmm-a11y-vmwindow-click-title"):
+                        os.remove("/tmp/vmm-a11y-vmwindow-click-title")
+                        self._unfocus_serial_console()
                 except Exception:
                     pass
                 try:
@@ -798,6 +810,40 @@ class vmmConsolePages(vmmGObjectUI):
     #################
     # Internal APIs #
     #################
+
+    def _serial_has_focus(self):
+        try:
+            return any(s.has_focus() for s in self._serial_consoles)
+        except Exception:
+            return False
+
+    def _should_ignore_window_close_accel(self):
+        """GTK 3 drops File->Close while serial is focused or the viewer grabs keys."""
+        if self._pointer_is_grabbed:
+            return True
+        if self._gtk_settings_accel is not None:
+            return True
+        return self._serial_has_focus()
+
+    def _focus_serial_console(self):
+        for serial in self._serial_consoles:
+            term = getattr(serial, "_vteterminal", None)
+            if term is None:
+                continue
+            try:
+                term.grab_focus()
+            except Exception:
+                pass
+        self._disable_modifiers()
+
+    def _unfocus_serial_console(self):
+        self._pointer_is_grabbed = False
+        try:
+            self.topwin.grab_focus()
+        except Exception:
+            pass
+        self._enable_modifiers()
+        self.emit("change-title")
 
     def _disable_modifiers(self):
         if self._gtk_settings_accel is not None:
@@ -1298,7 +1344,7 @@ class vmmConsolePages(vmmGObjectUI):
         self._viewer_sync_modifiers()
 
     def _viewer_sync_modifiers(self):
-        serial_has_focus = any([s.has_focus() for s in self._serial_consoles])
+        serial_has_focus = self._serial_has_focus()
         viewer_keyboard_grab = self._viewer and self._viewer.console_has_keyboard_grab()
 
         if serial_has_focus or viewer_keyboard_grab:

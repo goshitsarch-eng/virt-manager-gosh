@@ -551,6 +551,36 @@ def main():
         toolbar.timed_revealer.force_reveal(True)
         toolbar._on_send_key_button_clicked_cb(toolbar._send_key_button)
         toolbar.cleanup()
+        con = win._console
+        closed = []
+        orig_close = con.topwin.close
+        con.topwin.close = lambda *_a, **_k: closed.append(True)
+        try:
+            con._pointer_is_grabbed = False
+            if con._gtk_settings_accel is not None:
+                con._enable_modifiers()
+            assert not con._should_ignore_window_close_accel()
+            con._disable_modifiers()
+            assert con._should_ignore_window_close_accel()
+            if not con._should_ignore_window_close_accel():
+                con.topwin.close()
+            assert not closed
+            con._enable_modifiers()
+            assert not con._should_ignore_window_close_accel()
+            if not con._should_ignore_window_close_accel():
+                con.topwin.close()
+            assert closed
+            closed.clear()
+            con._focus_serial_console()
+            assert con._should_ignore_window_close_accel()
+            con._unfocus_serial_console()
+            assert not con._should_ignore_window_close_accel()
+        finally:
+            try:
+                con._enable_modifiers()
+            except Exception:
+                pass
+            con.topwin.close = orig_close
         bar = Gtk.MenuBar()
         file_item = Gtk.MenuItem(label="File")
         sub = Gtk.Menu()
