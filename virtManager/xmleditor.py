@@ -155,11 +155,11 @@ class vmmXMLEditor(vmmGObjectUI):
                             pass
                         if answer == "yes":
                             self.details_changed = False
-                            self.widget("xml-notebook").set_current_page(_PAGE_XML)
+                            self._goto_xml_page(_PAGE_XML)
                             self._curpage = _PAGE_XML
                             self.emit("xml-requested")
                         else:
-                            self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
+                            self._goto_xml_page(_PAGE_DETAILS)
                         self._publish_xml_a11y()
                     elif getattr(self, "_vmm_xml_leave_pending", False) and os.path.exists(resp):
                         answer = open(resp, "r").read().strip().lower()
@@ -171,9 +171,9 @@ class vmmXMLEditor(vmmGObjectUI):
                             pass
                         if answer == "yes":
                             self._srcxml = self.get_xml() or self._srcxml
-                            self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
+                            self._goto_xml_page(_PAGE_DETAILS)
                         else:
-                            self.widget("xml-notebook").set_current_page(_PAGE_XML)
+                            self._goto_xml_page(_PAGE_XML)
                         self._publish_xml_a11y()
                 except Exception:
                     pass
@@ -253,7 +253,7 @@ class vmmXMLEditor(vmmGObjectUI):
                                 pass
                             self._publish_xml_a11y()
                             return True
-                        self.widget("xml-notebook").set_current_page(_PAGE_XML)
+                        self._goto_xml_page(_PAGE_XML)
                         curxml = self.get_xml() or ""
                         # Add Hardware must publish device XML, not a
                         # leftover domain document from the VM window.
@@ -262,7 +262,7 @@ class vmmXMLEditor(vmmGObjectUI):
                         elif not curxml.strip():
                             self.emit("xml-requested")
                     elif want == "Details":
-                        self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
+                        self._goto_xml_page(_PAGE_DETAILS)
                     self._publish_xml_a11y()
                 except Exception:
                     pass
