@@ -219,10 +219,12 @@ class vmmStorageBrowser(vmmGObjectUI):
 
             if not getattr(self, "_vmm_browse_cancel_poll", False):
                 self._vmm_browse_cancel_poll = True
-                GLib.timeout_add(50, _poll_browse_cancel)
+                self._vmm_browse_cancel_poll_cb = _poll_browse_cancel
+                GLib.timeout_add(50, self._vmm_browse_cancel_poll_cb)
             if not getattr(self, "_vmm_vol_select_poll", False):
                 self._vmm_vol_select_poll = True
-                GLib.timeout_add(50, _select_vol_tick)
+                self._vmm_vol_select_poll_cb = _select_vol_tick
+                GLib.timeout_add(50, self._vmm_vol_select_poll_cb)
 
             def _poll_pool_select():
                 path = "/tmp/vmm-a11y-pool-select.txt"
@@ -237,7 +239,8 @@ class vmmStorageBrowser(vmmGObjectUI):
 
             if not getattr(self, "_vmm_pool_select_poll", False):
                 self._vmm_pool_select_poll = True
-                GLib.timeout_add(50, _poll_pool_select)
+                self._vmm_pool_select_poll_cb = _poll_pool_select
+                GLib.timeout_add(50, self._vmm_pool_select_poll_cb)
             try:
                 self.storagelist._start_a11y_poll()
             except Exception:
@@ -266,7 +269,8 @@ class vmmStorageBrowser(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_choose)
+            self._vmm_choose_poll_cb = _poll_choose
+            GLib.timeout_add(50, self._vmm_choose_poll_cb)
         self.topwin.present()
         self.conn.schedule_priority_tick(pollpool=True)
 
