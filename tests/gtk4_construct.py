@@ -348,6 +348,7 @@ def main():
 
         dlg = vmmPreferences()
         dlg.show(None)
+        assert dlg.topwin.get_default_widget() is dlg.widget("prefs-close")
         prev_gfs = vmmInspection._libguestfs_installed
         vmmInspection._libguestfs_installed = False
         try:
@@ -408,6 +409,16 @@ def main():
         dlg = vmmCreateVM()
         dlg.show(None, conn.get_uri())
         assert dlg.topwin.get_default_widget() is dlg.widget("create-forward")
+        _pump(GLib, 0.05)
+        nb = dlg.widget("create-pages")
+        cur = nb.get_current_page()
+        hidden = 0
+        for idx in range(nb.get_n_pages()):
+            page = nb.get_nth_page(idx)
+            if page is not None and not page.get_visible():
+                hidden += 1
+        assert hidden >= 1, "GTK 3 New VM wizard hid inactive notebook pages"
+        assert nb.get_nth_page(cur).get_visible()
 
     def host():
         from virtManager.host import vmmHost
@@ -420,6 +431,14 @@ def main():
 
         win = vmmVMWindow(vm)
         win.show()
+        cust = vmmVMWindow(vm, parent=win.topwin)
+        assert cust.is_customize_dialog
+        assert getattr(cust.topwin, "_vmm_window_type_dialog", False)
+        assert getattr(cust.topwin, "_vmm_center_on_parent", False)
+        try:
+            cust.close()
+        except Exception:
+            pass
         orig = win._console
 
         class _EmptyConsole:
@@ -442,6 +461,15 @@ def main():
         dlg = vmmAddHardware(vm)
         dlg.show(None)
         assert dlg.topwin.get_default_widget() is dlg.widget("create-finish")
+        nb = dlg.widget("create-pages")
+        cur = nb.get_current_page()
+        hidden = 0
+        for idx in range(nb.get_n_pages()):
+            page = nb.get_nth_page(idx)
+            if page is not None and not page.get_visible():
+                hidden += 1
+        assert hidden >= 1, "GTK 3 Add Hardware hid inactive notebook pages"
+        assert nb.get_nth_page(cur).get_visible()
 
     def clone():
         from virtManager.clone import vmmCloneVM
@@ -1083,9 +1111,12 @@ def main():
         assert extra.get_hexpand() is True
         assert extra.get_vexpand() is True
         # GTK 3 content_area.add() keeps extras above Close/OK.
-        nxt = extra.get_next_sibling()
-        assert nxt is not None
-        assert extra.get_parent().get_first_child() is not extra
+        extra_root = extra.get_root()
+        assert extra.get_parent() is extra_root._extra_box
+        assert extra_root._body.get_next_sibling() is extra_root._button_box
+        assert extra_root._primary.get_max_width_chars() == 40
+        assert extra_root._secondary.get_max_width_chars() == 40
+        assert extra_root.get_default_widget() is not None
 
         dlg = _errorDialog(message_type=Gtk.MessageType.ERROR)
         assert getattr(dlg, "_vmm_window_type_dialog", False)
@@ -1415,6 +1446,7 @@ def main():
         serial._show_error("gtk4 serial error")
         assert serial._box.get_visible_child_name() == "error"
         serial._serial_popup.show_all()
+        assert serial._serial_popover is None
         from virtManager.details.console import _TimedRevealer
 
         toolbar = Gtk.Box()

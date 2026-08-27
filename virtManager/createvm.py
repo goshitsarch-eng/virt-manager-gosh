@@ -3318,11 +3318,34 @@ class vmmCreateVM(vmmGObjectUI):
 
             GLib.idle_add(_restore)
 
-        # Do not hide inactive Gtk.Notebook pages here. set_visible(False)
-        # after GetItems blocks the main loop long enough that Back misses
-        # the 2s pagenum check.
+        try:
+            page = self.widget("create-pages").get_nth_page(pagenum)
+            if page is not None:
+                page.set_visible(True)
+        except Exception:
+            pass
 
+        # Publish Step N before hiding siblings. Synchronous hide after
+        # GetItems blocked Back's 2s pagenum check; idle keeps GTK 3
+        # shrink-wrap without stalling the switch.
         self._set_page_num_text(pagenum)
+        self._vmm_shrink_want = pagenum
+
+        def _shrink():
+            if getattr(self, "builder", None) is None:
+                return False
+            want = getattr(self, "_vmm_shrink_want", None)
+            if want is None:
+                return False
+            if getattr(self, "_vmm_goto_page", None) not in (None, want):
+                return False
+            gtkcompat.hide_inactive_notebook_pages(
+                self.widget("create-pages"), want, self.topwin
+            )
+            return False
+
+        self._vmm_shrink_cb = _shrink
+        GLib.idle_add(self._vmm_shrink_cb)
 
     ############################
     # Page validation routines #

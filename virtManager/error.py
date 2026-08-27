@@ -114,21 +114,29 @@ def _launch_dialog(
             widget.set_vexpand(True)
         except Exception:
             pass
-        content = dialog.get_content_area()
+        extra_box = getattr(dialog, "_extra_box", None)
+        content = extra_box if extra_box is not None else dialog.get_content_area()
         # GTK 3 MessageDialog.get_content_area().add() places extras
         # above the action buttons, not after Close/OK.
-        header = None
-        try:
-            header = content.get_first_child()
-        except Exception:
-            header = None
         inserted = False
-        try:
-            if header is not None and hasattr(content, "insert_child_after"):
-                content.insert_child_after(widget, header)
+        if extra_box is not None:
+            try:
+                extra_box.append(widget)
                 inserted = True
-        except Exception:
-            inserted = False
+            except Exception:
+                inserted = False
+        if not inserted:
+            header = None
+            try:
+                header = content.get_first_child()
+            except Exception:
+                header = None
+            try:
+                if header is not None and hasattr(content, "insert_child_after"):
+                    content.insert_child_after(widget, header)
+                    inserted = True
+            except Exception:
+                inserted = False
         if not inserted:
             try:
                 content.append(widget)
@@ -472,6 +480,8 @@ class _errorDialog(Gtk.Window):
         self._content.set_margin_bottom(16)
         self._content.set_margin_start(16)
         self._content.set_margin_end(16)
+        self._body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self._extra_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
 
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self._icon = Gtk.Image()
@@ -498,16 +508,20 @@ class _errorDialog(Gtk.Window):
         self._primary.set_xalign(0)
         self._primary.set_selectable(True)
         self._primary.set_use_markup(True)
+        self._primary.set_max_width_chars(40)
         self._primary.set_accessible_role(Gtk.AccessibleRole.LABEL)
         self._secondary = Gtk.Label()
         self._secondary.set_wrap(True)
         self._secondary.set_xalign(0)
         self._secondary.set_selectable(True)
+        self._secondary.set_max_width_chars(40)
         self._secondary.set_accessible_role(Gtk.AccessibleRole.LABEL)
         textcol.append(self._primary)
         textcol.append(self._secondary)
         header.append(textcol)
-        self._content.append(header)
+        self._body.append(header)
+        self._body.append(self._extra_box)
+        self._content.append(self._body)
         self._button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._button_box.set_halign(Gtk.Align.END)
         self._add_buttons(buttons)
@@ -547,9 +561,12 @@ class _errorDialog(Gtk.Window):
             default = btn
         if default is not None:
             try:
-                default.grab_default()
+                gtkcompat.set_window_default_button(self, default)
             except Exception:
-                pass
+                try:
+                    default.grab_default()
+                except Exception:
+                    pass
 
     def _set_primary_text(self, text):
         """GTK 3 MessageDialog used bold larger primary text that is selectable."""
@@ -568,10 +585,11 @@ class _errorDialog(Gtk.Window):
         gtkcompat.set_accessible_name(self._primary, text)
 
     def get_content_area(self):
-        return self._content
+        # Body only: checkbox, Details, and extras stay above the buttons.
+        return self._body
 
     def get_message_area(self):
-        return self._content
+        return self._body
 
     def format_secondary_text(self, text):
         self._secondary.set_text(text or "")

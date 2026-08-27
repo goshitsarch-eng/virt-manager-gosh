@@ -303,20 +303,13 @@ class vmmSerialConsole(vmmGObject):
             pass
         self._vteterminal._vmm_gtk3_serial_primary = True
         self._vmm_gtk3_serial_primary = True
+        # GTK 3 used one Gtk.Menu at the pointer. A VTE set_context_menu
+        # popover would stack a second menu on right-click.
         try:
-            popover = Gtk.Popover()
-            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-            copy_b = Gtk.Button(label=_("Copy"))
-            copy_b.connect("clicked", self._serial_copy_text)
-            paste_b = Gtk.Button(label=_("Paste"))
-            paste_b.connect("clicked", self._serial_paste_text)
-            box.append(copy_b)
-            box.append(paste_b)
-            popover.set_child(box)
-            self._vteterminal.set_context_menu(popover)
-            self._serial_popover = popover
+            self._vteterminal.set_context_menu(None)
         except Exception:
-            self._serial_popover = None
+            pass
+        self._serial_popover = None
         self._vteterminal.connect("commit", self._datastream.send_data, self._vteterminal)
         self._vteterminal.show()
 

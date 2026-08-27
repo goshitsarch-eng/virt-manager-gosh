@@ -1093,7 +1093,43 @@ _GTK3_DEFAULT_BUTTONS = {
     "vmm-create-vol": "vol-create",
     "snapshot-new": "snapshot-new-ok",
     "vmm-open-connection": "connect",
+    "vmm-preferences": "prefs-close",
 }
+
+
+def hide_inactive_notebook_pages(notebook, current, window=None):
+    """GTK 3 wizard shrink-wrap: only the active notebook page is visible."""
+    if notebook is None:
+        return False
+    try:
+        current = int(current)
+    except Exception:
+        return False
+    changed = False
+    try:
+        n_pages = notebook.get_n_pages()
+    except Exception:
+        return False
+    for nr in range(n_pages):
+        try:
+            page = notebook.get_nth_page(nr)
+        except Exception:
+            page = None
+        if page is None:
+            continue
+        visible = nr == current
+        try:
+            if bool(page.get_visible()) != visible:
+                page.set_visible(visible)
+                changed = True
+        except Exception:
+            pass
+    if window is not None:
+        try:
+            window.resize(1, 1)
+        except Exception:
+            pass
+    return changed
 
 
 def set_window_default_button(window, button):

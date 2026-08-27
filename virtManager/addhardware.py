@@ -1180,6 +1180,9 @@ class vmmAddHardware(vmmGObjectUI):
         self._set_page_title(page)
         self.widget("create-pages").get_nth_page(page).show()
         self.widget("create-pages").set_current_page(page)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("create-pages"), page, self.topwin
+        )
         self.widget("top-pages").set_current_page(0)
         try:
             page_names = {

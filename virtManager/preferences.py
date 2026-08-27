@@ -114,6 +114,12 @@ class vmmPreferences(vmmGObjectUI):
             self.widget("prefs-pages").set_current_page(0)
         except Exception:
             pass
+        try:
+            gtkcompat.set_window_default_button(
+                self.topwin, self.widget("prefs-close")
+            )
+        except Exception:
+            pass
         self.topwin.present()
         try:
             open("/tmp/vmm-a11y-prefs-shown.txt", "w").write("1")
