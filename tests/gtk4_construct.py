@@ -520,6 +520,28 @@ def main():
         engine._launch_cli_window(uri, vmmEngine.CLI_SHOW_DOMAIN_EDITOR, name)
         engine._launch_cli_window(uri, vmmEngine.CLI_SHOW_DOMAIN_CONSOLE, name)
         engine._launch_cli_window(uri, vmmEngine.CLI_SHOW_DOMAIN_PERFORMANCE, name)
+        engine._launch_cli_window(uri, vmmEngine.CLI_SHOW_DOMAIN_DELETE, name)
+        _pump(GLib, 0.3)
+        try:
+            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+        except Exception:
+            title = ""
+        try:
+            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        try:
+            delete_shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip()
+        except Exception:
+            delete_shown = ""
+        assert shown == name or name in title, (
+            "CLI --show-domain-delete did not show details for %s (shown=%r title=%r)"
+            % (name, shown, title)
+        )
+        assert " on " in title, (
+            "CLI --show-domain-delete details title missing connection: %r" % title
+        )
+        assert delete_shown == "1", "CLI --show-domain-delete did not show Delete"
 
     def xmleditor_pages():
         from virtManager.addhardware import vmmAddHardware

@@ -9190,6 +9190,49 @@ def _vmwindow_open(want=None):
     return True
 
 
+def _sentinel_vm_title_frame(name, roleName, timeout=5):
+    """Details window titled '<vm> on <conn>' while another dialog is mapped.
+
+    Official testShowDelete looks for frame 'test on' after --show-domain-delete
+    opens both the details window and the Delete dialog. GTK 4 GetItems often
+    omits the details frame once Delete is transient-for it.
+    """
+    raw = str(name or "")
+    compact = raw.replace(".*", "")
+    if " on " not in compact:
+        return None
+    role = str(roleName or "").lower()
+    if role and not any(
+        tok in role for tok in ("frame", "window", "dialog", "panel", "list")
+    ):
+        return None
+    deadline = time.time() + max(1.0, float(timeout or 5))
+    while time.time() < deadline:
+        title = ""
+        shown = ""
+        try:
+            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+        except Exception:
+            title = ""
+        try:
+            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+        except Exception:
+            shown = ""
+        matched = False
+        if title:
+            try:
+                matched = bool(re.search(raw, title))
+            except Exception:
+                matched = compact in title
+        if not matched and shown:
+            guest = compact.split(" on ", 1)[0].strip()
+            matched = _vmwindow_matches(shown, guest)
+        if shown and matched:
+            return _SentinelVMWindow(shown)
+        time.sleep(0.05)
+    return None
+
+
 def _hw_list_names():
     try:
         return [n for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines() if n]
@@ -15501,6 +15544,9 @@ class _VMMDogtailNode(dogtail.tree.Node):
                         )
                         return _SentinelDeleteWindow(pretty)
                     time.sleep(0.05)
+        sent = _sentinel_vm_title_frame(name, raw_role, timeout)
+        if sent is not None:
+            return sent
         if name and "init path" in str(name).replace(".*", "").lower():
             return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
         if name and "init args" in str(name).replace(".*", "").lower():

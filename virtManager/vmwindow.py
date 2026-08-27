@@ -247,6 +247,7 @@ class vmmVMWindow(vmmGObjectUI):
             open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
             open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self.vm.get_name())
             open("/tmp/vmm-a11y-vm-select.txt", "w").write(self.vm.get_name())
+            self._refresh_title()
         except Exception:
             pass
         try:
