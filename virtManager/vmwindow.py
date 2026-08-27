@@ -380,6 +380,10 @@ class vmmVMWindow(vmmGObjectUI):
                     return True
                 try:
                     if action in ("Run", "Restore"):
+                        try:
+                            self._console._viewer_connect_clicked = True
+                        except Exception:
+                            pass
                         self.control_vm_run(None)
                     elif action == "Pause":
                         src = self.widget("control-pause")
@@ -1291,12 +1295,18 @@ class vmmVMWindow(vmmGObjectUI):
         self._console.vmwindow_sync_resizeguest_with_display()
 
     def _autoconnect_ui_changed_cb(self, src):
+        if getattr(self, "_ignore_autoconnect_ui", False):
+            return
         val = int(self.widget("details-menu-view-autoconnect").get_active())
         self.vm.set_console_autoconnect(val)
 
     def _console_refresh_autoconnect_from_settings(self):
-        val = self.vm.get_console_autoconnect()
-        self.widget("details-menu-view-autoconnect").set_active(val)
+        self._ignore_autoconnect_ui = True
+        try:
+            val = self.vm.get_console_autoconnect()
+            self.widget("details-menu-view-autoconnect").set_active(val)
+        finally:
+            self._ignore_autoconnect_ui = False
 
     def _size_to_vm_cb(self, src):
         self._console.vmwindow_set_size_to_vm()
