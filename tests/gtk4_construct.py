@@ -153,9 +153,10 @@ def main():
     results = []
 
     _SURFACE_TIMEOUTS = {
-        "details_refresh": 120,
+        "details_refresh": 45,
         "details_hw_pages": 90,
         "addhardware_pages": 90,
+        "details_many_devices": 20,
     }
 
     def _run(name, fn, timeout=None):
@@ -789,8 +790,9 @@ def main():
     def details_refresh():
         from virtManager.vmwindow import vmmVMWindow
 
-        rich = _named_vm("test-many-devices")
-        win = vmmVMWindow.get_instance(None, rich)
+        # Use the first testdriver VM. test-many-devices rebuilds a huge
+        # hw list on every refresh and can nest a main loop for 2+ minutes.
+        win = vmmVMWindow.get_instance(None, vm)
         win.show()
         win._details.vmwindow_refresh_vm_state(True)
         win._details._refresh_overview_page()
@@ -799,6 +801,13 @@ def main():
         win._details._refresh_config_cpu()
         win._details._refresh_config_memory()
         win._details._refresh_boot_page()
+
+    def details_many_devices():
+        from virtManager.vmwindow import vmmVMWindow
+
+        rich = _named_vm("test-many-devices")
+        win = vmmVMWindow.get_instance(None, rich)
+        win.show()
 
     def filechooser_helpers():
         from virtManager.lib import gtkcompat
@@ -1914,6 +1923,7 @@ def main():
         ("createpool_finish", createpool_finish),
         ("migrate_finish", migrate_finish),
         ("delete_vm", delete_vm),
+        ("details_many_devices", details_many_devices),
     ]:
         _run(name, fn)
 
