@@ -64,14 +64,24 @@ class _vmmConnectAuth(vmmGObjectUI):
 
         self.entry1 = self.widget("entry1")
         self.entry2 = self.widget("entry2")
+        self._entry2_in_use = False
         self._init_ui()
 
     def _cleanup(self):
         pass
 
     def _init_ui(self):
+        try:
+            area = self.topwin.get_content_area()
+            if area is not None:
+                area.set_visible(True)
+        except Exception:
+            pass
         uiutil.set_grid_row_visible(self.entry1, False)
         uiutil.set_grid_row_visible(self.entry2, False)
+        self._entry2_in_use = False
+
+        from . import gtkcompat
 
         for idx, cred in enumerate(self.creds):
             # Libvirt virConnectCredential
@@ -86,7 +96,11 @@ class _vmmConnectAuth(vmmGObjectUI):
             uiutil.set_grid_row_visible(label, True)
             label.set_text(prompt)
             entry.set_visibility(not noecho)
-            entry.get_accessible().set_name(prompt + " entry")
+            if noecho:
+                gtkcompat.restore_password_input_purpose(entry)
+            gtkcompat.set_accessible_name(entry, prompt + "entry")
+            if idx == 1:
+                self._entry2_in_use = True
 
     def run(self):
         self._closed = False
@@ -106,9 +120,28 @@ class _vmmConnectAuth(vmmGObjectUI):
 
         self._apply_pending_a11y_text()
         self.creds[0][4] = self.entry1.get_text() or self._a11y_text("user")
-        if self.entry2.get_visible() or len(self.creds) > 1:
+        if self._passphrase_row_active():
             self.creds[1][4] = self.entry2.get_text() or self._a11y_text("pass")
         return 0
+
+    def _passphrase_row_active(self):
+        """GTK 4 get_visible()/is_visible() can be false while a parent is unmapped."""
+        if getattr(self, "_entry2_in_use", False) or len(self.creds) > 1:
+            return True
+        try:
+            return bool(self.entry2.get_visible())
+        except Exception:
+            return False
+
+    def _entry_a11y_name(self, entry, fallback):
+        try:
+            label = self.widget("label1" if entry is self.entry1 else "label2")
+            text = label.get_text() if label is not None else ""
+        except Exception:
+            text = ""
+        if text:
+            return text + ("entry" if text.endswith(" ") else " entry")
+        return fallback
 
     def _a11y_text(self, key):
         path = "/tmp/vmm-a11y-connectauth-%s.txt" % key
@@ -160,8 +193,12 @@ class _vmmConnectAuth(vmmGObjectUI):
             from . import gtkcompat
 
             gtkcompat.set_accessible_name(self.topwin, "Authentication required")
-            gtkcompat.set_accessible_name(self.entry1, "Username: entry")
-            gtkcompat.set_accessible_name(self.entry2, "Password: entry")
+            gtkcompat.set_accessible_name(
+                self.entry1, self._entry_a11y_name(self.entry1, "Username: entry")
+            )
+            gtkcompat.set_accessible_name(
+                self.entry2, self._entry_a11y_name(self.entry2, "Password: entry")
+            )
             self._clear_a11y_inputs()
             open("/tmp/vmm-a11y-connectauth-user.txt", "w").write("")
             open("/tmp/vmm-a11y-connectauth-pass.txt", "w").write("")
@@ -194,7 +231,7 @@ class _vmmConnectAuth(vmmGObjectUI):
                         focus = "user"
                     src = self.entry2 if focus == "pass" else self.entry1
                     self._entry_cb(src)
-                    if src == self.entry1 and self.entry2.get_visible():
+                    if src == self.entry1 and self._passphrase_row_active():
                         open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("pass")
             except Exception:
                 pass
@@ -212,7 +249,8 @@ class _vmmConnectAuth(vmmGObjectUI):
                 pass
             return not getattr(self, "_closed", False)
 
-        GLib.timeout_add(50, _tick)
+        self._vmm_auth_tick = _tick
+        GLib.timeout_add(50, self._vmm_auth_tick)
 
     def _ok_cb(self, src):
         self._apply_pending_a11y_text()
@@ -226,13 +264,7 @@ class _vmmConnectAuth(vmmGObjectUI):
         If entry 1 activated and entry2 visible, jump to entry 2.
         Otherwise, click OK
         """
-        # GTK4 is_visible() is false when an ancestor box is unmapped.
-        entry2_up = False
-        try:
-            entry2_up = bool(self.entry2.get_visible())
-        except Exception:
-            entry2_up = False
-        if src == self.entry1 and entry2_up:
+        if src == self.entry1 and self._passphrase_row_active():
             self.entry2.grab_focus()
             try:
                 open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("pass")

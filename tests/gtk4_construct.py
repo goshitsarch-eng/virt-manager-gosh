@@ -367,6 +367,31 @@ def main():
         from virtManager.about import _gpl2_text
 
         assert "GNU GENERAL PUBLIC LICENSE" in _gpl2_text()
+        assert win.get_icon_name() == "virt-manager"
+        child = win.get_child()
+        found_link = []
+
+        def _walk(widget):
+            if widget is None:
+                return
+            if isinstance(widget, Gtk.LinkButton):
+                found_link.append(widget)
+                return
+            try:
+                kids = []
+                if hasattr(widget, "get_first_child"):
+                    kid = widget.get_first_child()
+                    while kid is not None:
+                        kids.append(kid)
+                        kid = kid.get_next_sibling()
+                for kid in kids:
+                    _walk(kid)
+            except Exception:
+                pass
+
+        _walk(child)
+        assert found_link, "About website must be a Gtk.LinkButton"
+        assert found_link[0].get_uri() == "https://virt-manager.org/"
         lic = dlg._show_license(win, present=False)
         assert lic is not None
         buf = lic.get_child().get_first_child().get_child().get_buffer()
@@ -469,6 +494,14 @@ def main():
 
         dlg = vmmAsyncJob(_cb, [], None, None, "Test", "Testing", None, show_progress=True)
         assert dlg.topwin is not None
+        assert getattr(dlg.topwin, "_vmm_skip_taskbar", False)
+        assert getattr(dlg.topwin, "_vmm_urgency_hint", False)
+        assert getattr(dlg.topwin, "_vmm_center_on_parent", False)
+        try:
+            assert dlg.topwin.get_application() is None
+        except Exception:
+            pass
+        assert dlg.topwin.get_icon_name() == "virt-manager"
 
     def systray():
         from virtManager.systray import vmmSystray
@@ -486,6 +519,23 @@ def main():
         ]
         dlg = _vmmConnectAuth(creds)
         assert dlg.topwin is not None
+        try:
+            area = dlg.topwin.get_content_area()
+            assert area is not None
+            assert area.get_visible()
+        except Exception:
+            pass
+        assert dlg._entry2_in_use
+        assert dlg._passphrase_row_active()
+        assert dlg.entry2.get_visibility() is False
+        assert dlg.entry2.get_input_purpose() == Gtk.InputPurpose.PASSWORD
+        assert dlg.widget("label1").get_text() == "Username: "
+        assert dlg.widget("label2").get_text() == "Password: "
+        focused = []
+        dlg.entry2.grab_focus = lambda *a, **k: focused.append("pass")
+        dlg._entry_cb(dlg.entry1)
+        assert focused == ["pass"], "Enter on username must focus passphrase"
+        assert dlg.topwin.get_icon_name() == "virt-manager"
 
     def oslist():
         from virtManager.oslist import vmmOSList
@@ -965,6 +1015,7 @@ def main():
         assert len(rgb_fallback) == 3
 
         assert dlg.topwin._vmm_window_type_dialog
+        assert dlg.topwin.get_icon_name() == "virt-manager"
         dlg.topwin.set_type_hint(Gdk.WindowTypeHint.DIALOG)
         dlg.topwin.set_skip_taskbar_hint(True)
         dlg.topwin.set_urgency_hint(True)
@@ -3429,6 +3480,15 @@ def main():
         tip = sni._on_get_property(None, None, None, None, "ToolTip")
         assert tip is not None
         assert "virt-manager" in str(tip)
+        popped = []
+        sni._popup_menu = lambda *_a, **_k: popped.append("menu")
+        class _Inv:
+            def return_value(self, *_a, **_k):
+                return None
+        sni._on_method(None, None, None, None, "SecondaryActivate", None, _Inv())
+        assert popped == ["menu"], "SNI SecondaryActivate must open the menu"
+        sni._on_method(None, None, None, None, "Scroll", None, _Inv())
+        assert popped == ["menu"]
         sni.hide()
         assert sni._status == "Passive"
         sni._status = "Active"

@@ -565,10 +565,15 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
 
     def _on_method(self, _conn, _sender, _path, _iface, method, params, invocation):
         ignore = params
-        if method in ("Activate", "SecondaryActivate"):
+        if method == "Activate":
             _toggle_manager()
-        elif method == "ContextMenu":
+        elif method in ("SecondaryActivate", "ContextMenu"):
+            # GTK 3 StatusIcon popup-menu (button 3). Some trays send
+            # right-click as SecondaryActivate instead of ContextMenu.
             self._popup_menu()
+        elif method == "Scroll":
+            # GTK 3 StatusIcon had no scroll-event handler.
+            pass
         invocation.return_value(None)
 
     def _popup_menu(self):

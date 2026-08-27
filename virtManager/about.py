@@ -94,6 +94,10 @@ class vmmAbout(vmmGObject):
                 dialog.set_application(app)
         dialog.set_accessible_role(Gtk.AccessibleRole.DIALOG)
         gtkcompat.set_accessible_name(dialog, "About")
+        try:
+            dialog.set_icon_name("virt-manager")
+        except Exception:
+            pass
         gtkcompat.apply_gtk3_window_hints(dialog, dialog=True)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -125,22 +129,32 @@ class vmmAbout(vmmGObject):
         _label(self.config.get_appversion())
         _label(_("Powered by libvirt"))
         _label("Copyright (C) 2006-2026 Red Hat Inc.", "Copyright")
-        website = _label(_WEBSITE, _WEBSITE)
         try:
-            click = Gtk.GestureClick()
-
-            def _open_site(*_a):
-                try:
-                    Gio.AppInfo.launch_default_for_uri(_WEBSITE, None)
-                except Exception:
-                    pass
-                return True
-
-            click.connect("pressed", _open_site)
-            website.add_controller(click)
-            website.add_css_class("link")
+            website = Gtk.LinkButton(uri=_WEBSITE, label=_WEBSITE)
+            website.set_halign(Gtk.Align.START)
+            try:
+                website.set_visited(False)
+            except Exception:
+                pass
+            gtkcompat.set_accessible_name(website, _WEBSITE)
+            box.append(website)
         except Exception:
-            pass
+            website = _label(_WEBSITE, _WEBSITE)
+            try:
+                click = Gtk.GestureClick()
+
+                def _open_site(*_a):
+                    try:
+                        Gio.AppInfo.launch_default_for_uri(_WEBSITE, None)
+                    except Exception:
+                        pass
+                    return True
+
+                click.connect("pressed", _open_site)
+                website.add_controller(click)
+                website.add_css_class("link")
+            except Exception:
+                pass
         _label(_AUTHORS, "authors")
         _label(_ARTISTS, "artists")
         credits = _("translator-credits")
@@ -219,6 +233,10 @@ class vmmAbout(vmmGObject):
         except Exception:
             pass
         gtkcompat.set_accessible_name(win, "License")
+        try:
+            win.set_icon_name("virt-manager")
+        except Exception:
+            pass
         gtkcompat.apply_gtk3_window_hints(win, dialog=True)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         box.set_margin_top(8)

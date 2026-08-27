@@ -822,6 +822,50 @@ def _x11_set_window_type_dialog(xid):
         return False
 
 
+def _x11_set_net_wm_state(xid, atoms):
+    """Apply _NET_WM_STATE atoms GTK 4 Gdk.Surface may not expose."""
+    if not xid or not atoms:
+        return False
+    try:
+        import subprocess
+
+        subprocess.check_call(
+            [
+                "xprop",
+                "-id",
+                hex(int(xid)),
+                "-f",
+                "_NET_WM_STATE",
+                "32a",
+                "-set",
+                "_NET_WM_STATE",
+                ",".join(atoms),
+            ],
+            timeout=2,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _apply_window_icon(window):
+    """GTK 3 inherited virt-manager as the window/titlebar icon."""
+    if window is None or not hasattr(window, "set_icon_name"):
+        return False
+    try:
+        current = ""
+        if hasattr(window, "get_icon_name"):
+            current = window.get_icon_name() or ""
+        if current:
+            return False
+        window.set_icon_name("virt-manager")
+        return True
+    except Exception:
+        return False
+
+
 def _center_window_on_parent(window):
     parent = None
     try:
@@ -927,15 +971,23 @@ def _apply_x11_window_hints(window):
             applied = True
     except Exception:
         pass
-    if getattr(window, "_vmm_window_type_dialog", False):
+    xid = None
+    try:
+        if _window_is_live(window) and hasattr(surface, "get_xid"):
+            xid = surface.get_xid()
+    except Exception:
         xid = None
-        try:
-            if _window_is_live(window) and hasattr(surface, "get_xid"):
-                xid = surface.get_xid()
-        except Exception:
-            xid = None
-        if xid:
-            applied = _x11_set_window_type_dialog(xid) or applied
+    if getattr(window, "_vmm_window_type_dialog", False) and xid:
+        applied = _x11_set_window_type_dialog(xid) or applied
+    state_atoms = []
+    if getattr(window, "_vmm_skip_taskbar", False):
+        state_atoms.append("_NET_WM_STATE_SKIP_TASKBAR")
+    if getattr(window, "_vmm_skip_pager", False):
+        state_atoms.append("_NET_WM_STATE_SKIP_PAGER")
+    if getattr(window, "_vmm_urgency_hint", False):
+        state_atoms.append("_NET_WM_STATE_DEMANDS_ATTENTION")
+    if state_atoms and xid:
+        applied = _x11_set_net_wm_state(xid, state_atoms) or applied
     if applied:
         window._vmm_hints_applied = True
     return applied
@@ -956,12 +1008,18 @@ def apply_gtk3_window_hints(
         window._vmm_window_type_dialog = True
     if skip_taskbar:
         window._vmm_skip_taskbar = True
+        # app.add_window / set_application creates a Wayland taskbar entry.
+        try:
+            window.set_application(None)
+        except Exception:
+            pass
     if skip_pager:
         window._vmm_skip_pager = True
     if urgency:
         window._vmm_urgency_hint = True
     if center_on_parent:
         window._vmm_center_on_parent = True
+    _apply_window_icon(window)
 
     def _apply(*_a):
         if getattr(window, "_vmm_hints_dead", False):

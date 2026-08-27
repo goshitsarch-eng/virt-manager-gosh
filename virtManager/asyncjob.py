@@ -232,7 +232,8 @@ class vmmAsyncJob(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_cancel)
+            self._vmm_progress_cancel_tick = _poll_cancel
+            GLib.timeout_add(50, self._vmm_progress_cancel_tick)
 
     ####################
     # Internal helpers #
@@ -318,11 +319,23 @@ class vmmAsyncJob(vmmGObjectUI):
                 open("/tmp/vmm-a11y-progress.txt", "w").write("1")
             except Exception:
                 pass
+            # Do not app.add_window(): that forces a Wayland taskbar entry
+            # and defeats GTK 3 skip-taskbar-hint on vmm-progress.
             try:
-                gtkcompat._ensure_app_window(self.topwin)
+                self.topwin.set_application(None)
             except Exception:
                 pass
             self.topwin.present()
+            try:
+                gtkcompat.apply_gtk3_window_hints(
+                    self.topwin,
+                    dialog=True,
+                    skip_taskbar=True,
+                    urgency=True,
+                    center_on_parent=True,
+                )
+            except Exception:
+                pass
 
         if not self.cancel_cb and self.show_progress:
             self._set_cursor("progress")
