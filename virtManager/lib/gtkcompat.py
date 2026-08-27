@@ -560,39 +560,27 @@ def _x11_surface(window):
 
 def _x11_set_window_type_dialog(xid):
     """Set _NET_WM_WINDOW_TYPE_DIALOG so dialogs group like GTK 3."""
+    if not xid:
+        return False
     try:
-        import ctypes
-        from ctypes import c_char_p, c_int, c_ulong, c_void_p
+        import subprocess
 
-        xlib = ctypes.CDLL("libX11.so.6")
-        xlib.XOpenDisplay.restype = c_void_p
-        xlib.XOpenDisplay.argtypes = [c_char_p]
-        dpy = xlib.XOpenDisplay(None)
-        if not dpy:
-            return False
-        try:
-            xlib.XInternAtom.restype = c_ulong
-            xlib.XInternAtom.argtypes = [c_void_p, c_char_p, c_int]
-            xlib.XChangeProperty.argtypes = [
-                c_void_p,
-                c_ulong,
-                c_ulong,
-                c_ulong,
-                c_int,
-                c_int,
-                c_void_p,
-                c_int,
-            ]
-            type_atom = xlib.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE", 0)
-            value_atom = xlib.XInternAtom(dpy, b"_NET_WM_WINDOW_TYPE_DIALOG", 0)
-            XA_ATOM = 4
-            data = (c_ulong * 1)(value_atom)
-            xlib.XChangeProperty(
-                dpy, c_ulong(int(xid)), type_atom, XA_ATOM, 32, 0, data, 1
-            )
-            xlib.XFlush(dpy)
-        finally:
-            xlib.XCloseDisplay(dpy)
+        subprocess.check_call(
+            [
+                "xprop",
+                "-id",
+                hex(int(xid)),
+                "-f",
+                "_NET_WM_WINDOW_TYPE",
+                "32a",
+                "-set",
+                "_NET_WM_WINDOW_TYPE",
+                "_NET_WM_WINDOW_TYPE_DIALOG",
+            ],
+            timeout=2,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         return True
     except Exception:
         return False
@@ -620,7 +608,18 @@ def _center_window_on_parent(window):
         pass
 
 
+def _window_is_live(window):
+    if window is None or getattr(window, "_vmm_hints_dead", False):
+        return False
+    try:
+        return bool(window.get_realized())
+    except Exception:
+        return False
+
+
 def _apply_x11_window_hints(window):
+    if not _window_is_live(window):
+        return False
     surface = _x11_surface(window)
     if surface is None:
         return False
@@ -644,12 +643,16 @@ def _apply_x11_window_hints(window):
     except Exception:
         pass
     if getattr(window, "_vmm_window_type_dialog", False):
+        xid = None
         try:
-            xid = surface.get_xid() if hasattr(surface, "get_xid") else None
+            if _window_is_live(window) and hasattr(surface, "get_xid"):
+                xid = surface.get_xid()
         except Exception:
             xid = None
         if xid:
             applied = _x11_set_window_type_dialog(xid) or applied
+    if applied:
+        window._vmm_hints_applied = True
     return applied
 
 
@@ -676,6 +679,14 @@ def apply_gtk3_window_hints(
         window._vmm_center_on_parent = True
 
     def _apply(*_a):
+        if getattr(window, "_vmm_hints_dead", False):
+            return False
+        if getattr(window, "_vmm_hints_applied", False) and not getattr(
+            window, "_vmm_center_on_parent", False
+        ):
+            return False
+        if not _window_is_live(window):
+            return False
         _apply_x11_window_hints(window)
         if getattr(window, "_vmm_center_on_parent", False):
             try:
@@ -685,8 +696,16 @@ def apply_gtk3_window_hints(
                 pass
         return False
 
+    def _mark_dead(*_a):
+        window._vmm_hints_dead = True
+        return False
+
     if not getattr(window, "_vmm_hints_connected", False):
         window._vmm_hints_connected = True
+        try:
+            window.connect("unrealize", _mark_dead)
+        except Exception:
+            pass
         try:
             window.connect("realize", lambda *_a: GLib.idle_add(_apply))
         except Exception:
@@ -699,7 +718,7 @@ def apply_gtk3_window_hints(
         if window.get_realized():
             GLib.idle_add(_apply)
     except Exception:
-        GLib.idle_add(_apply)
+        pass
 
 
 def apply_gtk3_dialog_from_name(window, windowname):
