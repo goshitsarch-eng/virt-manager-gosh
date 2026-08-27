@@ -816,6 +816,65 @@ def main():
         assert getattr(hbar, "_vmm_open_item", None) is not None
         gtkcompat.popdown_window_menus(hwin.topwin, hwin.builder)
 
+    def gtk3_entry_mnemonics():
+        """GTK 3 form labels keep mnemonic-widget after a11y sync."""
+        from virtManager.createconn import vmmCreateConn
+        from virtManager.vmwindow import vmmVMWindow
+
+        dlg = vmmCreateConn()
+        dlg.show()
+        _pump(GLib, 0.2)
+        host_lbl = dlg.widget("label91")
+        host_ent = dlg.widget("hostname")
+        user_lbl = dlg.widget("label2")
+        user_ent = dlg.widget("username-entry")
+        assert host_lbl is not None and host_ent is not None
+        assert host_lbl.get_mnemonic_widget() is host_ent, (
+            "H_ostname: mnemonic-widget was cleared; Alt+O cannot focus Hostname"
+        )
+        assert user_lbl.get_mnemonic_widget() is user_ent, (
+            "_Username: mnemonic-widget was cleared; Alt+U cannot focus Username"
+        )
+        uri_lbl = None
+        uri_ent = dlg.widget("uri-entry")
+        for obj in dlg.builder.get_objects():
+            try:
+                if getattr(obj, "get_mnemonic_widget", None) and obj.get_mnemonic_widget() is uri_ent:
+                    uri_lbl = obj
+                    break
+            except Exception:
+                pass
+        assert uri_lbl is not None and uri_lbl.get_mnemonic_widget() is uri_ent
+
+        vwin = vmmVMWindow.get_instance(None, vm)
+        vwin.show()
+        _pump(GLib, 0.2)
+        details = vwin._details
+        name_lbl = details.widget("label43")
+        name_ent = details.widget("overview-name")
+        assert name_lbl.get_mnemonic_widget() is name_ent, (
+            "_Name: mnemonic-widget was cleared; Alt+N cannot focus Overview name"
+        )
+
+        from virtManager.lib import gtkcompat
+
+        folder = os.path.abspath(os.path.join(os.getcwd(), "tests"))
+
+        def _cancel():
+            try:
+                open("/tmp/vmm-a11y-filechooser-cancel", "w").write("1")
+            except Exception:
+                pass
+            return False
+
+        GLib.timeout_add(80, _cancel)
+        gtkcompat.browse_local(None, "Choose source path", start_folder=folder)
+        try:
+            listing = open("/tmp/vmm-a11y-filechooser-list.txt", "r").read().splitlines()
+        except Exception:
+            listing = []
+        assert ".." in listing, "file chooser must offer parent-directory navigation"
+
     def error_dialogs():
         from virtManager.error import vmmErrorDialog
 
@@ -3730,6 +3789,7 @@ def main():
         ("vm_lifecycle_menus", vm_lifecycle_menus),
         ("gtk3_context_menus_and_window_size", gtk3_context_menus_and_window_size),
         ("gtk3_menubar_mnemonics", gtk3_menubar_mnemonics),
+        ("gtk3_entry_mnemonics", gtk3_entry_mnemonics),
         ("error_dialogs", error_dialogs),
         ("cli_windows", cli_windows),
         ("xmleditor_pages", xmleditor_pages),

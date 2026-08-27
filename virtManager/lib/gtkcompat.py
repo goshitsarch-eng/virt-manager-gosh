@@ -1549,33 +1549,14 @@ def _a11y_sidecar_box(window=None):
 
 
 def _clear_entry_mnemonic(entry):
-    """Drop mnemonic/labelled-by so our LABEL value can win."""
+    """Drop labelled-by so our AT-SPI LABEL value can win.
+
+    Keep mnemonic-widget so Alt+letter still focuses the entry the way
+    GTK 3 did. Official uitests read the proxy labelled-by name, not the
+    keyboard mnemonic link.
+    """
     try:
         entry.reset_relation(Gtk.AccessibleRelation.LABELLED_BY)
-    except Exception:
-        pass
-    try:
-        root = entry.get_root()
-    except Exception:
-        root = None
-    start = root or entry.get_parent()
-    if start is None:
-        return
-
-    def _walk(widget, depth=0):
-        if widget is None or depth > 10:
-            return
-        if isinstance(widget, Gtk.Label) and hasattr(widget, "get_mnemonic_widget"):
-            try:
-                if widget.get_mnemonic_widget() is entry:
-                    widget.set_mnemonic_widget(None)
-            except Exception:
-                pass
-        for child in get_children(widget):
-            _walk(child, depth + 1)
-
-    try:
-        _walk(start)
     except Exception:
         pass
 
@@ -6415,6 +6396,13 @@ def _browse_local_window(
     scroll.set_vexpand(True)
     listbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
     scroll.set_child(listbox)
+    path_lbl = Gtk.Label(xalign=0)
+    try:
+        path_lbl.set_ellipsize(3)  # Pango.EllipsizeMode.MIDDLE
+    except Exception:
+        pass
+    set_accessible_name(path_lbl, folder or "")
+    box.append(path_lbl)
     box.append(scroll)
     chosen = [None]
     current = [folder]
@@ -6461,6 +6449,16 @@ def _browse_local_window(
             names = sorted(os.listdir(current[0]))
         except Exception:
             names = []
+        cur_abs = os.path.abspath(current[0] or "/")
+        parent_dir = os.path.dirname(cur_abs)
+        if parent_dir and parent_dir != cur_abs:
+            if ".." not in names:
+                names = [".."] + names
+        try:
+            path_lbl.set_text(cur_abs)
+            set_accessible_name(path_lbl, cur_abs)
+        except Exception:
+            pass
         # Tests look for COPYING from the repo root.
         extra = os.getcwd()
         if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
@@ -6505,6 +6503,11 @@ def _browse_local_window(
             set_accessible_name(btn, name)
 
             def _pick(_b, p=path, n=name):
+                if n == "..":
+                    current[0] = os.path.dirname(os.path.abspath(current[0] or "/"))
+                    _fill()
+                    _publish_filechooser()
+                    return
                 if select_folder and os.path.isdir(p):
                     chosen[0] = p
                     try:
@@ -6541,6 +6544,10 @@ def _browse_local_window(
             names = sorted(os.listdir(current[0]))
         except Exception:
             names = []
+        cur_abs = os.path.abspath(current[0] or "/")
+        parent_dir = os.path.dirname(cur_abs)
+        if parent_dir and parent_dir != cur_abs and ".." not in names:
+            names = [".."] + names
         extra = os.getcwd()
         if extra != current[0] and os.path.isfile(os.path.join(extra, "COPYING")):
             if "COPYING" not in names:
@@ -6581,6 +6588,11 @@ def _browse_local_window(
         bookmark = os.path.basename(os.path.abspath(extra)) or "virt-manager"
         if want in (bookmark, "virt-manager"):
             current[0] = extra
+            _fill()
+            _publish_filechooser()
+            return
+        if want == "..":
+            current[0] = os.path.dirname(os.path.abspath(current[0] or "/"))
             _fill()
             _publish_filechooser()
             return
