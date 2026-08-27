@@ -2572,6 +2572,33 @@ def main():
         names = [cand.get_name() for cand in conn.list_vms()]
         assert "gtk4-cloned-vm" in names
 
+    def clone_many_devices_alert():
+        from virtManager.clone import vmmCloneVM
+
+        dlg = vmmCloneVM()
+        src = _named_vm("test-many-devices")
+        dlg.show(None, src)
+
+        def _ok_cancel(text1, text2=None, title=None):
+            open("/tmp/vmm-a11y-alert.txt", "w").write(
+                "%s\n%s" % (text1 or "", text2 or "")
+            )
+            return False
+
+        dlg.err.ok_cancel = _ok_cancel
+        dlg.err.yes_no = lambda *a, **k: True
+        try:
+            os.remove("/tmp/vmm-a11y-alert.txt")
+        except Exception:
+            pass
+        dlg._finish()
+        _pump(GLib, 0.4)
+        try:
+            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        except Exception:
+            alert = ""
+        assert "relative.sock" in alert, alert
+
     def systray_menu_popup():
         from virtManager.systray import vmmSystray
 
@@ -3029,6 +3056,7 @@ def main():
         ("network_create", network_create),
         ("details_apply_title", details_apply_title),
         ("clone_share_finish", clone_share_finish),
+        ("clone_many_devices_alert", clone_many_devices_alert),
         ("systray_menu_popup", systray_menu_popup),
         ("addhardware_finish_sound", addhardware_finish_sound),
         ("createvm_finish", createvm_finish),

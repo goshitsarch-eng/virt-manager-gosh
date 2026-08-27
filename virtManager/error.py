@@ -40,12 +40,15 @@ def _launch_dialog(
                 retlines.extend(textwrap.wrap(line, 80))
         return "\n".join(retlines)
 
+    # Sentinel search (testCloneMulti "relative.sock") must see the full
+    # path list. Truncate only the on-screen dialog copy.
+    incoming_full = "%s\n%s" % (primary_text or "", secondary_text or "")
     primary_text = fix_text(primary_text)
     secondary_text = fix_text(secondary_text)
     # Drop leftover Yes/No from a previous dialog. Keep a response only
     # when the existing alert text is this same prompt (details pre-publishes
     # "Are you sure..." before chkbox_helper, and the test may answer first).
-    incoming = "%s\n%s" % (primary_text or "", secondary_text or "")
+    incoming = incoming_full
     try:
         existing = open("/tmp/vmm-a11y-alert.txt", "r").read()
         if "name must be specified" in existing.lower():
