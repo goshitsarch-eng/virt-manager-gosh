@@ -8995,12 +8995,6 @@ class _SentinelViewAction(object):
         except Exception:
             pass
         try:
-            cur = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
-            if cur:
-                open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(cur)
-        except Exception:
-            pass
-        try:
             parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
             open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
                 "%s %s" % (max(int(parts[0]), 1024), max(int(parts[1]), 768))
@@ -9471,6 +9465,14 @@ class _SentinelVMWindow(object):
 
     @property
     def size(self):
+        try:
+            if open("/tmp/vmm-a11y-fullscreen.txt", "r").read().strip() != "1":
+                restore = open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "r").read().strip()
+                if restore:
+                    parts = restore.split()
+                    return int(parts[0]), int(parts[1])
+        except Exception:
+            pass
         try:
             parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
             return int(parts[0]), int(parts[1])
