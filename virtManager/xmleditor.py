@@ -254,7 +254,12 @@ class vmmXMLEditor(vmmGObjectUI):
                             self._publish_xml_a11y()
                             return True
                         self.widget("xml-notebook").set_current_page(_PAGE_XML)
-                        if not (self.get_xml() or "").strip():
+                        curxml = self.get_xml() or ""
+                        # Add Hardware must publish device XML, not a
+                        # leftover domain document from the VM window.
+                        if getattr(self, "_vmm_a11y_owner", None) == "addhw":
+                            self.emit("xml-requested")
+                        elif not curxml.strip():
                             self.emit("xml-requested")
                     elif want == "Details":
                         self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)

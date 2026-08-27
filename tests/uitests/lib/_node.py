@@ -4987,12 +4987,49 @@ class _SentinelNavButton(object):
         self.click()
 
 
+def _addhw_xml_want_tag():
+    try:
+        if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() != "1":
+            return ""
+    except Exception:
+        return ""
+    try:
+        sel = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read().strip().lower()
+    except Exception:
+        sel = ""
+    for key, tag in (
+        ("network", "<interface"),
+        ("controller", "<controller"),
+        ("input", "<input"),
+        ("graphics", "<graphics"),
+        ("sound", "<sound"),
+        ("video", "<video"),
+        ("filesystem", "<filesystem"),
+        ("host", "<hostdev"),
+        ("tpm", "<tpm"),
+        ("rng", "<rng"),
+        ("watchdog", "<watchdog"),
+        ("smartcard", "<smartcard"),
+        ("vsock", "<vsock"),
+        ("redir", "<redirdev"),
+        ("channel", "<channel"),
+        ("serial", "<serial"),
+        ("parallel", "<parallel"),
+        ("console", "<console"),
+    ):
+        if key in sel:
+            return tag
+    return "<disk"
+
+
 def _wizard_xml_want_tag():
+    addhw_tag = _addhw_xml_want_tag()
+    if addhw_tag:
+        return addhw_tag
     for path, tag in (
         ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
         ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
         ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
-        ("/tmp/vmm-a11y-addhw-shown.txt", "<"),
     ):
         try:
             if open(path, "r").read().strip() == "1":
@@ -5107,11 +5144,13 @@ class _SentinelXmlEditor(object):
             return ""
 
     def _wanted_tag(self):
+        addhw_tag = _addhw_xml_want_tag()
+        if addhw_tag:
+            return addhw_tag
         for path, tag in (
             ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
             ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
             ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
-            ("/tmp/vmm-a11y-addhw-shown.txt", "<"),
         ):
             try:
                 if open(path, "r").read().strip() == "1":

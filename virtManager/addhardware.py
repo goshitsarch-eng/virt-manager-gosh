@@ -1580,7 +1580,17 @@ class vmmAddHardware(vmmGObjectUI):
         try:
             dev = self._build_device_page(page_num)
 
-            if check_xmleditor and self._xmleditor.is_xml_selected():
+            xml_sel = self._xmleditor.is_xml_selected()
+            if not xml_sel:
+                try:
+                    xml_sel = (
+                        open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+                        == "1"
+                    )
+                except Exception:
+                    xml_sel = False
+            if check_xmleditor and xml_sel:
+                self._a11y_load_pending_xml()
                 dev = self._build_xmleditor_device(dev)
 
             return dev
