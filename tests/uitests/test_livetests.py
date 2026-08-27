@@ -14,6 +14,35 @@ import tests
 from . import lib
 
 
+def _session_tcg_xml(xml):
+    """qemu:///session on this host cannot use type=kvm (/dev/kvm group)."""
+    xml = xml.replace('type="kvm"', 'type="qemu"')
+    xml = xml.replace(
+        '<type arch="x86_64">hvm</type>',
+        '<type arch="x86_64" machine="pc">hvm</type>',
+    )
+    return xml
+
+
+def _qemu_system_ready(conn):
+    """qemu:///system list works here, but qemu-driver calls hang without udev."""
+    import signal
+
+    def _timeout(_signum, _frame):
+        raise TimeoutError("qemu:///system getVersion")
+
+    old = signal.signal(signal.SIGALRM, _timeout)
+    signal.alarm(3)
+    try:
+        conn.getVersion()
+        return True
+    except Exception:
+        return False
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
+
+
 def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
     """
     Decorator to define+start a VM and clean it up on exit
@@ -23,11 +52,23 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
         def wrapper(app, *args, **kwargs):
             app.error_if_already_running()
             xmlfile = "%s/live/%s.xml" % (tests.utils.UITESTDATADIR, vmname)
-            conn = libvirt.open(uri)
-            dom = conn.defineXML(open(xmlfile).read())
+            xml = open(xmlfile).read()
+            live_uri = os.environ.get("VMM_LIVETEST_URI") or uri
+            conn = libvirt.open(live_uri)
+            if live_uri.startswith("qemu:///system") and not _qemu_system_ready(conn):
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                live_uri = "qemu:///session"
+                xml = _session_tcg_xml(xml)
+                conn = libvirt.open(live_uri)
+            elif live_uri.startswith("qemu:///session"):
+                xml = _session_tcg_xml(xml)
+            dom = conn.defineXML(xml)
             try:
                 dom.create()
-                app.uri = uri
+                app.uri = live_uri
                 app.conn = conn
                 extra_opts = opts or []
                 extra_opts += ["--show-domain-console", vmname]
@@ -42,7 +83,7 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
                     pass
                 try:
                     flags = 0
-                    if "qemu" in uri:
+                    if "qemu" in live_uri:
                         flags = (
                             libvirt.VIR_DOMAIN_UNDEFINE_NVRAM
                             | libvirt.VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA
@@ -440,10 +481,19 @@ def testConsoleSpiceSpecific(app, dom):
 
 @_vm_wrapper("uitests-vnc-standard")
 def testVNCSpecific(app, dom):
-    from gi.repository import GtkVnc
+    has_resize = False
+    try:
+        gi_mod = __import__("gi")
+        gi_mod.require_version("GtkVnc", "2.0")
+        from gi.repository import GtkVnc
 
-    if not hasattr(GtkVnc.Display, "set_allow_resize"):
-        pytest.skip("GtkVnc is too old")
+        has_resize = hasattr(GtkVnc.Display, "set_allow_resize")
+    except Exception:
+        from virtManager.details import gtk4display
+
+        has_resize = hasattr(gtk4display.VNCDisplay, "set_allow_resize")
+    if not has_resize:
+        pytest.skip("VNC resize-guest is not available")
 
     ignore = dom
     win = app.topwin
