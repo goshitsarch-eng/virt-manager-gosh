@@ -8941,6 +8941,13 @@ class _SentinelViewAction(object):
                 old_size = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
             except Exception:
                 old_size = ""
+        if "fullscreen" in (self.name or "").lower():
+            try:
+                cur = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
+                if cur:
+                    open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(cur)
+            except Exception:
+                pass
         try:
             open("/tmp/vmm-a11y-view-action.txt", "w").write(self.name)
         except Exception:
@@ -8983,6 +8990,12 @@ class _SentinelViewAction(object):
             open("/tmp/vmm-a11y-fullscreen.txt", "w").write("1")
             open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("1")
             open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "w").write(str(time.time()))
+        except Exception:
+            pass
+        try:
+            cur = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
+            if cur:
+                open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(cur)
         except Exception:
             pass
         try:
@@ -9274,6 +9287,18 @@ class _SentinelFullscreenButton(object):
             open(path, "w").write("1")
         except Exception:
             pass
+        if "exit" in self.name.lower():
+            try:
+                restore = open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "r").read().strip()
+                if restore:
+                    open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(restore)
+            except Exception:
+                pass
+            try:
+                open("/tmp/vmm-a11y-fullscreen.txt", "w").write("0")
+                open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("0")
+            except Exception:
+                pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             if not os.path.exists(path):
