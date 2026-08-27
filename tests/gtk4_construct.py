@@ -173,6 +173,8 @@ def main():
         "details_hw_pages": 90,
         "addhardware_pages": 90,
         "details_many_devices": 20,
+        "cli_windows": 90,
+        "createvm_finish": 90,
     }
 
     def _run(name, fn, timeout=None):
