@@ -4515,6 +4515,7 @@ class vmmDetails(vmmGObjectUI):
 
     def _disable_apply(self):
         self._active_edits = []
+        self._vmm_pending_media_path = None
         self._vmm_apply_failed = False
         self._vmm_dirty_hw = None
         self.widget("config-apply").set_sensitive(False)
@@ -7001,8 +7002,13 @@ class vmmDetails(vmmGObjectUI):
                 user_pending = pending is not None
             if user_pending and pending is not None and pending != (path or ""):
                 path = pending
-            self._mediacombo.reset_state(is_floppy=disk.is_floppy())
-            self._mediacombo.set_path(path or "")
+            refreshing = getattr(self, "_ui_refreshing", False)
+            self._ui_refreshing = True
+            try:
+                self._mediacombo.reset_state(is_floppy=disk.is_floppy())
+                self._mediacombo.set_path(path or "")
+            finally:
+                self._ui_refreshing = refreshing
             try:
                 pretty = ""
                 try:

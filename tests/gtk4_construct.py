@@ -3021,18 +3021,25 @@ def main():
             details._set_hw_selection(cdrom1[0], _disable_apply=True)
         except Exception:
             pass
+        details._ui_refreshing = True
         try:
-            row = details.widget("hw-list").get_model()[cdrom1[0]]
-            details._refresh_disk_page(row[HW_LIST_COL_DEVICE])
-            details._pin_hw_context("IDE CDROM 1", row)
-        except Exception:
-            details._refresh_disk_page(cdrom1[1])
             try:
-                details._pin_hw_context("IDE CDROM 1")
+                row = details.widget("hw-list").get_model()[cdrom1[0]]
+                details._refresh_disk_page(row[HW_LIST_COL_DEVICE])
+                details._pin_hw_context("IDE CDROM 1", row)
             except Exception:
-                pass
-        details._mediacombo.reset_state(is_floppy=False)
+                details._refresh_disk_page(cdrom1[1])
+                try:
+                    details._pin_hw_context("IDE CDROM 1")
+                except Exception:
+                    pass
+            details._mediacombo.reset_state(is_floppy=False)
+        finally:
+            details._ui_refreshing = False
+        details._vmm_pending_media_path = None
+        details._disable_apply()
         _pump(GLib, 0.2)
+        details._disable_apply()
         labels = []
         try:
             model = details._mediacombo._combo.get_model()
