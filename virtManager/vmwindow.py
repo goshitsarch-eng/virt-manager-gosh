@@ -246,6 +246,12 @@ class vmmVMWindow(vmmGObjectUI):
         except Exception:
             pass
         try:
+            w, h = self.topwin.get_size()
+            if w > 1 and h > 1:
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
+        except Exception:
+            pass
+        try:
             self.topwin.present()
         except Exception:
             pass
@@ -1277,11 +1283,6 @@ class vmmVMWindow(vmmGObjectUI):
 
     def _size_to_vm_cb(self, src):
         self._console.vmwindow_set_size_to_vm()
-        try:
-            w, h = self.topwin.get_size()
-            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
-        except Exception:
-            pass
 
     def _console_leave_fullscreen_cb(self, src):
         # This will trigger de-fullscreening in a roundabout way

