@@ -1577,6 +1577,7 @@ class vmmDetails(vmmGObjectUI):
                             w = self.netlist.widget("net-manual-source")
                             if w is not None and (w.get_text() or "") != text:
                                 w.set_text(text)
+                            self._vmm_net_device_cleared = not bool((text or "").strip())
                             # Empty Device name is still an edit even when
                             # the widget was already blank.
                             self._enable_apply(EDIT_NET_SOURCE)
@@ -5722,25 +5723,38 @@ class vmmDetails(vmmGObjectUI):
                 kwargs["mode"],
                 kwargs["portgroup"],
             ) = self.netlist.get_network_selection()
-            # Prefer a pending .set, then the widget. Do not fall back
-            # to net-device.txt: that file is the last published value
-            # (fakedev12) and would skip the empty-bridge validation
-            # (testDetailsEditDiskNet).
+            # Prefer a pending .set, then the widget. An empty .set or
+            # empty Device name is a user clear (testDetailsEditDiskNet).
+            # Do not fall back to net-device.txt or the previous source.
+            pending_src = None
+            pending_set = False
             if os.path.exists("/tmp/vmm-a11y-net-device.txt.set"):
                 try:
-                    kwargs["source"] = (
-                        open("/tmp/vmm-a11y-net-device.txt.set", "r").read().strip()
-                        or None
-                    )
+                    pending_src = open("/tmp/vmm-a11y-net-device.txt.set", "r").read()
+                    pending_set = True
                 except Exception:
-                    pass
+                    pending_src = None
+                    pending_set = False
+            try:
+                widget_src = (
+                    self.netlist.widget("net-manual-source").get_text() or ""
+                )
+            except Exception:
+                widget_src = ""
+            if pending_set:
+                kwargs["source"] = (pending_src or "").strip() or None
+                if not (pending_src or "").strip():
+                    try:
+                        self.netlist.widget("net-manual-source").set_text("")
+                    except Exception:
+                        pass
+                    self._vmm_net_device_cleared = True
+            elif getattr(self, "_vmm_net_device_cleared", False):
+                kwargs["source"] = None
             else:
-                try:
-                    kwargs["source"] = (
-                        self.netlist.widget("net-manual-source").get_text() or ""
-                    ).strip() or None
-                except Exception:
-                    pass
+                kwargs["source"] = widget_src.strip() or None
+            if getattr(self, "_vmm_net_device_cleared", False):
+                kwargs["source"] = None
             if not kwargs["ntype"]:
                 try:
                     label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
@@ -5778,6 +5792,8 @@ class vmmDetails(vmmGObjectUI):
                 os.remove("/tmp/vmm-a11y-net-device.txt.set")
             except Exception:
                 pass
+            if kwargs.get("source"):
+                self._vmm_net_device_cleared = False
 
         if self._edited(EDIT_NET_MAC):
             mac = ""
