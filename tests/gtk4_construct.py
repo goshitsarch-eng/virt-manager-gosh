@@ -3214,6 +3214,24 @@ def main():
             title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
         except Exception:
             title = ""
+        if "Remove" not in (title or ""):
+            try:
+                from gi.repository import Gtk
+
+                app = Gtk.Application.get_default()
+                if app is not None:
+                    for win in list(app.get_windows()):
+                        try:
+                            if not (win.get_visible() or win.get_mapped()):
+                                continue
+                            wtitle = win.get_title() or ""
+                        except Exception:
+                            continue
+                        if "Remove" in wtitle:
+                            title = wtitle
+                            break
+            except Exception:
+                pass
         try:
             err = open("/tmp/vmm-a11y-config-remove-err.txt", "r").read()
         except Exception:

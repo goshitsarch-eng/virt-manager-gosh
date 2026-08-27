@@ -180,6 +180,11 @@ class _vmmDeleteBase(vmmGObjectUI):
         if self.vm is None:
             return
         try:
+            if not (self.topwin.get_visible() or self.topwin.get_mapped()):
+                return
+        except Exception:
+            pass
+        try:
             chk = self.widget("delete-remove-storage")
             active = bool(chk.get_active())
             open("/tmp/vmm-a11y-delete-associated.txt", "w").write("1" if active else "0")
@@ -222,6 +227,11 @@ class _vmmDeleteBase(vmmGObjectUI):
             if not getattr(self, "_vmm_delete_a11y_poll", False):
                 return False
             if self.vm is None:
+                return True
+            try:
+                if not (self.topwin.get_visible() or self.topwin.get_mapped()):
+                    return True
+            except Exception:
                 return True
             shown = True
             try:
