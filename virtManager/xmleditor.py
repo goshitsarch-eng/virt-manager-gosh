@@ -156,6 +156,7 @@ class vmmXMLEditor(vmmGObjectUI):
                         if answer == "yes":
                             self.details_changed = False
                             self.widget("xml-notebook").set_current_page(_PAGE_XML)
+                            self._curpage = _PAGE_XML
                             self.emit("xml-requested")
                         else:
                             self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
