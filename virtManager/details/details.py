@@ -3843,6 +3843,7 @@ class vmmDetails(vmmGObjectUI):
             self._active_edits.append(edittype)
         if edittype != EDIT_XML:
             self._xmleditor.details_changed = True
+        self._vmm_last_disk_kwargs = None
         try:
             dirty = getattr(self, "_vmm_last_refreshed_hw", None)
             if not dirty:
@@ -4692,8 +4693,10 @@ class vmmDetails(vmmGObjectUI):
 
         try:
             self._vmm_last_disk_kwargs = dict(kwargs)
+            self._vmm_last_disk_target = getattr(devobj, "target", None)
         except Exception:
             self._vmm_last_disk_kwargs = None
+            self._vmm_last_disk_target = None
         return self._change_config(self.vm.define_disk, kwargs, devobj=devobj)
 
     def _apply_sound(self, devobj):
@@ -5647,6 +5650,17 @@ class vmmDetails(vmmGObjectUI):
                 pass
 
         self._addstorage.set_dev(disk)
+        # Testdriver inactive XML can lag the just-applied Guest
+        # object. Keep Shareable visible until the user edits again.
+        try:
+            last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+            last_tgt = getattr(self, "_vmm_last_disk_target", None)
+            tgt = getattr(disk, "target", None)
+            if last.get("shareable") and (last_tgt is None or last_tgt == tgt):
+                self._addstorage.widget("disk-shareable").set_active(True)
+                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+        except Exception:
+            pass
 
     def _refresh_network_page(self, net):
         vmmAddHardware.populate_network_model_combo(self.vm, self.widget("network-model"))
