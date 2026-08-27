@@ -73,9 +73,12 @@ _VNC_LED_NUM = 2
 _VNC_LED_CAPS = 4
 _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
+_VNC_SEC_TIGHT = 16
 _VNC_SEC_TLS = 18
 _VNC_SEC_VENCRYPT = 19
 _VNC_SEC_SASL = 20
+_VNC_TIGHT_UNIX = 129
+_VNC_TIGHT_EXTERNAL = 130
 _VNC_VENCRYPT_PLAIN = 256
 _VNC_VENCRYPT_TLSNONE = 257
 _VNC_VENCRYPT_TLSVNC = 258
@@ -1067,8 +1070,10 @@ class VNCDisplay(_DisplayBase):
     Supports None, VNC-auth, VeNCrypt (including SASL subtypes), RFB SASL
     (PLAIN, DIGEST-MD5, Cyrus when libsasl2 plugins exist, and GSSAPI
     via libgssapi_krb5), and
-    TLS; 32-bit pixels; QEMU audio and LED state; and the encodings QEMU commonly sends: raw,
-    CopyRect, RRE, Hextile, zlib, Tight, ZRLE, DesktopSize, and cursor.
+    TLS; TightVNC security type 16 (tunnels, VNC/None/Unix/SASL/VeNCrypt
+    auth, extended ServerInit); 32-bit pixels; QEMU audio and LED state;
+    and the encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile,
+    zlib, Tight, ZRLE, DesktopSize, and cursor.
     """
 
     def __init__(self, **kwargs):
@@ -1100,6 +1105,7 @@ class VNCDisplay(_DisplayBase):
         self._tls_client_cert = ""
         self._tls_client_key = ""
         self._host = ""
+        self._tight_sec = False
 
     def set_credential(self, cred, value):
         name = str(cred).upper()
@@ -1401,6 +1407,10 @@ class VNCDisplay(_DisplayBase):
             sock.sendall(bytes([_VNC_SEC_TLS]))
             sock = self._wrap_tls(sock, verify=bool(self._tls_ca_file()))
             self._sock = sock
+        elif _VNC_SEC_TIGHT in types:
+            sock.sendall(bytes([_VNC_SEC_TIGHT]))
+            sock = self._vnc_tight(sock)
+            self._sock = sock
         elif _VNC_SEC_NONE in types:
             sock.sendall(bytes([_VNC_SEC_NONE]))
         else:
@@ -1415,6 +1425,8 @@ class VNCDisplay(_DisplayBase):
         width, height, _ppf = struct.unpack("!HH16s", self._recv_n(sock, 20))
         namelen = struct.unpack("!I", self._recv_n(sock, 4))[0]
         self._name = self._recv_n(sock, namelen).decode("utf-8", "replace")
+        if self._tight_sec:
+            self._skip_tight_serverinit(sock)
         # SetPixelFormat: 32-bit little-endian true-colour (20 bytes)
         sock.sendall(
             struct.pack(
@@ -1671,6 +1683,78 @@ class VNCDisplay(_DisplayBase):
         user = (self._username or "").encode("utf-8")
         pw = (self._password or "").encode("utf-8")
         sock.sendall(struct.pack("!II", len(user), len(pw)) + user + pw)
+
+    def _read_tight_caps(self, sock, count):
+        caps = []
+        for _ignore in range(count):
+            code = struct.unpack("!I", self._recv_n(sock, 4))[0]
+            vendor = self._recv_n(sock, 4)
+            signature = self._recv_n(sock, 8)
+            caps.append((code, vendor, signature))
+        return caps
+
+    def _skip_tight_serverinit(self, sock):
+        # Tight extends ServerInit with interaction capability lists.
+        nsrv, ncli, nenc, _pad = struct.unpack("!HHHH", self._recv_n(sock, 8))
+        self._read_tight_caps(sock, nsrv + ncli + nenc)
+
+    def _choose_tight_tunnel(self, caps):
+        codes = [item[0] for item in caps]
+        # Siemens panels advertise SCHANNEL but accept NOTUNNEL (code 0).
+        if any(item[0] == 1 and item[1] == b"SICR" and item[2] == b"SCHANNEL" for item in caps):
+            if 0 not in codes:
+                codes.append(0)
+        if 0 in codes:
+            return 0
+        if codes:
+            return codes[0]
+        return 0
+
+    def _choose_tight_auth(self, auths):
+        for cand in (
+            _VNC_SEC_VNC,
+            _VNC_SEC_NONE,
+            _VNC_TIGHT_UNIX,
+            _VNC_TIGHT_EXTERNAL,
+            _VNC_SEC_SASL,
+            _VNC_SEC_VENCRYPT,
+        ):
+            if cand in auths:
+                return cand
+        return None
+
+    def _vnc_tight(self, sock):
+        """TightVNC security type 16: 16-byte capabilities, then subtype auth."""
+        self._tight_sec = True
+        ntunnels = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        tunnels = self._read_tight_caps(sock, ntunnels)
+        if ntunnels:
+            # 0 is "no tunneling". gtk-vnc does not open Tight SSH/SSL.
+            sock.sendall(struct.pack("!I", self._choose_tight_tunnel(tunnels)))
+        nauth = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        if nauth == 0:
+            return sock
+        auths = [item[0] for item in self._read_tight_caps(sock, nauth)]
+        chosen = self._choose_tight_auth(auths)
+        if chosen is None:
+            raise RuntimeError("Tight authentication types unsupported: %s" % auths)
+        sock.sendall(struct.pack("!I", chosen))
+        if chosen in (_VNC_SEC_NONE,):
+            return sock
+        if chosen == _VNC_SEC_VNC:
+            self._vnc_auth2(sock)
+            return sock
+        if chosen in (_VNC_TIGHT_UNIX, _VNC_TIGHT_EXTERNAL):
+            self._send_plain_creds(sock)
+            return sock
+        if chosen == _VNC_SEC_SASL:
+            self._vnc_sasl(sock)
+            return sock
+        if chosen == _VNC_SEC_VENCRYPT:
+            sock = self._vencrypt(sock)
+            self._sock = sock
+            return sock
+        raise RuntimeError("Unsupported TightVNC auth type %s" % chosen)
 
     def _vencrypt(self, sock):
         # VeNCrypt 0.2: Plain, TLS/X509 + None/VNC/Plain, or TLS/X509 + SASL.

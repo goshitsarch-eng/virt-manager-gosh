@@ -1117,6 +1117,66 @@ def main():
         assert done and token.startswith(b"gss-wrap-")
         gss.dispose()
         assert gtk4display._GssapiKr5Backend.available()
+
+        def _tight_cap(code, vendor, sig):
+            return st.pack("!I", code) + vendor + sig
+
+        assert disp._choose_tight_auth([16, 2, 1]) == 2
+        assert disp._choose_tight_auth([129, 1]) == 1
+        assert disp._choose_tight_auth([129]) == 129
+        assert disp._choose_tight_auth([130]) == 130
+        assert disp._choose_tight_auth([20]) == 20
+        assert disp._choose_tight_auth([19]) == 19
+        assert disp._choose_tight_auth([99]) is None
+        siemens = [(1, b"SICR", b"SCHANNEL")]
+        assert disp._choose_tight_tunnel(siemens) == 0
+        assert disp._choose_tight_tunnel([(0, b"TGHT", b"NOTUNNEL")]) == 0
+
+        class _TightSock:
+            def __init__(self, data):
+                self.buf = data
+                self.sent = b""
+
+            def recv(self, n):
+                out, self.buf = self.buf[:n], self.buf[n:]
+                return out
+
+            def sendall(self, data):
+                self.sent += data
+
+        chal = b"0123456789abcdef"
+        tight_vnc = st.pack("!I", 0)
+        tight_vnc += st.pack("!I", 2)
+        tight_vnc += _tight_cap(1, b"STDV", b"NOAUTH__")
+        tight_vnc += _tight_cap(2, b"STDV", b"VNCAUTH_")
+        tight_vnc += chal
+        tsock = _TightSock(tight_vnc)
+        disp._password = "secret"
+        disp._vnc_tight(tsock)
+        assert st.unpack("!I", tsock.sent[:4])[0] == 2
+        assert len(tsock.sent) == 20
+        assert tsock.buf == b""
+
+        none_sock = _TightSock(st.pack("!II", 0, 0))
+        disp._vnc_tight(none_sock)
+        assert none_sock.sent == b""
+
+        unix_payload = st.pack("!I", 1) + _tight_cap(0, b"TGHT", b"NOTUNNEL")
+        unix_payload += st.pack("!I", 1) + _tight_cap(129, b"TGHT", b"ULGNAUTH")
+        usock = _TightSock(unix_payload)
+        disp._username = "alice"
+        disp._password = "s3cret"
+        disp._vnc_tight(usock)
+        assert st.unpack("!I", usock.sent[:4])[0] == 0
+        assert st.unpack("!I", usock.sent[4:8])[0] == 129
+        assert b"alice" in usock.sent
+        assert b"s3cret" in usock.sent
+
+        extra = st.pack("!HHHH", 1, 0, 0, 0) + _tight_cap(150, b"TGHT", b"CUS_EOCU")
+        skip = _TightSock(extra)
+        disp._skip_tight_serverinit(skip)
+        assert skip.buf == b""
+
         disp.send_keys([97])
         disp.set_property("resize-guest", True)
         disp._apply_resize_guest(True)
@@ -1567,6 +1627,107 @@ def main():
         if hasattr(saved, "buffer"):
             saved = saved.buffer
         assert saved and saved[:4] == b"\x89PNG"
+        display.close()
+
+    def vnc_tight_handshake():
+        import socket
+        import struct
+        import threading
+
+        from virtManager.details import gtk4display
+
+        port = [0]
+        ready = threading.Event()
+        seen = []
+
+        def _cap(code, vendor, sig):
+            return struct.pack("!I", code) + vendor + sig
+
+        def server():
+            sock = socket.socket()
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", 0))
+            port[0] = sock.getsockname()[1]
+            sock.listen(1)
+            ready.set()
+            conn, _addr = sock.accept()
+            try:
+                conn.sendall(b"RFB 003.008\n")
+                conn.recv(12)
+                conn.sendall(b"\x01\x10")
+                chosen = conn.recv(1)
+                seen.append(("sec", chosen))
+                conn.sendall(struct.pack("!I", 1) + _cap(0, b"TGHT", b"NOTUNNEL"))
+                tunnel = conn.recv(4)
+                seen.append(("tunnel", tunnel))
+                conn.sendall(
+                    struct.pack("!I", 2)
+                    + _cap(1, b"STDV", b"NOAUTH__")
+                    + _cap(2, b"STDV", b"VNCAUTH_")
+                )
+                auth = conn.recv(4)
+                seen.append(("auth", auth))
+                conn.sendall(b"0123456789abcdef")
+                conn.recv(16)
+                conn.sendall(struct.pack("!I", 0))
+                width = height = 8
+                conn.sendall(struct.pack("!HH16sI", width, height, bytes(16), 5))
+                conn.sendall(b"tight")
+                conn.sendall(struct.pack("!HHHH", 0, 0, 0, 0))
+                conn.settimeout(0.4)
+                deadline = time.monotonic() + 2.5
+                while time.monotonic() < deadline:
+                    try:
+                        msg = conn.recv(1)
+                    except (socket.timeout, ConnectionResetError, BrokenPipeError):
+                        continue
+                    if not msg:
+                        break
+                    if msg[0] == 0:
+                        conn.recv(19)
+                    elif msg[0] == 2:
+                        conn.recv(1)
+                        nenc = struct.unpack("!H", conn.recv(2))[0]
+                        conn.recv(nenc * 4)
+                    elif msg[0] == 3:
+                        conn.recv(9)
+                        conn.sendall(struct.pack("!BxH", 0, 1))
+                        conn.sendall(struct.pack("!HHHHi", 0, 0, width, height, 0))
+                        conn.sendall(b"\x11\x22\x33\x44" * (width * height))
+                    elif msg[0] == 4:
+                        conn.recv(7)
+                    elif msg[0] == 5:
+                        conn.recv(5)
+                    elif msg[0] == 255:
+                        sub = conn.recv(1)
+                        if not sub:
+                            break
+                        if sub[0] == 1:
+                            kindb = conn.recv(2)
+                            if len(kindb) < 2:
+                                break
+                            kind = struct.unpack("!H", kindb)[0]
+                            if kind == 2:
+                                conn.recv(6)
+            finally:
+                conn.close()
+                sock.close()
+
+        threading.Thread(target=server, daemon=True).start()
+        assert ready.wait(2)
+        display = gtk4display.VNCDisplay()
+        display.set_credential(1, "secret")
+        initialized = []
+        display.connect("vnc-initialized", lambda *_a: initialized.append(True))
+        display.open_host("127.0.0.1", port[0])
+        _pump(GLib, 2.0)
+        assert initialized, "TightVNC client did not complete RFB handshake: %s" % seen
+        assert seen and seen[0][1] == b"\x10", seen
+        assert struct.unpack("!I", seen[1][1])[0] == 0, seen
+        assert struct.unpack("!I", seen[2][1])[0] == 2, seen
+        pix = display.get_pixbuf()
+        assert pix is not None
+        assert pix.get_width() == 8 and pix.get_height() == 8
         display.close()
 
     def inspection_os_page():
@@ -2273,6 +2434,7 @@ def main():
                 break
         assert gone, "delete finish did not remove %s" % name
 
+    wanted = set(sys.argv[1:])
     for name, fn in [
         ("manager", manager),
         ("createconn", createconn),
@@ -2326,6 +2488,7 @@ def main():
         ("createvm_oslist", createvm_oslist),
         ("vnc_protocol_helpers", vnc_protocol_helpers),
         ("vnc_live_handshake", vnc_live_handshake),
+        ("vnc_tight_handshake", vnc_tight_handshake),
         ("disk_shareable_live_deferred", disk_shareable_live_deferred),
         ("inspection_os_page", inspection_os_page),
         ("inspection_perform_path", inspection_perform_path),
@@ -2349,6 +2512,8 @@ def main():
         ("delete_vm", delete_vm),
         ("details_many_devices", details_many_devices),
     ]:
+        if wanted and name not in wanted:
+            continue
         _run(name, fn)
 
     failed = [(n, e) for n, ok, e in results if not ok]
