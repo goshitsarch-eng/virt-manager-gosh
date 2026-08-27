@@ -266,16 +266,17 @@ class VMMDogtailApp:
                 time.sleep(0.1)
             return _node._SentinelDeleteWindow(name)
         if name and "Add New Virtual Hardware" in name:
+            from . import _node
+
             while time.time() < deadline:
                 try:
                     shown = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip()
                     if shown == "1" or os.path.exists("/tmp/vmm-a11y-addhw-open"):
-                        from . import _node
-
                         return _node._SentinelAddhwWindow()
                 except Exception as exc:
                     last_err = exc
                 time.sleep(0.1)
+            return _node._SentinelAddhwWindow()
         if name and "Create snapshot" in name:
             while time.time() < deadline:
                 try:

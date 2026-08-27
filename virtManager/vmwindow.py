@@ -303,6 +303,20 @@ class vmmVMWindow(vmmGObjectUI):
                     return True
                 if not self.is_visible():
                     return True
+                showp = "/tmp/vmm-a11y-addhw-show.txt"
+                try:
+                    if os.path.exists(showp):
+                        want = open(showp, "r").read().strip()
+                        mine = ""
+                        try:
+                            mine = self.vm.get_name()
+                        except Exception:
+                            mine = ""
+                        if want in ("", "1") or want == mine:
+                            os.remove(showp)
+                            self._details._show_addhw()
+                except Exception:
+                    pass
                 path = "/tmp/vmm-a11y-vm-page.txt"
                 try:
                     if not os.path.exists(path):

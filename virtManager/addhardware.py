@@ -200,7 +200,16 @@ class vmmAddHardware(vmmGObjectUI):
             pass
         self._reset_state()
         self.topwin.set_transient_for(parent)
+        try:
+            self.topwin.set_visible(True)
+        except Exception:
+            pass
         self.topwin.present()
+        try:
+            open(_ADDHW_SHOWN, "w").write("1")
+            open(_ADDHW_OPEN, "w").write("1")
+        except Exception:
+            pass
         self.conn.schedule_priority_tick(pollnet=True, pollpool=True, pollnodedev=True)
         try:
             gtkcompat.set_accessible_name(self.topwin, "Add New Virtual Hardware")
@@ -219,6 +228,10 @@ class vmmAddHardware(vmmGObjectUI):
         except Exception:
             pass
         self._start_a11y_poll()
+        try:
+            GLib.idle_add(lambda: self._hw_selected_cb(self.widget("hw-list")) or False)
+        except Exception:
+            pass
         self._publish_a11y_state()
 
     def close(self, ignore1=None, ignore2=None):
@@ -2108,7 +2121,14 @@ class vmmAddHardware(vmmGObjectUI):
         return False
 
     def _publish_a11y_state(self):
-        visible = bool(self.is_visible())
+        hidden = os.path.exists(_ADDHW_HIDDEN)
+        visible = not hidden
+        try:
+            visible = visible or bool(self.is_visible()) or bool(self.topwin.get_visible())
+        except Exception:
+            pass
+        if hidden:
+            visible = False
         try:
             open(_ADDHW_SHOWN, "w").write("1" if visible else "0")
         except Exception:

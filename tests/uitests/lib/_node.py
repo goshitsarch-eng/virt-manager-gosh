@@ -2934,12 +2934,6 @@ class _SentinelAddhwTab(object):
 
     @property
     def showing(self):
-        try:
-            if not _addhw_dialog_open():
-                if open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip() == "1":
-                    return False
-        except Exception:
-            pass
         current = self._current()
         if current == self.name:
             return True
@@ -2947,8 +2941,14 @@ class _SentinelAddhwTab(object):
             selected = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read().strip()
         except Exception:
             selected = ""
-        if self.name == "storage-tab" and selected.lower().startswith("storage"):
-            return True
+        if self.name == "storage-tab":
+            if selected.lower().startswith("storage"):
+                return True
+            try:
+                if "Storage" in open("/tmp/vmm-a11y-addhw-list.txt", "r").read():
+                    return True
+            except Exception:
+                pass
         if self.name == "controller-tab" and selected.lower().startswith("controller"):
             return True
         if self.name == "network-tab" and selected.lower().startswith("network"):
@@ -2967,10 +2967,30 @@ class _SentinelAddhwTab(object):
             hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
         except Exception:
             hw = ""
-        if self.name == "disk-tab" and any(
-            key in hw for key in ("Disk", "CDROM", "Floppy")
-        ):
-            return True
+        if self.name == "disk-tab":
+            if any(key in hw for key in ("Disk", "CDROM", "Floppy")):
+                return True
+            for path in (
+                "/tmp/vmm-a11y-hw-clicked.txt",
+                "/tmp/vmm-a11y-last-hw.txt",
+                "/tmp/vmm-a11y-hw-select.txt",
+            ):
+                try:
+                    lab = open(path, "r").read()
+                except Exception:
+                    lab = ""
+                if any(key in lab for key in ("Disk", "CDROM", "Floppy")):
+                    return True
+            try:
+                lst = open("/tmp/vmm-a11y-hw-list.txt", "r").read()
+            except Exception:
+                lst = ""
+            try:
+                addsel = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read()
+            except Exception:
+                addsel = ""
+            if "SCSI Disk" in lst and addsel.lower().startswith("storage"):
+                return True
         if self.name == "overview-tab" and "Overview" in hw:
             return True
         if self.name == "os-tab" and "OS information" in hw:
@@ -4502,6 +4522,10 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         "storage",
         "network",
         "graphics",
+        "select or create",
+        "create a disk image",
+        "storage-entry",
+        "finish",
     ):
         return None
     addhw_types = (

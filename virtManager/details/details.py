@@ -1208,6 +1208,53 @@ class vmmDetails(vmmGObjectUI):
                 return True
 
             GLib.timeout_add(50, _poll_hw_popup)
+        if not getattr(self, "_vmm_hw_select_poll", False):
+            self._vmm_hw_select_poll = True
+
+            def _poll_hw_select():
+                path = "/tmp/vmm-a11y-hw-select.txt"
+                try:
+                    if not os.path.exists(path):
+                        return True
+                    want = open(path, "r").read().strip()
+                except Exception:
+                    return True
+                if not want:
+                    return True
+                try:
+                    shown = ""
+                    try:
+                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    except Exception:
+                        shown = ""
+                    if shown and shown != self.vm.get_name():
+                        return True
+                    labeled = self._hw_row_for_label(want)
+                    if labeled is None:
+                        return True
+                    idx = None
+                    model = self.widget("hw-list").get_model()
+                    if model is not None:
+                        for i, row in enumerate(model):
+                            if row[0] == labeled[0]:
+                                idx = i
+                                break
+                    os.remove(path)
+                    if idx is not None:
+                        self._set_hw_selection(idx, _disable_apply=True)
+                    try:
+                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(
+                            str(labeled[0] or want)
+                        )
+                        if any(k in want for k in ("Disk", "CDROM", "Floppy")):
+                            open("/tmp/vmm-a11y-details-tab.txt", "w").write("disk-tab")
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+                return True
+
+            GLib.timeout_add(50, _poll_hw_select)
         if not getattr(self, "_vmm_os_publish_poll", False):
             self._vmm_os_publish_poll = True
 
