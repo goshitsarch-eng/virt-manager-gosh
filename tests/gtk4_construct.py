@@ -1194,15 +1194,19 @@ def main():
         editor = dlg._xmleditor
         editor._goto_xml_page(1)
         nb = editor.widget("xml-notebook")
+        assert nb.get_current_page() == 1
+        assert nb.get_nth_page(0).get_visible()
         assert nb.get_nth_page(1).get_visible()
-        hidden = 0
-        for idx in range(nb.get_n_pages()):
-            page = nb.get_nth_page(idx)
-            if page is not None and not page.get_visible():
-                hidden += 1
-        assert hidden >= 1, "GTK 3 XML editor hid the inactive Details/XML tab"
+        # GTK 3 kept both Details and XML tabs visible so users could click.
+        # Hiding the inactive child hid the tab in GTK 4.
         editor.reset_state()
-        assert editor.widget("xml-notebook").get_nth_page(0).get_visible()
+        assert nb.get_current_page() == 0
+        assert nb.get_nth_page(0).get_visible()
+        assert nb.get_nth_page(1).get_visible()
+        nb.set_current_page(1)
+        _pump(GLib, 0.05)
+        assert nb.get_current_page() == 1
+        editor.reset_state()
 
     def console_pages():
         from virtManager.vmwindow import vmmVMWindow

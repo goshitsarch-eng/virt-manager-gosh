@@ -276,16 +276,16 @@ class vmmXMLEditor(vmmGObjectUI):
     ####################
 
     def _goto_xml_page(self, pagenum):
-        """GTK 4 will not switch a notebook to a hidden child."""
+        """Switch Details/XML. GTK 3 kept both tabs visible and clickable."""
         notebook = self.widget("xml-notebook")
         try:
-            page = notebook.get_nth_page(pagenum)
-            if page is not None:
-                page.set_visible(True)
+            for idx in range(notebook.get_n_pages()):
+                page = notebook.get_nth_page(idx)
+                if page is not None:
+                    page.set_visible(True)
         except Exception:
             pass
         notebook.set_current_page(pagenum)
-        gtkcompat.hide_inactive_notebook_pages(notebook, pagenum, self.topwin)
 
     def _reselect_page(self, pagenum):
         # Setting _curpage first will shortcircuit our page changed callback
@@ -509,14 +509,12 @@ class vmmXMLEditor(vmmGObjectUI):
     def _after_page_changed_cb(self, notebook, gparam):
         self._curpage = notebook.get_current_page()
         try:
-            page = notebook.get_nth_page(self._curpage)
-            if page is not None:
-                page.set_visible(True)
+            for idx in range(notebook.get_n_pages()):
+                page = notebook.get_nth_page(idx)
+                if page is not None:
+                    page.set_visible(True)
         except Exception:
             pass
-        gtkcompat.hide_inactive_notebook_pages(
-            notebook, self._curpage, self.topwin
-        )
         self._publish_xml_a11y()
 
     def _xmleditor_enabled_changed_cb(self):

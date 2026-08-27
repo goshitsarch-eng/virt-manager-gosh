@@ -1186,6 +1186,18 @@ class vmmHostStorage(vmmGObjectUI):
         if event.button != 3:
             return
 
+        # GTK 3 TreeView selected the row under a right-click before
+        # the Copy Volume Path menu opened.
+        try:
+            tup = src.get_path_at_pos(int(event.x), int(event.y))
+        except Exception:
+            tup = None
+        if tup is not None:
+            try:
+                src.get_selection().select_path(tup[0])
+            except Exception:
+                pass
+
         self._volmenu.popup_at_pointer(event)
 
     def _cancel_clicked_cb(self, src):

@@ -928,9 +928,18 @@ class vmmSnapshotPage(vmmGObjectUI):
     #############
 
     def _popup_snapshot_menu(self, src, event):
-        ignore = src
         if event.button != 3:
             return
+        try:
+            tup = src.get_path_at_pos(int(event.x), int(event.y))
+        except Exception:
+            tup = None
+        if tup is not None:
+            try:
+                src.get_selection().unselect_all()
+                src.get_selection().select_path(tup[0])
+            except Exception:
+                pass
         self._snapmenu.popup_at_pointer(event)
 
     def close(self, ignore1=None, ignore2=None):
