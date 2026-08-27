@@ -1019,6 +1019,34 @@ def main():
         disp._username = "alice"
         disp._password = "s3cret"
         assert disp._sasl_plain_clientout() == b"\x00alice\x00s3cret"
+        # RFC 2831 example 8.1 (imap / elwood.innosoft.com)
+        resp, rspauth = gtk4display._digest_md5_hashes(
+            "chris",
+            "secret",
+            "elwood.innosoft.com",
+            "OA6MG9tEQGm2hh",
+            "OA6MHXh6VqTrRk",
+            "00000001",
+            "auth",
+            "imap/elwood.innosoft.com",
+            "md5-sess",
+        )
+        assert resp == "d388dad90d4bbd760a152321f2143af7", resp
+        challenge = (
+            b'realm="elwood.innosoft.com",nonce="OA6MG9tEQGm2hh",'
+            b'qop="auth",algorithm=md5-sess'
+        )
+        out, expect = gtk4display._digest_md5_client_out(
+            challenge,
+            "chris",
+            "secret",
+            "elwood.innosoft.com",
+            cnonce="OA6MHXh6VqTrRk",
+        )
+        text = out.decode("ascii")
+        assert 'username="chris"' in text
+        assert "response=" in text
+        assert expect == rspauth
 
         class _SaslSock:
             def __init__(self, data):
@@ -1038,6 +1066,25 @@ def main():
         disp._vnc_sasl(ssock)
         assert b"PLAIN" in ssock.sent
         assert b"\x00alice\x00s3cret\x00" in ssock.sent
+        disp._username = "chris"
+        disp._password = "secret"
+        disp._host = "elwood.innosoft.com"
+        chal = (
+            b'realm="elwood.innosoft.com",nonce="OA6MG9tEQGm2hh",'
+            b'qop="auth",algorithm=md5-sess'
+        )
+        _dout, expect = gtk4display._digest_md5_client_out(
+            chal, "chris", "secret", "elwood.innosoft.com", cnonce="OA6MHXh6VqTrRk"
+        )
+        rsp = ("rspauth=%s" % expect).encode("ascii")
+        dmech = b"DIGEST-MD5"
+        dstart = st.pack("!I", len(dmech)) + dmech
+        dstart += st.pack("!I", len(chal) + 1) + chal + b"\x00" + b"\x00"
+        dstart += st.pack("!I", len(rsp) + 1) + rsp + b"\x00" + b"\x01"
+        dsock = _SaslSock(dstart)
+        disp._vnc_sasl(dsock, cnonce="OA6MHXh6VqTrRk")
+        assert b"DIGEST-MD5" in dsock.sent
+        assert b"response=" in dsock.sent
         disp.send_keys([97])
         disp.set_property("resize-guest", True)
         disp._apply_resize_guest(True)

@@ -10,6 +10,9 @@ a DrawingArea. VNC uses a built-in RFB client against the same widget API
 the rest of virt-manager already talks to.
 """
 
+import ctypes
+import ctypes.util
+import hashlib
 import io
 import os
 import socket
@@ -85,6 +88,281 @@ _VNC_VENCRYPT_VNC_AUTH = (_VNC_VENCRYPT_TLSVNC, _VNC_VENCRYPT_X509VNC)
 _VNC_VENCRYPT_SASL_AUTH = (_VNC_VENCRYPT_TLSSASL, _VNC_VENCRYPT_X509SASL)
 _SASL_MAX_MECHLIST = 300
 _SASL_MAX_DATA = 1024 * 1024
+_SASL_OK = 0
+_SASL_CONTINUE = 1
+_SASL_INTERACT = 2
+_SASL_CB_USER = 0x4001
+_SASL_CB_AUTHNAME = 0x4002
+_SASL_CB_PASS = 0x4004
+_SASL_CB_GETREALM = 0x4008
+
+
+def _digest_md5_parse(raw):
+    """Parse a SASL DIGEST-MD5 challenge / rspauth token list."""
+    text = raw.decode("utf-8", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw or "")
+    out = {}
+    key = []
+    val = []
+    in_key = True
+    in_quote = False
+    for ch in text:
+        if in_key:
+            if ch == "=":
+                in_key = False
+            elif ch not in " \t\r\n":
+                key.append(ch)
+            continue
+        if ch == '"':
+            in_quote = not in_quote
+            continue
+        if ch == "," and not in_quote:
+            name = "".join(key).strip().lower()
+            if name:
+                out[name] = "".join(val)
+            key = []
+            val = []
+            in_key = True
+            continue
+        val.append(ch)
+    name = "".join(key).strip().lower()
+    if name:
+        out[name] = "".join(val)
+    return out
+
+
+def _digest_md5_hashes(username, password, realm, nonce, cnonce, nc, qop, digest_uri, algorithm):
+    """RFC 2831 response and rspauth hex digests."""
+    user = username or ""
+    realm = realm or ""
+    passwd = password or ""
+    a1 = hashlib.md5(("%s:%s:%s" % (user, realm, passwd)).encode("utf-8")).digest()
+    if (algorithm or "").lower() == "md5-sess":
+        a1 = hashlib.md5(a1 + (":%s:%s" % (nonce, cnonce)).encode("utf-8")).digest()
+    ha1 = a1.hex()
+    ha2 = hashlib.md5(("AUTHENTICATE:%s" % digest_uri).encode("utf-8")).hexdigest()
+    response = hashlib.md5(
+        ("%s:%s:%s:%s:%s:%s" % (ha1, nonce, nc, cnonce, qop, ha2)).encode("ascii")
+    ).hexdigest()
+    ha2_rsp = hashlib.md5((":%s" % digest_uri).encode("utf-8")).hexdigest()
+    rspauth = hashlib.md5(
+        ("%s:%s:%s:%s:%s:%s" % (ha1, nonce, nc, cnonce, qop, ha2_rsp)).encode("ascii")
+    ).hexdigest()
+    return response, rspauth
+
+
+def _digest_md5_client_out(challenge, username, password, host, cnonce=None, nc="00000001"):
+    parsed = _digest_md5_parse(challenge)
+    nonce = parsed.get("nonce")
+    if not nonce:
+        raise RuntimeError("SASL DIGEST-MD5 challenge missing nonce")
+    realm = parsed.get("realm", "")
+    qop_opts = [p.strip() for p in (parsed.get("qop") or "auth").split(",") if p.strip()]
+    qop = "auth" if "auth" in qop_opts else qop_opts[0]
+    algorithm = parsed.get("algorithm", "md5-sess")
+    charset = parsed.get("charset") or ""
+    cnonce = cnonce or os.urandom(16).hex()
+    digest_uri = "vnc/%s" % (host or "localhost")
+    response, rspauth = _digest_md5_hashes(
+        username, password, realm, nonce, cnonce, nc, qop, digest_uri, algorithm
+    )
+    parts = [
+        'username="%s"' % (username or ""),
+        'nonce="%s"' % nonce,
+        'cnonce="%s"' % cnonce,
+        "nc=%s" % nc,
+        "qop=%s" % qop,
+        'digest-uri="%s"' % digest_uri,
+        "response=%s" % response,
+    ]
+    if realm:
+        parts.insert(1, 'realm="%s"' % realm)
+    if charset:
+        parts.append("charset=%s" % charset)
+    return ",".join(parts).encode("utf-8"), rspauth
+
+
+class _DigestMd5Client:
+    def __init__(self, username, password, host, cnonce=None):
+        self._username = username or ""
+        self._password = password or ""
+        self._host = host or "localhost"
+        self._cnonce = cnonce
+        self._expect_rspauth = None
+        self._sent = False
+
+    def start(self, _mechlist):
+        return "DIGEST-MD5", None, True
+
+    def step(self, serverin):
+        if not self._sent:
+            out, self._expect_rspauth = _digest_md5_client_out(
+                serverin, self._username, self._password, self._host, cnonce=self._cnonce
+            )
+            self._sent = True
+            return out, False
+        if serverin:
+            got = _digest_md5_parse(serverin).get("rspauth")
+            if got and got != self._expect_rspauth:
+                raise RuntimeError("SASL DIGEST-MD5 server authentication failed")
+        return None, True
+
+
+class _CyrusSaslClient:
+    """gtk-vnc uses Cyrus SASL for PLAIN, DIGEST-MD5, and GSSAPI."""
+
+    _lib = None
+    _inited = False
+
+    class _Interact(ctypes.Structure):
+        _fields_ = [
+            ("id", ctypes.c_ulong),
+            ("challenge", ctypes.c_char_p),
+            ("prompt", ctypes.c_char_p),
+            ("defresult", ctypes.c_char_p),
+            ("result", ctypes.c_void_p),
+            ("len", ctypes.c_uint),
+        ]
+
+    @classmethod
+    def _load(cls):
+        if cls._lib is not None:
+            return cls._lib
+        name = ctypes.util.find_library("sasl2")
+        if not name:
+            return None
+        lib = ctypes.CDLL(name)
+        lib.sasl_client_init.argtypes = [ctypes.c_void_p]
+        lib.sasl_client_init.restype = ctypes.c_int
+        lib.sasl_client_new.argtypes = [
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        lib.sasl_client_new.restype = ctypes.c_int
+        lib.sasl_client_start.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(ctypes.c_char_p),
+            ctypes.POINTER(ctypes.c_uint),
+            ctypes.POINTER(ctypes.c_char_p),
+        ]
+        lib.sasl_client_start.restype = ctypes.c_int
+        lib.sasl_client_step.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(ctypes.c_char_p),
+            ctypes.POINTER(ctypes.c_uint),
+        ]
+        lib.sasl_client_step.restype = ctypes.c_int
+        lib.sasl_dispose.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+        lib.sasl_dispose.restype = None
+        cls._lib = lib
+        return lib
+
+    def __init__(self, username, password, host):
+        lib = self._load()
+        if lib is None:
+            raise RuntimeError("libsasl2 is not available")
+        if not _CyrusSaslClient._inited:
+            err = lib.sasl_client_init(None)
+            if err != _SASL_OK:
+                raise RuntimeError("sasl_client_init failed: %s" % err)
+            _CyrusSaslClient._inited = True
+        self._lib = lib
+        self._username = (username or "").encode("utf-8")
+        self._password = (password or "").encode("utf-8")
+        self._keep = []
+        self._conn = ctypes.c_void_p()
+        hostb = (host or "localhost").encode("utf-8")
+        err = lib.sasl_client_new(b"vnc", hostb, None, None, None, 0, ctypes.byref(self._conn))
+        if err != _SASL_OK or not self._conn:
+            raise RuntimeError("sasl_client_new failed: %s" % err)
+
+    def _copy_out(self, ptr, length):
+        if not ptr or not ptr.value:
+            return None
+        return ctypes.string_at(ptr.value, int(length.value))
+
+    def _fill_interact(self, interact_ptr):
+        if not interact_ptr:
+            return
+        idx = 0
+        while True:
+            item = _CyrusSaslClient._Interact.from_address(interact_ptr + idx * ctypes.sizeof(_CyrusSaslClient._Interact))
+            if item.id == 0:
+                break
+            if item.id in (_SASL_CB_USER, _SASL_CB_AUTHNAME):
+                buf = self._username
+            elif item.id == _SASL_CB_PASS:
+                buf = self._password
+            else:
+                buf = b""
+            cbuf = ctypes.c_char_p(buf)
+            self._keep.append((buf, cbuf))
+            item.result = ctypes.cast(cbuf, ctypes.c_void_p)
+            item.len = len(buf)
+            idx += 1
+
+    def start(self, mechlist):
+        interact = ctypes.c_void_p()
+        clientout = ctypes.c_char_p()
+        clientoutlen = ctypes.c_uint()
+        mech = ctypes.c_char_p()
+        while True:
+            err = self._lib.sasl_client_start(
+                self._conn,
+                mechlist.encode("ascii"),
+                ctypes.byref(interact),
+                ctypes.byref(clientout),
+                ctypes.byref(clientoutlen),
+                ctypes.byref(mech),
+            )
+            if err == _SASL_INTERACT:
+                self._fill_interact(interact.value or 0)
+                continue
+            if err not in (_SASL_OK, _SASL_CONTINUE):
+                raise RuntimeError("sasl_client_start failed: %s" % err)
+            name = mech.value.decode("ascii") if mech.value else ""
+            if not name:
+                raise RuntimeError("sasl_client_start chose no mechanism")
+            return name, self._copy_out(clientout, clientoutlen), err == _SASL_CONTINUE
+
+    def step(self, serverin):
+        interact = ctypes.c_void_p()
+        clientout = ctypes.c_char_p()
+        clientoutlen = ctypes.c_uint()
+        raw = serverin if isinstance(serverin, (bytes, bytearray)) else (serverin or b"")
+        while True:
+            err = self._lib.sasl_client_step(
+                self._conn,
+                raw if raw else None,
+                len(raw),
+                ctypes.byref(interact),
+                ctypes.byref(clientout),
+                ctypes.byref(clientoutlen),
+            )
+            if err == _SASL_INTERACT:
+                self._fill_interact(interact.value or 0)
+                continue
+            if err not in (_SASL_OK, _SASL_CONTINUE):
+                raise RuntimeError("sasl_client_step failed: %s" % err)
+            return self._copy_out(clientout, clientoutlen), err == _SASL_OK
+
+    def dispose(self):
+        if self._conn:
+            try:
+                self._lib.sasl_dispose(ctypes.byref(self._conn))
+            except Exception:
+                pass
+            self._conn = None
+
 
 # Linux evdev codes used by SpiceClientGLib.inputs_key_press and QEMU
 # VNC extended key events. Gdk hardware keycodes on X11 are evdev + 8.
@@ -541,9 +819,9 @@ class VNCDisplay(_DisplayBase):
     RFB/VNC client painted on a GTK 4 DrawingArea.
 
     Supports None, VNC-auth, VeNCrypt (including SASL subtypes), RFB SASL
-    (PLAIN), and TLS; 32-bit pixels; and the encodings QEMU commonly
-    sends: raw, CopyRect, RRE, Hextile, zlib, Tight, ZRLE, DesktopSize,
-    and cursor.
+    (PLAIN, DIGEST-MD5, and Cyrus/GSSAPI when libsasl2 is present), and
+    TLS; 32-bit pixels; and the encodings QEMU commonly sends: raw,
+    CopyRect, RRE, Hextile, zlib, Tight, ZRLE, DesktopSize, and cursor.
     """
 
     def __init__(self, **kwargs):
@@ -900,29 +1178,61 @@ class VNCDisplay(_DisplayBase):
         complete = self._recv_n(sock, 1)[0]
         return data, complete
 
-    def _vnc_sasl(self, sock):
-        """RFB security type 20 / VeNCrypt *SASL. GtkVnc PLAIN wire format."""
+    def _sasl_python_client(self, mechlist, cnonce=None):
+        chosen = self._sasl_choose_mech(mechlist)
+        if chosen == "PLAIN":
+            class _Plain:
+                def start(self_inner, _mechs):
+                    return "PLAIN", self._sasl_plain_clientout(), False
+
+                def step(self_inner, _serverin):
+                    return None, True
+
+            return _Plain()
+        if chosen == "DIGEST-MD5":
+            return _DigestMd5Client(self._username, self._password, self._host, cnonce=cnonce)
+        return None
+
+    def _vnc_sasl(self, sock, cnonce=None):
+        """RFB security type 20 / VeNCrypt *SASL. GtkVnc wire format."""
         mechlistlen = struct.unpack("!I", self._recv_n(sock, 4))[0]
         if mechlistlen > _SASL_MAX_MECHLIST:
             raise RuntimeError("SASL mechlist too long")
         mechlist = self._recv_n(sock, mechlistlen).decode("ascii", "replace")
-        chosen = self._sasl_choose_mech(mechlist)
-        if chosen is None:
-            raise RuntimeError("SASL mechanisms unsupported: %s" % mechlist)
         self._need_vnc_creds(True)
-        if chosen != "PLAIN":
-            raise RuntimeError("SASL mechanism %s is not supported" % chosen)
-        clientout = self._sasl_plain_clientout()
+        client = None
+        try:
+            client = _CyrusSaslClient(self._username, self._password, self._host)
+            chosen, clientout, _cont = client.start(mechlist)
+        except Exception as exc:
+            log.debug("Cyrus SASL unavailable, using built-in: %s", exc)
+            if client is not None:
+                try:
+                    client.dispose()
+                except Exception:
+                    pass
+            client = self._sasl_python_client(mechlist, cnonce=cnonce)
+            if client is None:
+                raise RuntimeError("SASL mechanisms unsupported: %s" % mechlist)
+            chosen, clientout, _cont = client.start(mechlist)
         sock.sendall(struct.pack("!I", len(chosen)) + chosen.encode("ascii"))
         self._sasl_write_payload(sock, clientout)
-        _serverin, complete = self._sasl_read_server(sock)
-        # PLAIN finishes in one client start. If the server is not done,
-        # send an empty step like gtk-vnc's client-step loop.
-        if not complete:
-            self._sasl_write_payload(sock, None)
-            _serverin, complete = self._sasl_read_server(sock)
-        if not complete:
-            raise RuntimeError("SASL negotiation did not complete")
+        # gtk-vnc: always read the START reply, then step until both sides done.
+        while True:
+            serverin, complete = self._sasl_read_server(sock)
+            try:
+                out, done = client.step(serverin)
+            except Exception:
+                if complete:
+                    break
+                raise
+            if complete and done:
+                break
+            self._sasl_write_payload(sock, out)
+        try:
+            client.dispose()
+        except Exception:
+            pass
 
     def _tls_ca_file(self):
         return (
