@@ -1109,6 +1109,35 @@ def main():
         file_item._on_clicked()
         assert opened, "GTK 3 menubar must open on click"
 
+        from virtManager.details.console import _CONSOLE_PAGE_CONNECT
+
+        assert con._viewer_connect_clicked is False
+        active = None
+        for cand in conn.list_vms():
+            if cand.is_active():
+                active = cand
+                break
+        if active is not None:
+            orig_auto = active.get_console_autoconnect()
+            try:
+                active.set_console_autoconnect(False)
+                win_ac = vmmVMWindow.get_instance(None, active)
+                win_ac._console._viewer_connect_clicked = False
+                try:
+                    win_ac._console._close_viewer()
+                except Exception:
+                    pass
+                win_ac._console.vmwindow_refresh_vm_state()
+                page = win_ac._console.widget("console-pages").get_current_page()
+                assert page == _CONSOLE_PAGE_CONNECT, (
+                    "GTK 3 Autoconnect-off must show Connect page, page=%s" % page
+                )
+            finally:
+                try:
+                    active.set_console_autoconnect(orig_auto)
+                except Exception:
+                    pass
+
     def preferences_grabkeys_widgets():
         from virtManager.preferences import vmmPreferences
 
@@ -1472,6 +1501,23 @@ def main():
             listing = []
         assert ".." in listing, "file chooser must offer parent-directory navigation"
         assert gtkcompat._use_test_file_browser()
+        old_suite = os.environ.get("VIRTINST_TEST_SUITE")
+        old_a11y = os.environ.get("GTK_A11Y")
+        try:
+            os.environ.pop("VIRTINST_TEST_SUITE", None)
+            os.environ["GTK_A11Y"] = "atspi"
+            assert not gtkcompat._use_test_file_browser(), (
+                "production with GTK_A11Y=atspi must use Gtk.FileDialog"
+            )
+        finally:
+            if old_suite is None:
+                os.environ.pop("VIRTINST_TEST_SUITE", None)
+            else:
+                os.environ["VIRTINST_TEST_SUITE"] = old_suite
+            if old_a11y is None:
+                os.environ.pop("GTK_A11Y", None)
+            else:
+                os.environ["GTK_A11Y"] = old_a11y
         assert gtkcompat._path_needs_overwrite_confirm("/etc/passwd", True)
         assert not gtkcompat._path_needs_overwrite_confirm("/tmp/no-such-vmm-file", True)
         assert hasattr(gtkcompat, "_browse_local_native")

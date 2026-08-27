@@ -471,9 +471,9 @@ class vmmConsolePages(vmmGObjectUI):
 
         # Initialize display widget
         self._viewer = None
-        # First console show connects even if gsettings autoconnect is unset.
-        # Guest-stop _close_viewer() clears this so Autoconnect-off is honored.
-        self._viewer_connect_clicked = True
+        # Match GTK 3: first open honors per-VM/global Autoconnect. Only an
+        # explicit Connect click (or auth retry) sets this True.
+        self._viewer_connect_clicked = False
         self._in_fullscreen = False
 
         # Fullscreen toolbar

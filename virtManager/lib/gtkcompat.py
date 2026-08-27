@@ -6964,10 +6964,12 @@ def choose_alert(parent, heading, body="", responses=None, extra_child=None, def
 
 
 def _use_test_file_browser():
-    """Official uitests and construct need the AT-SPI list browser."""
-    if os.environ.get("VIRTINST_TEST_SUITE"):
-        return True
-    return _a11y_runtime_enabled()
+    """AT-SPI list browser for official uitests and construct only.
+
+    Production must use Gtk.FileDialog even when GTK_A11Y=atspi, so
+    users keep GTK 3 bookmarks, filters, portal, and overwrite UX.
+    """
+    return bool(os.environ.get("VIRTINST_TEST_SUITE"))
 
 
 def _path_needs_overwrite_confirm(path, confirm_overwrite):
@@ -7074,7 +7076,11 @@ def _browse_local_native(
     else:
         dialog.open(parent, None, lambda d, r: _done(d, r, dialog.open_finish))
     loop.run()
-    if _path_needs_overwrite_confirm(result[0], confirm_overwrite):
+    # Gtk.FileDialog.save already confirms overwrite. Extra prompt only
+    # for open/folder picks that land on an existing path.
+    if dialog_type != Gtk.FileChooserAction.SAVE and _path_needs_overwrite_confirm(
+        result[0], confirm_overwrite
+    ):
         if not _confirm_overwrite_or_test(parent, result[0]):
             return None
     return result[0]
