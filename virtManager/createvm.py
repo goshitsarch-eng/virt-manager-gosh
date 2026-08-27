@@ -378,18 +378,7 @@ class vmmCreateVM(vmmGObjectUI):
             self._vmm_create_name_poll = True
 
             def _poll_create_name():
-                path = "/tmp/vmm-a11y-create-name.txt"
-                try:
-                    if not os.path.exists(path):
-                        return True
-                    text = open(path, "r").read()
-                    os.remove(path)
-                except Exception:
-                    return True
-                try:
-                    self.widget("create-vm-name").set_text(text)
-                except Exception:
-                    pass
+                self._apply_create_name_file()
                 return True
 
             GLib.timeout_add(50, _poll_create_name)
@@ -833,7 +822,9 @@ class vmmCreateVM(vmmGObjectUI):
                     finish = "/tmp/vmm-a11y-create-finish"
                     if os.path.exists(finish):
                         os.remove(finish)
-                        self._finish_clicked(None)
+                        # idle_add can sit behind a nested dialog loop;
+                        # the sentinel already runs on the main context.
+                        self._finish_clicked_impl()
                 except Exception:
                     pass
                 return True
@@ -2256,8 +2247,8 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _populate_summary(self):
         guest = self._gdata.build_guest()
-        mem = _pretty_memory(int(guest.memory))
-        cpu = str(int(guest.vcpus))
+        mem = _pretty_memory(int(guest.memory or 0))
+        cpu = str(int(guest.vcpus or 1))
 
         instmethod = self._get_config_install_page()
         install = ""
@@ -2350,6 +2341,45 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _get_config_name(self):
         return self.widget("create-vm-name").get_text()
+
+    def _apply_create_name_file(self):
+        """Apply a typed Name sentinel. Ignore empty leftovers so they
+        cannot wipe the generated guest name before Finish."""
+        path = "/tmp/vmm-a11y-create-name.txt"
+        try:
+            if not os.path.exists(path):
+                return
+            text = open(path, "r").read()
+            os.remove(path)
+        except Exception:
+            return
+        if not (text or "").strip():
+            return
+        try:
+            self.widget("create-vm-name").set_text(text)
+        except Exception:
+            pass
+
+    def _ensure_guest_name(self):
+        """Keep the generated name when the finish-page entry is empty."""
+        name = ""
+        try:
+            name = (self.widget("create-vm-name").get_text() or "").strip()
+        except Exception:
+            name = ""
+        if name:
+            return name
+        kept = ""
+        try:
+            kept = ((self._gdata and self._gdata.name) or "").strip()
+        except Exception:
+            kept = ""
+        if kept:
+            try:
+                self.widget("create-vm-name").set_text(kept)
+            except Exception:
+                pass
+        return kept
 
     def _get_config_machine(self):
         return uiutil.get_list_selection(self.widget("machine"), check_visible=True)
@@ -3691,7 +3721,9 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _validate_final_page(self):
         # HV + Arch selection
-        name = self._get_config_name()
+        name = self._ensure_guest_name()
+        if not name:
+            return self.err.val_err(_("Invalid guest name"), _("A name must be specified."))
         if name != self._gdata.name:
             try:
                 virtinst.Guest.validate_name(self._gdata.conn, name)
@@ -3705,6 +3737,13 @@ class vmmCreateVM(vmmGObjectUI):
                 )
                 if not self._validate_storage_page():
                     return False  # pragma: no cover
+
+        # Import skips the storage page; Finish from MEM must still
+        # attach the existing image before start_install.
+        if self._should_skip_disk_page() and self._gdata.disk is None:
+            if self._get_config_install_page() == INSTALL_PAGE_IMPORT:
+                if not self._validate_storage_page():
+                    return False
 
         macaddr = virtinst.DeviceInterface.generate_mac(self.conn.get_backend())
 
@@ -3884,32 +3923,38 @@ class vmmCreateVM(vmmGObjectUI):
         return True
 
     def _finish_clicked_impl(self, *_a):
-        try:
-            path = "/tmp/vmm-a11y-create-name.txt"
-            if os.path.exists(path):
-                text = open(path, "r").read()
-                os.remove(path)
-                self.widget("create-vm-name").set_text(text)
-        except Exception:
-            pass
+        self._apply_create_name_file()
+        self._ensure_guest_name()
         # File-sentinel disk-collision Yes is not modal. Finish can land
         # while the wizard is still on MEM/STORAGE; walk remaining pages.
         page = self._current_create_page()
+        gdata = self._gdata
         try:
             open("/tmp/vmm-a11y-create-finish-debug.txt", "w").write(
-                "page=%s method=%s import=%s\n"
+                "page=%s method=%s import=%s name=%s disk=%s os=%s\n"
                 % (
                     page,
                     self._get_config_install_page(),
                     self._get_config_import_path() or "",
+                    (gdata and gdata.name) or "",
+                    bool(gdata and gdata.disk),
+                    (gdata and gdata.osinfo) or "",
                 )
             )
         except Exception:
             pass
+        if gdata is None:
+            return False
         for _ in range(PAGE_FINISH + 1):
             if page == PAGE_FINISH:
                 break
             if self._validate(page) is not True:
+                try:
+                    open("/tmp/vmm-a11y-create-finish-debug.txt", "a").write(
+                        "validate-fail page=%s\n" % page
+                    )
+                except Exception:
+                    pass
                 return False
             nxt = self._get_next_pagenum(page)
             if nxt is None or nxt <= page:
@@ -3917,6 +3962,12 @@ class vmmCreateVM(vmmGObjectUI):
             self._goto_create_page(nxt)
             page = self._current_create_page()
         if self._validate(PAGE_FINISH) is not True:
+            try:
+                open("/tmp/vmm-a11y-create-finish-debug.txt", "a").write(
+                    "validate-fail finish\n"
+                )
+            except Exception:
+                pass
             return False
 
         log.debug("Starting create finish() sequence")

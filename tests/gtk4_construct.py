@@ -274,6 +274,7 @@ def main():
         "details_many_devices": 20,
         "cli_windows": 90,
         "createvm_finish": 90,
+        "createvm_arm_import_finish": 90,
         "inspection_os_page": 90,
     }
 
@@ -3705,6 +3706,94 @@ def main():
         found = _wait_named_vm("gtk4-created-vm", timeout=12)
         assert found is not None, "createvm finish did not define gtk4-created-vm: %s" % errs
 
+    def createvm_arm_import_finish():
+        """Import an in-use volume on armv7l and Finish from Memory."""
+        import tests
+        import virtinst
+        from virtManager.createvm import PAGE_INSTALL
+        from virtManager.createvm import PAGE_MEM
+        from virtManager.createvm import PAGE_NAME
+        from virtManager.createvm import vmmCreateVM
+        from virtManager.lib import uiutil
+
+        uri = tests.utils.URIs.kvm_armv7l_nodomcaps
+        armconn = _open_conn(GLib, uri)
+        dlg = vmmCreateVM()
+        dlg.show(None, uri)
+        errs = []
+
+        def _val_err(*a, **k):
+            errs.append(("val_err", a, k))
+            return False
+
+        def _show_err(*a, **k):
+            errs.append(("show_err", a, k))
+
+        dlg.err.yes_no = lambda *a, **k: True
+        dlg.err.ok_cancel = lambda *a, **k: True
+        dlg.err.chkbox_helper = lambda *a, **k: True
+        dlg.err.val_err = _val_err
+        dlg.err.show_err = _show_err
+        dlg.widget("arch-expander").set_expanded(True)
+        _pump(GLib, 0.05)
+        try:
+            uiutil.set_list_selection(dlg.widget("machine"), "virt")
+        except Exception:
+            pass
+        dlg._set_install_method_key("import")
+        dlg._set_install_page()
+        assert dlg._validate(PAGE_NAME) is True, errs
+        dlg._forward_clicked_impl()
+        dlg.widget("install-import-entry").set_text("/pool-dir/default-vol")
+        try:
+            open("/tmp/vmm-a11y-import-entry.txt", "w").write("/pool-dir/default-vol")
+            open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+        except Exception:
+            pass
+        osobj = virtinst.OSDB.lookup_os("generic")
+        assert osobj is not None
+        dlg._remember_create_os(osobj)
+        dlg._os_list.select_os(osobj)
+        assert dlg._validate(PAGE_INSTALL) is True, "install validate: %s" % errs
+        dlg._goto_create_page(PAGE_MEM)
+        assert dlg._validate(PAGE_MEM) is True, errs
+        # Official uitest Finish lands here; empty Name leftovers must not abort.
+        try:
+            open("/tmp/vmm-a11y-create-name.txt", "w").write("")
+        except Exception:
+            pass
+        dlg.widget("create-vm-name").set_text("")
+        dlg._finish_clicked_impl()
+        found = None
+        deadline = time.monotonic() + 12
+        while time.monotonic() < deadline:
+            armconn.schedule_priority_tick(pollvm=True, force=True)
+            _pump(GLib, 0.2)
+            for cand in armconn.list_vms():
+                if cand.get_name() == "vm1":
+                    found = cand
+                    break
+            if found is not None:
+                break
+        debug = ""
+        alert = ""
+        try:
+            debug = open("/tmp/vmm-a11y-create-finish-debug.txt").read()
+        except Exception:
+            pass
+        try:
+            alert = open("/tmp/vmm-a11y-alert.txt").read()
+        except Exception:
+            pass
+        assert found is not None, (
+            "arm import finish did not define vm1: %s debug=%s alert=%s"
+            % (errs, debug, alert)
+        )
+        try:
+            dlg.close()
+        except Exception:
+            pass
+
     def details_apply_xml():
         import re
 
@@ -4381,6 +4470,7 @@ def main():
         ("systray_menu_popup", systray_menu_popup),
         ("addhardware_finish_sound", addhardware_finish_sound),
         ("createvm_finish", createvm_finish),
+        ("createvm_arm_import_finish", createvm_arm_import_finish),
         ("details_apply_xml", details_apply_xml),
         ("media_change", media_change),
         ("media_change_cdrom_nodedev", media_change_cdrom_nodedev),
