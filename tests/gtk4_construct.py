@@ -1197,6 +1197,10 @@ def main():
         win.resize(320, 240)
         assert getattr(win, "_vmm_win_size", None) == (320, 240)
         assert win.get_size()[0] >= 1 and win.get_size()[1] >= 1
+        win.present()
+        xid = gtkcompat._window_xid(win)
+        if xid:
+            assert gtkcompat._x11_resize_window(xid, 320, 240) in (True, False)
         win.resize(1, 1)
         win.close()
 
@@ -1622,6 +1626,19 @@ def main():
         assert disp._buttons & 4
         disp._on_scroll(None, 0, 1)
         assert grabbed
+        assert disp._grabbed_keyboard, "click must grab keyboard like gtk-vnc"
+        # Unmapped widgets cannot XGrabPointer; helpers must not raise.
+        assert gtk4display._x11_grab_pointer(disp) in (True, False)
+        assert gtk4display._x11_grab_keyboard(disp) in (True, False)
+        gtk4display._x11_ungrab_input()
+        # Focus-out / Alt-Tab must release grabs so menu accelerators return.
+        disp._grab_pointer()
+        disp._grab_keyboard()
+        disp._on_focus_leave(None)
+        assert not disp._grabbed_pointer
+        assert not disp._grabbed_keyboard
+        # Re-grab so the Ctrl+Alt sequence test still has something to release.
+        disp._on_pressed(type("G", (), {"get_current_button": lambda self: 1})(), 1, 1, 1)
         # Grab sequence is stored as keyvals; GTK 4 events report both
         disp._on_key_pressed(None, 65507, 37, 0)
         disp._on_key_pressed(None, 65513, 64, 0)
@@ -1966,9 +1983,25 @@ def main():
             assert motion, "server mouse mode must send inputs_motion"
             assert motion[-1][0] == 6 and motion[-1][1] == 3, motion
             assert any(item[0] == "down" for item in press), press
+            spice._pointer_grab = True
+            spice._grabbed_pointer = False
+            spice._main = type(
+                "M",
+                (),
+                {
+                    "get_property": lambda self, n: gtk4display._SPICE_MOUSE_MODE_SERVER
+                },
+            )()
+            spice._sync_mouse_mode()
+            assert spice._grabbed_pointer, "server mouse must grab the pointer"
+            assert spice._grabbed_keyboard, "server mouse must grab the keyboard"
+            spice._on_focus_leave(None)
+            assert not spice._grabbed_pointer
+            assert not spice._grabbed_keyboard
             spice._sync_key_locks(int(Gdk.ModifierType.LOCK_MASK))
             assert locks, "caps lock must be sent to the guest"
             assert locks[-1] & int(gtk4display.SpiceClientGLib.InputsLock.CAPS_LOCK)
+            spice._recenter_server_mouse()
         finally:
             gtk4display.SpiceClientGLib.inputs_motion = orig_motion
             gtk4display.SpiceClientGLib.inputs_position = orig_position
@@ -1991,6 +2024,28 @@ def main():
         payload += b"\x01\x00\x00\x00" + (b"\x00" * 16)
         nw, nh = disp._read_fb_update(FakeSock(payload), 4, 4)
         assert (nw, nh) == (16, 12)
+        assert disp._vnc_screens and disp._vnc_screens[0][0] == 0
+        # Non-zero screen id must be reused by SetDesktopSize (gtk-vnc).
+        payload = b"\x00" + st.pack("!H", 1) + st.pack("!HHHHi", 0, 0, 32, 24, -308)
+        payload += b"\x01\x00\x00\x00" + st.pack("!IHHHHI", 7, 0, 0, 32, 24, 1)
+        nw, nh = disp._read_fb_update(FakeSock(payload), 4, 4)
+        assert (nw, nh) == (32, 24)
+        assert disp._vnc_screens[0][0] == 7
+        class _SizeSock:
+            def __init__(self):
+                self.sent = b""
+
+            def sendall(self, data):
+                self.sent += data
+
+        rec = _SizeSock()
+        disp.set_property("resize-guest", True)
+        disp._sock = rec
+        disp._open = True
+        disp._send_desktop_size(64, 48)
+        assert rec.sent[:2] == bytes([251, 1])
+        sid = st.unpack("!I", rec.sent[6:10])[0]
+        assert sid == 7, rec.sent
         def _pixel(dx, dy):
             i = (dy * 4 + dx) * 4
             return bytes(disp._pixels[i : i + 4])
@@ -2185,6 +2240,10 @@ def main():
         assert disp._led_state == (
             gtk4display._VNC_LED_CAPS | gtk4display._VNC_LED_NUM
         )
+        disp._grabbed_keyboard = True
+        assert gtk4display._x11_apply_led_state(disp._led_state) in (True, False)
+        disp._apply_led_state(disp._led_state)
+        disp._grabbed_keyboard = False
         fmt = st.pack("!BBHBBI", 255, 1, 2, 3, 2, 48000)
         en = st.pack("!BBH", 255, 1, 0)
         class _Rec:

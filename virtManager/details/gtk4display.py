@@ -95,6 +95,22 @@ _X11_MOD2_MASK = 1 << 4
 _X11_MOD3_MASK = 1 << 5
 _XKB_USE_CORE_KBD = 0x0100
 _X11_DPY = None
+_X11_GrabModeAsync = 1
+_X11_CurrentTime = 0
+_X11_Success = 0
+_X11_ButtonPressMask = 1 << 2
+_X11_ButtonReleaseMask = 1 << 3
+_X11_PointerMotionMask = 1 << 6
+_X11_ButtonMotionMask = 1 << 13
+_X11_POINTER_EVENT_MASK = (
+    _X11_ButtonPressMask
+    | _X11_ButtonReleaseMask
+    | _X11_PointerMotionMask
+    | _X11_ButtonMotionMask
+)
+_X11_BLANK_CURSOR = 0
+_X11_PTR_GRABBED = False
+_X11_KBD_GRABBED = False
 
 
 class _XkbStateRec(ctypes.Structure):
@@ -116,18 +132,43 @@ class _XkbStateRec(ctypes.Structure):
     ]
 
 
-def _x11_locked_mods():
-    """Xkb locked modifiers. GTK 4 Gdk.ModifierType has no Num/Scroll bits."""
+class _XColor(ctypes.Structure):
+    _fields_ = [
+        ("pixel", ctypes.c_ulong),
+        ("red", ctypes.c_ushort),
+        ("green", ctypes.c_ushort),
+        ("blue", ctypes.c_ushort),
+        ("flags", ctypes.c_char),
+        ("pad", ctypes.c_char),
+    ]
+
+
+def _x11_lib():
+    return ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+
+
+def _x11_ensure_dpy():
+    """Shared XOpenDisplay for grabs, warps, keycodes, and LED sync."""
     global _X11_DPY
     try:
-        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11 = _x11_lib()
         if _X11_DPY is None:
             x11.XOpenDisplay.restype = ctypes.c_void_p
             x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
             name = os.environ.get("DISPLAY")
             _X11_DPY = x11.XOpenDisplay(name.encode("utf-8") if name else None)
-        if not _X11_DPY:
-            return 0
+        return _X11_DPY
+    except Exception:
+        return None
+
+
+def _x11_locked_mods():
+    """Xkb locked modifiers. GTK 4 Gdk.ModifierType has no Num/Scroll bits."""
+    dpy = _x11_ensure_dpy()
+    if not dpy:
+        return 0
+    try:
+        x11 = _x11_lib()
         x11.XkbGetState.argtypes = [
             ctypes.c_void_p,
             ctypes.c_uint,
@@ -135,11 +176,221 @@ def _x11_locked_mods():
         ]
         x11.XkbGetState.restype = ctypes.c_int
         state = _XkbStateRec()
-        if x11.XkbGetState(_X11_DPY, _XKB_USE_CORE_KBD, ctypes.byref(state)) != 0:
+        if x11.XkbGetState(dpy, _XKB_USE_CORE_KBD, ctypes.byref(state)) != 0:
             return 0
         return int(state.locked_mods)
     except Exception:
         return 0
+
+
+def _widget_surface_xid(widget):
+    """Toplevel XID for the console widget. GTK 4 has no per-widget X window."""
+    try:
+        native = widget.get_native() if hasattr(widget, "get_native") else None
+        surface = native.get_surface() if native is not None else None
+        if surface is None and hasattr(widget, "get_surface"):
+            surface = widget.get_surface()
+        if surface is not None and hasattr(surface, "get_xid"):
+            return int(surface.get_xid()), surface
+    except Exception:
+        pass
+    return None, None
+
+
+def _x11_blank_cursor(x11, dpy, xid):
+    """Invisible cursor used while the pointer is grabbed (gtk-vnc / spice-gtk)."""
+    global _X11_BLANK_CURSOR
+    if _X11_BLANK_CURSOR:
+        return _X11_BLANK_CURSOR
+    try:
+        x11.XCreatePixmap.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_uint,
+            ctypes.c_uint,
+            ctypes.c_uint,
+        ]
+        x11.XCreatePixmap.restype = ctypes.c_ulong
+        pix = x11.XCreatePixmap(dpy, xid, 1, 1, 1)
+        dummy = _XColor()
+        x11.XCreatePixmapCursor.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.POINTER(_XColor),
+            ctypes.POINTER(_XColor),
+            ctypes.c_uint,
+            ctypes.c_uint,
+        ]
+        x11.XCreatePixmapCursor.restype = ctypes.c_ulong
+        _X11_BLANK_CURSOR = x11.XCreatePixmapCursor(
+            dpy, pix, pix, ctypes.byref(dummy), ctypes.byref(dummy), 0, 0
+        )
+        x11.XFreePixmap.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        x11.XFreePixmap(dpy, pix)
+        return _X11_BLANK_CURSOR
+    except Exception:
+        return 0
+
+
+def _x11_grab_pointer(widget, hide_cursor=False):
+    """
+    GTK 4 removed Gdk.Seat.grab. Recreate gtk-vnc / spice-gtk confinement
+    with XGrabPointer so server-mouse deltas do not stop at the widget edge.
+    """
+    global _X11_PTR_GRABBED
+    xid, _surface = _widget_surface_xid(widget)
+    dpy = _x11_ensure_dpy()
+    if not xid or not dpy:
+        return False
+    try:
+        x11 = _x11_lib()
+        cursor = _x11_blank_cursor(x11, dpy, xid) if hide_cursor else 0
+        x11.XGrabPointer.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+        ]
+        x11.XGrabPointer.restype = ctypes.c_int
+        status = x11.XGrabPointer(
+            dpy,
+            xid,
+            1,
+            _X11_POINTER_EVENT_MASK,
+            _X11_GrabModeAsync,
+            _X11_GrabModeAsync,
+            xid,
+            cursor or 0,
+            _X11_CurrentTime,
+        )
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        _X11_PTR_GRABBED = int(status) == _X11_Success
+        return _X11_PTR_GRABBED
+    except Exception:
+        return False
+
+
+def _x11_grab_keyboard(widget):
+    """XGrabKeyboard so VM keys do not hit window menu accelerators."""
+    global _X11_KBD_GRABBED
+    xid, _surface = _widget_surface_xid(widget)
+    dpy = _x11_ensure_dpy()
+    if not xid or not dpy:
+        return False
+    try:
+        x11 = _x11_lib()
+        x11.XGrabKeyboard.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_ulong,
+        ]
+        x11.XGrabKeyboard.restype = ctypes.c_int
+        status = x11.XGrabKeyboard(
+            dpy,
+            xid,
+            1,
+            _X11_GrabModeAsync,
+            _X11_GrabModeAsync,
+            _X11_CurrentTime,
+        )
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        _X11_KBD_GRABBED = int(status) == _X11_Success
+        return _X11_KBD_GRABBED
+    except Exception:
+        return False
+
+
+def _x11_ungrab_input():
+    """Release X11 pointer/keyboard grabs. Safe when nothing is grabbed."""
+    global _X11_PTR_GRABBED, _X11_KBD_GRABBED
+    dpy = _x11_ensure_dpy()
+    if not dpy:
+        _X11_PTR_GRABBED = False
+        _X11_KBD_GRABBED = False
+        return
+    try:
+        x11 = _x11_lib()
+        if _X11_PTR_GRABBED:
+            x11.XUngrabPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+            x11.XUngrabPointer(dpy, _X11_CurrentTime)
+        if _X11_KBD_GRABBED:
+            x11.XUngrabKeyboard.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+            x11.XUngrabKeyboard(dpy, _X11_CurrentTime)
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+    except Exception:
+        pass
+    _X11_PTR_GRABBED = False
+    _X11_KBD_GRABBED = False
+
+
+def _x11_warp_pointer(widget, x, y):
+    """Warp to surface-relative coords so server-mouse deltas stay unbounded."""
+    xid, _surface = _widget_surface_xid(widget)
+    dpy = _x11_ensure_dpy()
+    if not xid or not dpy:
+        return False
+    try:
+        x11 = _x11_lib()
+        x11.XWarpPointer.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_uint,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+        x11.XWarpPointer(dpy, 0, xid, 0, 0, 0, 0, int(x), int(y))
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        return True
+    except Exception:
+        return False
+
+
+def _x11_apply_led_state(led):
+    """Match host Caps/Num/Scroll lock LEDs to the guest (gtk-vnc LED state)."""
+    dpy = _x11_ensure_dpy()
+    if not dpy:
+        return False
+    try:
+        x11 = _x11_lib()
+        affect = _X11_LOCK_MASK | _X11_MOD2_MASK | _X11_MOD3_MASK
+        values = 0
+        led = int(led or 0)
+        if led & _VNC_LED_CAPS:
+            values |= _X11_LOCK_MASK
+        if led & _VNC_LED_NUM:
+            values |= _X11_MOD2_MASK
+        if led & _VNC_LED_SCROLL:
+            values |= _X11_MOD3_MASK
+        x11.XkbLockModifiers.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_uint,
+            ctypes.c_uint,
+        ]
+        x11.XkbLockModifiers.restype = ctypes.c_int
+        x11.XkbLockModifiers(dpy, _XKB_USE_CORE_KBD, affect, values)
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        return True
+    except Exception:
+        return False
 
 
 def _keycode_for_keyval(keyval):
@@ -151,9 +402,8 @@ def _keycode_for_keyval(keyval):
     if not keyval:
         return 0
     try:
-        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
-        _x11_locked_mods()
-        if not _X11_DPY:
+        x11 = _x11_lib()
+        if not _x11_ensure_dpy():
             return 0
         x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_uint]
         x11.XKeysymToKeycode.restype = ctypes.c_uint
@@ -881,6 +1131,7 @@ class _DisplayBase(Gtk.DrawingArea):
         self._cursor_surface = None
         self._cursor_hot = (0, 0)
         self._cursor_pixels = None
+        self._toplevel_bound = None
         self.set_draw_func(self._on_draw)
         motion = Gtk.EventControllerMotion()
         motion.connect("motion", self._on_motion)
@@ -894,6 +1145,12 @@ class _DisplayBase(Gtk.DrawingArea):
         keys.connect("key-pressed", self._on_key_pressed)
         keys.connect("key-released", self._on_key_released)
         self.add_controller(keys)
+        try:
+            focus = Gtk.EventControllerFocus()
+            focus.connect("leave", self._on_focus_leave)
+            self.add_controller(focus)
+        except Exception:
+            pass
         try:
             scroll = Gtk.EventControllerScroll()
             scroll.set_flags(
@@ -965,7 +1222,66 @@ class _DisplayBase(Gtk.DrawingArea):
             return False
         return all(int(k) in self._pressed_hwkeys for k in keys)
 
+    def _bind_toplevel_active(self):
+        root = None
+        try:
+            root = self.get_root()
+        except Exception:
+            root = None
+        if root is None or getattr(self, "_toplevel_bound", None) is root:
+            return
+        self._toplevel_bound = root
+        try:
+            root.connect("notify::is-active", self._on_toplevel_active)
+        except Exception:
+            pass
+
+    def _on_toplevel_active(self, win, *_args):
+        try:
+            if not win.is_active():
+                self._ungrab_input()
+        except Exception:
+            self._ungrab_input()
+
+    def _on_focus_leave(self, *_args):
+        self._ungrab_input()
+
+    def _widget_to_surface_point(self, x, y):
+        try:
+            dest = self.get_native() or self.get_root()
+            if dest is not None:
+                nx, ny = self.translate_coordinates(dest, float(x), float(y))
+                if nx is not None and ny is not None:
+                    return int(nx), int(ny)
+        except Exception:
+            pass
+        return int(x), int(y)
+
+    def _grab_pointer(self, hide_cursor=False):
+        self._bind_toplevel_active()
+        _x11_grab_pointer(self, hide_cursor=hide_cursor)
+        if self._grabbed_pointer:
+            return
+        self._grabbed_pointer = True
+        self.emit("vnc-pointer-grab")
+        self.emit("mouse-grab", True)
+
+    def _grab_keyboard(self):
+        self._bind_toplevel_active()
+        _x11_grab_keyboard(self)
+        if self._grabbed_keyboard:
+            return
+        self._grabbed_keyboard = True
+        self.emit("vnc-keyboard-grab")
+        self.emit("keyboard-grab", True)
+        led = getattr(self, "_led_state", None)
+        if led:
+            _x11_apply_led_state(led)
+
     def _ungrab_input(self):
+        _x11_ungrab_input()
+        self._rel_x = None
+        self._rel_y = None
         if self._grabbed_pointer:
             self._grabbed_pointer = False
             self.emit("vnc-pointer-ungrab")
@@ -1023,10 +1339,11 @@ class _DisplayBase(Gtk.DrawingArea):
         self._last_x, self._last_y = x, y
         self._send_pointer(x, y, gest.get_current_button(), True)
         self.grab_focus()
-        if self._pointer_grab and not self._grabbed_pointer:
-            self._grabbed_pointer = True
-            self.emit("vnc-pointer-grab")
-            self.emit("mouse-grab", True)
+        # gtk-vnc grabs pointer and keyboard on click so the first Alt
+        # after focusing the console goes to the guest, not the menubar.
+        if self._pointer_grab:
+            self._grab_pointer()
+        self._grab_keyboard()
 
     def _on_released(self, gest, _n, x, y):
         self._last_x, self._last_y = x, y
@@ -1067,10 +1384,7 @@ class _DisplayBase(Gtk.DrawingArea):
             self._ungrab_input()
             return True
         self._send_key(keyval, keycode, True)
-        if not self._grabbed_keyboard:
-            self._grabbed_keyboard = True
-            self.emit("vnc-keyboard-grab")
-            self.emit("keyboard-grab", True)
+        self._grab_keyboard()
         return True
 
     def _on_key_released(self, _c, keyval, keycode, state):
@@ -1188,6 +1502,7 @@ class _DisplayBase(Gtk.DrawingArea):
         return self._open
 
     def close(self):
+        self._ungrab_input()
         self._open = False
 
 
@@ -1241,6 +1556,7 @@ class VNCDisplay(_DisplayBase):
         self._ext_clip = False
         self._ext_clip_caps_sent = False
         self._host_clip_text = ""
+        self._vnc_screens = []
 
     def set_credential(self, cred, value):
         name = str(cred).upper()
@@ -1265,6 +1581,7 @@ class VNCDisplay(_DisplayBase):
         self._start_thread(lambda: self._connect_fd(fd))
 
     def close(self):
+        self._ungrab_input()
         self._stop = True
         self._open = False
         try:
@@ -1429,6 +1746,8 @@ class VNCDisplay(_DisplayBase):
 
     def _apply_led_state(self, led):
         self._led_state = int(led or 0)
+        if self._grabbed_keyboard:
+            _x11_apply_led_state(self._led_state)
         return False
 
     def _apply_resize_guest(self, val):
@@ -1444,9 +1763,26 @@ class VNCDisplay(_DisplayBase):
         if w < 16 or h < 16:
             return
         try:
-            # QEMU / TigerVNC SetDesktopSize (client msg 251)
-            sock.sendall(struct.pack("!BBHH", _VNC_SET_DESKTOP_SIZE, 1, w, h))
-            sock.sendall(struct.pack("!IHHHHI", 0, 0, 0, w, h, 0))
+            # QEMU / TigerVNC SetDesktopSize (client msg 251). Preserve
+            # screen IDs from the last ExtendedDesktopSize so a non-zero
+            # primary id is not replaced with screen 0.
+            screens = list(getattr(self, "_vnc_screens", None) or [])
+            if not screens:
+                screens = [(0, 0, 0, w, h, 0)]
+            elif len(screens) == 1:
+                sid, _sx, _sy, _sw, _sh, flags = screens[0]
+                screens = [(sid, 0, 0, w, h, flags)]
+            else:
+                sid, _sx, _sy, _sw, _sh, flags = screens[0]
+                extras = [
+                    (osid, ox, oy, ow, oh, oflags)
+                    for osid, ox, oy, ow, oh, oflags in screens[1:]
+                    if ox + ow <= w and oy + oh <= h
+                ]
+                screens = [(sid, 0, 0, w, h, flags)] + extras
+            sock.sendall(struct.pack("!BBHH", _VNC_SET_DESKTOP_SIZE, len(screens), w, h))
+            for sid, sx, sy, sw, sh, flags in screens:
+                sock.sendall(struct.pack("!IHHHHI", sid, sx, sy, sw, sh, flags))
         except Exception:
             pass
 
@@ -2723,7 +3059,13 @@ class VNCDisplay(_DisplayBase):
             if enc == _VNC_ENC_EXTENDED_DESKTOPSIZE:
                 nscreens = self._recv_n(sock, 1)[0]
                 self._recv_n(sock, 3)
-                self._recv_n(sock, nscreens * 16)
+                screens = []
+                for _screen in range(nscreens):
+                    sid, sx, sy, sw, sh, flags = struct.unpack(
+                        "!IHHHHI", self._recv_n(sock, 16)
+                    )
+                    screens.append((sid, sx, sy, sw, sh, flags))
+                self._vnc_screens = screens
                 if w and h:
                     width, height = w, h
                     self._alloc_pixels(width, height)
@@ -3278,10 +3620,8 @@ class SpiceDisplay(_DisplayBase):
         # spice-gtk grabs the pointer in server (relative) mode so
         # motion events are deltas rather than leaving the widget.
         if self._mouse_mode == _SPICE_MOUSE_MODE_SERVER and self._pointer_grab:
-            if not self._grabbed_pointer:
-                self._grabbed_pointer = True
-                self.emit("vnc-pointer-grab")
-                self.emit("mouse-grab", True)
+            self._grab_pointer(hide_cursor=True)
+            self._grab_keyboard()
 
     def _is_server_mouse(self):
         return self._mouse_mode == _SPICE_MOUSE_MODE_SERVER
@@ -3297,15 +3637,24 @@ class SpiceDisplay(_DisplayBase):
         except Exception:
             caps, num, scroll = 1, 2, 4
         modifiers = int(state or 0)
-        if not modifiers:
-            try:
-                display = Gdk.Display.get_default()
-                seat = display.get_default_seat() if display is not None else None
-                keyboard = seat.get_keyboard() if seat is not None else None
-                if keyboard is not None and hasattr(keyboard, "get_modifier_state"):
+        try:
+            display = Gdk.Display.get_default()
+            seat = display.get_default_seat() if display is not None else None
+            keyboard = seat.get_keyboard() if seat is not None else None
+            if keyboard is not None:
+                if hasattr(keyboard, "get_caps_lock_state") and keyboard.get_caps_lock_state():
+                    locks |= caps
+                if hasattr(keyboard, "get_num_lock_state") and keyboard.get_num_lock_state():
+                    locks |= num
+                if (
+                    hasattr(keyboard, "get_scroll_lock_state")
+                    and keyboard.get_scroll_lock_state()
+                ):
+                    locks |= scroll
+                if not modifiers and hasattr(keyboard, "get_modifier_state"):
                     modifiers = int(keyboard.get_modifier_state())
-            except Exception:
-                modifiers = 0
+        except Exception:
+            pass
         if modifiers & int(Gdk.ModifierType.LOCK_MASK):
             locks |= caps
         # GTK 4 dropped MOD2_MASK / MOD3_MASK. Recover Num/Scroll from
@@ -3360,6 +3709,7 @@ class SpiceDisplay(_DisplayBase):
                     dy = int(y - self._rel_y)
                 self._rel_x, self._rel_y = x, y
                 SpiceClientGLib.inputs_motion(self._inputs, dx, dy, self._buttons)
+                self._recenter_server_mouse()
             else:
                 abs_x, abs_y = self._scale_pointer(x, y)
                 SpiceClientGLib.inputs_position(
@@ -3663,7 +4013,22 @@ class SpiceDisplay(_DisplayBase):
         except Exception:
             pass
 
+    def _recenter_server_mouse(self):
+        """Warp to the widget center so relative motion never hits an edge."""
+        w = max(self.get_width(), 1)
+        h = max(self.get_height(), 1)
+        cx, cy = w / 2.0, h / 2.0
+        if abs((self._last_x or 0) - cx) < 12 and abs((self._last_y or 0) - cy) < 12:
+            return
+        sx, sy = self._widget_to_surface_point(cx, cy)
+        if _x11_warp_pointer(self, sx, sy):
+            self._rel_x = cx
+            self._rel_y = cy
+            self._last_x = cx
+            self._last_y = cy
+
     def close(self):
+        self._ungrab_input()
         self._open = False
         self.attach_cursor_channel(None)
         self._channel = None

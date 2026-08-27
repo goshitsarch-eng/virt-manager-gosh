@@ -388,6 +388,35 @@ def _window_move(window, x, y):
         pass
 
 
+def _x11_resize_window(xid, width, height):
+    """XResizeWindow is the GTK 3 gtk_window_resize path without xdotool."""
+    try:
+        import ctypes
+        import ctypes.util
+
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        x11.XOpenDisplay.restype = ctypes.c_void_p
+        x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+        name = os.environ.get("DISPLAY")
+        dpy = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not dpy:
+            return False
+        x11.XResizeWindow.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_uint,
+            ctypes.c_uint,
+        ]
+        x11.XResizeWindow(dpy, int(xid), int(width), int(height))
+        x11.XFlush.argtypes = [ctypes.c_void_p]
+        x11.XFlush(dpy)
+        x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+        x11.XCloseDisplay(dpy)
+        return True
+    except Exception:
+        return False
+
+
 def _window_resize(window, width, height):
     """
     GTK 3 gtk_window_resize() changes a mapped window. GTK 4 only has
@@ -428,11 +457,19 @@ def _window_resize(window, width, height):
     xid = _window_xid(window)
     if not xid:
         return
+    _x11_resize_window(xid, width, height)
     try:
         import subprocess
         import time
 
         for _try in range(8):
+            try:
+                _x, _y, got_w, got_h = _xdotool_geometry(xid)
+                if abs(got_w - width) <= 4 and abs(got_h - height) <= 4:
+                    window._vmm_win_size = (got_w, got_h)
+                    return
+            except Exception:
+                pass
             subprocess.check_call(
                 [
                     "xdotool",
@@ -446,10 +483,6 @@ def _window_resize(window, width, height):
                 stderr=subprocess.DEVNULL,
             )
             time.sleep(0.05)
-            _x, _y, got_w, got_h = _xdotool_geometry(xid)
-            if abs(got_w - width) <= 4 and abs(got_h - height) <= 4:
-                window._vmm_win_size = (got_w, got_h)
-                return
         window._vmm_win_size = (width, height)
     except Exception:
         pass

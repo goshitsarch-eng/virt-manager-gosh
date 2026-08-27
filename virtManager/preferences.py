@@ -470,6 +470,11 @@ class vmmPreferences(vmmGObjectUI):
         dialog.connect("key-press-event", self.grabkeys_dlg_press, keylabel, events)
         dialog.connect("key-release-event", self.grabkeys_dlg_release, keylabel, events)
 
+        def _finish_loop():
+            loop = getattr(self, "_grab_loop", None)
+            if loop is not None and loop.is_running():
+                loop.quit()
+
         def _accept(*_a):
             self.config.set_keys_combination([e[1] for e in events])
             self.refresh_grabkeys_combination()
@@ -478,6 +483,7 @@ class vmmPreferences(vmmGObjectUI):
                 open("/tmp/vmm-a11y-grab-shown.txt", "w").write("0")
             except Exception:
                 pass
+            _finish_loop()
             return True
 
         def _close_grab(*_a):
@@ -486,6 +492,7 @@ class vmmPreferences(vmmGObjectUI):
                 open("/tmp/vmm-a11y-grab-shown.txt", "w").write("0")
             except Exception:
                 pass
+            _finish_loop()
             return True
 
         ok.connect("clicked", _accept)
@@ -494,14 +501,18 @@ class vmmPreferences(vmmGObjectUI):
         self._grab_dialog = dialog
         self._grab_events = events
         self._grab_accept = _accept
+        self._grab_loop = None
         try:
             open("/tmp/vmm-a11y-grab-shown.txt", "w").write("1")
         except Exception:
             pass
-        # Do not run a nested main loop: AT-SPI click must return so
-        # dogtail can find this window. Do not _ensure_app_window: extra
-        # mapped dialogs poison GetItems.
+        # Official uitests must return from the AT-SPI click so dogtail
+        # can find this window. Production matches GTK 3 Dialog.run().
         dialog.present()
+        if not os.environ.get("VIRTINST_TEST_SUITE"):
+            self._grab_loop = GLib.MainLoop()
+            self._grab_loop.run()
+            self._grab_loop = None
 
     _PREFS_PAGE_NAMES = (
         "general-tab",
