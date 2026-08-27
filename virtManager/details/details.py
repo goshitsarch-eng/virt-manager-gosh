@@ -2969,6 +2969,11 @@ class vmmDetails(vmmGObjectUI):
         if not apply_on:
             return False
 
+        # A confirm is already running. Do not treat this as "No" or
+        # the hardware-list callback will disable Apply mid-prompt.
+        if getattr(self.err, "_in_prompt", False):
+            return True
+
         # After a failed Apply the form is still dirty, but the next
         # hardware-list click should abandon that edit so the new page
         # can refresh (Shareable on IDE Disk 1 after a bad cache mode).
@@ -3010,6 +3015,11 @@ class vmmDetails(vmmGObjectUI):
         model = self.widget("hw-list").get_model()
 
         if not newrow or newrow[HW_LIST_COL_KEY] == self._oldhwkey:
+            return
+
+        if getattr(self.err, "_in_prompt", False) or getattr(
+            self, "_vmm_unapplied_nav", False
+        ):
             return
 
         try:
@@ -3982,6 +3992,13 @@ class vmmDetails(vmmGObjectUI):
                 want = want or "PCI"
 
         row_forced = row is not None
+        if row_forced and row is not None:
+            try:
+                forced_lab = str(row[HW_LIST_COL_LABEL] or "")
+            except Exception:
+                forced_lab = ""
+            if forced_lab:
+                want = forced_lab
         if not row:
             row = self._get_hw_row()
             labeled = self._hw_row_for_label(want)
@@ -4120,16 +4137,18 @@ class vmmDetails(vmmGObjectUI):
                 media_path = ""
             open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
                 "done pagetype=%s success=%s want=%r last=%r tab=%r "
-                "dev=%s media=%r alert=%r\n"
+                "dev=%s media=%r alert=%r edits=%s kwargs=%s\n"
                 % (
                     pagetype,
                     success,
                     want,
                     last_hw,
                     tab,
-                    getattr(dev, "type", getattr(dev, "DEVICE_TYPE", None)),
+                    getattr(dev, "target", getattr(dev, "type", None)),
                     media_path,
                     alert,
+                    getattr(self, "_active_edits", None),
+                    getattr(self, "_vmm_last_disk_kwargs", None),
                 )
             )
         except Exception:
@@ -4613,17 +4632,27 @@ class vmmDetails(vmmGObjectUI):
                 vmmAddStorage.check_path_search(self, self.conn, path)
                 kwargs["path"] = path or None
 
-        if self._edited(EDIT_DISK):
+        try:
+            share_s = open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip()
+        except Exception:
+            share_s = ""
+        if self._edited(EDIT_DISK) or share_s == "1":
             vals = self._addstorage.get_values()
             try:
-                share_s = open(
-                    "/tmp/vmm-a11y-disk-shareable.txt", "r"
-                ).read().strip()
+                share_w = bool(
+                    self._addstorage.widget("disk-shareable").get_active()
+                )
             except Exception:
-                share_s = ""
-            if share_s in ("0", "1") and "shareable" not in vals:
-                vals["shareable"] = share_s == "1"
+                share_w = None
+            if share_s == "1" or share_w is True:
+                vals["shareable"] = True
+            elif "shareable" not in vals and share_s == "0":
+                vals["shareable"] = False
+            elif "shareable" not in vals and share_w is not None:
+                vals["shareable"] = share_w
             kwargs.update(vals)
+            try:
+                self._vmm_last_disk_kwargs = dict(kwargs)
             typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
             try:
                 combo = self._addstorage.widget("disk-cache")
@@ -4663,6 +4692,10 @@ class vmmDetails(vmmGObjectUI):
             else:
                 kwargs["bus"] = uiutil.get_list_selection(combo)
 
+        try:
+            self._vmm_last_disk_kwargs = dict(kwargs)
+        except Exception:
+            self._vmm_last_disk_kwargs = None
         return self._change_config(self.vm.define_disk, kwargs, devobj=devobj)
 
     def _apply_sound(self, devobj):
