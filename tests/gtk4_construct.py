@@ -2277,6 +2277,49 @@ def main():
             details._active_edits = []
             details._addstorage._active_edits = []
 
+        # Don't-warn leave of the disk page must abandon the uncheck
+        # (testDetailsMiscEdits line 731-734).
+        details._vmm_last_disk_kwargs = {"shareable": True}
+        details._vmm_last_disk_target = getattr(disk, "target", None)
+        try:
+            open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+        except Exception:
+            pass
+        details._addstorage.widget("disk-shareable").set_active(False)
+        details._addstorage._active_edits = [_EDIT_SHARE]
+        details._enable_apply(EDIT_DISK)
+        details._vmm_dirty_hw = details._get_hw_row_label_for_device(disk)
+        try:
+            details.config.set_confirm_unapplied(False)
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+        except Exception:
+            pass
+        try:
+            failed = details._has_unapplied_changes(
+                details._get_hw_row_for_device(disk)
+            )
+            assert failed is False
+            details._finish_unapplied_hw_nav("CPUs")
+            assert details._addstorage.widget("disk-shareable").get_active(), (
+                "Don't-warn leave must restore applied Shareable"
+            )
+            assert open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip() == "1", (
+                "Don't-warn leave must republish Shareable checked"
+            )
+        finally:
+            try:
+                details.config.set_confirm_unapplied(True)
+            except Exception:
+                pass
+            details._vmm_last_disk_kwargs = None
+            details._vmm_last_disk_target = None
+            details.widget("config-apply").set_sensitive(False)
+            details._active_edits = []
+            details._addstorage._active_edits = []
+
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
         from virtManager.lib import uiutil

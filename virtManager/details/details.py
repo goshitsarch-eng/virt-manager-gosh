@@ -1243,11 +1243,60 @@ class vmmDetails(vmmGObjectUI):
                                 idx = i
                                 break
                     os.remove(path)
-                    if idx is not None:
-                        self._set_hw_selection(idx, _disable_apply=True)
+                    dest_label = str(labeled[0] or want)
+                    dirty = None
+                    try:
+                        dirty = self._a11y_dirty_hw_label()
+                    except Exception:
+                        dirty = None
+                    apply_on = False
+                    try:
+                        apply_on = bool(self.widget("config-apply").get_sensitive())
+                    except Exception:
+                        apply_on = False
+                    if not apply_on:
+                        try:
+                            apply_on = (
+                                open(
+                                    "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                                ).read().strip()
+                                == "1"
+                            )
+                        except Exception:
+                            apply_on = False
+                    pending_share = _EDIT_SHARE in getattr(
+                        self._addstorage, "_active_edits", []
+                    )
+                    leaving_dirty = bool(
+                        (apply_on or pending_share)
+                        and dest_label
+                        and dirty
+                        and dest_label != dirty
+                    )
+                    if leaving_dirty:
+                        dirty_row = self._hw_row_for_label(dirty)
+                        failed = self._has_unapplied_changes(dirty_row)
+                        if failed:
+                            try:
+                                open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(
+                                    dirty
+                                )
+                                open("/tmp/vmm-a11y-hw-selected.txt", "w").write(
+                                    dirty
+                                )
+                            except Exception:
+                                pass
+                            return True
+                        self._finish_unapplied_hw_nav(
+                            dest_label, dest_row=labeled
+                        )
+                    elif idx is not None:
+                        # Keep Apply armed so _hw_changed_cb can prompt
+                        # or Don't-warn-abandon (testDetailsMiscEdits).
+                        self._set_hw_selection(idx, _disable_apply=False)
                     try:
                         open("/tmp/vmm-a11y-hw-selected.txt", "w").write(
-                            str(labeled[0] or want)
+                            dest_label
                         )
                         if any(k in want for k in ("Disk", "CDROM", "Floppy")):
                             open("/tmp/vmm-a11y-details-tab.txt", "w").write("disk-tab")
@@ -3086,6 +3135,21 @@ class vmmDetails(vmmGObjectUI):
             apply_on = False
         if not apply_on:
             apply_on = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        if not apply_on:
+            try:
+                apply_on = (
+                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    == "1"
+                )
+            except Exception:
+                apply_on = False
+        if not apply_on:
+            try:
+                apply_on = bool(self._active_edits) or bool(
+                    getattr(self._addstorage, "_active_edits", None)
+                )
+            except Exception:
+                apply_on = False
         if not apply_on:
             return False
 
