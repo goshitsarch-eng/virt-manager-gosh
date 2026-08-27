@@ -4107,6 +4107,16 @@ class vmmDetails(vmmGObjectUI):
 
     def _finish_unapplied_hw_nav(self, dest_label, dest_row=None):
         """Leave a dirty page after unapplied Yes/No (GTK already on dest)."""
+        try:
+            dirty = getattr(self, "_vmm_dirty_hw", None)
+            if (
+                _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
+                and dirty
+                and dest_label == dirty
+            ):
+                return
+        except Exception:
+            pass
         self._disable_apply()
         self._revert_a11y_disk_shareable()
         self._vmm_pending_hw_nav = None
@@ -4163,15 +4173,31 @@ class vmmDetails(vmmGObjectUI):
             dirty = None
             row = None
             if edittype in (EDIT_DISK, EDIT_DISK_PATH, EDIT_DISK_BUS):
-                arow = self._a11y_selected_hw_row()
-                gtk_row = self._get_hw_row()
-                for cand in (arow, gtk_row):
+                # Prefer the current disk page over a stale CPUs
+                # hw-clicked leftover from Don't-warn navigation.
+                for path in (
+                    "/tmp/vmm-a11y-hw-selected.txt",
+                    "/tmp/vmm-a11y-last-hw.txt",
+                    "/tmp/vmm-a11y-hw-clicked.txt",
+                ):
+                    try:
+                        want = open(path, "r").read().strip()
+                    except Exception:
+                        want = ""
+                    labeled = self._hw_row_for_label(want) if want else None
                     if (
-                        cand is not None
-                        and cand[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK
+                        labeled is not None
+                        and labeled[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK
                     ):
-                        row = cand
+                        row = labeled
                         break
+                if row is None:
+                    gtk_row = self._get_hw_row()
+                    if (
+                        gtk_row is not None
+                        and gtk_row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK
+                    ):
+                        row = gtk_row
             if row is None:
                 row = self._a11y_selected_hw_row()
             if row is not None:
