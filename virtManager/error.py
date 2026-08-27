@@ -8,6 +8,7 @@ import sys
 import textwrap
 import traceback
 
+from gi.repository import GLib
 from gi.repository import GObject
 from gi.repository import Gtk
 
@@ -74,7 +75,9 @@ def _launch_dialog(
     except Exception:
         pass
 
-    if hasattr(dialog, "_primary"):
+    if hasattr(dialog, "_set_primary_text"):
+        dialog._set_primary_text(primary_text or "")
+    elif hasattr(dialog, "_primary"):
         dialog._primary.set_text(primary_text or "")
         gtkcompat.set_accessible_name(dialog._primary, primary_text or "")
     else:
@@ -417,8 +420,8 @@ class _errorDialog(Gtk.Window):
 
     def __init__(self, parent=None, flags=0, message_type=Gtk.MessageType.ERROR, buttons=Gtk.ButtonsType.CLOSE):
         ignore = flags
-        ignore = message_type
         Gtk.Window.__init__(self)
+        self._message_type = message_type
         self.set_transient_for(parent)
         self.set_modal(True)
         if parent is not None and hasattr(parent, "get_application"):
@@ -429,22 +432,49 @@ class _errorDialog(Gtk.Window):
         self.set_default_size(440, 180)
         self.set_accessible_role(Gtk.AccessibleRole.ALERT)
         gtkcompat.set_accessible_name(self, "vmm dialog")
+        gtkcompat.apply_gtk3_window_hints(self, dialog=True)
 
         self._content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self._content.set_margin_top(16)
         self._content.set_margin_bottom(16)
         self._content.set_margin_start(16)
         self._content.set_margin_end(16)
+
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self._icon = Gtk.Image()
+        icon_name = {
+            Gtk.MessageType.ERROR: "dialog-error",
+            Gtk.MessageType.WARNING: "dialog-warning",
+            Gtk.MessageType.INFO: "dialog-information",
+            Gtk.MessageType.QUESTION: "dialog-question",
+        }.get(message_type, "dialog-error")
+        self._icon_name = icon_name
+        try:
+            self._icon.set_from_icon_name(icon_name)
+            self._icon.set_pixel_size(48)
+            self._icon.set_valign(Gtk.Align.START)
+            gtkcompat.set_accessible_name(self._icon, icon_name)
+        except Exception:
+            pass
+        header.append(self._icon)
+
+        textcol = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        textcol.set_hexpand(True)
         self._primary = Gtk.Label()
         self._primary.set_wrap(True)
         self._primary.set_xalign(0)
+        self._primary.set_selectable(True)
+        self._primary.set_use_markup(True)
         self._primary.set_accessible_role(Gtk.AccessibleRole.LABEL)
         self._secondary = Gtk.Label()
         self._secondary.set_wrap(True)
         self._secondary.set_xalign(0)
+        self._secondary.set_selectable(True)
         self._secondary.set_accessible_role(Gtk.AccessibleRole.LABEL)
-        self._content.append(self._primary)
-        self._content.append(self._secondary)
+        textcol.append(self._primary)
+        textcol.append(self._secondary)
+        header.append(textcol)
+        self._content.append(header)
         self._button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._button_box.set_halign(Gtk.Align.END)
         self._add_buttons(buttons)
@@ -474,12 +504,35 @@ class _errorDialog(Gtk.Window):
             Gtk.ButtonsType.OK: (("OK", Gtk.ResponseType.OK),),
             Gtk.ButtonsType.CLOSE: (("Close", Gtk.ResponseType.CLOSE),),
         }
+        default = None
         for label, response in mapping.get(buttons, (("Close", Gtk.ResponseType.CLOSE),)):
             btn = Gtk.Button(label=label)
             btn.set_accessible_role(Gtk.AccessibleRole.BUTTON)
             gtkcompat.set_accessible_name(btn, label)
             btn.connect("clicked", lambda _b, r=response: self._emit_response(r))
             self._button_box.append(btn)
+            default = btn
+        if default is not None:
+            try:
+                default.grab_default()
+            except Exception:
+                pass
+
+    def _set_primary_text(self, text):
+        """GTK 3 MessageDialog used bold larger primary text that is selectable."""
+        text = text or ""
+        try:
+            escaped = GLib.markup_escape_text(text)
+            self._primary.set_markup(
+                '<span weight="bold" size="larger">%s</span>' % escaped
+            )
+        except Exception:
+            self._primary.set_text(text)
+        try:
+            self._primary.set_selectable(True)
+        except Exception:
+            pass
+        gtkcompat.set_accessible_name(self._primary, text)
 
     def get_content_area(self):
         return self._content
@@ -489,6 +542,10 @@ class _errorDialog(Gtk.Window):
 
     def format_secondary_text(self, text):
         self._secondary.set_text(text or "")
+        try:
+            self._secondary.set_selectable(True)
+        except Exception:
+            pass
         if text:
             gtkcompat.set_accessible_name(self._secondary, text)
 
@@ -513,6 +570,11 @@ class _errorDialog(Gtk.Window):
         details.set_editable(False)
         details.set_overwrite(False)
         details.set_cursor_visible(False)
+        try:
+            details.set_can_focus(True)
+        except Exception:
+            pass
+        self._details_view = details
         details.set_wrap_mode(Gtk.WrapMode.WORD)
         details.set_margin_top(6)
         details.set_margin_bottom(6)

@@ -962,11 +962,24 @@ def main():
             pass
 
     def error_dialogs():
+        from virtManager.error import _errorDialog
         from virtManager.error import vmmErrorDialog
 
         err = vmmErrorDialog.get_instance()
         err.show_err("test error", details="details", title="t", modal=False, debug=False)
         err.show_info("info", modal=False)
+
+        dlg = _errorDialog(message_type=Gtk.MessageType.ERROR)
+        assert getattr(dlg, "_vmm_window_type_dialog", False)
+        assert dlg._primary.get_selectable()
+        assert dlg._secondary.get_selectable()
+        dlg._set_primary_text("boom <err>")
+        markup = dlg._primary.get_label() or ""
+        assert "bold" in markup and "boom" in markup
+        assert "&lt;err&gt;" in markup
+        assert dlg._icon_name == "dialog-error", dlg._icon_name
+        warn = _errorDialog(message_type=Gtk.MessageType.WARNING)
+        assert warn._icon_name == "dialog-warning", warn._icon_name
 
     def cli_windows():
         from virtManager.engine import vmmEngine
