@@ -3444,18 +3444,18 @@ class vmmDetails(vmmGObjectUI):
                     return
             # A pending media edit or storage-browser path must not be
             # wiped just because the selected CDROM is still ejected.
+            # Leftover Apply from bus/cache refresh after a successful
+            # media define is not a media edit.
             try:
-                if EDIT_DISK_PATH in getattr(self, "_active_edits", []):
+                if (
+                    EDIT_DISK_PATH in getattr(self, "_active_edits", [])
+                    and self._pending_media_path() is not None
+                ):
                     return
             except Exception:
                 pass
             try:
                 if open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip():
-                    return
-            except Exception:
-                pass
-            try:
-                if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "1":
                     return
             except Exception:
                 pass
@@ -3473,6 +3473,13 @@ class vmmDetails(vmmGObjectUI):
             # Persistent XML is authoritative after shutdown. A stale
             # empty running disk must not hide a just-applied ISO path
             # (testMediaHotplug deferred apply).
+            last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+            last_path = str(last.get("path") or "").strip()
+            last_tgt = getattr(self, "_vmm_last_disk_target", None)
+            if not inactive_path and last_path and (
+                last_tgt is None or target is None or last_tgt == target
+            ):
+                inactive_path = last_path
             if inactive_path:
                 self._publish_inactive_media_path(inactive_path)
                 return
@@ -3574,6 +3581,22 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 pass
+        if apply_on and not self.vm.is_active():
+            pending_share = _EDIT_SHARE in getattr(
+                self._addstorage, "_active_edits", []
+            )
+            pending_media = (
+                EDIT_DISK_PATH in getattr(self, "_active_edits", [])
+                or self._pending_media_path() is not None
+            )
+            if not pending_share and not pending_media:
+                # Leftover bus/cache Apply from a post-apply refresh
+                # must not skip the shutoff disk-page refresh.
+                try:
+                    self._disable_apply()
+                except Exception:
+                    pass
+                apply_on = False
 
         self._refresh_vm_state()
         # GTK 4 ListStore cell updates can emit selection-changed and
@@ -4459,6 +4482,15 @@ class vmmDetails(vmmGObjectUI):
                 and pending is None
             ):
                 return
+        elif (
+            edittype in (EDIT_DISK, EDIT_DISK_BUS)
+            and getattr(self, "_vmm_apply_just_succeeded", False)
+            and _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", [])
+        ):
+            # Delayed bus/cache "changed" after a successful media apply
+            # must not keep Apply armed; shutdown then skips the disk
+            # refresh and hides the deferred inactive path.
+            return
         if getattr(self, "_ui_refreshing", False):
             if edittype == EDIT_CONTROLLER_MODEL and (
                 getattr(self, "_vmm_user_controller_edit", False)
@@ -6816,6 +6848,18 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
         path = disk.get_source_path()
+        if (
+            not path
+            and self.vm is not None
+            and not self.vm.is_active()
+            and (disk.is_cdrom() or disk.is_floppy())
+        ):
+            last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
+            last_path = str(last.get("path") or "").strip()
+            last_tgt = getattr(self, "_vmm_last_disk_target", None)
+            tgt = getattr(disk, "target", None)
+            if last_path and (last_tgt is None or tgt is None or last_tgt == tgt):
+                path = last_path
         devtype = disk.device
         bus = disk.bus
 
