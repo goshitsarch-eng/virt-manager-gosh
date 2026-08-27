@@ -1145,7 +1145,15 @@ class _SentinelEntry(object):
                 newvm = open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
             except Exception:
                 newvm = False
-            if not newvm:
+            details_net = False
+            try:
+                details_net = (
+                    open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+                    == "network-tab"
+                )
+            except Exception:
+                details_net = False
+            if details_net or not newvm:
                 try:
                     open("/tmp/vmm-a11y-net-device.txt.set", "w").write(
                         text if text is not None else ""

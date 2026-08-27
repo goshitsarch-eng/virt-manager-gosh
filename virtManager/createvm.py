@@ -836,22 +836,6 @@ class vmmCreateVM(vmmGObjectUI):
                         self._finish_clicked(None)
                 except Exception:
                     pass
-                try:
-                    # GTK3 yes_no() is modal, so the install-page Forward that
-                    # hits a disk collision finishes after Yes. The file
-                    # sentinel path returns False immediately; retry once the
-                    # test writes disk-inuse-allow so later Forward is MEM→FINISH.
-                    allow = "/tmp/vmm-a11y-disk-inuse-allow"
-                    if (
-                        os.path.exists(allow)
-                        and self._current_create_page() == PAGE_INSTALL
-                        and not getattr(self, "_vmm_forward_busy", False)
-                        and not getattr(self, "_vmm_disk_inuse_retried", False)
-                    ):
-                        self._vmm_disk_inuse_retried = True
-                        self._forward_clicked_impl()
-                except Exception:
-                    pass
                 return True
 
             GLib.timeout_add(50, _poll_nav)
