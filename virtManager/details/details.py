@@ -2912,6 +2912,13 @@ class vmmDetails(vmmGObjectUI):
         if not apply_on:
             return False
 
+        # After a failed Apply the form is still dirty, but the next
+        # hardware-list click should abandon that edit so the new page
+        # can refresh (Shareable on IDE Disk 1 after a bad cache mode).
+        if getattr(self, "_vmm_apply_failed", False):
+            self._disable_apply()
+            return False
+
         if not row:
             # The previous hardware row is gone (device was removed).
             # Apply from pending edits instead of inventing Overview.
@@ -3698,6 +3705,7 @@ class vmmDetails(vmmGObjectUI):
 
     def _disable_apply(self):
         self._active_edits = []
+        self._vmm_apply_failed = False
         self.widget("config-apply").set_sensitive(False)
         self.widget("config-cancel").set_sensitive(False)
         self._xmleditor.details_changed = False
@@ -3707,6 +3715,7 @@ class vmmDetails(vmmGObjectUI):
             pass
 
     def _enable_apply(self, edittype):
+        self._vmm_apply_failed = False
         self.widget("config-apply").set_sensitive(True)
         try:
             open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
@@ -4482,6 +4491,7 @@ class vmmDetails(vmmGObjectUI):
             if typed and typed.lower() not in ("hypervisor default",):
                 known = set(virtinst.DeviceDisk.CACHE_MODES)
                 if typed not in known:
+                    self._vmm_apply_failed = True
                     self.err.show_err(
                         _("Error changing VM configuration: invalid cache mode '%s'")
                         % typed,
