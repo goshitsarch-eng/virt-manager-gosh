@@ -92,6 +92,8 @@ def _reset_open_ui():
             details._vmm_hw_change_busy = False
             details._config_remove_busy = False
             details._vmm_pending_media_path = None
+            details._vmm_pending_vsock_cid = None
+            details._vmm_applied_vsock_cid = None
         except Exception:
             pass
         try:
@@ -121,6 +123,7 @@ def _reset_open_ui():
         inst = getattr(vmmDeleteDialog, "_instance", None)
         if inst is not None:
             try:
+                inst._vmm_delete_a11y_poll = False
                 inst.close()
             except Exception:
                 pass
@@ -141,6 +144,10 @@ def _reset_open_ui():
                 if title in ("Delete", "Remove Disk", "Remove Disk Device"):
                     try:
                         win.hide()
+                    except Exception:
+                        pass
+                    try:
+                        win._vmm_delete_a11y_poll = False
                     except Exception:
                         pass
     except Exception:
@@ -3238,16 +3245,31 @@ def main():
         details = win._details
         _auto_confirm(details)
         vsock = None
-        for row in details.widget("hw-list").get_model():
+        vsock_idx = None
+        vsock_row = None
+        for idx, row in enumerate(details.widget("hw-list").get_model()):
             if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_VSOCK:
                 vsock = row[HW_LIST_COL_DEVICE]
+                vsock_idx = idx
+                vsock_row = row
                 break
         assert vsock is not None, "test-many-devices has no vsock"
+        try:
+            details._set_hw_selection(vsock_idx, _disable_apply=True)
+        except Exception:
+            pass
+        try:
+            details._pin_hw_context("VirtIO VSOCK", vsock_row)
+        except Exception:
+            pass
+        details._vmm_applied_vsock_cid = None
+        details._vmm_pending_vsock_cid = None
         details._refresh_vsock_page(vsock)
         open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write("7")
         open("/tmp/vmm-a11y-vsock-cid.txt.set", "w").write("7")
         open("/tmp/vmm-a11y-hw-clicked.txt", "w").write("VirtIO VSOCK")
         open("/tmp/vmm-a11y-hw-selected.txt", "w").write("VirtIO VSOCK")
+        open("/tmp/vmm-a11y-last-hw.txt", "w").write("VirtIO VSOCK")
         open("/tmp/vmm-a11y-details-tab.txt", "w").write("vsock-tab")
         details._poll_vsock_cid_tick()
         _pump(GLib, 0.2)

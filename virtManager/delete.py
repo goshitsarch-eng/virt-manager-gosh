@@ -101,6 +101,7 @@ class _vmmDeleteBase(vmmGObjectUI):
         log.debug("Closing delete wizard")
         self.topwin.hide()
         self._set_vm(None)
+        self._vmm_delete_a11y_poll = False
         try:
             open("/tmp/vmm-a11y-delete-shown.txt", "w").write("0")
         except Exception:
@@ -167,7 +168,15 @@ class _vmmDeleteBase(vmmGObjectUI):
         except Exception:
             return False
 
+    def _dialog_visible(self):
+        try:
+            return bool(self.topwin.get_mapped() or self.topwin.get_visible())
+        except Exception:
+            return False
+
     def _publish_a11y_state(self):
+        if not self._dialog_visible():
+            return
         try:
             chk = self.widget("delete-remove-storage")
             active = bool(chk.get_active())
@@ -208,8 +217,14 @@ class _vmmDeleteBase(vmmGObjectUI):
         self._vmm_delete_a11y_poll = True
 
         def _tick():
+            if not getattr(self, "_vmm_delete_a11y_poll", False):
+                return False
             try:
-                shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
+                visible = self._dialog_visible()
+            except Exception:
+                visible = False
+            try:
+                shown = visible
             except Exception:
                 shown = False
             try:
