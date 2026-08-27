@@ -195,11 +195,12 @@ class vmmAbout(vmmGObject):
         except Exception:
             pass
 
-    def _show_license(self, parent=None):
+    def _show_license(self, parent=None, present=True):
         """GTK 3 AboutDialog license-type opened the full GPLv2 text."""
         if self._license_win is not None:
             try:
-                self._license_win.present()
+                if present:
+                    self._license_win.present()
                 return self._license_win
             except Exception:
                 self._license_win = None
@@ -255,7 +256,8 @@ class vmmAbout(vmmGObject):
         box.append(close_btn)
         win.set_child(box)
         self._license_win = win
-        win.present()
+        if present:
+            win.present()
         return win
 
     def close(self, ignore1=None, ignore2=None):

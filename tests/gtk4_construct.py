@@ -339,7 +339,7 @@ def main():
         from virtManager.about import _gpl2_text
 
         assert "GNU GENERAL PUBLIC LICENSE" in _gpl2_text()
-        lic = dlg._show_license(win)
+        lic = dlg._show_license(win, present=False)
         assert lic is not None
         buf = lic.get_child().get_first_child().get_child().get_buffer()
         assert "GNU GENERAL PUBLIC LICENSE" in buf.get_text(
