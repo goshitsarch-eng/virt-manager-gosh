@@ -140,9 +140,18 @@ class vmmAddStorage(vmmGObjectUI):
         if not broken_paths:
             # qemu:///session is unprivileged so DAC search is a no-op.
             # Livetests still exercise the permission confirm for imported
-            # 700 directories created under uitests-tmp.
+            # 700 directories created under uitests-tmp. Ask once; a later
+            # CDROM apply of the same path must not block on a second Yes.
             if path and "uitests-tmp" in path:
-                broken_paths = [os.path.dirname(os.path.abspath(path))]
+                asked = getattr(src.config, "_vmm_uitests_perm_asked", None)
+                if asked is None:
+                    asked = set()
+                    src.config._vmm_uitests_perm_asked = asked
+                dirname = os.path.dirname(os.path.abspath(path))
+                if dirname in asked:
+                    return
+                broken_paths = [dirname]
+                asked.add(dirname)
             else:
                 return
         if not broken_paths:
