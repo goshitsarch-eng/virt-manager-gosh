@@ -147,17 +147,33 @@ def main():
     pool = _first_pool(conn)
     results = []
 
-    def _run(name, fn):
+    def _run(name, fn, timeout=45):
+        class _Timeout(Exception):
+            pass
+
+        def _on_alarm(_signum, _frame):
+            raise _Timeout("%s exceeded %ss" % (name, timeout))
+
+        import signal
+
+        old = signal.signal(signal.SIGALRM, _on_alarm)
+        signal.alarm(int(timeout))
         try:
             fn()
             _pump(GLib, 0.05)
             results.append((name, True, None))
             print("OK  ", name, flush=True)
+        except _Timeout as exc:
+            results.append((name, False, str(exc)))
+            print("TIMEOUT", name, flush=True)
         except Exception:
             err = traceback.format_exc()
             results.append((name, False, err))
             print("FAIL", name, flush=True)
             print(err, flush=True)
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old)
 
     def manager():
         from virtManager.manager import vmmManager
