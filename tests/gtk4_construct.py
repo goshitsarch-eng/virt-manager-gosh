@@ -1013,6 +1013,18 @@ def main():
         assert disp._tls_ca_file() == "/tmp/vnc-ca.pem"
         disp._apply_server_cut_text(b"guest-clip")
         assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
+        ct, tag = gtk4display._aes_eax_encrypt(b"\x11" * 16, b"\x22" * 16, b"\x00\x04", b"ping")
+        assert gtk4display._aes_eax_decrypt(b"\x11" * 16, b"\x22" * 16, b"\x00\x04", ct, tag) == b"ping"
+        frame = gtk4display._ra2_seal(b"\x33" * 16, 0, b"rfb")
+        class _Mem:
+            def __init__(self, data):
+                self.buf = data
+
+            def recv(self, n):
+                out, self.buf = self.buf[:n], self.buf[n:]
+                return out
+
+        assert gtk4display._ra2_recv_msg(_Mem(frame), b"\x33" * 16, 0, lambda s, n: s.recv(n)) == b"rfb"
         # Extended clipboard: server caps then UTF-8 provide
         import zlib as _zlib
 
@@ -1217,6 +1229,17 @@ def main():
         skip = _TightSock(extra)
         disp._skip_tight_serverinit(skip)
         assert skip.buf == b""
+
+        prime = (2**127 - 1).to_bytes(16, "big")
+        ard = _TightSock(st.pack("!HH", 2, 16) + prime + (b"\x02" * 16))
+        disp._username = "ard"
+        disp._password = "secret"
+        disp._vnc_ard(ard)
+        assert len(ard.sent) == 128 + 16
+
+        msl = _TightSock((2).to_bytes(8, "big") + (0xFFFFFFFB).to_bytes(8, "big") + (3).to_bytes(8, "big"))
+        disp._vnc_mslogonii(msl)
+        assert len(msl.sent) == 8 + 256 + 64
 
         disp.send_keys([97])
         disp.set_property("resize-guest", True)
@@ -1802,6 +1825,128 @@ def main():
         pix = display.get_pixbuf()
         assert pix is not None
         assert pix.get_width() == 8 and pix.get_height() == 8
+        display.close()
+
+    def vnc_ra2_handshake():
+        import hashlib
+        import socket
+        import struct
+        import threading
+
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        from virtManager.details import gtk4display
+
+        port = [0]
+        ready = threading.Event()
+        seen = []
+
+        def server():
+            from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+
+            sock = socket.socket()
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", 0))
+            port[0] = sock.getsockname()[1]
+            sock.listen(1)
+            ready.set()
+            conn, _addr = sock.accept()
+            try:
+                conn.sendall(b"RFB 003.008\n")
+                conn.recv(12)
+                conn.sendall(b"\x01\x06")
+                seen.append(conn.recv(1))
+                priv = _rsa.generate_private_key(public_exponent=65537, key_size=2048)
+                nums = priv.public_key().public_numbers()
+                nlen = 256
+                server_blob = struct.pack("!I", 2048)
+                server_blob += nums.n.to_bytes(nlen, "big")
+                server_blob += nums.e.to_bytes(nlen, "big")
+                conn.sendall(server_blob)
+                client_bits = struct.unpack("!I", conn.recv(4))[0]
+                clen = (client_bits + 7) // 8
+                client_mod = conn.recv(clen)
+                client_exp = conn.recv(clen)
+                client_blob = struct.pack("!I", client_bits) + client_mod + client_exp
+                client_pub = _rsa.RSAPublicNumbers(
+                    int.from_bytes(client_exp, "big"), int.from_bytes(client_mod, "big")
+                ).public_key()
+                server_random = b"S" * 16
+                enc_sr = client_pub.encrypt(server_random, padding.PKCS1v15())
+                conn.sendall(struct.pack("!H", len(enc_sr)) + enc_sr)
+                crlen = struct.unpack("!H", conn.recv(2))[0]
+                client_random = priv.decrypt(conn.recv(crlen), padding.PKCS1v15())
+                send_key = hashlib.sha1(client_random + server_random).digest()[:16]
+                recv_key = hashlib.sha1(server_random + client_random).digest()[:16]
+                send_ctr = 0
+                recv_ctr = 0
+                server_hash = hashlib.sha1(server_blob + client_blob).digest()
+                conn.sendall(gtk4display._ra2_seal(send_key, send_ctr, server_hash))
+                send_ctr += 1
+                client_hash = gtk4display._ra2_recv_msg(
+                    conn, recv_key, recv_ctr, lambda s, n: s.recv(n)
+                )
+                recv_ctr += 1
+                assert client_hash == hashlib.sha1(client_blob + server_blob).digest()
+                conn.sendall(gtk4display._ra2_seal(send_key, send_ctr, b"\x02"))
+                send_ctr += 1
+                creds = gtk4display._ra2_recv_msg(
+                    conn, recv_key, recv_ctr, lambda s, n: s.recv(n)
+                )
+                seen.append(creds)
+                conn.sendall(struct.pack("!I", 0))
+                width = height = 8
+                conn.sendall(struct.pack("!HH16sI", width, height, bytes(16), 3))
+                conn.sendall(b"ra2")
+                conn.settimeout(0.4)
+                deadline = time.monotonic() + 2.5
+                while time.monotonic() < deadline:
+                    try:
+                        msg = conn.recv(1)
+                    except (socket.timeout, ConnectionResetError, BrokenPipeError):
+                        continue
+                    if not msg:
+                        break
+                    if msg[0] == 0:
+                        conn.recv(19)
+                    elif msg[0] == 2:
+                        conn.recv(1)
+                        nenc = struct.unpack("!H", conn.recv(2))[0]
+                        conn.recv(nenc * 4)
+                    elif msg[0] == 3:
+                        conn.recv(9)
+                        conn.sendall(struct.pack("!BxH", 0, 1))
+                        conn.sendall(struct.pack("!HHHHi", 0, 0, width, height, 0))
+                        conn.sendall(b"\x11\x22\x33\x44" * (width * height))
+                    elif msg[0] == 4:
+                        conn.recv(7)
+                    elif msg[0] == 5:
+                        conn.recv(5)
+                    elif msg[0] == 255:
+                        sub = conn.recv(1)
+                        if not sub:
+                            break
+                        if sub[0] == 1:
+                            kindb = conn.recv(2)
+                            if len(kindb) < 2:
+                                break
+                            if struct.unpack("!H", kindb)[0] == 2:
+                                conn.recv(6)
+            finally:
+                conn.close()
+                sock.close()
+
+        threading.Thread(target=server, daemon=True).start()
+        assert ready.wait(2)
+        display = gtk4display.VNCDisplay()
+        display.set_credential(1, "secret")
+        initialized = []
+        display.connect("vnc-initialized", lambda *_a: initialized.append(True))
+        display.open_host("127.0.0.1", port[0])
+        _pump(GLib, 3.0)
+        assert initialized, "RA2ne client did not complete handshake: %s" % seen
+        assert seen and seen[0] == b"\x06", seen
         display.close()
 
     def inspection_os_page():
@@ -2563,6 +2708,7 @@ def main():
         ("vnc_protocol_helpers", vnc_protocol_helpers),
         ("vnc_live_handshake", vnc_live_handshake),
         ("vnc_tight_handshake", vnc_tight_handshake),
+        ("vnc_ra2_handshake", vnc_ra2_handshake),
         ("disk_shareable_live_deferred", disk_shareable_live_deferred),
         ("inspection_os_page", inspection_os_page),
         ("inspection_perform_path", inspection_perform_path),

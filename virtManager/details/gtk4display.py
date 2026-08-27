@@ -90,10 +90,16 @@ _VNC_LED_NUM = 2
 _VNC_LED_CAPS = 4
 _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
+_VNC_SEC_RA2 = 5
+_VNC_SEC_RA2NE = 6
 _VNC_SEC_TIGHT = 16
+_VNC_SEC_ULTRA_AUTH = 17
 _VNC_SEC_TLS = 18
 _VNC_SEC_VENCRYPT = 19
 _VNC_SEC_SASL = 20
+_VNC_SEC_ARD = 30
+_VNC_SEC_MSLOGONII = 0x71
+_VNC_SEC_MSLOGON = 0xFA
 _VNC_TIGHT_UNIX = 129
 _VNC_TIGHT_EXTERNAL = 130
 _VNC_VENCRYPT_PLAIN = 256
@@ -1088,7 +1094,8 @@ class VNCDisplay(_DisplayBase):
     (PLAIN, DIGEST-MD5, Cyrus when libsasl2 plugins exist, and GSSAPI
     via libgssapi_krb5), and
     TLS; TightVNC security type 16 (tunnels, VNC/None/Unix/SASL/VeNCrypt
-    auth, extended ServerInit); TigerVNC UTF-8 extended clipboard;
+    auth, extended ServerInit); RealVNC RA2/RA2ne, Apple ARD, and
+    UltraVNC MSLogonII; TigerVNC UTF-8 extended clipboard;
     32-bit pixels; QEMU audio and LED state;
     and the encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile,
     zlib, ZlibHex, Ultra, Tight, ZRLE, DesktopSize, and cursor.
@@ -1433,6 +1440,24 @@ class VNCDisplay(_DisplayBase):
             sock.sendall(bytes([_VNC_SEC_TIGHT]))
             sock = self._vnc_tight(sock)
             self._sock = sock
+        elif _VNC_SEC_RA2NE in types:
+            sock.sendall(bytes([_VNC_SEC_RA2NE]))
+            sock = self._vnc_ra2(sock, encrypt_session=False)
+            self._sock = sock
+        elif _VNC_SEC_RA2 in types:
+            sock.sendall(bytes([_VNC_SEC_RA2]))
+            sock = self._vnc_ra2(sock, encrypt_session=True)
+            self._sock = sock
+        elif _VNC_SEC_ARD in types:
+            sock.sendall(bytes([_VNC_SEC_ARD]))
+            self._vnc_ard(sock)
+        elif _VNC_SEC_MSLOGONII in types or _VNC_SEC_MSLOGON in types:
+            chosen = _VNC_SEC_MSLOGONII if _VNC_SEC_MSLOGONII in types else _VNC_SEC_MSLOGON
+            sock.sendall(bytes([chosen]))
+            self._vnc_mslogonii(sock)
+        elif _VNC_SEC_ULTRA_AUTH in types:
+            sock.sendall(bytes([_VNC_SEC_ULTRA_AUTH]))
+            self._vnc_mslogonii(sock)
         elif _VNC_SEC_NONE in types:
             sock.sendall(bytes([_VNC_SEC_NONE]))
         else:
@@ -1782,6 +1807,107 @@ class VNCDisplay(_DisplayBase):
             self._sock = sock
             return sock
         raise RuntimeError("Unsupported TightVNC auth type %s" % chosen)
+
+    def _vnc_ra2(self, sock, encrypt_session=False):
+        """RealVNC RA2 / RA2ne (rfbproto RSA-AES + AES-EAX)."""
+        from cryptography.hazmat.primitives.asymmetric import padding
+        from cryptography.hazmat.primitives.asymmetric import rsa
+
+        server_bits = struct.unpack("!I", self._recv_n(sock, 4))[0]
+        server_len = (server_bits + 7) // 8
+        if server_len < 64 or server_len > 1024:
+            raise RuntimeError("RA2 server key length unsupported: %s" % server_bits)
+        server_mod = self._recv_n(sock, server_len)
+        server_exp = self._recv_n(sock, server_len)
+        server_blob = struct.pack("!I", server_bits) + server_mod + server_exp
+        server_pub = rsa.RSAPublicNumbers(
+            int.from_bytes(server_exp, "big"), int.from_bytes(server_mod, "big")
+        ).public_key()
+
+        client_bits = 2048
+        client_len = client_bits // 8
+        priv = rsa.generate_private_key(public_exponent=65537, key_size=client_bits)
+        nums = priv.public_key().public_numbers()
+        client_mod = nums.n.to_bytes(client_len, "big")
+        client_exp = nums.e.to_bytes(client_len, "big")
+        client_blob = struct.pack("!I", client_bits) + client_mod + client_exp
+        sock.sendall(client_blob)
+
+        enc_len = struct.unpack("!H", self._recv_n(sock, 2))[0]
+        server_random = priv.decrypt(self._recv_n(sock, enc_len), padding.PKCS1v15())
+        client_random = os.urandom(16)
+        enc_client = server_pub.encrypt(client_random, padding.PKCS1v15())
+        sock.sendall(struct.pack("!H", len(enc_client)) + enc_client)
+
+        send_key = hashlib.sha1(server_random + client_random).digest()[:16]
+        recv_key = hashlib.sha1(client_random + server_random).digest()[:16]
+        send_ctr = [0]
+        recv_ctr = [0]
+
+        def _recv_msg():
+            pt = _ra2_recv_msg(sock, recv_key, recv_ctr[0], self._recv_n)
+            recv_ctr[0] += 1
+            return pt
+
+        def _send_msg(data):
+            sock.sendall(_ra2_seal(send_key, send_ctr[0], data))
+            send_ctr[0] += 1
+
+        server_hash = _recv_msg()
+        expect = hashlib.sha1(server_blob + client_blob).digest()
+        if server_hash != expect:
+            raise RuntimeError("RA2 server hash mismatch")
+        _send_msg(hashlib.sha1(client_blob + server_blob).digest())
+
+        subtype = _recv_msg()
+        if not subtype or subtype[0] not in (1, 2):
+            raise RuntimeError("RA2 subtype unsupported: %s" % list(subtype or b""))
+        self._need_vnc_creds(username=(subtype[0] == 1))
+        user = (self._username or "").encode("utf-8")
+        pw = (self._password or "").encode("utf-8")
+        if subtype[0] == 2:
+            creds = bytes([0, len(pw)]) + pw
+        else:
+            creds = bytes([len(user)]) + user + bytes([len(pw)]) + pw
+        _send_msg(creds)
+        if encrypt_session:
+            return _RA2Sock(sock, send_key, recv_key, send_ctr[0], recv_ctr[0])
+        return sock
+
+    def _vnc_ard(self, sock):
+        """Apple Remote Desktop / Screen Sharing (security type 30)."""
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+        gen = struct.unpack("!H", self._recv_n(sock, 2))[0]
+        key_size = struct.unpack("!H", self._recv_n(sock, 2))[0]
+        if key_size < 8 or key_size > 1024:
+            raise RuntimeError("ARD key size unsupported: %s" % key_size)
+        prime = int.from_bytes(self._recv_n(sock, key_size), "big")
+        peer = int.from_bytes(self._recv_n(sock, key_size), "big")
+        priv = int.from_bytes(os.urandom(key_size), "big") % (prime - 2) + 1
+        pub = pow(gen, priv, prime)
+        shared = pow(peer, priv, prime).to_bytes(key_size, "big")
+        aes_key = hashlib.md5(shared).digest()
+        self._need_vnc_creds(True)
+        creds = _pad_cstr(self._username, 64) + _pad_cstr(self._password, 64)
+        encryptor = Cipher(algorithms.AES(aes_key), modes.ECB()).encryptor()
+        enc = encryptor.update(creds) + encryptor.finalize()
+        sock.sendall(enc + pub.to_bytes(key_size, "big"))
+
+    def _vnc_mslogonii(self, sock):
+        """UltraVNC MSLogonII (0x71) / Ultra (17) username+password."""
+        gen = int.from_bytes(self._recv_n(sock, 8), "big")
+        mod = int.from_bytes(self._recv_n(sock, 8), "big")
+        peer = int.from_bytes(self._recv_n(sock, 8), "big")
+        if mod <= 3:
+            raise RuntimeError("MSLogonII modulus too small")
+        priv = int.from_bytes(os.urandom(8), "big") % (mod - 2) + 1
+        pub = pow(gen, priv, mod)
+        secret = pow(peer, priv, mod).to_bytes(8, "big")
+        self._need_vnc_creds(True)
+        user = _pad_cstr(self._username, 256)
+        pw = _pad_cstr(self._password, 64)
+        sock.sendall(pub.to_bytes(8, "big") + _vnc_des_cbc(secret, secret, user) + _vnc_des_cbc(secret, secret, pw))
 
     def _vencrypt(self, sock):
         # VeNCrypt 0.2: Plain, TLS/X509 + None/VNC/Plain, or TLS/X509 + SASL.
@@ -2510,6 +2636,126 @@ class VNCDisplay(_DisplayBase):
 def _vnc_bit_reverse_key(password):
     key = (password or "").encode("latin1")[:8].ljust(8, b"\x00")
     return bytes(int("{:08b}".format(b)[::-1], 2) for b in key)
+
+
+def _vnc_bit_reverse_bytes(raw):
+    raw = (raw or b"")[:8].ljust(8, b"\x00")
+    return bytes(int("{:08b}".format(b)[::-1], 2) for b in raw)
+
+
+def _pad_cstr(text, size):
+    raw = (text or "").encode("utf-8") + b"\x00"
+    if len(raw) >= size:
+        return raw[:size]
+    return raw + os.urandom(size - len(raw))
+
+
+def _aes_cmac(key, data):
+    from cryptography.hazmat.primitives.ciphers import algorithms
+    from cryptography.hazmat.primitives.cmac import CMAC
+
+    c = CMAC(algorithms.AES(key))
+    c.update(data)
+    return c.finalize()
+
+
+def _eax_omac(key, tweak, data):
+    prefix = bytes(15) + bytes([tweak & 0xFF])
+    return _aes_cmac(key, prefix + data)
+
+
+def _aes_eax_encrypt(key, nonce, ad, plaintext):
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+    n = _eax_omac(key, 0, nonce)
+    h = _eax_omac(key, 1, ad)
+    enc = Cipher(algorithms.AES(key), modes.CTR(n)).encryptor()
+    ct = enc.update(plaintext or b"") + enc.finalize()
+    tag = bytes(a ^ b ^ c for a, b, c in zip(_eax_omac(key, 2, ct), n, h))
+    return ct, tag
+
+
+def _aes_eax_decrypt(key, nonce, ad, ciphertext, tag):
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+    n = _eax_omac(key, 0, nonce)
+    h = _eax_omac(key, 1, ad)
+    expect = bytes(a ^ b ^ c for a, b, c in zip(_eax_omac(key, 2, ciphertext), n, h))
+    if expect != tag:
+        raise RuntimeError("RA2 AES-EAX MAC check failed")
+    dec = Cipher(algorithms.AES(key), modes.CTR(n)).decryptor()
+    return dec.update(ciphertext or b"") + dec.finalize()
+
+
+def _ra2_seal(key, counter, plaintext):
+    ad = struct.pack("!H", len(plaintext or b""))
+    nonce = int(counter).to_bytes(16, "little")
+    ct, tag = _aes_eax_encrypt(key, nonce, ad, plaintext or b"")
+    return ad + ct + tag
+
+
+def _ra2_recv_msg(sock, key, counter, recv_n):
+    ad = recv_n(sock, 2)
+    n = struct.unpack("!H", ad)[0]
+    ct = recv_n(sock, n) if n else b""
+    tag = recv_n(sock, 16)
+    nonce = int(counter).to_bytes(16, "little")
+    return _aes_eax_decrypt(key, nonce, ad, ct, tag)
+
+
+def _vnc_des_cbc(key8, iv8, data):
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+    rev = _vnc_bit_reverse_bytes(key8)
+    iv = _vnc_bit_reverse_bytes(iv8)
+    enc = Cipher(algorithms.TripleDES(rev * 3), modes.CBC(iv)).encryptor()
+    return enc.update(data) + enc.finalize()
+
+
+class _RA2Sock:
+    """Byte stream that frames RFB through RA2 AES-EAX messages."""
+
+    def __init__(self, sock, send_key, recv_key, send_ctr=0, recv_ctr=0):
+        self._sock = sock
+        self._send_key = send_key
+        self._recv_key = recv_key
+        self._send_ctr = send_ctr
+        self._recv_ctr = recv_ctr
+        self._inbuf = b""
+
+    def sendall(self, data):
+        self._sock.sendall(_ra2_seal(self._send_key, self._send_ctr, data))
+        self._send_ctr += 1
+
+    def recv(self, n):
+        while len(self._inbuf) < n:
+            pt = _ra2_recv_msg(self._sock, self._recv_key, self._recv_ctr, _ra2_raw_recv)
+            self._recv_ctr += 1
+            self._inbuf += pt
+        out, self._inbuf = self._inbuf[:n], self._inbuf[n:]
+        return out
+
+    def settimeout(self, value):
+        self._sock.settimeout(value)
+
+    def close(self):
+        try:
+            self._sock.close()
+        except Exception:
+            pass
+
+    def fileno(self):
+        return self._sock.fileno()
+
+
+def _ra2_raw_recv(sock, n):
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise EOFError("RA2 connection closed")
+        buf += chunk
+    return buf
 
 
 def _vnc_auth_response(challenge, password):
