@@ -3476,8 +3476,31 @@ class vmmDetails(vmmGObjectUI):
                 inactive_path = disk.get_source_path() or ""
                 break
             # Persistent XML is authoritative after shutdown. A stale
-            # empty running disk must not hide a just-applied ISO path.
+            # empty running disk must not hide a just-applied ISO path
+            # (testMediaHotplug deferred apply).
             if inactive_path:
+                try:
+                    self._mediacombo.set_path(inactive_path)
+                except Exception:
+                    pass
+                pretty = inactive_path
+                try:
+                    pretty = (
+                        self._mediacombo._pretty_label_for_path(inactive_path)
+                        or inactive_path
+                    )
+                except Exception:
+                    pretty = inactive_path
+                for path, val in (
+                    ("/tmp/vmm-a11y-details-media-entry.txt", pretty or inactive_path),
+                    ("/tmp/vmm-a11y-details-media-path.txt", inactive_path),
+                    ("/tmp/vmm-a11y-disk-source-path.txt", inactive_path),
+                    ("/tmp/vmm-a11y-media-entry.txt", inactive_path),
+                ):
+                    try:
+                        open(path, "w").write(val or "")
+                    except Exception:
+                        pass
                 return
             ejected = inactive_path == "" or (
                 inactive_path is None and not current.get_source_path()

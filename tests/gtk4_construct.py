@@ -2902,6 +2902,26 @@ def main():
                 "deferred media apply must keep the running empty path, got %r"
                 % published
             )
+            if vmobj.is_active():
+                vmobj.shutdown()
+                deadline = time.monotonic() + 6
+                while time.monotonic() < deadline and vmobj.is_active():
+                    conn.schedule_priority_tick(pollvm=True, force=True)
+                    _pump(GLib, 0.2)
+            details.vmwindow_refresh_vm_state(True)
+            _pump(GLib, 0.2)
+            try:
+                published = open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
+            except Exception:
+                published = ""
+            try:
+                src = open("/tmp/vmm-a11y-disk-source-path.txt", "r").read()
+            except Exception:
+                src = ""
+            assert "virt-install" in (published + src), (
+                "after shutdown deferred media must appear, entry=%r src=%r"
+                % (published, src)
+            )
         finally:
             vmobj.config.CLITestOptions.test_update_device_fail = orig
 
