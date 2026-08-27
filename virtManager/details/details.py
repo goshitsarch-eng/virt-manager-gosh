@@ -1954,23 +1954,8 @@ class vmmDetails(vmmGObjectUI):
                     _tab, hw = self._details_hw_context()
                     try:
                         last_kw = getattr(self, "_vmm_last_disk_kwargs", None) or {}
-                        applied = False
-                        try:
-                            applied = (
-                                open(
-                                    "/tmp/vmm-a11y-disk-shareable-applied.txt",
-                                    "r",
-                                )
-                                .read()
-                                .strip()
-                                == "1"
-                            )
-                        except Exception:
-                            applied = False
-                        if (
-                            applied
-                            and last_kw.get("shareable")
-                            and (_tab == "disk-tab" or "Disk" in (hw or ""))
+                        if last_kw.get("shareable") and (
+                            _tab == "disk-tab" or "Disk" in (hw or "")
                         ):
                             # After Apply, testdriver XML can lag. Do not
                             # clobber a later user uncheck while Apply is
@@ -4774,6 +4759,8 @@ class vmmDetails(vmmGObjectUI):
         return self._change_config(self.vm.define_boot, kwargs)
 
     def _apply_disk(self, devobj):
+        if devobj is None:
+            return False
         kwargs = {}
 
         if self._edited(EDIT_DISK_PATH):
@@ -4980,6 +4967,22 @@ class vmmDetails(vmmGObjectUI):
         kwargs = {}
         if self._edited(EDIT_GFX):
             kwargs = self.gfxdetails.get_values()
+
+        # After VNC→Spice the previous DeviceGraphics object is gone.
+        try:
+            gfx = list(self.vm.xmlobj.devices.graphics)
+            gtype = kwargs.get("gtype")
+            match = None
+            for g in gfx:
+                if not gtype or getattr(g, "type", None) == gtype:
+                    match = g
+                    break
+            if match is None and gfx:
+                match = gfx[0]
+            if match is not None:
+                devobj = match
+        except Exception:
+            pass
 
         return self._change_config(self.vm.define_graphics, kwargs, devobj=devobj)
 
