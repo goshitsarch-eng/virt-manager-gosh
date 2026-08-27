@@ -1879,7 +1879,40 @@ def main():
         cancel_xfer._on_cancel()
         assert cancel_xfer._status.get_text() == "Transfer cancelled"
         assert cancel_xfer._closed is True
+
+        class _FakeXfer:
+            def __init__(self):
+                self.cancelled = False
+                self._progress = 0.25
+                self._sigs = {}
+
+            def get_filename(self):
+                return "from-guest.bin"
+
+            def get_progress(self):
+                return self._progress
+
+            def cancel(self):
+                self.cancelled = True
+
+            def connect(self, sig, handler):
+                self._sigs[sig] = handler
+                return 1
+
+            def get_property(self, name):
+                if name in ("cancellable", "file"):
+                    return None
+                raise AttributeError(name)
+
         spice = gtk4display.SpiceDisplay(None)
+        task = _FakeXfer()
+        spice._on_new_file_transfer(None, task)
+        assert spice._xfer_windows
+        xfer_task = spice._xfer_windows[-1]
+        assert abs(xfer_task._bar.get_fraction() - 0.25) < 0.01
+        xfer_task._on_cancel()
+        assert task.cancelled is True
+        assert xfer_task._closed is True
         assert spice._on_file_drop(None, [], 0, 0) is False
         from gi.repository import Gdk
         motion = []

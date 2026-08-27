@@ -2843,6 +2843,8 @@ class SpiceDisplay(_DisplayBase):
         self._mouse_mode = _SPICE_MOUSE_MODE_CLIENT
         self._rel_x = None
         self._rel_y = None
+        self._xfer_bound = False
+        self._xfer_windows = []
         self._bind_session_channels()
         try:
             drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
@@ -2892,6 +2894,12 @@ class SpiceDisplay(_DisplayBase):
             self._session.connect("channel-new", self._on_session_channel)
         except Exception:
             pass
+        if not self._xfer_bound:
+            try:
+                self._session.connect("new-file-transfer", self._on_new_file_transfer)
+                self._xfer_bound = True
+            except (TypeError, RuntimeError):
+                self._xfer_bound = True
         self._bind_main(self._find_main_channel())
 
     def _on_session_channel(self, _session, channel):
@@ -3407,24 +3415,7 @@ class SpiceDisplay(_DisplayBase):
                 names.append(_("file"))
         cancellable = Gio.Cancellable()
         progress = _SpiceFileTransferWindow(names, cancellable=cancellable)
-        parent = None
-        try:
-            parent = self.get_root()
-        except Exception:
-            parent = None
-        if isinstance(parent, Gtk.Window):
-            try:
-                progress.set_transient_for(parent)
-                progress.set_modal(True)
-            except Exception:
-                pass
-            try:
-                app = parent.get_application()
-                if app is not None:
-                    app.add_window(progress)
-            except Exception:
-                pass
-        progress.present()
+        self._present_xfer_window(progress)
 
         def _progress(_current, _total):
             try:
@@ -3475,6 +3466,57 @@ class SpiceDisplay(_DisplayBase):
             progress.finish_error(str(exc))
             log.debug("spice file transfer failed: %s", exc)
             return False
+
+    def _present_xfer_window(self, progress):
+        parent = None
+        try:
+            parent = self.get_root()
+        except Exception:
+            parent = None
+        if isinstance(parent, Gtk.Window):
+            try:
+                progress.set_transient_for(parent)
+                progress.set_modal(True)
+            except Exception:
+                pass
+            try:
+                app = parent.get_application()
+                if app is not None:
+                    app.add_window(progress)
+            except Exception:
+                pass
+        try:
+            self._xfer_windows.append(progress)
+        except Exception:
+            pass
+        progress.present()
+
+    def _on_new_file_transfer(self, _session, task):
+        """spice-gtk Display shows FileTransferTask progress with Cancel."""
+        if task is None:
+            return
+        name = None
+        try:
+            name = task.get_filename()
+        except Exception:
+            name = None
+        if not name:
+            try:
+                fobj = task.get_property("file")
+                name = fobj.get_basename() if fobj is not None else None
+            except Exception:
+                name = None
+        cancellable = None
+        try:
+            cancellable = task.get_property("cancellable")
+        except Exception:
+            cancellable = None
+        progress = _SpiceFileTransferWindow(
+            [name or _("file")],
+            cancellable=cancellable,
+            task=task,
+        )
+        self._present_xfer_window(progress)
 
     def _on_key_pressed(self, controller, keyval, keycode, state):
         self._sync_key_locks(state)
@@ -3585,10 +3627,11 @@ class _SpiceFileTransferWindow(Gtk.Window):
     Recreate that on the GTK 4 DrawingArea path after a drag-and-drop.
     """
 
-    def __init__(self, names, cancellable=None, **kwargs):
+    def __init__(self, names, cancellable=None, task=None, **kwargs):
         title = _("File transfer")
         super().__init__(title=title, **kwargs)
         self._cancellable = cancellable
+        self._task = task
         self._closed = False
         self.set_default_size(360, 160)
         try:
@@ -3622,6 +3665,17 @@ class _SpiceFileTransferWindow(Gtk.Window):
         box.append(self._status)
         box.append(btn_box)
         self.set_child(box)
+        if task is not None:
+            try:
+                task.connect("notify::progress", self._on_task_progress)
+            except Exception:
+                pass
+            try:
+                task.connect("finished", self._on_task_finished)
+            except Exception:
+                pass
+            self._on_task_progress()
+            self._status.set_text(_("Copying file…"))
 
     def set_fraction(self, value):
         try:
@@ -3631,7 +3685,30 @@ class _SpiceFileTransferWindow(Gtk.Window):
         self._bar.set_fraction(frac)
         self._bar.set_text("%d%%" % int(frac * 100))
 
+    def _on_task_progress(self, *_a):
+        if self._task is None:
+            return
+        try:
+            self.set_fraction(self._task.get_progress())
+        except Exception:
+            pass
+
+    def _on_task_finished(self, _task, error=None):
+        if error:
+            try:
+                message = error.message
+            except Exception:
+                message = str(error)
+            self.finish_error(message)
+            return
+        self.finish_ok()
+
     def _on_cancel(self, *_a):
+        if self._task is not None:
+            try:
+                self._task.cancel()
+            except Exception:
+                pass
         if self._cancellable is not None:
             try:
                 self._cancellable.cancel()
