@@ -14,6 +14,7 @@ import ctypes
 import ctypes.util
 import hashlib
 import io
+import mmap
 import os
 import socket
 import struct
@@ -137,6 +138,26 @@ def _x11_locked_mods():
         if x11.XkbGetState(_X11_DPY, _XKB_USE_CORE_KBD, ctypes.byref(state)) != 0:
             return 0
         return int(state.locked_mods)
+    except Exception:
+        return 0
+
+
+def _keycode_for_keyval(keyval):
+    """Map a Gdk keyval to a hardware keycode. GTK 3 send_keys used both."""
+    try:
+        keyval = int(keyval or 0)
+    except Exception:
+        return 0
+    if not keyval:
+        return 0
+    try:
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        _x11_locked_mods()
+        if not _X11_DPY:
+            return 0
+        x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        x11.XKeysymToKeycode.restype = ctypes.c_uint
+        return int(x11.XKeysymToKeycode(_X11_DPY, keyval) or 0)
     except Exception:
         return 0
 
@@ -1102,15 +1123,20 @@ class _DisplayBase(Gtk.DrawingArea):
 
     def send_keys(self, keyvals, _event=None):
         for keyval in keyvals:
-            self._send_key(keyval, 0, True)
+            self._send_key(keyval, _keycode_for_keyval(keyval), True)
         for keyval in reversed(keyvals):
-            self._send_key(keyval, 0, False)
+            self._send_key(keyval, _keycode_for_keyval(keyval), False)
 
     def get_pixbuf(self):
         """
         Return a GdkPixbuf.Pixbuf of the current framebuffer so
         Virtual Machine -> Take Screenshot can call save_to_bufferv("png").
         """
+        if hasattr(self, "_refresh_primary"):
+            try:
+                self._refresh_primary()
+            except Exception:
+                pass
         if GdkPixbuf is None:
             return None
         surface = self._fb
@@ -1129,6 +1155,19 @@ class _DisplayBase(Gtk.DrawingArea):
         try:
             if hasattr(surface, "flush"):
                 surface.flush()
+            if cairo is not None and getattr(self, "_cursor_surface", None) is not None:
+                copy = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+                cr = cairo.Context(copy)
+                cr.set_source_surface(surface, 0, 0)
+                cr.paint()
+                hx, hy = getattr(self, "_cursor_hot", (0, 0))
+                cr.set_source_surface(
+                    self._cursor_surface,
+                    int(getattr(self, "_last_x", 0) or 0) - int(hx or 0),
+                    int(getattr(self, "_last_y", 0) or 0) - int(hy or 0),
+                )
+                cr.paint()
+                surface = copy
             buf = io.BytesIO()
             surface.write_to_png(buf)
             loader = GdkPixbuf.PixbufLoader.new_with_type("png")
@@ -2715,6 +2754,15 @@ class VNCDisplay(_DisplayBase):
                 self._read_zrle(sock, width, x, y, w, h)
             elif enc == _VNC_ENC_CURSOR:
                 self._read_cursor(sock, x, y, w, h)
+            elif enc == _VNC_ENC_EXT_CLIPBOARD:
+                # gtk-vnc treats this dummy rect as an Extended Clipboard
+                # capability ping. Payload, if any, uses ServerCutText.
+                self._ext_clip = True
+                if not getattr(self, "_ext_clip_caps_sent", False):
+                    try:
+                        self._send_ext_caps()
+                    except Exception:
+                        pass
             elif enc < 0:
                 log.debug("Ignoring VNC pseudo-encoding %s", enc)
             else:
@@ -3294,7 +3342,7 @@ class SpiceDisplay(_DisplayBase):
             pass
 
     def _on_key_modifiers(self, *_args):
-        return None
+        self._sync_key_locks()
 
     def _send_pointer(self, x, y, button, pressed=False):
         if button:
@@ -3661,7 +3709,26 @@ def _cairo_from_gl_scanout(scanout):
             memoryview(buf), cairo.FORMAT_ARGB32, width, height, width * 4
         )
     except Exception as exc:
-        log.debug("Failed to import spice GL scanout: %s", exc)
+        log.debug("Failed to import spice GL scanout via GDK: %s", exc)
+        return _mmap_gl_scanout(fd, width, height, stride)
+
+
+def _mmap_gl_scanout(fd, width, height, stride):
+    """Linear dmabuf fallback when Gdk.DmabufTextureBuilder cannot import."""
+    if cairo is None or fd < 0 or width <= 0 or height <= 0:
+        return None
+    try:
+        size = max(int(stride) * int(height), int(width) * int(height) * 4)
+        mapped = mmap.mmap(int(fd), size, mmap.MAP_SHARED, mmap.PROT_READ)
+        try:
+            buf = bytearray(mapped[: int(stride) * int(height)])
+        finally:
+            mapped.close()
+        return cairo.ImageSurface.create_for_data(
+            memoryview(buf), cairo.FORMAT_ARGB32, int(width), int(height), int(stride)
+        )
+    except Exception as exc:
+        log.debug("Failed to mmap spice GL scanout: %s", exc)
         return None
 
 

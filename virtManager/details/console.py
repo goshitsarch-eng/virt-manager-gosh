@@ -56,8 +56,12 @@ class _TimedRevealer(vmmGObject):
 
         self._ebox = Gtk.EventBox()
         self._ebox.add(self._revealer)
-        self._ebox.set_halign(Gtk.Align.CENTER)
+        self._ebox.set_halign(Gtk.Align.FILL)
+        self._ebox.set_hexpand(True)
         self._ebox.set_valign(Gtk.Align.START)
+        # GTK 3 kept a 1px hit target when the toolbar was hidden.
+        # GTK 4 Revealer collapse can make that zero-height on Wayland.
+        self._ebox.set_size_request(-1, 8)
         self._ebox.show_all()
 
         self._ebox.connect("enter-notify-event", self._enter_notify)
@@ -1169,6 +1173,17 @@ class vmmConsolePages(vmmGObjectUI):
             pass
 
     def _pointer_near_top(self):
+        try:
+            display = Gdk.Display.get_default()
+            surface = self.topwin.get_surface() if self.topwin is not None else None
+            seat = display.get_default_seat() if display is not None else None
+            pointer = seat.get_pointer() if seat is not None else None
+            if surface is not None and pointer is not None:
+                found, _x, y, _mask = surface.get_device_position(pointer)
+                if found:
+                    return int(y) <= 8
+        except Exception:
+            pass
         try:
             import subprocess
 

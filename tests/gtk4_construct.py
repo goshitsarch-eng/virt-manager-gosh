@@ -1082,6 +1082,9 @@ def main():
         toolbar = vmmOverlayToolbar(lambda *_a: None, lambda _src, keys: sent.append(list(keys)))
         overlay = toolbar.timed_revealer.get_overlay_widget()
         assert overlay is not None
+        assert overlay.get_size_request()[1] >= 8
+        near = win._console._pointer_near_top()
+        assert near in (True, False)
         toolbar.timed_revealer.force_reveal(True)
         toolbar._on_send_key_button_clicked_cb(toolbar._send_key_button)
         toolbar.cleanup()
@@ -1874,6 +1877,8 @@ def main():
         assert len(msl.sent) == 8 + 256 + 64
 
         disp.send_keys([97])
+        assert gtk4display._keycode_for_keyval(65507) > 0
+        assert gtk4display._mmap_gl_scanout(-1, 16, 16, 64) is None
         disp.set_property("resize-guest", True)
         disp._apply_resize_guest(True)
 
@@ -3332,6 +3337,9 @@ def main():
         sni._activate_item(sni._items[quit_id])
         _pump(GLib, 0.05)
         assert clicked == ["quit"]
+        tip = sni._on_get_property(None, None, None, None, "ToolTip")
+        assert tip is not None
+        assert "virt-manager" in str(tip)
         sni.hide()
         assert sni._status == "Passive"
         sni._status = "Active"

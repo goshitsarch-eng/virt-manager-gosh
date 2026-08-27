@@ -367,6 +367,7 @@ _SNI_XML = """
     <property name="Status" type="s" access="read"/>
     <property name="WindowId" type="i" access="read"/>
     <property name="IconName" type="s" access="read"/>
+    <property name="ToolTip" type="(sa{sv}s)" access="read"/>
     <property name="ItemIsMenu" type="b" access="read"/>
     <property name="Menu" type="o" access="read"/>
     <method name="ContextMenu">
@@ -564,9 +565,9 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
 
     def _on_method(self, _conn, _sender, _path, _iface, method, params, invocation):
         ignore = params
-        if method == "Activate":
+        if method in ("Activate", "SecondaryActivate"):
             _toggle_manager()
-        elif method in ("ContextMenu", "SecondaryActivate"):
+        elif method == "ContextMenu":
             self._popup_menu()
         invocation.return_value(None)
 
@@ -583,6 +584,10 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
             "Status": GLib.Variant("s", self._status),
             "WindowId": GLib.Variant("i", 0),
             "IconName": GLib.Variant("s", "virt-manager"),
+            "ToolTip": GLib.Variant(
+                "(sa{sv}s)",
+                ("virt-manager", {}, _("Virtual Machine Manager")),
+            ),
             "ItemIsMenu": GLib.Variant("b", False),
             "Menu": GLib.Variant("o", "/MenuBar"),
         }
