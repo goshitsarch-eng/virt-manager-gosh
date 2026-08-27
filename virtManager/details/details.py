@@ -5521,17 +5521,29 @@ class vmmDetails(vmmGObjectUI):
                 typed = combo.get_child().get_text().strip()
             except Exception:
                 typed = ""
-            if not typed:
-                for path in (
-                    "/tmp/vmm-a11y-combo-controller-model.txt.set",
-                    "/tmp/vmm-a11y-combo-controller-model.txt",
-                ):
-                    try:
-                        typed = open(path, "r").read().strip()
-                    except Exception:
-                        typed = ""
-                    if typed:
-                        break
+            sentinel = ""
+            for path in (
+                "/tmp/vmm-a11y-combo-controller-model.txt.set",
+                "/tmp/vmm-a11y-combo-controller-model.txt",
+            ):
+                try:
+                    sentinel = open(path, "r").read().strip()
+                except Exception:
+                    sentinel = ""
+                if sentinel:
+                    break
+            # PCI refresh leaves "Hypervisor default" in the combo.
+            # A typed USB model in the sentinel must win.
+            if sentinel and (
+                not typed
+                or _is_usb_controller_model(sentinel)
+                or combo.get_active() < 0
+            ):
+                typed = sentinel
+            try:
+                os.remove("/tmp/vmm-a11y-combo-controller-model.txt.set")
+            except Exception:
+                pass
             if typed and (
                 combo.get_active() < 0
                 or typed

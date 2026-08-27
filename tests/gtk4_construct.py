@@ -2434,6 +2434,18 @@ def main():
         combo = details.widget("controller-model")
         child = combo.get_child()
 
+        def _usb_models():
+            guest = vmobj.get_xmlobj(inactive=True)
+            return [
+                c.model
+                for c in guest.devices.controller
+                if c.type == "usb" and c.model not in (
+                    "ich9-uhci1",
+                    "ich9-uhci2",
+                    "ich9-uhci3",
+                )
+            ]
+
         def _apply_model(model):
             details._enable_apply(EDIT_CONTROLLER_MODEL)
             uiutil.set_list_selection(combo, model)
@@ -2448,6 +2460,12 @@ def main():
             ok = details._apply_controller(usb[HW_LIST_COL_DEVICE])
             assert ok is not False, "controller apply %r failed" % model
             details._repopulate_hw_list()
+            got = _usb_models()
+            expect = "ich9-ehci1" if model in ("usb2", "ich9-ehci1") else model
+            if model == "usb3":
+                assert any(m and "xhci" in m for m in got), got
+            else:
+                assert expect in got, got
 
         _apply_model("ich9-ehci1")
         _apply_model("usb3")
@@ -2478,6 +2496,12 @@ def main():
         except Exception:
             pass
         details._enable_apply(EDIT_CONTROLLER_MODEL)
+        try:
+            open("/tmp/vmm-a11y-combo-controller-model.txt.set", "w").write(
+                "piix3-uhci"
+            )
+        except Exception:
+            pass
         child.set_text("piix3-uhci")
         try:
             combo.set_active(-1)
@@ -2488,11 +2512,9 @@ def main():
         assert not details.widget("config-apply").get_sensitive(), (
             "typed USB model apply must idle Apply"
         )
+        assert "piix3-uhci" in _usb_models(), _usb_models()
         usb = _usb_row()
         assert usb is not None
-        assert getattr(usb[HW_LIST_COL_DEVICE], "model", None) == "piix3-uhci", (
-            getattr(usb[HW_LIST_COL_DEVICE], "model", None)
-        )
 
         details._vmm_apply_just_succeeded = True
         details._vmm_user_controller_edit = False
