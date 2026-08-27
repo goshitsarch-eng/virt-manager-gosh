@@ -1384,6 +1384,11 @@ class VMMDogtailApp:
         if check_already_running:
             self.error_if_already_running()
         env = os.environ.copy()
+        # _dogtailinit pops VIRTINST_TEST_SUITE so the dogtail/GTK 3
+        # process does not take the virt-manager test-suite gate.
+        # The app under test still needs it for the findable file
+        # browser and other official-uitest shims.
+        env["VIRTINST_TEST_SUITE"] = "1"
         if enable_libguestfs is True:
             stub = os.path.join(tests.utils.TOPDIR, "tests", "guestfs_stub")
             if os.path.isdir(stub):
