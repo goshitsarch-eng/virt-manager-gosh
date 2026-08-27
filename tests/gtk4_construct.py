@@ -1191,6 +1191,7 @@ def main():
             dlg.set_browse_reason(reason)
             _pump(GLib, 0.01)
         dlg.show(None)
+        assert getattr(dlg, "_vmm_choose_poll_cb", None) is not None
         shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
         assert shown == "1", shown
         dlg.storagelist.emit("volume-chosen", None)
