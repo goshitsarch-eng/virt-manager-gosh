@@ -4651,8 +4651,6 @@ class vmmDetails(vmmGObjectUI):
             elif "shareable" not in vals and share_w is not None:
                 vals["shareable"] = share_w
             kwargs.update(vals)
-            try:
-                self._vmm_last_disk_kwargs = dict(kwargs)
             typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
             try:
                 combo = self._addstorage.widget("disk-cache")
