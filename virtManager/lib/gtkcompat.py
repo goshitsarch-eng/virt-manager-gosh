@@ -723,7 +723,9 @@ def restore_button_icon_name(button, icon_name, accessible_name=None):
         return
     label = None
     try:
-        label = button.get_label()
+        child = button.get_child() if hasattr(button, "get_child") else None
+        if isinstance(child, Gtk.Label) or child is None:
+            label = button.get_label()
     except Exception:
         label = None
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -732,16 +734,16 @@ def restore_button_icon_name(button, icon_name, accessible_name=None):
     if label:
         box.append(Gtk.Label(label=label, use_underline=True))
     try:
-        button.set_label(None)
+        button.set_child(box)
     except Exception:
-        pass
-    button.set_child(box)
+        return
     button._vmm_icon_child = True
     name = accessible_name
     if not name and label:
         name = label.replace("_", "", 1)
     if name:
-        ensure_button_accessible_name(button, name)
+        button._vmm_a11y_name = name
+        set_accessible_name(button, name)
 
 
 def restore_password_input_purpose(widget):
@@ -1572,11 +1574,26 @@ def _mnemonic_label(text):
 
 
 def _accessible_label_for_widget(widget):
+    cached = getattr(widget, "_vmm_a11y_name", None)
+    if cached:
+        return _mnemonic_label(cached)
     label = None
-    if hasattr(widget, "get_label"):
+    child = None
+    if hasattr(widget, "get_child"):
+        try:
+            child = widget.get_child()
+        except Exception:
+            child = None
+    # GTK 4 gtk_button_get_label() is only valid when the child is a Label.
+    if hasattr(widget, "get_label") and (child is None or isinstance(child, Gtk.Label)):
         try:
             label = widget.get_label()
-        except TypeError:
+        except Exception:
+            label = None
+    if not label and isinstance(child, Gtk.Label):
+        try:
+            label = child.get_label()
+        except Exception:
             label = None
     if not label:
         label = getattr(widget, "label", None)

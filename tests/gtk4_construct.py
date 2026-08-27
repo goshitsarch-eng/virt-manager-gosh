@@ -924,8 +924,8 @@ def main():
         from virtManager.vmwindow import vmmVMWindow
 
         css = vmmconfig.CSSDATA
-        assert "alpha(@window_fg_color" in css, css
-        assert "@insensitive_fg_color" not in css, css
+        assert "color: alpha(@window_fg_color, 0.55);" in css, css
+        assert "color: @insensitive_fg_color" not in css, css
 
         dlg = vmmPreferences()
         color = gtkcompat.theme_insensitive_color(dlg.topwin)
