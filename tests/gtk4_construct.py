@@ -2913,7 +2913,6 @@ def main():
         uiutil.set_list_selection_by_number(hwlist, cdrom1[0])
         details._hw_changed_cb(hwlist)
         _pump(GLib, 0.2)
-        details._refresh_disk_page(cdrom1[1])
         labels = []
         try:
             model = details._mediacombo._combo.get_model()
