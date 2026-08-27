@@ -4021,6 +4021,7 @@ class vmmDetails(vmmGObjectUI):
                 w.set_active(val == "1")
             finally:
                 self._ui_refreshing = refreshing
+            self._addstorage._active_edits = []
         except Exception:
             pass
 
