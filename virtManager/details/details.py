@@ -3164,21 +3164,6 @@ class vmmDetails(vmmGObjectUI):
             self._disable_apply()
             return False
 
-        # Leftover EDIT_DISK_PATH after a successful apply is not a
-        # real unapplied edit. Prompting here opens a nested modal
-        # that hangs same-process construct walks. Do not invent a
-        # pending path from the destination row's combo here.
-        if (
-            EDIT_DISK_PATH in getattr(self, "_active_edits", [])
-            and getattr(self, "_vmm_apply_just_succeeded", False)
-            and self._pending_media_path() is None
-        ):
-            try:
-                self._disable_apply()
-            except Exception:
-                pass
-            return False
-
         if not row:
             # Don't-warn must abandon even when the source row object
             # is a testdriver/xmlobj copy that is not in hw-list.
@@ -4483,13 +4468,13 @@ class vmmDetails(vmmGObjectUI):
             ):
                 return
         elif (
-            edittype in (EDIT_DISK, EDIT_DISK_BUS)
+            edittype == EDIT_DISK_BUS
             and getattr(self, "_vmm_apply_just_succeeded", False)
-            and _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", [])
         ):
-            # Delayed bus/cache "changed" after a successful media apply
-            # must not keep Apply armed; shutdown then skips the disk
-            # refresh and hides the deferred inactive path.
+            # Delayed bus "changed" after a successful media apply
+            # must not keep Apply armed. Do not also ignore EDIT_DISK:
+            # Shareable clicks after apply (testDetailsMiscEdits) emit
+            # that and must still arm Apply.
             return
         if getattr(self, "_ui_refreshing", False):
             if edittype == EDIT_CONTROLLER_MODEL and (
@@ -5912,6 +5897,13 @@ class vmmDetails(vmmGObjectUI):
         pending = self._pending_media_path()
         if pending is not None:
             return pending
+        try:
+            row = self._get_hw_row()
+            disk = row[HW_LIST_COL_DEVICE] if row is not None else None
+            if disk is None or not (disk.is_cdrom() or disk.is_floppy()):
+                return None
+        except Exception:
+            return None
         try:
             combo_path = (self._mediacombo.get_path() or "").strip()
             combo_path = (
