@@ -333,9 +333,18 @@ def main():
 
     def preferences():
         from virtManager.preferences import vmmPreferences
+        from virtManager.lib.inspection import vmmInspection
 
         dlg = vmmPreferences()
         dlg.show(None)
+        prev_gfs = vmmInspection._libguestfs_installed
+        vmmInspection._libguestfs_installed = False
+        try:
+            missing = vmmPreferences()
+            assert missing.widget("prefs-libguestfs").get_sensitive() is False
+            missing.close()
+        finally:
+            vmmInspection._libguestfs_installed = prev_gfs
 
     def about():
         from virtManager.about import vmmAbout

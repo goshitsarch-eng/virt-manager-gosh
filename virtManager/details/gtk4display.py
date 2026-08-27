@@ -89,6 +89,58 @@ _VNC_AUDIO_S16 = 3
 _VNC_LED_SCROLL = 1
 _VNC_LED_NUM = 2
 _VNC_LED_CAPS = 4
+_X11_LOCK_MASK = 1 << 1
+_X11_MOD2_MASK = 1 << 4
+_X11_MOD3_MASK = 1 << 5
+_XKB_USE_CORE_KBD = 0x0100
+_X11_DPY = None
+
+
+class _XkbStateRec(ctypes.Structure):
+    _fields_ = [
+        ("group", ctypes.c_ubyte),
+        ("locked_group", ctypes.c_ubyte),
+        ("base_group", ctypes.c_ushort),
+        ("latched_group", ctypes.c_ushort),
+        ("mods", ctypes.c_ubyte),
+        ("base_mods", ctypes.c_ubyte),
+        ("latched_mods", ctypes.c_ubyte),
+        ("locked_mods", ctypes.c_ubyte),
+        ("compat_state", ctypes.c_ubyte),
+        ("grab_mods", ctypes.c_ubyte),
+        ("compat_grab_mods", ctypes.c_ubyte),
+        ("lookup_mods", ctypes.c_ubyte),
+        ("compat_lookup_mods", ctypes.c_ubyte),
+        ("ptr_buttons", ctypes.c_ushort),
+    ]
+
+
+def _x11_locked_mods():
+    """Xkb locked modifiers. GTK 4 Gdk.ModifierType has no Num/Scroll bits."""
+    global _X11_DPY
+    try:
+        x11 = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+        if _X11_DPY is None:
+            x11.XOpenDisplay.restype = ctypes.c_void_p
+            x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+            name = os.environ.get("DISPLAY")
+            _X11_DPY = x11.XOpenDisplay(name.encode("utf-8") if name else None)
+        if not _X11_DPY:
+            return 0
+        x11.XkbGetState.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.POINTER(_XkbStateRec),
+        ]
+        x11.XkbGetState.restype = ctypes.c_int
+        state = _XkbStateRec()
+        if x11.XkbGetState(_X11_DPY, _XKB_USE_CORE_KBD, ctypes.byref(state)) != 0:
+            return 0
+        return int(state.locked_mods)
+    except Exception:
+        return 0
+
+
 _VNC_SEC_NONE = 1
 _VNC_SEC_VNC = 2
 _VNC_SEC_RA2 = 5
@@ -798,6 +850,8 @@ class _DisplayBase(Gtk.DrawingArea):
         self._grabbed_pointer = False
         self._grabbed_keyboard = False
         self._grab_keys = GrabSequence()
+        self._led_num = False
+        self._led_scroll = False
         self._force_size = False
         self._buttons = 0
         self._last_x = 0
@@ -980,7 +1034,14 @@ class _DisplayBase(Gtk.DrawingArea):
         if keycode:
             self._pressed_hwkeys.add(int(keycode))
         if keyval:
+            already = int(keyval) in self._pressed_hwkeys
             self._pressed_hwkeys.add(int(keyval))
+            if not already:
+                name = Gdk.keyval_name(int(keyval)) or ""
+                if name == "Num_Lock":
+                    self._led_num = not self._led_num
+                elif name == "Scroll_Lock":
+                    self._led_scroll = not self._led_scroll
         if self._matches_grab_sequence() and (self._grabbed_pointer or self._grabbed_keyboard):
             self._ungrab_input()
             return True
@@ -3199,15 +3260,28 @@ class SpiceDisplay(_DisplayBase):
                 modifiers = 0
         if modifiers & int(Gdk.ModifierType.LOCK_MASK):
             locks |= caps
-        # GTK 4 dropped MOD2_MASK / MOD3_MASK (Num/Scroll). Use them
-        # only when the Gdk version still exposes the bits.
+        # GTK 4 dropped MOD2_MASK / MOD3_MASK. Recover Num/Scroll from
+        # Xkb locked modifiers on X11, then from in-session key toggles.
+        xkb = _x11_locked_mods()
+        if xkb & _X11_LOCK_MASK:
+            locks |= caps
+        if xkb & _X11_MOD2_MASK:
+            locks |= num
+        if xkb & _X11_MOD3_MASK:
+            locks |= scroll
         num_mask = getattr(Gdk.ModifierType, "MOD2_MASK", None) or getattr(
             Gdk.ModifierType, "NUM_LOCK_MASK", None
         )
-        scroll_mask = getattr(Gdk.ModifierType, "MOD3_MASK", None)
+        scroll_mask = getattr(Gdk.ModifierType, "MOD3_MASK", None) or getattr(
+            Gdk.ModifierType, "SCROLL_LOCK_MASK", None
+        )
         if num_mask and modifiers & int(num_mask):
             locks |= num
         if scroll_mask and modifiers & int(scroll_mask):
+            locks |= scroll
+        if getattr(self, "_led_num", False):
+            locks |= num
+        if getattr(self, "_led_scroll", False):
             locks |= scroll
         return locks
 
