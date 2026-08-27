@@ -1273,6 +1273,23 @@ def main():
                 return bytes([n])
             return bytes([0x80 | (n & 0x7F), (n >> 7) & 0x7F])
 
+        import zlib as _zlib
+
+        # ZlibHex: zlib-raw tile and zlib-hextile subrects
+        disp._zhex_dec = None
+        disp._alloc_pixels(4, 4)
+        zraw = _zlib.compress(b"\x11\x22\x33\x00" * 4)
+        zhex_raw = bytes([1 | 32]) + st.pack("!H", len(zraw)) + zraw
+        disp._read_zlibhex(FakeSock(zhex_raw), 4, 0, 0, 2, 2)
+        assert _pixel(0, 0) == b"\x11\x22\x33\x00"
+        assert _pixel(1, 1) == b"\x11\x22\x33\x00"
+        disp._zhex_dec = None
+        disp._alloc_pixels(4, 4)
+        zhex_subs = bytes([2 | 64]) + b"\xaa\xbb\xcc\x00" + st.pack("!H", 0)
+        disp._read_zlibhex(FakeSock(zhex_subs), 4, 0, 0, 2, 2)
+        assert _pixel(0, 0) == b"\xaa\xbb\xcc\x00"
+        assert _pixel(1, 1) == b"\xaa\xbb\xcc\x00"
+
         # Tight fill rectangle (control 0x80 + RGB) → BGRA
         disp._alloc_pixels(4, 4)
         tight = b"\x80\xaa\xbb\xcc"

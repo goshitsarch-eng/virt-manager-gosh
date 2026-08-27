@@ -49,7 +49,15 @@ _VNC_SET_DESKTOP_SIZE = 251
 _VNC_ENC_DESKTOPSIZE = -223
 _VNC_ENC_EXTENDED_DESKTOPSIZE = -308
 _VNC_ENC_TIGHT = 7
+_VNC_ENC_ZLIBHEX = 8
 _VNC_ENC_TRLE = 15
+_HEXTILE_RAW = 1
+_HEXTILE_BG = 2
+_HEXTILE_FG = 4
+_HEXTILE_ANY = 8
+_HEXTILE_COLOURED = 16
+_HEXTILE_ZLIBRAW = 32
+_HEXTILE_ZLIBHEX = 64
 _VNC_ENC_ZRLE = 16
 _VNC_ENC_CURSOR = -239
 _VNC_ENC_XCURSOR = -232
@@ -1073,7 +1081,7 @@ class VNCDisplay(_DisplayBase):
     TLS; TightVNC security type 16 (tunnels, VNC/None/Unix/SASL/VeNCrypt
     auth, extended ServerInit); 32-bit pixels; QEMU audio and LED state;
     and the encodings QEMU commonly sends: raw, CopyRect, RRE, Hextile,
-    zlib, Tight, ZRLE, DesktopSize, and cursor.
+    zlib, ZlibHex, Tight, ZRLE, DesktopSize, and cursor.
     """
 
     def __init__(self, **kwargs):
@@ -1091,6 +1099,7 @@ class VNCDisplay(_DisplayBase):
         self._auth_event = threading.Event()
         self._pixels = bytearray()
         self._zdec = None
+        self._zhex_dec = None
         self._tight_z = [None, None, None, None]
         self._zrle_z = None
         self._buttons = 0
@@ -1460,6 +1469,7 @@ class VNCDisplay(_DisplayBase):
             2,  # RRE
             5,  # hextile
             6,  # zlib
+            _VNC_ENC_ZLIBHEX,
             _VNC_ENC_CORRE,
             _VNC_ENC_TRLE,
             _VNC_ENC_ZRLE,
@@ -1872,7 +1882,43 @@ class VNCDisplay(_DisplayBase):
             self._pixels[d : d + w * 4] = src[s : s + w * 4]
         ignore = height
 
-    def _read_hextile(self, sock, width, x, y, w, h):
+    def _inflate_zhex(self, rawz):
+        import zlib
+
+        if self._zhex_dec is None:
+            self._zhex_dec = zlib.decompressobj()
+        try:
+            data = self._zhex_dec.decompress(rawz)
+        except zlib.error:
+            self._zhex_dec = zlib.decompressobj()
+            try:
+                data = self._zhex_dec.decompress(rawz)
+            except zlib.error:
+                data = zlib.decompress(rawz)
+        if not data:
+            try:
+                data = zlib.decompress(rawz)
+            except zlib.error:
+                data = b""
+        return data
+
+    def _hextile_subrects(self, recv, width, tx, ty, tw, th, bg, fg, sub):
+        self._fill_rect(width, tx, ty, tw, th, bg)
+        if not (sub & _HEXTILE_ANY):
+            return
+        nsub = recv(1)[0]
+        coloured = bool(sub & _HEXTILE_COLOURED)
+        for _ignore in range(nsub):
+            pix = recv(4) if coloured else fg
+            xy = recv(1)[0]
+            wh = recv(1)[0]
+            sx = tx + ((xy >> 4) & 0xF)
+            sy = ty + (xy & 0xF)
+            sw = ((wh >> 4) & 0xF) + 1
+            sh = (wh & 0xF) + 1
+            self._fill_rect(width, sx, sy, sw, sh, pix)
+
+    def _read_hextile(self, sock, width, x, y, w, h, zlibhex=False):
         bg = b"\x00\x00\x00\x00"
         fg = b"\x00\x00\x00\x00"
         for ty in range(y, y + h, 16):
@@ -1880,28 +1926,38 @@ class VNCDisplay(_DisplayBase):
             for tx in range(x, x + w, 16):
                 tw = min(16, x + w - tx)
                 sub = self._recv_n(sock, 1)[0]
-                raw = bool(sub & 1)
-                if sub & 2:
+                if sub & _HEXTILE_BG:
                     bg = self._recv_n(sock, 4)
-                if sub & 4:
+                if sub & _HEXTILE_FG:
                     fg = self._recv_n(sock, 4)
-                if raw:
+                if zlibhex and (sub & _HEXTILE_ZLIBRAW):
+                    n = struct.unpack("!H", self._recv_n(sock, 2))[0]
+                    data = self._inflate_zhex(self._recv_n(sock, n))
+                    self._blit_raw(width, tx, ty, tw, th, data[: tw * th * 4])
+                    continue
+                if zlibhex and (sub & _HEXTILE_ZLIBHEX):
+                    n = struct.unpack("!H", self._recv_n(sock, 2))[0]
+                    data = self._inflate_zhex(self._recv_n(sock, n)) if n else b""
+                    buf = io.BytesIO(data)
+                    self._hextile_subrects(
+                        lambda count, _buf=buf: _buf.read(count),
+                        width,
+                        tx,
+                        ty,
+                        tw,
+                        th,
+                        bg,
+                        fg,
+                        sub,
+                    )
+                    continue
+                if sub & _HEXTILE_RAW:
                     self._blit_raw(width, tx, ty, tw, th, self._recv_n(sock, tw * th * 4))
                     continue
-                self._fill_rect(width, tx, ty, tw, th, bg)
-                if not (sub & 8):
-                    continue
-                nsub = self._recv_n(sock, 1)[0]
-                coloured = bool(sub & 16)
-                for _ in range(nsub):
-                    pix = self._recv_n(sock, 4) if coloured else fg
-                    xy = self._recv_n(sock, 1)[0]
-                    wh = self._recv_n(sock, 1)[0]
-                    sx = tx + ((xy >> 4) & 0xF)
-                    sy = ty + (xy & 0xF)
-                    sw = ((wh >> 4) & 0xF) + 1
-                    sh = (wh & 0xF) + 1
-                    self._fill_rect(width, sx, sy, sw, sh, pix)
+                self._hextile_subrects(lambda n: self._recv_n(sock, n), width, tx, ty, tw, th, bg, fg, sub)
+
+    def _read_zlibhex(self, sock, width, x, y, w, h):
+        self._read_hextile(sock, width, x, y, w, h, zlibhex=True)
 
     def _read_zlib(self, sock, width, x, y, w, h):
         import zlib
@@ -2296,6 +2352,8 @@ class VNCDisplay(_DisplayBase):
                 self._read_corre(sock, width, x, y, w, h)
             elif enc == 5:
                 self._read_hextile(sock, width, x, y, w, h)
+            elif enc == _VNC_ENC_ZLIBHEX:
+                self._read_zlibhex(sock, width, x, y, w, h)
             elif enc == 6:
                 self._read_zlib(sock, width, x, y, w, h)
             elif enc in (_VNC_ENC_TIGHT, _VNC_ENC_TIGHTPNG):
