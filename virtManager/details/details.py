@@ -1267,11 +1267,16 @@ class vmmDetails(vmmGObjectUI):
                     pending_share = _EDIT_SHARE in getattr(
                         self._addstorage, "_active_edits", []
                     )
+                    dest_is_disk = any(
+                        k in dest_label for k in ("Disk", "CDROM", "Floppy")
+                    )
                     leaving_dirty = bool(
                         (apply_on or pending_share)
                         and dest_label
-                        and dirty
-                        and dest_label != dirty
+                        and (
+                            (dirty and dest_label != dirty)
+                            or (pending_share and not dest_is_disk)
+                        )
                     )
                     if leaving_dirty:
                         dirty_row = self._hw_row_for_label(dirty)
