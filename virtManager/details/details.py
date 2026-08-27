@@ -4579,16 +4579,15 @@ class vmmDetails(vmmGObjectUI):
                 pass
             try:
                 last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
-                if success and "shareable" in last:
-                    if last.get("shareable"):
-                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-                        open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
-                    else:
-                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-                        try:
-                            os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
-                        except Exception:
-                            pass
+                if success and last.get("shareable"):
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                elif success and last.get("shareable") is False and not self.vm.is_active():
+                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                    try:
+                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                    except Exception:
+                        pass
             except Exception:
                 pass
         return success
@@ -5009,7 +5008,9 @@ class vmmDetails(vmmGObjectUI):
                     if kwargs.get("shareable"):
                         open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
                         open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
-                    else:
+                    elif not self.vm.is_active():
+                        # Live apply of False still shows the running XML
+                        # (shareable=True) until shutdown.
                         open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
                         os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
                 except Exception:
