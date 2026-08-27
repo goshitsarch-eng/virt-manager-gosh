@@ -2913,10 +2913,9 @@ class vmmDetails(vmmGObjectUI):
             return False
 
         if not row:
-            try:
-                row = self._hw_row_for_label("Overview")
-            except Exception:
-                row = None
+            # The previous hardware row is gone (device was removed).
+            # Apply from pending edits instead of inventing Overview.
+            return not self._config_apply(row=None)
 
         try:
             existing = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
@@ -3882,6 +3881,19 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 xml_page = False
             page_edits = [e for e in self._active_edits if e != EDIT_XML]
+            disk_edits = any(
+                e in self._active_edits
+                for e in (EDIT_DISK, EDIT_DISK_PATH, EDIT_DISK_BUS)
+            )
+            if (
+                disk_edits
+                and pagetype is not HW_LIST_TYPE_DISK
+                and not any(
+                    e in self._active_edits
+                    for e in (EDIT_VCPUS, EDIT_CPU, EDIT_TOPOLOGY)
+                )
+            ):
+                pagetype = HW_LIST_TYPE_DISK
             if (
                 self._edited(EDIT_XML)
                 and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
@@ -6029,6 +6041,16 @@ class vmmDetails(vmmGObjectUI):
                 continue
 
             hw_list_model.remove(_iter)
+
+        still = False
+        for row in hw_list_model:
+            if row[HW_LIST_COL_KEY] == self._oldhwkey:
+                still = True
+                break
+        if not still:
+            cur = self._get_hw_row()
+            if cur is not None:
+                self._oldhwkey = cur[HW_LIST_COL_KEY]
 
     ################
     # UI listeners #
