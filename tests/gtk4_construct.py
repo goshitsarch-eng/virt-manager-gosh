@@ -1112,31 +1112,17 @@ def main():
         from virtManager.details.console import _CONSOLE_PAGE_CONNECT
 
         assert con._viewer_connect_clicked is False
-        active = None
-        for cand in conn.list_vms():
-            if cand.is_active():
-                active = cand
-                break
-        if active is not None:
-            orig_auto = active.get_console_autoconnect()
-            try:
-                active.set_console_autoconnect(False)
-                win_ac = vmmVMWindow.get_instance(None, active)
-                win_ac._console._viewer_connect_clicked = False
-                try:
-                    win_ac._console._close_viewer()
-                except Exception:
-                    pass
-                win_ac._console.vmwindow_refresh_vm_state()
-                page = win_ac._console.widget("console-pages").get_current_page()
-                assert page == _CONSOLE_PAGE_CONNECT, (
-                    "GTK 3 Autoconnect-off must show Connect page, page=%s" % page
-                )
-            finally:
-                try:
-                    active.set_console_autoconnect(orig_auto)
-                except Exception:
-                    pass
+        orig_auto = con.vm.get_console_autoconnect
+        con.vm.get_console_autoconnect = lambda: False
+        try:
+            con._close_viewer()
+            con._init_viewer(None, None)
+            page = con.widget("console-pages").get_current_page()
+            assert page == _CONSOLE_PAGE_CONNECT, (
+                "GTK 3 Autoconnect-off must show Connect page, page=%s" % page
+            )
+        finally:
+            con.vm.get_console_autoconnect = orig_auto
 
     def preferences_grabkeys_widgets():
         from virtManager.preferences import vmmPreferences
