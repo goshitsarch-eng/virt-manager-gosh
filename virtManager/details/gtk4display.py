@@ -566,10 +566,9 @@ class _GssapiSaslClient:
             if not self._backend.complete:
                 return token, False
             self._need_layer = True
-            if token:
-                return token, False
-            if not serverin:
-                return None, False
+            # Context just completed on this GSS token. The RFC 4752
+            # security-layer wrap arrives as the next server message.
+            return token or None, False
         return self._finish_layer(serverin)
 
     def _finish_layer(self, serverin):

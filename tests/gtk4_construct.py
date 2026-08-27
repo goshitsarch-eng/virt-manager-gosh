@@ -1112,7 +1112,7 @@ def main():
         name, token, cont = gss.start("GSSAPI")
         assert name == "GSSAPI" and token == b"gss-token-1" and cont
         token, done = gss.step(b"gss-token-2")
-        assert token == b"" and not done
+        assert not done
         token, done = gss.step(b"gss-layer")
         assert done and token.startswith(b"gss-wrap-")
         gss.dispose()
@@ -1697,25 +1697,26 @@ def main():
         assert disks, "test-clone-simple has no disks"
         disk = disks[0]
         orig_active = details.vm.is_active
+        orig_share = disk.shareable
         details._vmm_last_disk_kwargs = {"shareable": False}
         details._vmm_last_disk_target = getattr(disk, "target", None)
         disk.shareable = True
-        details.vm.is_active = lambda: True
         try:
+            details.vm.is_active = lambda: True
             details._refresh_disk_page(disk)
             assert details._addstorage.widget("disk-shareable").get_active(), (
                 "running guest must keep live Shareable until shutdown"
             )
-        finally:
-            details.vm.is_active = orig_active
-        details.vm.is_active = lambda: False
-        try:
+            details.vm.is_active = lambda: False
             details._refresh_disk_page(disk)
             assert not details._addstorage.widget("disk-shareable").get_active(), (
                 "shut-off guest must show the deferred shareable=False apply"
             )
         finally:
             details.vm.is_active = orig_active
+            disk.shareable = orig_share
+            details._vmm_last_disk_kwargs = None
+            details._vmm_last_disk_target = None
 
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
