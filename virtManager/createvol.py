@@ -12,6 +12,7 @@ from gi.repository import Gtk
 from virtinst import log
 from virtinst import StorageVolume, StoragePool
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -385,6 +386,7 @@ class vmmCreateVolume(vmmGObjectUI):
         self.widget("vol-nonsparse").set_active(not self._should_default_sparse())
         self._show_backing()
         self.widget("vol-name").emit("changed")
+        gtkcompat.shrink_window(self.topwin)
 
     def _vol_name_changed_cb(self, src):
         text = src.get_text()

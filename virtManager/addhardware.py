@@ -472,6 +472,12 @@ class vmmAddHardware(vmmGObjectUI):
         for page in range(self.widget("create-pages").get_n_pages()):
             widget = self.widget("create-pages").get_nth_page(page)
             widget.hide()
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("create-pages"), 0, self.topwin
+        )
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("top-pages"), 0, self.topwin
+        )
 
         self._set_hw_selection(0)
         try:
@@ -1122,6 +1128,9 @@ class vmmAddHardware(vmmGObjectUI):
 
     def _set_error_page(self, msg=None):
         self.widget("top-pages").set_current_page(1)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("top-pages"), 1, self.topwin
+        )
         text = msg or "Hardware selection error."
         self.widget("error-label").set_text(text)
         try:
@@ -1184,6 +1193,9 @@ class vmmAddHardware(vmmGObjectUI):
             self.widget("create-pages"), page, self.topwin
         )
         self.widget("top-pages").set_current_page(0)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("top-pages"), 0, self.topwin
+        )
         try:
             page_names = {
                 PAGE_DISK: "storage-tab",

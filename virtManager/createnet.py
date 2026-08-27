@@ -17,6 +17,7 @@ from virtinst import generatename
 from virtinst import log
 from virtinst import Network
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -300,12 +301,14 @@ class vmmCreateNetwork(vmmGObjectUI):
         self.widget("net-ipv4-expander").set_visible(not is_hostdev)
         self.widget("net-ipv6-expander").set_visible(not is_hostdev)
         self.widget("net-dns-expander").set_visible(not is_hostdev)
+        gtkcompat.shrink_window(self.topwin)
 
     def _net_forward_device_changed_cb(self, src):
         manual = uiutil.get_list_selection(self.widget("net-forward-device"))
         if not src.is_visible():
             manual = False
         uiutil.set_grid_row_visible(self.widget("net-forward-manual"), manual)
+        gtkcompat.shrink_window(self.topwin)
 
     def _net_dns_use_toggled_cb(self, src):
         custom = self.widget("net-dns-use-custom").get_active()

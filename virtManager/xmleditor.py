@@ -279,6 +279,9 @@ class vmmXMLEditor(vmmGObjectUI):
         # Setting _curpage first will shortcircuit our page changed callback
         self._curpage = pagenum
         self.widget("xml-notebook").set_current_page(pagenum)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("xml-notebook"), pagenum, self.topwin
+        )
 
     def _reset_xml(self):
         self.set_xml("")
@@ -326,7 +329,11 @@ class vmmXMLEditor(vmmGObjectUI):
         their own reset_state
         """
         self._reset_xml()
-        return self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
+        ret = self.widget("xml-notebook").set_current_page(_PAGE_DETAILS)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("xml-notebook"), _PAGE_DETAILS, self.topwin
+        )
+        return ret
 
     def get_xml(self):
         """
@@ -495,6 +502,9 @@ class vmmXMLEditor(vmmGObjectUI):
 
     def _after_page_changed_cb(self, notebook, gparam):
         self._curpage = notebook.get_current_page()
+        gtkcompat.hide_inactive_notebook_pages(
+            notebook, self._curpage, self.topwin
+        )
         self._publish_xml_a11y()
 
     def _xmleditor_enabled_changed_cb(self):

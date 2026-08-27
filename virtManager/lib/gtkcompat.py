@@ -1097,6 +1097,17 @@ _GTK3_DEFAULT_BUTTONS = {
 }
 
 
+def shrink_window(window):
+    """GTK 3 dialogs called resize(1, 1) after hiding rows/pages."""
+    if window is None:
+        return False
+    try:
+        window.resize(1, 1)
+        return True
+    except Exception:
+        return False
+
+
 def hide_inactive_notebook_pages(notebook, current, window=None):
     """GTK 3 wizard shrink-wrap: only the active notebook page is visible."""
     if notebook is None:
@@ -1125,10 +1136,7 @@ def hide_inactive_notebook_pages(notebook, current, window=None):
         except Exception:
             pass
     if window is not None:
-        try:
-            window.resize(1, 1)
-        except Exception:
-            pass
+        shrink_window(window)
     return changed
 
 
@@ -7213,6 +7221,13 @@ def container_add(parent, child):
 
 
 def container_remove(parent, child):
+    if parent is None or child is None:
+        return
+    try:
+        if child.get_parent() is not parent:
+            return
+    except Exception:
+        return
     if hasattr(parent, "remove"):
         parent.remove(child)
     elif hasattr(parent, "set_child"):
@@ -9198,6 +9213,19 @@ def _patch_widget_methods():
         return orig_box_append(self, child)
 
     Gtk.Box.append = box_append
+    orig_box_remove = Gtk.Box.remove
+
+    def box_remove(self, child=None):
+        if child is None:
+            return None
+        try:
+            if child.get_parent() is not self:
+                return None
+        except Exception:
+            return None
+        return orig_box_remove(self, child)
+
+    Gtk.Box.remove = box_remove
 
     for clsname in (
         "ScrolledWindow",

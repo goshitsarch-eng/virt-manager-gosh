@@ -1975,7 +1975,9 @@ class vmmCreateVM(vmmGObjectUI):
         if oldconn:
             oldconn.disconnect_by_obj(self)
         if self._netlist:
-            self.widget("netdev-ui-align").remove(self._netlist.top_box)
+            gtkcompat.container_remove(
+                self.widget("netdev-ui-align"), self._netlist.top_box
+            )
             self._netlist.cleanup()
             self._netlist = None
             try:
@@ -2990,6 +2992,10 @@ class vmmCreateVM(vmmGObjectUI):
         if not has_install:
             self._os_list.search_entry.grab_focus()
         self.widget("install-method-pages").set_current_page(instpage)
+        if has_install:
+            gtkcompat.hide_inactive_notebook_pages(
+                self.widget("install-method-pages"), instpage, self.topwin
+            )
 
     def _current_create_page(self):
         want = getattr(self, "_vmm_goto_page", None)

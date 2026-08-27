@@ -12,6 +12,7 @@ from gi.repository import Gtk
 from virtinst import log
 from virtinst import StoragePool
 
+from .lib import gtkcompat
 from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
@@ -291,6 +292,7 @@ class vmmCreatePool(vmmGObjectUI):
             self.widget("pool-source-name").get_child().set_text(pool.default_source_name() or "")
 
         self._populate_pool_sources()
+        gtkcompat.shrink_window(self.topwin)
 
     ################
     # UI accessors #

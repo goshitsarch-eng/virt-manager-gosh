@@ -691,6 +691,21 @@ def main():
         # Finish page needs a populated guest; cover name/install/mem/storage
         for page in range(min(4, dlg.widget("create-pages").get_n_pages())):
             dlg._goto_create_page(page)
+        from virtManager.createvm import PAGE_INSTALL
+
+        dlg.widget("method-local").set_active(True)
+        dlg._method_changed(dlg.widget("method-local"))
+        dlg._set_install_page()
+        dlg._goto_create_page(PAGE_INSTALL)
+        inst = dlg.widget("install-method-pages")
+        cur = inst.get_current_page()
+        hidden = 0
+        for idx in range(inst.get_n_pages()):
+            page = inst.get_nth_page(idx)
+            if page is not None and not page.get_visible():
+                hidden += 1
+        assert hidden >= 1, "GTK 3 install-method subpages shrink-wrap"
+        assert inst.get_nth_page(cur).get_visible()
 
     def createpool_types():
         from virtManager.createpool import vmmCreatePool
@@ -1057,6 +1072,12 @@ def main():
 
         assert dlg.topwin._vmm_window_type_dialog
         assert dlg.topwin.get_icon_name() == "virt-manager"
+        box = Gtk.Box()
+        orphan = Gtk.Label(label="orphan")
+        other = Gtk.Box()
+        other.append(orphan)
+        box.remove(orphan)
+        assert orphan.get_parent() is other
         dlg.topwin.set_type_hint(Gdk.WindowTypeHint.DIALOG)
         dlg.topwin.set_skip_taskbar_hint(True)
         dlg.topwin.set_urgency_hint(True)
@@ -1172,7 +1193,18 @@ def main():
         dlg = vmmAddHardware(vm)
         editor = dlg._xmleditor
         editor.widget("xml-notebook").set_current_page(1)
+        editor._after_page_changed_cb(editor.widget("xml-notebook"), None)
+        nb = editor.widget("xml-notebook")
+        assert nb.get_nth_page(1).get_visible()
+        hidden = 0
+        for idx in range(nb.get_n_pages()):
+            page = nb.get_nth_page(idx)
+            if page is not None and not page.get_visible():
+                hidden += 1
+        assert hidden >= 1, "GTK 3 XML editor hid the inactive Details/XML tab"
         editor.widget("xml-notebook").set_current_page(0)
+        editor.reset_state()
+        assert editor.widget("xml-notebook").get_nth_page(0).get_visible()
 
     def console_pages():
         from virtManager.vmwindow import vmmVMWindow
