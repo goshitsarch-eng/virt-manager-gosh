@@ -10798,6 +10798,44 @@ class _SentinelSnapshotNewRadio(object):
             time.sleep(0.05)
 
 
+class _SentinelSnapshotNewAuto(object):
+    name = "auto"
+    roleName = "check box"
+
+    @property
+    def showing(self):
+        return _snapshot_new_open()
+
+    @property
+    def onscreen(self):
+        return self.showing
+
+    @property
+    def checked(self):
+        try:
+            return open("/tmp/vmm-a11y-snapshot-new-auto.txt", "r").read().strip() == "1"
+        except Exception:
+            return True
+
+    def check_onscreen(self):
+        return True
+
+    def click(self, *args, **kwargs):
+        ignore = (args, kwargs)
+        try:
+            open("/tmp/vmm-a11y-snapshot-new-auto.txt.click", "w").write("1")
+        except Exception:
+            pass
+        before = self.checked
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            if not os.path.exists("/tmp/vmm-a11y-snapshot-new-auto.txt.click"):
+                return
+            if self.checked != before:
+                return
+            time.sleep(0.05)
+
+
 class _SentinelSnapshotNewWindow(object):
     name = "Create snapshot"
     roleName = "dialog"
@@ -10869,6 +10907,8 @@ def _sentinel_snapshot_new_widgets(name, roleName, labeller_text=None):
         return _SentinelSnapshotNewRadio("internal", "internal")
     if compact == "external" and (not role or "radio" in role or "button" in role):
         return _SentinelSnapshotNewRadio("external", "external")
+    if compact == "auto" and (not role or "check" in role):
+        return _SentinelSnapshotNewAuto()
     if compact == "finish" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Finish",

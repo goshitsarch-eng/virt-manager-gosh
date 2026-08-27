@@ -40,6 +40,7 @@ _SNAP_NEW_SHOWN = "/tmp/vmm-a11y-snapshot-new-shown.txt"
 _SNAP_NEW_NAME = "/tmp/vmm-a11y-snapshot-new-name.txt"
 _SNAP_NEW_DESC = "/tmp/vmm-a11y-snapshot-new-desc.txt"
 _SNAP_NEW_MODE = "/tmp/vmm-a11y-snapshot-new-mode.txt"
+_SNAP_NEW_AUTO = "/tmp/vmm-a11y-snapshot-new-auto.txt"
 _SNAP_NEW_FINISH = "/tmp/vmm-a11y-snapshot-new-finish"
 _SNAP_NEW_CANCEL = "/tmp/vmm-a11y-snapshot-new-cancel"
 
@@ -129,6 +130,7 @@ class vmmSnapshotNew(vmmGObjectUI):
             _SNAP_NEW_NAME + ".set",
             _SNAP_NEW_DESC + ".set",
             _SNAP_NEW_MODE + ".set",
+            _SNAP_NEW_AUTO + ".click",
         ):
             try:
                 os.remove(path)
@@ -493,6 +495,10 @@ class vmmSnapshotNew(vmmGObjectUI):
                 self.widget("snapshot-new-mode-internal").set_active(False)
                 self.widget("snapshot-new-mode-external").set_active(True)
                 changed = True
+        if os.path.exists(_SNAP_NEW_AUTO + ".click"):
+            widget = self.widget("snapshot-new-memory-auto")
+            widget.set_active(not widget.get_active())
+            changed = True
         return changed
 
     def _publish_a11y_state(self):
@@ -513,6 +519,11 @@ class vmmSnapshotNew(vmmGObjectUI):
                 pass
         try:
             open(_SNAP_NEW_MODE, "w").write(self._get_mode() or "")
+        except Exception:
+            pass
+        try:
+            auto = self.widget("snapshot-new-memory-auto")
+            open(_SNAP_NEW_AUTO, "w").write("1" if auto.get_active() else "0")
         except Exception:
             pass
 
@@ -537,6 +548,7 @@ class vmmSnapshotNew(vmmGObjectUI):
                         _SNAP_NEW_NAME + ".set",
                         _SNAP_NEW_DESC + ".set",
                         _SNAP_NEW_MODE + ".set",
+                        _SNAP_NEW_AUTO + ".click",
                     ):
                         try:
                             os.remove(path)
