@@ -84,7 +84,10 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
             app.error_if_already_running()
             xmlfile = "%s/live/%s.xml" % (tests.utils.UITESTDATADIR, vmname)
             xml = open(xmlfile).read()
-            live_uri = os.environ.get("VMM_LIVETEST_URI") or uri
+            live_uri = uri
+            env_uri = os.environ.get("VMM_LIVETEST_URI")
+            if env_uri and uri.startswith("qemu"):
+                live_uri = env_uri
             if live_uri.startswith("qemu:///system") and not _qemu_system_ready():
                 live_uri = "qemu:///session"
             if live_uri.startswith("qemu:///session"):
