@@ -2443,9 +2443,9 @@ class vmmDetails(vmmGObjectUI):
             if host:
                 return tab, host
         for path in (
-            "/tmp/vmm-a11y-last-hw.txt",
             "/tmp/vmm-a11y-hw-clicked.txt",
             "/tmp/vmm-a11y-hw-selected.txt",
+            "/tmp/vmm-a11y-last-hw.txt",
         ):
             try:
                 hw = open(path, "r").read().strip()
