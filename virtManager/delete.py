@@ -188,18 +188,31 @@ class _vmmDeleteBase(vmmGObjectUI):
         return "Delete"
 
     def _associated_active(self):
+        chk = None
+        try:
+            chk = self.widget("delete-remove-storage")
+        except Exception:
+            chk = None
+        widget_val = False
+        try:
+            widget_val = bool(chk.get_active()) if chk is not None else False
+        except Exception:
+            widget_val = False
         try:
             val = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip().lower()
-            if val in ("0", "false", "off", "no"):
-                return False
-            if val in ("1", "true", "on", "yes"):
-                return True
         except Exception:
-            pass
-        try:
-            return bool(self.widget("delete-remove-storage").get_active())
-        except Exception:
-            return False
+            val = ""
+        if val in ("0", "false", "off", "no", "1", "true", "on", "yes"):
+            want = val in ("1", "true", "on", "yes")
+            # The sentinel is a command. Apply it before finish so a
+            # publish tick cannot clobber a just-clicked checkbox.
+            if chk is not None and widget_val != want:
+                try:
+                    chk.set_active(want)
+                except Exception:
+                    pass
+            return want
+        return widget_val
 
     def _dialog_visible(self):
         if self.vm is None:
@@ -223,7 +236,19 @@ class _vmmDeleteBase(vmmGObjectUI):
         try:
             chk = self.widget("delete-remove-storage")
             active = bool(chk.get_active())
-            open("/tmp/vmm-a11y-delete-associated.txt", "w").write("1" if active else "0")
+            try:
+                pending = open(
+                    "/tmp/vmm-a11y-delete-associated.txt", "r"
+                ).read().strip().lower()
+            except Exception:
+                pending = ""
+            if pending in ("0", "1") and (pending == "1") != active:
+                chk.set_active(pending == "1")
+                active = pending == "1"
+            else:
+                open("/tmp/vmm-a11y-delete-associated.txt", "w").write(
+                    "1" if active else "0"
+                )
             open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
             open("/tmp/vmm-a11y-delete-title.txt", "w").write(self._a11y_window_title())
             gtkcompat.sync_accessible_checked(chk)
