@@ -690,8 +690,7 @@ def main():
             _pump(GLib, 0.01)
         # Finish page needs a populated guest; cover name/install/mem/storage
         for page in range(min(4, dlg.widget("create-pages").get_n_pages())):
-            dlg.widget("create-pages").set_current_page(page)
-            dlg._page_changed(None, None, page)
+            dlg._goto_create_page(page)
 
     def createpool_types():
         from virtManager.createpool import vmmCreatePool
@@ -2933,13 +2932,11 @@ def main():
         dlg._method_changed(dlg.widget("method-manual"))
         dlg._set_install_page()
         for page in (PAGE_NAME, PAGE_INSTALL, PAGE_MEM, PAGE_STORAGE):
-            dlg.widget("create-pages").set_current_page(page)
-            dlg._page_changed(None, None, page)
+            dlg._goto_create_page(page)
             _pump(GLib, 0.02)
         dlg._back_clicked(None)
-        dlg.widget("create-pages").set_current_page(PAGE_FINISH)
         try:
-            dlg._page_changed(None, None, PAGE_FINISH)
+            dlg._goto_create_page(PAGE_FINISH)
         except Exception:
             pass
 

@@ -277,6 +277,14 @@ class vmmCreateVM(vmmGObjectUI):
         gtkcompat.expose_createvm_methods_window(self)
         gtkcompat.expose_oslist_activate_window(self._os_list)
         try:
+            gtkcompat.hide_inactive_notebook_pages(
+                self.widget("create-pages"),
+                self._current_create_page(),
+                self.topwin,
+            )
+        except Exception:
+            pass
+        try:
             open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
         except Exception:
             pass
@@ -1712,6 +1720,9 @@ class vmmCreateVM(vmmGObjectUI):
 
         # Final page
         self.widget("summary-customize").set_active(False)
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("create-pages"), PAGE_NAME, self.topwin
+        )
 
     def _set_caps_state(self):
         """
@@ -3325,11 +3336,13 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
 
-        # Publish Step N before hiding siblings. Synchronous hide after
-        # GetItems blocked Back's 2s pagenum check; idle keeps GTK 3
-        # shrink-wrap without stalling the switch.
+        # Publish Step N first, then hide siblings. Hiding before the
+        # pagenum file was written made Back miss the 2s check.
         self._set_page_num_text(pagenum)
         self._vmm_shrink_want = pagenum
+        gtkcompat.hide_inactive_notebook_pages(
+            self.widget("create-pages"), pagenum, self.topwin
+        )
 
         def _shrink():
             if getattr(self, "builder", None) is None:
