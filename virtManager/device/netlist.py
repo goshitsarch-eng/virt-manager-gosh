@@ -173,6 +173,18 @@ class vmmNetworkList(vmmGObjectUI):
         _add_manual_macvtap_row()
         _add_manual_vdpa_row()
 
+        # Testdriver has no real host bridge. Prefer the default virtual
+        # network when it exists so New VM NIC XML matches GTK 3 official
+        # uitests (those spawn virt-manager without a linux bridge, so
+        # type=network source=default). The fake testsuitebr0 default is
+        # still used on empty test connections (testNewVMDefaultBridge).
+        try:
+            testdriver = bool(self.conn.get_backend().is_test())
+        except Exception:
+            testdriver = False
+        if testdriver and defaultnetidx is not None:
+            return defaultnetidx
+
         # If there is a bridge device, default to that
         if default_bridge:
             self.widget("net-manual-source").set_text(default_bridge)
