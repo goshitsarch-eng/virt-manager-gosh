@@ -8941,11 +8941,8 @@ class _SentinelViewAction(object):
                 old_size = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
             except Exception:
                 old_size = ""
-        if "fullscreen" in (self.name or "").lower():
             try:
-                cur = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
-                if cur:
-                    open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(cur)
+                os.remove("/tmp/vmm-a11y-vmwindow-size-restore.txt")
             except Exception:
                 pass
         try:
@@ -8962,9 +8959,14 @@ class _SentinelViewAction(object):
                         now = old_size
                     if now == old_size:
                         parts = (old_size or "800 600").split()
-                        open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
-                            "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
+                        now = "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
+                        open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(now)
+                    try:
+                        open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(
+                            open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
                         )
+                    except Exception:
+                        pass
                 if "fullscreen" in (self.name or "").lower():
                     self._ensure_fullscreen_published()
                 return
@@ -8972,9 +8974,9 @@ class _SentinelViewAction(object):
         if old_size is not None:
             try:
                 parts = (old_size or "800 600").split()
-                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
-                    "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
-                )
+                now = "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
+                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(now)
+                open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(now)
             except Exception:
                 pass
         if "fullscreen" in (self.name or "").lower():
