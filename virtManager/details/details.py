@@ -4522,9 +4522,11 @@ class vmmDetails(vmmGObjectUI):
             if (
                 disk_edits
                 and pagetype is not HW_LIST_TYPE_DISK
+                and tab not in ("network-tab",)
+                and "NIC" not in (want or "")
                 and not any(
                     e in self._active_edits
-                    for e in (EDIT_VCPUS, EDIT_CPU, EDIT_TOPOLOGY)
+                    for e in (EDIT_VCPUS, EDIT_CPU, EDIT_TOPOLOGY, EDIT_NET_SOURCE)
                 )
             ):
                 pagetype = HW_LIST_TYPE_DISK
