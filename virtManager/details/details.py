@@ -3301,31 +3301,11 @@ class vmmDetails(vmmGObjectUI):
         if oldhwrow is None:
             oldhwrow = self._pending_disk_apply_row()
 
-        just_applied = getattr(self, "_vmm_apply_just_succeeded", False)
-        real_pending = False
+        self._vmm_unapplied_nav = True
         try:
-            real_pending = (
-                self._pending_media_path() is not None
-                or _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
-            )
-        except Exception:
-            real_pending = False
-        if just_applied and not real_pending:
-            # Refresh after a successful apply can re-arm Apply via
-            # combo/entry "changed". Auto-confirming that again
-            # (_config_apply → repopulate → changed) livelocks the
-            # hardware list in the same-process construct suite.
-            try:
-                self._disable_apply()
-            except Exception:
-                pass
-            failed = False
-        else:
-            self._vmm_unapplied_nav = True
-            try:
-                failed = self._has_unapplied_changes(oldhwrow)
-            finally:
-                self._vmm_unapplied_nav = False
+            failed = self._has_unapplied_changes(oldhwrow)
+        finally:
+            self._vmm_unapplied_nav = False
         if failed:
             # Unapplied changes, and syncing them failed
             pageidx = 0
