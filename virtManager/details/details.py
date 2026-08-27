@@ -2024,7 +2024,7 @@ class vmmDetails(vmmGObjectUI):
                                 skip = widget_off or pending_share or (
                                     live == "0" and apply_on
                                 )
-                            if not skip:
+                            if not skip and live != "1":
                                 open(
                                     "/tmp/vmm-a11y-disk-shareable.txt", "w"
                                 ).write("1")
@@ -3166,6 +3166,26 @@ class vmmDetails(vmmGObjectUI):
         if not newrow or newrow[HW_LIST_COL_KEY] == self._oldhwkey:
             return
 
+        # Sentinel Shareable/disk edits can land while GTK still
+        # shows the previous row (CPUs). Syncing GTK to that disk
+        # must not Don't-warn-abandon the uncheck.
+        try:
+            if _EDIT_SHARE in getattr(self._addstorage, "_active_edits", []):
+                dest = str(newrow[HW_LIST_COL_LABEL] or "")
+                dirty = getattr(self, "_vmm_dirty_hw", None)
+                if newrow[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK and (
+                    not dirty or dest == dirty or "Disk" in dest
+                ):
+                    self._oldhwkey = newrow[HW_LIST_COL_KEY]
+                    try:
+                        self._vmm_last_refreshed_hw = dest
+                        self._vmm_dirty_hw = dest
+                    except Exception:
+                        pass
+                    return
+        except Exception:
+            pass
+
         # GTK 4 may emit changed when ListStore cells are rewritten
         # in place during a VM start/stop hardware refresh.
         try:
@@ -4143,11 +4163,30 @@ class vmmDetails(vmmGObjectUI):
         if edittype != EDIT_XML:
             self._xmleditor.details_changed = True
         try:
-            dirty = getattr(self, "_vmm_last_refreshed_hw", None)
-            if not dirty:
+            dirty = None
+            row = None
+            if edittype in (EDIT_DISK, EDIT_DISK_PATH, EDIT_DISK_BUS):
                 arow = self._a11y_selected_hw_row()
-                if arow is not None:
-                    dirty = str(arow[HW_LIST_COL_LABEL] or "")
+                gtk_row = self._get_hw_row()
+                for cand in (arow, gtk_row):
+                    if (
+                        cand is not None
+                        and cand[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK
+                    ):
+                        row = cand
+                        break
+            if row is None:
+                row = self._a11y_selected_hw_row()
+            if row is not None:
+                dirty = str(row[HW_LIST_COL_LABEL] or "")
+                if row[HW_LIST_COL_TYPE] == HW_LIST_TYPE_DISK:
+                    try:
+                        self._oldhwkey = row[HW_LIST_COL_KEY]
+                    except Exception:
+                        pass
+                    self._vmm_last_refreshed_hw = dirty
+            if not dirty:
+                dirty = getattr(self, "_vmm_last_refreshed_hw", None)
             if dirty:
                 self._vmm_dirty_hw = dirty
         except Exception:
