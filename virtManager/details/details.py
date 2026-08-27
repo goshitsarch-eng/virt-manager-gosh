@@ -20,7 +20,12 @@ from ..lib import gtkcompat
 from ..lib import uiutil
 from ..addhardware import vmmAddHardware
 from ..baseclass import vmmGObjectUI
-from ..device.addstorage import vmmAddStorage
+from ..device.addstorage import (
+    _EDIT_REMOVABLE,
+    _EDIT_RO,
+    _EDIT_SHARE,
+    vmmAddStorage,
+)
 from ..device.gfxdetails import (
     _EDIT_GFX_LISTEN,
     _EDIT_GFX_OPENGL,
@@ -1453,6 +1458,16 @@ class vmmDetails(vmmGObjectUI):
                         w.set_active(not w.get_active())
                         pub = cpath.replace(".click", "")
                         open(pub, "w").write("1" if w.get_active() else "0")
+                        # GTK 4 set_active may not emit the builder
+                        # changed handler, so get_values() would omit
+                        # shareable/readonly on Apply.
+                        aedit = {
+                            "disk-shareable": _EDIT_SHARE,
+                            "disk-readonly": _EDIT_RO,
+                            "disk-removable": _EDIT_REMOVABLE,
+                        }.get(wid)
+                        if aedit is not None:
+                            self._addstorage._change_cb(aedit)
                         self._enable_apply(edit)
                     except Exception:
                         pass
@@ -4600,6 +4615,14 @@ class vmmDetails(vmmGObjectUI):
 
         if self._edited(EDIT_DISK):
             vals = self._addstorage.get_values()
+            try:
+                share_s = open(
+                    "/tmp/vmm-a11y-disk-shareable.txt", "r"
+                ).read().strip()
+            except Exception:
+                share_s = ""
+            if share_s in ("0", "1") and "shareable" not in vals:
+                vals["shareable"] = share_s == "1"
             kwargs.update(vals)
             typed = getattr(self._addstorage, "_a11y_cache_override", None) or ""
             try:
