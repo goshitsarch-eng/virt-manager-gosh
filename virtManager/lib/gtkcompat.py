@@ -4749,7 +4749,22 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         except Exception:
             selected_idx = -1
         try:
-            if selected and selected in names:
+            keep = None
+            try:
+                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                if cur != "":
+                    ci = int(cur)
+                    if 0 <= ci < len(names) and selected and names[ci] == selected:
+                        keep = ci
+            except Exception:
+                keep = None
+            if 0 <= selected_idx < len(names) and selected and names[selected_idx] == selected:
+                pass
+            elif keep is not None:
+                selected_idx = keep
+            elif selected and selected in names:
+                # Last resort only: first label match collapses duplicate
+                # NIC/Controller rows and breaks reverse keyboard walks.
                 selected_idx = names.index(selected)
             elif selected:
                 sel_first = selected.split()[0]
