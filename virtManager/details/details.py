@@ -3993,6 +3993,14 @@ class vmmDetails(vmmGObjectUI):
                 os.remove(path)
             except Exception:
                 pass
+        # Disable before refresh so set_dev can reset Shareable. Refreshing
+        # first kept _EDIT_SHARE + apply-sensitive and skipped the uncheck
+        # (testDetailsMiscEdits cancel).
+        try:
+            self._addstorage._active_edits = []
+        except Exception:
+            pass
+        self._disable_apply()
         # Prefer the hardware-list sentinel when GTK selection lagged
         # (Shareable cancel on IDE Disk 1 after a failed cache apply).
         row = None
@@ -4010,7 +4018,6 @@ class vmmDetails(vmmGObjectUI):
                 self._vmm_last_refreshed_hw = str(row[HW_LIST_COL_LABEL] or "")
             except Exception:
                 pass
-            self._disable_apply()
             return
         self._refresh_page()
 
