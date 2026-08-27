@@ -8607,16 +8607,18 @@ class _SentinelHWList(object):
         stable_since = None
         while time.time() < deadline:
             names = _hw_list_names()
-            if names and names == last:
+            # The first publish is the 6 built-in rows (Overview..Boot).
+            # Device rows are inserted afterwards; rebuild is debounced
+            # 150ms so that short list stays unchanged long enough to
+            # look stable. Require a device row before accepting.
+            if names and names == last and len(names) >= 8:
                 if stable_since is None:
                     stable_since = time.time()
-                elif (time.time() - stable_since) >= 0.45:
-                    # Model rebuild is debounced 150ms; do not snapshot
-                    # the first Overview-only publish.
+                elif (time.time() - stable_since) >= 0.25:
                     break
             else:
                 last = list(names)
-                stable_since = time.time() if names else None
+                stable_since = time.time() if names and len(names) >= 8 else None
             time.sleep(0.05)
         return [_SentinelTableCell(n, index=i) for i, n in enumerate(names)]
 
