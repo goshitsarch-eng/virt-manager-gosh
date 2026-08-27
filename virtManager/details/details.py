@@ -1983,17 +1983,47 @@ class vmmDetails(vmmGObjectUI):
                                 "/tmp/vmm-a11y-disk-shareable.txt.click"
                             )
                             if not skip:
+                                widget_off = False
+                                try:
+                                    widget_off = not bool(
+                                        self._addstorage.widget(
+                                            "disk-shareable"
+                                        ).get_active()
+                                    )
+                                except Exception:
+                                    widget_off = False
+                                pending_share = _EDIT_SHARE in getattr(
+                                    self._addstorage, "_active_edits", []
+                                )
+                                live = ""
+                                apply_on = False
                                 try:
                                     live = open(
-                                        "/tmp/vmm-a11y-disk-shareable.txt", "r"
-                                    ).read().strip()
-                                    apply_file = open(
-                                        "/tmp/vmm-a11y-config-apply-sensitive",
+                                        "/tmp/vmm-a11y-disk-shareable.txt",
                                         "r",
                                     ).read().strip()
-                                    skip = live == "0" and apply_file == "1"
                                 except Exception:
-                                    skip = False
+                                    live = ""
+                                try:
+                                    apply_on = bool(
+                                        self.widget("config-apply").get_sensitive()
+                                    )
+                                except Exception:
+                                    apply_on = False
+                                if not apply_on:
+                                    try:
+                                        apply_on = (
+                                            open(
+                                                "/tmp/vmm-a11y-config-apply-sensitive",
+                                                "r",
+                                            ).read().strip()
+                                            == "1"
+                                        )
+                                    except Exception:
+                                        apply_on = False
+                                skip = widget_off or pending_share or (
+                                    live == "0" and apply_on
+                                )
                             if not skip:
                                 open(
                                     "/tmp/vmm-a11y-disk-shareable.txt", "w"
@@ -3335,7 +3365,20 @@ class vmmDetails(vmmGObjectUI):
 
     def vmwindow_refresh_vm_state(self, is_current_page):
         if not is_current_page:
-            self._disable_apply()
+            keep_edits = False
+            try:
+                keep_edits = bool(self._active_edits) or bool(
+                    getattr(self._addstorage, "_active_edits", None)
+                )
+            except Exception:
+                keep_edits = False
+            if not keep_edits:
+                try:
+                    keep_edits = bool(self.widget("config-apply").get_sensitive())
+                except Exception:
+                    keep_edits = False
+            if not keep_edits:
+                self._disable_apply()
             return
 
         apply_on = False
@@ -3353,6 +3396,16 @@ class vmmDetails(vmmGObjectUI):
                 )
             except Exception:
                 apply_on = False
+        # GTK 3: "VM State change doesn't refresh UI". Apply can look
+        # idle after a11y/GTK 4 desync while _active_edits still holds
+        # the user's Shareable uncheck.
+        if not apply_on:
+            try:
+                apply_on = bool(self._active_edits) or bool(
+                    getattr(self._addstorage, "_active_edits", None)
+                )
+            except Exception:
+                pass
 
         self._refresh_vm_state()
         # GTK 4 ListStore cell updates can emit selection-changed and
@@ -5442,6 +5495,7 @@ class vmmDetails(vmmGObjectUI):
 
     def _refresh_page_body(self, row):
         pagetype = row[HW_LIST_COL_TYPE]
+        keep_share = _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
 
         self.widget("config-remove").set_sensitive(True)
         self.widget("config-remove").set_tooltip_text(
@@ -5520,7 +5574,12 @@ class vmmDetails(vmmGObjectUI):
             self.err.show_err(_("Error refreshing hardware page: %s") % str(e))
             # Don't return, we want the rest of the bits to run regardless
 
-        self._disable_apply()
+        if keep_share:
+            if _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", []):
+                self._addstorage._active_edits.append(_EDIT_SHARE)
+            self._enable_apply(EDIT_DISK)
+        else:
+            self._disable_apply()
         self._restore_boot_init_sentinels()
         try:
             self._restore_overview_sentinels()
@@ -5996,6 +6055,10 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         self._addstorage.set_dev(disk)
+        if pending_share:
+            if _EDIT_SHARE not in (self._addstorage._active_edits or []):
+                self._addstorage._active_edits.append(_EDIT_SHARE)
+            self._enable_apply(EDIT_DISK)
         # Testdriver inactive XML can lag the just-applied Guest
         # object. Keep Shareable visible until the user edits again.
         try:

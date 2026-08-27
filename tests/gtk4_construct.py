@@ -2212,6 +2212,7 @@ def main():
             details._vmm_last_disk_kwargs = None
             details._vmm_last_disk_target = None
 
+        from virtManager.details.details import EDIT_DISK
         from virtManager.device.addstorage import _EDIT_SHARE
 
         details._vmm_last_disk_kwargs = {"shareable": True}
@@ -2232,6 +2233,49 @@ def main():
             details._vmm_last_disk_kwargs = None
             details._vmm_last_disk_target = None
             details.widget("config-apply").set_sensitive(False)
+
+        # Official uitest reads the widget/sentinel, not this file. A
+        # missing apply-sensitive path must not restore shareable=True.
+        details._vmm_last_disk_kwargs = {"shareable": True}
+        details._vmm_last_disk_target = getattr(disk, "target", None)
+        details._addstorage.widget("disk-shareable").set_active(False)
+        details._addstorage._active_edits = [_EDIT_SHARE]
+        details._active_edits = [EDIT_DISK]
+        details.widget("config-apply").set_sensitive(False)
+        try:
+            os.remove("/tmp/vmm-a11y-config-apply-sensitive")
+        except Exception:
+            pass
+        try:
+            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+        except Exception:
+            pass
+        try:
+            details._addstorage.set_dev(disk)
+            assert not details._addstorage.widget("disk-shareable").get_active(), (
+                "set_dev must keep a pending Shareable uncheck without a11y files"
+            )
+            details._addstorage._active_edits = [_EDIT_SHARE]
+            details._refresh_disk_page(disk)
+            assert not details._addstorage.widget("disk-shareable").get_active(), (
+                "disk refresh must keep a pending Shareable uncheck"
+            )
+            assert details.widget("config-apply").get_sensitive(), (
+                "pending Shareable uncheck must keep Apply armed"
+            )
+            details.vmwindow_refresh_vm_state(True)
+            assert not details._addstorage.widget("disk-shareable").get_active(), (
+                "VM state change must not refresh an unapplied Shareable uncheck"
+            )
+            assert details.widget("config-apply").get_sensitive(), (
+                "VM state change must leave Apply armed for the pending uncheck"
+            )
+        finally:
+            details._vmm_last_disk_kwargs = None
+            details._vmm_last_disk_target = None
+            details.widget("config-apply").set_sensitive(False)
+            details._active_edits = []
+            details._addstorage._active_edits = []
 
     def details_apply_title():
         from virtManager.details.details import EDIT_TITLE
