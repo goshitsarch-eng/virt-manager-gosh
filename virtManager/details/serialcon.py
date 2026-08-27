@@ -388,14 +388,9 @@ class vmmSerialConsole(vmmGObject):
                     text = ""
                     if self._vteterminal is not None:
                         try:
-                            text, _attrs = self._vteterminal.get_text()
+                            text = self._vteterminal.get_text_format(Vte.Format.TEXT)
                         except Exception:
-                            try:
-                                text = self._vteterminal.get_text_range(
-                                    0, 0, -1, -1, None, None, None
-                                )[0]
-                            except Exception:
-                                text = ""
+                            text = ""
                     open("/tmp/vmm-a11y-serial-text.txt", "w").write(text or "")
                 except Exception:
                     pass

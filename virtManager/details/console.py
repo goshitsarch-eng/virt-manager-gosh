@@ -1181,10 +1181,11 @@ class vmmConsolePages(vmmGObjectUI):
         except Exception:
             pass
         if self._viewer:
+            # A viewer that is not open yet may be waiting for VNC/SPICE
+            # credentials. Do not tear it down on the next state refresh.
             if self._viewer.console_is_open():
                 self._activate_gfx_viewer_page()
-                return
-            self._close_viewer()
+            return
         if errmsg:
             log.debug("No acceptable graphics to connect to")
             self._activate_gfx_unavailable_page(errmsg)
