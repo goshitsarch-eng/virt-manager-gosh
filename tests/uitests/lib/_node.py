@@ -10705,7 +10705,11 @@ class _SentinelShutdownMenu(object):
     ):
         ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
         want = str(name or "").replace(".*", "")
-        if "save" in want.lower():
+        compact = want.lower().strip()
+        pretty = _VM_WINDOW_ACTION_LABELS.get(compact)
+        if pretty:
+            return _SentinelSnapshotToolbar(pretty, "menu item")
+        if "save" in compact:
             return _SentinelSnapshotToolbar("Save", "menu item")
         return _SentinelSnapshotMenuItem(want)
 
