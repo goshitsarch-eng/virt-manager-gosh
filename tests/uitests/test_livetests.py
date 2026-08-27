@@ -24,23 +24,28 @@ def _session_tcg_xml(xml):
     return xml
 
 
-def _qemu_system_ready(conn):
-    """qemu:///system list works here, but qemu-driver calls hang without udev."""
-    import signal
+def _qemu_system_ready():
+    """qemu:///system list works here, but qemu-driver calls hang.
 
-    def _timeout(_signum, _frame):
-        raise TimeoutError("qemu:///system getVersion")
+    Probe in a subprocess: SIGALRM does not interrupt libvirt's C getVersion.
+    """
+    import subprocess
+    import sys
 
-    old = signal.signal(signal.SIGALRM, _timeout)
-    signal.alarm(3)
     try:
-        conn.getVersion()
-        return True
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import libvirt; libvirt.open('qemu:///system').getVersion()",
+            ],
+            timeout=4,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return proc.returncode == 0
     except Exception:
         return False
-    finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old)
 
 
 def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
@@ -54,17 +59,11 @@ def _vm_wrapper(vmname, uri="qemu:///system", opts=None):
             xmlfile = "%s/live/%s.xml" % (tests.utils.UITESTDATADIR, vmname)
             xml = open(xmlfile).read()
             live_uri = os.environ.get("VMM_LIVETEST_URI") or uri
-            conn = libvirt.open(live_uri)
-            if live_uri.startswith("qemu:///system") and not _qemu_system_ready(conn):
-                try:
-                    conn.close()
-                except Exception:
-                    pass
+            if live_uri.startswith("qemu:///system") and not _qemu_system_ready():
                 live_uri = "qemu:///session"
+            if live_uri.startswith("qemu:///session"):
                 xml = _session_tcg_xml(xml)
-                conn = libvirt.open(live_uri)
-            elif live_uri.startswith("qemu:///session"):
-                xml = _session_tcg_xml(xml)
+            conn = libvirt.open(live_uri)
             dom = conn.defineXML(xml)
             try:
                 dom.create()
