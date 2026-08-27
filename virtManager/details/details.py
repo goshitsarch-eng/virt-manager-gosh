@@ -3100,9 +3100,19 @@ class vmmDetails(vmmGObjectUI):
         return uiutil.get_list_selected_row(self.widget("hw-list"))
 
     def _get_hw_row_for_device(self, dev):
-        for row in self.widget("hw-list").get_model():
+        if dev is None:
+            return None
+        model = self.widget("hw-list").get_model()
+        for row in model:
             if row[HW_LIST_COL_DEVICE] is dev:
                 return row
+        tgt = getattr(dev, "target", None)
+        if tgt:
+            for row in model:
+                other = row[HW_LIST_COL_DEVICE]
+                if other is not None and getattr(other, "target", None) == tgt:
+                    return row
+        return None
 
     def _get_hw_row_label_for_device(self, dev):
         row = self._get_hw_row_for_device(dev)
@@ -3188,6 +3198,13 @@ class vmmDetails(vmmGObjectUI):
             return False
 
         if not row:
+            # Don't-warn must abandon even when the source row object
+            # is a testdriver/xmlobj copy that is not in hw-list.
+            try:
+                if not self.config.get_confirm_unapplied():
+                    return False
+            except Exception:
+                pass
             # The previous hardware row is gone (device was removed).
             # A pending cache/shareable edit must still apply as disk,
             # not as the destination CPUs/Overview page
