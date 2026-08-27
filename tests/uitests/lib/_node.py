@@ -10687,6 +10687,11 @@ class _SentinelSnapshotPageRadio(object):
             open("/tmp/vmm-a11y-vm-page.txt", "w").write(self._page)
         except Exception:
             pass
+        if self._page == "snapshots":
+            try:
+                open("/tmp/vmm-a11y-snapshot-page.txt", "w").write("1")
+            except Exception:
+                pass
         if self._page == "console":
             try:
                 open("/tmp/vmm-a11y-console-reinit.txt", "w").write("1")
@@ -11093,6 +11098,25 @@ def _sentinel_snapshot_widgets(name, roleName, labeller_text=None, root_name="")
         " on " in (root_name or "")
     ):
         return _SentinelSnapshotToolbar("Pause", "toggle button")
+    snap_requested = False
+    try:
+        snap_requested = (
+            open("/tmp/vmm-a11y-vm-page.txt", "r").read().strip() == "snapshots"
+        )
+    except Exception:
+        snap_requested = False
+    if role and "cell" in role and (_snapshot_page_open() or snap_requested):
+        want = str(name or "").replace(".*", "")
+        if want and not any(
+            key in want
+            for key in ("Disk", "CDROM", "Floppy", "NIC", "Overview", "CPUs", "Memory")
+        ):
+            deadline = time.time() + 3.0
+            while time.time() < deadline:
+                for n in _snapshot_list_names():
+                    if n and (want == n or want in n or n in want):
+                        return _SentinelSnapshotCell(n)
+                time.sleep(0.05)
     if not _snapshot_page_open() and compact not in (
         "snapshot-list",
         "snapshot-error-label",
@@ -11103,10 +11127,6 @@ def _sentinel_snapshot_widgets(name, roleName, labeller_text=None, root_name="")
         "snapshot-apply",
         "snapshot-refresh",
     ):
-        if role and "cell" in role:
-            want = str(name or "").replace(".*", "")
-            if want and want in [n for n in _snapshot_list_names() if n]:
-                return _SentinelSnapshotCell(want)
         return None
     if compact == "snapshot-list" and (not role or "table" in role or "list" in role):
         return _SentinelSnapshotList()
@@ -11124,21 +11144,6 @@ def _sentinel_snapshot_widgets(name, roleName, labeller_text=None, root_name="")
         return _SentinelSnapshotButton("snapshot-apply", "apply")
     if compact == "snapshot-refresh":
         return _SentinelSnapshotButton("snapshot-refresh", "refresh")
-    if role and "cell" in role:
-        want = str(name or "").replace(".*", "")
-        if not want or any(
-            key in want
-            for key in ("Disk", "CDROM", "Floppy", "NIC", "Overview", "CPUs", "Memory")
-        ):
-            return None
-        deadline = time.time() + 3.0
-        while time.time() < deadline:
-            for n in _snapshot_list_names():
-                if n and (want == n or want in n or n in want):
-                    return _SentinelSnapshotCell(n)
-            if not _snapshot_page_open():
-                break
-            time.sleep(0.05)
     return None
 
 

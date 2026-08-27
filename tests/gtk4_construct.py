@@ -843,17 +843,16 @@ def main():
         from virtManager.details.snapshots import vmmSnapshotNew
         from virtManager.vmwindow import vmmVMWindow
 
-        snapvm = _named_vm("test-clone-simple")
-        for cand in conn.list_vms():
-            try:
-                if cand.list_snapshots():
-                    snapvm = cand
-                    break
-            except Exception:
-                continue
+        snapvm = _named_vm("test-snapshots")
         win = vmmVMWindow.get_instance(None, snapvm)
         win.show()
+        win.widget("details-pages").set_current_page(2)
+        win._refresh_current_page(2)
+        win._sync_toolbar_page_buttons(2)
         win._snapshots.vmwindow_refresh_vm_state()
+        _pump(GLib, 0.2)
+        names = open("/tmp/vmm-a11y-snapshot-list.txt", "r").read().splitlines()
+        assert "internal-root" in names, names
         dlg = vmmSnapshotNew(snapvm)
         dlg.show(None)
         dlg.widget("snapshot-new-name").set_text("gtk4-snap")

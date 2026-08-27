@@ -336,11 +336,24 @@ class vmmVMWindow(vmmGObjectUI):
                         btn.set_active(True)
                     except Exception:
                         pass
-                if want == "console":
+                # GTK 4 ToggleButton set_active can no-op when the
+                # toolbar group is catching up. Force the notebook page
+                # so Snapshots publishes internal-root (testSnapshotLifecycle).
+                pages = self.widget("details-pages")
+                if want == "snapshots":
+                    pages.set_current_page(DETAILS_PAGE_SNAPSHOTS)
+                    self._refresh_current_page(DETAILS_PAGE_SNAPSHOTS)
+                    self._sync_toolbar_page_buttons(DETAILS_PAGE_SNAPSHOTS)
+                elif want == "details":
+                    pages.set_current_page(DETAILS_PAGE_DETAILS)
+                    self._refresh_current_page(DETAILS_PAGE_DETAILS)
+                    self._sync_toolbar_page_buttons(DETAILS_PAGE_DETAILS)
+                elif want == "console":
                     try:
                         self.activate_default_console_page()
                     except Exception:
-                        pass
+                        pages.set_current_page(DETAILS_PAGE_CONSOLE)
+                    self._sync_toolbar_page_buttons(DETAILS_PAGE_CONSOLE)
                 return True
 
             def _publish_vm_toolbar():
@@ -1206,7 +1219,8 @@ class vmmVMWindow(vmmGObjectUI):
             self._details.vmwindow_resources_refreshed()
 
     def _refresh_current_page(self, newpage=None):
-        newpage = newpage or self.widget("details-pages").get_current_page()
+        if newpage is None:
+            newpage = self.widget("details-pages").get_current_page()
 
         is_details = newpage == DETAILS_PAGE_DETAILS
         self._details.vmwindow_refresh_vm_state(is_details)
