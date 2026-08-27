@@ -790,8 +790,9 @@ class vmmDetails(vmmGObjectUI):
                             hw = ""
                         if hw:
                             break
-                    if not any(token in hw for token in ("disk", "cdrom", "floppy")):
-                        # Wizard ISO leftovers must not dirty Overview Apply.
+                    if not any(token in hw for token in ("cdrom", "floppy")):
+                        # media-entry is removable media only. "IDE Disk 2"
+                        # contains "disk" but must not consume an ISO leftover.
                         os.remove(path)
                         return True
                     text = open(path, "r").read()
