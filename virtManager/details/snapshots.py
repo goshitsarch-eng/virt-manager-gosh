@@ -1128,12 +1128,7 @@ class vmmSnapshotPage(vmmGObjectUI):
                 except Exception:
                     resp = ""
                 if not resp:
-                    # Do not block the a11y poller in a nested GTK dialog.
-                    # Retry this select after the uitest writes Yes/No.
-                    try:
-                        open(_SNAP_SELECT, "w").write(name)
-                    except Exception:
-                        pass
+                    # Leave _SNAP_SELECT in place for the next poll.
                     return False
                 try:
                     os.remove("/tmp/vmm-a11y-alert-response.txt")
@@ -1233,91 +1228,86 @@ class vmmSnapshotPage(vmmGObjectUI):
             except Exception:
                 pass
 
+    def _a11y_consume_action(self):
+        if not os.path.exists(_SNAP_ACTION):
+            return
+        action = open(_SNAP_ACTION, "r").read().strip().lower()
+        os.remove(_SNAP_ACTION)
+        if action == "add":
+            self._on_add_clicked(None)
+        elif action == "start":
+            if not self._get_selected_snapshots() and self._a11y_want_select:
+                self._select_snapshot_by_name(self._a11y_want_select)
+            self._on_start_clicked(None)
+        elif action == "delete":
+            self._on_delete_clicked(None)
+        elif action == "apply":
+            self._on_apply_clicked(None)
+        elif action == "refresh":
+            self._on_refresh_clicked(None)
+        self._publish_a11y_state()
+
+    def _a11y_poll_once(self):
+        """Bound method so GLib cannot drop the timeout callback."""
+        try:
+            if self._apply_snapshot_desc():
+                try:
+                    os.remove(_SNAP_DESC + ".set")
+                except Exception:
+                    pass
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            self._a11y_consume_action()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_SELECT):
+                name = open(_SNAP_SELECT, "r").read().strip()
+                if self._select_snapshot_by_name(name, add=False):
+                    try:
+                        os.remove(_SNAP_SELECT)
+                    except Exception:
+                        pass
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_SELECT_ADD):
+                name = open(_SNAP_SELECT_ADD, "r").read().strip()
+                os.remove(_SNAP_SELECT_ADD)
+                self._select_snapshot_by_name(name, add=True)
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_NAV):
+                direction = open(_SNAP_NAV, "r").read().strip().lower()
+                os.remove(_SNAP_NAV)
+                self._nav_snapshot_list(direction)
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        try:
+            if os.path.exists(_SNAP_MENU_ACTION):
+                action = open(_SNAP_MENU_ACTION, "r").read().strip().lower()
+                os.remove(_SNAP_MENU_ACTION)
+                try:
+                    open(_SNAP_MENU, "w").write("0")
+                except Exception:
+                    pass
+                if action in ("start", "start snapshot"):
+                    self._on_start_clicked(None)
+                elif action in ("delete", "delete snapshot"):
+                    self._on_delete_clicked(None)
+                self._publish_a11y_state()
+        except Exception:
+            pass
+        return True
+
     def _start_a11y_poll(self):
-        if getattr(self, "_vmm_snapshot_poll", False):
+        if getattr(self, "_vmm_snapshot_poll_src", None):
             return
         self._vmm_snapshot_poll = True
-
-        def _consume_action():
-            if not os.path.exists(_SNAP_ACTION):
-                return
-            action = open(_SNAP_ACTION, "r").read().strip().lower()
-            os.remove(_SNAP_ACTION)
-            if action == "add":
-                self._on_add_clicked(None)
-            elif action == "start":
-                if not self._get_selected_snapshots() and self._a11y_want_select:
-                    self._select_snapshot_by_name(self._a11y_want_select)
-                self._on_start_clicked(None)
-            elif action == "delete":
-                self._on_delete_clicked(None)
-            elif action == "apply":
-                self._on_apply_clicked(None)
-            elif action == "refresh":
-                self._on_refresh_clicked(None)
-            self._publish_a11y_state()
-
-        def _fields_tick():
-            try:
-                if self._apply_snapshot_desc():
-                    try:
-                        os.remove(_SNAP_DESC + ".set")
-                    except Exception:
-                        pass
-                    self._publish_a11y_state()
-            except Exception:
-                pass
-            try:
-                _consume_action()
-            except Exception:
-                pass
-            return True
-
-        def _tick():
-            try:
-                if os.path.exists(_SNAP_SELECT):
-                    name = open(_SNAP_SELECT, "r").read().strip()
-                    os.remove(_SNAP_SELECT)
-                    self._select_snapshot_by_name(name, add=False)
-                    self._publish_a11y_state()
-            except Exception:
-                pass
-            try:
-                if os.path.exists(_SNAP_SELECT_ADD):
-                    name = open(_SNAP_SELECT_ADD, "r").read().strip()
-                    os.remove(_SNAP_SELECT_ADD)
-                    self._select_snapshot_by_name(name, add=True)
-                    self._publish_a11y_state()
-            except Exception:
-                pass
-            try:
-                if os.path.exists(_SNAP_NAV):
-                    direction = open(_SNAP_NAV, "r").read().strip().lower()
-                    os.remove(_SNAP_NAV)
-                    self._nav_snapshot_list(direction)
-                    self._publish_a11y_state()
-            except Exception:
-                pass
-            try:
-                if os.path.exists(_SNAP_MENU_ACTION):
-                    action = open(_SNAP_MENU_ACTION, "r").read().strip().lower()
-                    os.remove(_SNAP_MENU_ACTION)
-                    try:
-                        open(_SNAP_MENU, "w").write("0")
-                    except Exception:
-                        pass
-                    if action in ("start", "start snapshot"):
-                        self._on_start_clicked(None)
-                    elif action in ("delete", "delete snapshot"):
-                        self._on_delete_clicked(None)
-                    self._publish_a11y_state()
-            except Exception:
-                pass
-            return True
-
-        # Keep strong refs: PyGObject can drop unreferenced timeout
-        # callbacks, which left snapshot-add sitting in the action file.
-        self._vmm_snap_fields_tick = _fields_tick
-        self._vmm_snap_tick = _tick
-        GLib.timeout_add(50, self._vmm_snap_fields_tick)
-        GLib.timeout_add(50, self._vmm_snap_tick)
+        self._vmm_snapshot_poll_src = GLib.timeout_add(50, self._a11y_poll_once)
