@@ -2648,6 +2648,16 @@ class vmmCreateVM(vmmGObjectUI):
     def _method_changed(self, src, *_a):
         if getattr(self, "_vmm_setting_method", False):
             return
+        # Install-page AT-SPI/media clicks can activate a sibling radio
+        # (GTK 4 methods-window sidecars sit in the same "New VM" tree).
+        # Only adopt a live click while the method page is showing so a
+        # later Import notify cannot clobber Local after Forward.
+        try:
+            page = self.widget("create-pages").get_current_page()
+        except Exception:
+            page = PAGE_NAME
+        if page != PAGE_NAME:
+            return
         # Reset the page number, since the total page numbers depend
         # on the chosen install method
         self._set_page_num_text(0)
