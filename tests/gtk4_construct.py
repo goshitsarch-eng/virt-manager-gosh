@@ -2484,6 +2484,44 @@ def main():
         assert spice._try_gl_scanout() is False
         fake_scanout = type("_Scanout", (), {"fd": -1, "width": 0, "height": 0, "stride": 0, "format": 0})()
         assert gtk4display._cairo_from_gl_scanout(fake_scanout) is None
+        assert gtk4display._scanout_is_linear(fake_scanout)
+        tiled = type(
+            "_Scanout",
+            (),
+            {
+                "fd": 3,
+                "width": 16,
+                "height": 16,
+                "stride": 64,
+                "format": 0,
+                "modifier": 1,
+                "y0top": False,
+            },
+        )()
+        assert not gtk4display._scanout_is_linear(tiled)
+        assert gtk4display._scanout_modifier(tiled) == 1
+        assert gtk4display._scanout_y0_top(tiled) is False
+        tex, surface, flip = gtk4display._import_gl_scanout(tiled)
+        assert tex is None
+        assert surface is None
+        done = []
+
+        class _GlChan:
+            def get_gl_scanout(self):
+                return tiled
+
+            def gl_draw_done(self):
+                done.append("done")
+
+        spice._channel = _GlChan()
+        assert spice._try_gl_scanout() is False
+        assert done == ["done"], "gl_draw_done must run when tiled import fails"
+        spice._channel = None
+        gtk4display._notify_gl_draw_done(None)
+        disp._wayland_keyboard_grab()
+        disp._wayland_pointer_grab(hide_cursor=True, x11_ok=False)
+        disp._wayland_ungrab()
+        assert not disp._shortcuts_inhibited
         assert spice.get_pixbuf() is None
         spice.close()
         usb = gtk4display.UsbDeviceWidget.new(None)
@@ -3582,10 +3620,13 @@ def main():
         sni._status = "Active"
         sni._registered = False
         assert not sni.is_embedded()
+        assert sni._retry_register() is True
         sni._registered = True
+        assert sni._retry_register() is False
         assert sni.is_embedded()
         sni.hide()
         assert not sni.is_embedded()
+        assert vmmSystray.systray_disabled_message() is None
 
         icon = systraymod._SystrayStatusIcon()
         assert not icon.is_embedded()

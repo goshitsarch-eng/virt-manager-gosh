@@ -645,6 +645,10 @@ def _window_resize(window, width, height):
         from gi.repository import GLib
 
         window.set_size_request(width, height)
+        try:
+            window.queue_resize()
+        except Exception:
+            pass
 
         def _unpin(_w=window, _width=width, _height=height):
             try:
