@@ -1690,6 +1690,30 @@ class _DisplayBase(Gtk.DrawingArea):
         self._open = False
 
 
+class _PrimedSaslClient:
+    """A SASL client whose start() has already been proven to work.
+
+    _sasl_python_client walks the mechanism ranking and calls start() to
+    check each candidate is actually usable; this replays that result so
+    the caller's own start() call still behaves normally.
+    """
+
+    def __init__(self, client, started):
+        self._client = client
+        self._started = started
+
+    def start(self, _mechlist):
+        return self._started
+
+    def step(self, serverin):
+        return self._client.step(serverin)
+
+    def dispose(self):
+        dispose = getattr(self._client, "dispose", None)
+        if dispose is not None:
+            dispose()
+
+
 class VNCDisplay(_DisplayBase):
     """
     RFB/VNC client painted on a GTK 4 DrawingArea.
@@ -2275,12 +2299,20 @@ class VNCDisplay(_DisplayBase):
         return None
 
     def _sasl_choose_mech(self, mechlist):
+        """Pick a SASL mechanism, strongest first.
+
+        This preferred PLAIN, then DIGEST-MD5, and only then GSSAPI. But
+        _vnc_sasl runs on a socket that may never have been TLS-wrapped
+        (the RFB SASL security type, and the SASL branch of the Tight
+        handshake both reach it raw), and _sasl_plain_clientout emits
+        "\\0user\\0password" -- so preferring PLAIN handed the console
+        credentials to the wire. GSSAPI sends no password at all, and
+        DIGEST-MD5 at least does not send one in the clear.
+        """
         mechs = [m.strip() for m in str(mechlist or "").split(",") if m.strip()]
-        for cand in ("PLAIN", "DIGEST-MD5"):
+        for cand in ("GSSAPI", "DIGEST-MD5", "PLAIN"):
             if cand in mechs:
                 return cand
-        if "GSSAPI" in mechs:
-            return "GSSAPI"
         return None
 
     def _sasl_plain_clientout(self):
@@ -2307,8 +2339,16 @@ class VNCDisplay(_DisplayBase):
         return data, complete
 
     def _sasl_python_client(self, mechlist, cnonce=None):
-        chosen = self._sasl_choose_mech(mechlist)
-        if chosen == "PLAIN":
+        """Build a client for the strongest mechanism we can actually use.
+
+        _sasl_choose_mech now ranks GSSAPI first, but GSSAPI needs a
+        working Kerberos setup: if building that client fails there is no
+        Cyrus fallback left, so walk down the ranking rather than failing
+        the console outright.
+        """
+        offered = [m.strip() for m in str(mechlist or "").split(",") if m.strip()]
+
+        def _plain():
             class _Plain:
                 def start(self_inner, _mechs):
                     return "PLAIN", self._sasl_plain_clientout(), False
@@ -2317,10 +2357,33 @@ class VNCDisplay(_DisplayBase):
                     return None, True
 
             return _Plain()
-        if chosen == "DIGEST-MD5":
-            return _DigestMd5Client(self._username, self._password, self._host, cnonce=cnonce)
-        if chosen == "GSSAPI":
-            return _GssapiSaslClient(self._username, self._password, self._host)
+
+        builders = (
+            ("GSSAPI", lambda: _GssapiSaslClient(self._username, self._password, self._host)),
+            (
+                "DIGEST-MD5",
+                lambda: _DigestMd5Client(
+                    self._username, self._password, self._host, cnonce=cnonce
+                ),
+            ),
+            ("PLAIN", _plain),
+        )
+        for name, build in builders:
+            if name not in offered:
+                continue
+            try:
+                client = build()
+                if client is None:
+                    continue
+                # Prime it here: GSSAPI builds fine on a host with no
+                # Kerberos and only fails in start(), and by then
+                # _vnc_sasl has no fallback left. Whatever start()
+                # returns is replayed to the caller.
+                primed = client.start(mechlist)
+            except Exception as exc:
+                log.debug("SASL %s unusable: %s", name, exc)
+                continue
+            return _PrimedSaslClient(client, primed)
         return None
 
     def _vnc_sasl(self, sock, cnonce=None):

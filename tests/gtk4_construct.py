@@ -1887,7 +1887,11 @@ def main():
         assert disp._choose_vencrypt_subtype([258]) == 258
         assert disp._choose_vencrypt_subtype([263]) == 263
         assert disp._choose_vencrypt_subtype([264, 263]) == 264
-        assert disp._sasl_choose_mech("GSSAPI,PLAIN") == "PLAIN"
+        # Strongest mechanism the server offers. GSSAPI sends no password,
+        # DIGEST-MD5 does not send one in the clear, PLAIN sends both.
+        assert disp._sasl_choose_mech("GSSAPI,PLAIN") == "GSSAPI"
+        assert disp._sasl_choose_mech("PLAIN,DIGEST-MD5") == "DIGEST-MD5"
+        assert disp._sasl_choose_mech("PLAIN") == "PLAIN"
         assert disp._sasl_choose_mech("DIGEST-MD5") == "DIGEST-MD5"
         assert disp._sasl_choose_mech("GSSAPI") == "GSSAPI"
         disp._username = "alice"

@@ -96,6 +96,14 @@
 - virt-manager: Fix "Enable direct kernel boot" being impossible to turn
   off: unticking it marked the page edited, and Apply then re-ticked the
   box and wrote the greyed-out kernel paths straight back
+- virt-manager: SECURITY: the built-in SASL fallback preferred the PLAIN
+  mechanism, which sends the console username and password in the clear,
+  over DIGEST-MD5 and GSSAPI -- on a socket the RFB SASL and Tight paths
+  never TLS-wrap. Rank them strongest first, and fall through to the next
+  when one cannot start, so a host without Kerberos still connects
+- virt-manager: Do not fork xdotool to read a window's size or position.
+  Those run from a per-frame configure-event tick, so dragging a window
+  edge forked a process on the GTK main loop every frame
 - Point the appdata bug tracker at this tree rather than upstream's
 
 ## Release 5.1.0 (August 26, 2025)

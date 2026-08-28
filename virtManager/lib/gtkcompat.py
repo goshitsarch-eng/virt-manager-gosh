@@ -319,7 +319,13 @@ def _xdotool_geometry(xid):
 
 
 def _window_get_position(window):
-    xid = _window_xid(window)
+    # GTK 4 has no window-position API, so the exact answer needs xdotool.
+    # window_resized is wired to "configure-event", which this shim
+    # implements as a per-frame tick callback, so dragging a window edge
+    # would fork and exec a process on the GTK main loop every frame. Pay
+    # that only for a ui test, which compares exact frame geometry; a real
+    # session is happy with the position _window_move last set.
+    xid = _window_xid(window) if uitest.enabled() else None
     if xid:
         try:
             open(uitest.path("vmm-a11y-manager-xid.txt"), "w").write(hex(int(xid)))
@@ -337,7 +343,10 @@ def _window_get_position(window):
 
 
 def _window_get_size(window):
-    xid = _window_xid(window)
+    # Same per-frame concern as _window_get_position. GTK's own
+    # get_width()/get_height() below are exact for the content area, which
+    # is what the app stores and restores.
+    xid = _window_xid(window) if uitest.enabled() else None
     if xid:
         try:
             _x, _y, width, height = _xdotool_geometry(xid)
