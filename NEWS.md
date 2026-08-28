@@ -3,6 +3,12 @@
 ## Release 5.2.0 (unreleased)
 - virt-manager: Rewrite the graphical application on GTK 4 and libadwaita
   while keeping the existing feature set, windows, wizards, and actions
+- virt-manager: Grab the console on Wayland via shortcut inhibit and
+  capturing pointer motion (X11 still uses XGrabPointer/XGrabKeyboard)
+- virt-manager: Paint SPICE GL/virtio-gpu scanout through Gdk dmabuf
+  textures, including tiled modifiers, and always release gl_draw_done
+- virt-manager: Retry StatusNotifierItem registration so the tray works
+  when a Wayland watcher appears after startup
 
 ## Release 5.1.0 (August 26, 2025)
 - cli: Support --cpu maximum (Andrea Bolognani)

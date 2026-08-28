@@ -111,6 +111,10 @@ _X11_POINTER_EVENT_MASK = (
 _X11_BLANK_CURSOR = 0
 _X11_PTR_GRABBED = False
 _X11_KBD_GRABBED = False
+# drm_fourcc.h: linear and "unspecified" modifiers. Tiled buffers
+# (I915_FORMAT_MOD_Y_TILED, etc.) cannot be mmap()'d as cairo pixels.
+_DRM_FORMAT_MOD_LINEAR = 0
+_DRM_FORMAT_MOD_INVALID = 0x00FFFFFFFFFFFFFF
 
 
 class _XkbStateRec(ctypes.Structure):
@@ -1053,6 +1057,12 @@ except (ImportError, ValueError):  # pragma: no cover
     cairo = None
 
 try:
+    gi.require_version("Graphene", "1.0")
+    from gi.repository import Graphene
+except (ValueError, ImportError):  # pragma: no cover
+    Graphene = None
+
+try:
     gi.require_version("SpiceClientGLib", "2.0")
     from gi.repository import SpiceClientGLib
 except (ValueError, ImportError):  # pragma: no cover
@@ -1114,12 +1124,20 @@ class _DisplayBase(Gtk.DrawingArea):
         self.set_vexpand(True)
         self._fb = None
         self._fb_size = (0, 0)
+        self._texture = None
+        self._texture_flip = False
         self._open = False
         self._scaling = True
         self._keep_aspect = True
         self._pointer_grab = True
         self._grabbed_pointer = False
         self._grabbed_keyboard = False
+        self._shortcuts_inhibited = False
+        self._grab_blank_cursor = False
+        self._win_controllers = []
+        self._grab_native = None
+        self._rel_x = None
+        self._rel_y = None
         self._grab_keys = GrabSequence()
         self._led_num = False
         self._led_scroll = False
@@ -1257,9 +1275,101 @@ class _DisplayBase(Gtk.DrawingArea):
             pass
         return int(x), int(y)
 
+    def _set_shortcut_inhibit(self, enable):
+        """Wayland replacement for XGrabKeyboard host-shortcut blocking."""
+        surface = None
+        try:
+            native = self.get_native()
+            surface = native.get_surface() if native is not None else None
+        except Exception:
+            surface = None
+        if surface is None or not hasattr(surface, "inhibit_system_shortcuts"):
+            return
+        try:
+            if enable and not self._shortcuts_inhibited:
+                surface.inhibit_system_shortcuts(None)
+                self._shortcuts_inhibited = True
+            elif not enable and self._shortcuts_inhibited:
+                if hasattr(surface, "restore_system_shortcuts"):
+                    surface.restore_system_shortcuts()
+                self._shortcuts_inhibited = False
+        except Exception:
+            self._shortcuts_inhibited = False
+
+    def _attach_window_motion(self):
+        """Capture motion on the toplevel when XGrabPointer is unavailable."""
+        if self._win_controllers:
+            return
+        try:
+            native = self.get_native()
+        except Exception:
+            native = None
+        if native is None:
+            return
+        self._grab_native = native
+        motion = Gtk.EventControllerMotion()
+        try:
+            motion.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        except Exception:
+            pass
+        motion.connect("motion", self._on_window_motion)
+        native.add_controller(motion)
+        self._win_controllers.append(motion)
+
+    def _on_window_motion(self, _c, x, y):
+        native = self._grab_native
+        wx, wy = x, y
+        if native is not None:
+            try:
+                trans = native.translate_coordinates(self, float(x), float(y))
+                if trans is not None:
+                    wx, wy = trans
+            except Exception:
+                pass
+        self._on_motion(None, wx, wy)
+
+    def _detach_window_motion(self):
+        native = self._grab_native
+        for ctl in self._win_controllers:
+            try:
+                if native is not None:
+                    native.remove_controller(ctl)
+            except Exception:
+                pass
+        self._win_controllers = []
+        self._grab_native = None
+
+    def _wayland_pointer_grab(self, hide_cursor=False, x11_ok=False):
+        if hide_cursor:
+            try:
+                self.set_cursor(Gdk.Cursor.new_from_name("none"))
+                self._grab_blank_cursor = True
+            except Exception:
+                pass
+        if not x11_ok:
+            self._attach_window_motion()
+
+    def _wayland_keyboard_grab(self):
+        self._set_shortcut_inhibit(True)
+        try:
+            self.grab_focus()
+        except Exception:
+            pass
+
+    def _wayland_ungrab(self):
+        self._set_shortcut_inhibit(False)
+        self._detach_window_motion()
+        if self._grab_blank_cursor:
+            try:
+                self.set_cursor(None)
+            except Exception:
+                pass
+            self._grab_blank_cursor = False
+
     def _grab_pointer(self, hide_cursor=False):
         self._bind_toplevel_active()
-        _x11_grab_pointer(self, hide_cursor=hide_cursor)
+        x11_ok = _x11_grab_pointer(self, hide_cursor=hide_cursor)
+        self._wayland_pointer_grab(hide_cursor=hide_cursor, x11_ok=x11_ok)
         if self._grabbed_pointer:
             return
         self._grabbed_pointer = True
@@ -1269,6 +1379,7 @@ class _DisplayBase(Gtk.DrawingArea):
     def _grab_keyboard(self):
         self._bind_toplevel_active()
         _x11_grab_keyboard(self)
+        self._wayland_keyboard_grab()
         if self._grabbed_keyboard:
             return
         self._grabbed_keyboard = True
@@ -1280,6 +1391,7 @@ class _DisplayBase(Gtk.DrawingArea):
 
     def _ungrab_input(self):
         _x11_ungrab_input()
+        self._wayland_ungrab()
         self._rel_x = None
         self._rel_y = None
         if self._grabbed_pointer:
@@ -1292,7 +1404,7 @@ class _DisplayBase(Gtk.DrawingArea):
             self.emit("keyboard-grab", False)
 
     def _on_draw(self, _area, cr, width, height, _data=None):
-        if cairo is None or self._fb is None:
+        if cairo is None or (self._fb is None and self._texture is None):
             cr.set_source_rgb(0, 0, 0)
             cr.rectangle(0, 0, width, height)
             cr.fill()
@@ -1309,8 +1421,17 @@ class _DisplayBase(Gtk.DrawingArea):
         cr.save()
         cr.translate(dx, dy)
         cr.scale(dw / fw, dh / fh)
-        cr.set_source_surface(self._fb, 0, 0)
-        cr.paint()
+        if self._texture_flip:
+            cr.translate(0, fh)
+            cr.scale(1, -1)
+        if self._fb is not None:
+            cr.set_source_surface(self._fb, 0, 0)
+            cr.paint()
+        elif self._texture is not None:
+            pix = _pixbuf_from_texture(self._texture, fw, fh)
+            if pix is not None:
+                Gdk.cairo_set_source_pixbuf(cr, pix, 0, 0)
+                cr.paint()
         if self._cursor_surface is not None:
             fb_x, fb_y = self._scale_pointer(self._last_x, self._last_y)
             hx, hy = self._cursor_hot
@@ -1318,9 +1439,53 @@ class _DisplayBase(Gtk.DrawingArea):
             cr.paint()
         cr.restore()
 
+    def do_snapshot(self, snapshot, *args):
+        """Paint dmabuf textures on the GPU. Tiled modifiers cannot go
+        through cairo without a download that often fails."""
+        texture = self._texture
+        if (
+            texture is None
+            or Graphene is None
+            or self._cursor_surface is not None
+        ):
+            return Gtk.DrawingArea.do_snapshot(self, snapshot, *args)
+        width = max(self.get_width(), 1)
+        height = max(self.get_height(), 1)
+        black = Gdk.RGBA()
+        black.red = black.green = black.blue = 0
+        black.alpha = 1
+        snapshot.append_color(black, Graphene.Rect().init(0, 0, width, height))
+        dx, dy, dw, dh = self._fb_dest_rect(width, height)
+        if dw <= 0 or dh <= 0:
+            return
+        if self._texture_flip:
+            snapshot.save()
+            snapshot.translate(Graphene.Point().init(dx, dy + dh))
+            snapshot.scale(1, -1)
+            snapshot.append_texture(texture, Graphene.Rect().init(0, 0, dw, dh))
+            snapshot.restore()
+        else:
+            snapshot.append_texture(
+                texture, Graphene.Rect().init(dx, dy, dw, dh)
+            )
+
     def _set_framebuffer(self, surface, width, height):
         changed = self._fb_size != (width, height)
+        self._texture = None
+        self._texture_flip = False
         self._fb = surface
+        self._fb_size = (width, height)
+        if self._force_size and not self._scaling:
+            self.set_content_width(width)
+            self.set_content_height(height)
+        self.queue_draw()
+        if changed:
+            self.emit("vnc-desktop-resize", width, height)
+
+    def _set_texture(self, texture, width, height, flip=False):
+        changed = self._fb_size != (width, height)
+        self._texture = texture
+        self._texture_flip = bool(flip)
         self._fb_size = (width, height)
         if self._force_size and not self._scaling:
             self.set_content_width(width)
@@ -1453,6 +1618,13 @@ class _DisplayBase(Gtk.DrawingArea):
                 pass
         if GdkPixbuf is None:
             return None
+        w, h = self._fb_size
+        if self._texture is not None and w > 0 and h > 0:
+            pix = _pixbuf_from_texture(self._texture, w, h)
+            if pix is not None:
+                if self._texture_flip:
+                    pix = pix.flip(False)
+                return pix
         surface = self._fb
         w, h = self._fb_size
         if surface is None and cairo is not None:
@@ -3546,18 +3718,21 @@ class SpiceDisplay(_DisplayBase):
             return False
         if not scanout or not getattr(scanout, "width", 0):
             return False
-        surface = _cairo_from_gl_scanout(scanout)
-        if surface is None:
-            return False
-        self._set_framebuffer(surface, int(scanout.width), int(scanout.height))
-        try:
-            if hasattr(self._channel, "gl_draw_done"):
-                self._channel.gl_draw_done()
-            elif hasattr(SpiceClientGLib, "display_gl_draw_done"):
-                SpiceClientGLib.display_gl_draw_done(self._channel)
-        except Exception:
-            pass
-        return True
+        texture, surface, flip = _import_gl_scanout(scanout)
+        # spice-gtk requires gl_draw_done even when import fails, or
+        # virtio-gpu scanout stalls on the next frame.
+        _notify_gl_draw_done(self._channel)
+        width = int(getattr(scanout, "width", 0) or 0)
+        height = int(getattr(scanout, "height", 0) or 0)
+        if texture is not None:
+            self._set_texture(texture, width, height, flip=flip)
+            if surface is not None:
+                self._fb = surface
+            return True
+        if surface is not None:
+            self._set_framebuffer(surface, width, height)
+            return True
+        return False
 
     def _refresh_primary(self):
         if not self._channel or SpiceClientGLib is None:
@@ -4036,10 +4211,106 @@ class SpiceDisplay(_DisplayBase):
         self._main = None
 
 
-def _cairo_from_gl_scanout(scanout):
-    """Import a Spice GL dmabuf scanout into a cairo surface."""
-    if cairo is None or GdkPixbuf is None:
+def _scanout_modifier(scanout):
+    try:
+        return int(getattr(scanout, "modifier", 0) or 0)
+    except Exception:
+        return 0
+
+
+def _scanout_is_linear(scanout):
+    """True when the dmabuf can be mmap()'d as tightly packed pixels."""
+    mod = _scanout_modifier(scanout)
+    return mod in (0, _DRM_FORMAT_MOD_LINEAR, _DRM_FORMAT_MOD_INVALID)
+
+
+def _scanout_y0_top(scanout):
+    for name in ("y0top", "y0_top"):
+        if hasattr(scanout, name):
+            try:
+                return bool(getattr(scanout, name))
+            except Exception:
+                pass
+    return True
+
+
+def _notify_gl_draw_done(channel):
+    """Release the guest scanout. Must run after every gl-scanout frame."""
+    if channel is None:
+        return
+    try:
+        if hasattr(channel, "gl_draw_done"):
+            channel.gl_draw_done()
+            return
+        if SpiceClientGLib is not None and hasattr(
+            SpiceClientGLib, "display_gl_draw_done"
+        ):
+            SpiceClientGLib.display_gl_draw_done(channel)
+    except Exception:
+        pass
+
+
+def _pixbuf_from_texture(texture, width, height):
+    if texture is None or GdkPixbuf is None or width <= 0 or height <= 0:
         return None
+    try:
+        buf = bytearray(int(width) * int(height) * 4)
+        texture.download(buf, int(width) * 4)
+        gbytes = GLib.Bytes(bytes(buf))
+        return GdkPixbuf.Pixbuf.new_from_bytes(
+            gbytes,
+            GdkPixbuf.Colorspace.RGB,
+            True,
+            8,
+            int(width),
+            int(height),
+            int(width) * 4,
+        )
+    except Exception as exc:
+        log.debug("Failed to download GL texture: %s", exc)
+        return None
+
+
+def _cairo_from_texture(texture, width, height, flip=False):
+    if cairo is None or texture is None:
+        return None
+    try:
+        buf = bytearray(int(width) * int(height) * 4)
+        texture.download(buf, int(width) * 4)
+        surface = cairo.ImageSurface.create_for_data(
+            memoryview(buf),
+            cairo.FORMAT_ARGB32,
+            int(width),
+            int(height),
+            int(width) * 4,
+        )
+        if flip:
+            return _cairo_flip_y(surface)
+        return surface
+    except Exception as exc:
+        log.debug("Failed to convert GL texture to cairo: %s", exc)
+        return None
+
+
+def _cairo_flip_y(surface):
+    if cairo is None or surface is None:
+        return surface
+    try:
+        width = surface.get_width()
+        height = surface.get_height()
+        flipped = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+        cr = cairo.Context(flipped)
+        cr.translate(0, height)
+        cr.scale(1, -1)
+        cr.set_source_surface(surface, 0, 0)
+        cr.paint()
+        return flipped
+    except Exception:
+        return surface
+
+
+def _texture_from_gl_scanout(scanout):
+    """Import a Spice GL dmabuf, including tiled modifiers, via GDK."""
     try:
         fd = int(getattr(scanout, "fd", -1))
         width = int(getattr(scanout, "width", 0) or 0)
@@ -4048,7 +4319,9 @@ def _cairo_from_gl_scanout(scanout):
         fourcc = int(getattr(scanout, "format", 0) or 0)
     except Exception:
         return None
-    if fd < 0 or width <= 0 or height <= 0:
+    if fd < 0 or width <= 0 or height <= 0 or fourcc == 0:
+        return None
+    if not hasattr(Gdk, "DmabufTextureBuilder"):
         return None
     try:
         builder = Gdk.DmabufTextureBuilder.new()
@@ -4061,21 +4334,61 @@ def _cairo_from_gl_scanout(scanout):
         builder.set_n_planes(1)
         builder.set_fd(0, fd)
         builder.set_stride(0, stride)
-        modifier = int(getattr(scanout, "modifier", 0) or 0)
+        offset = int(getattr(scanout, "offset", 0) or 0)
+        if offset and hasattr(builder, "set_offset"):
+            builder.set_offset(0, offset)
+        modifier = _scanout_modifier(scanout)
         if hasattr(builder, "set_modifier"):
-            try:
-                builder.set_modifier(modifier)
-            except Exception:
-                pass
-        texture = builder.build()
-        buf = bytearray(width * height * 4)
-        texture.download(buf, width * 4)
-        return cairo.ImageSurface.create_for_data(
-            memoryview(buf), cairo.FORMAT_ARGB32, width, height, width * 4
-        )
+            builder.set_modifier(modifier)
+        return builder.build()
     except Exception as exc:
         log.debug("Failed to import spice GL scanout via GDK: %s", exc)
-        return _mmap_gl_scanout(fd, width, height, stride)
+        return None
+
+
+def _import_gl_scanout(scanout):
+    """Return (Gdk.Texture or None, cairo surface or None, flip_y)."""
+    if scanout is None:
+        return None, None, False
+    try:
+        width = int(getattr(scanout, "width", 0) or 0)
+        height = int(getattr(scanout, "height", 0) or 0)
+        stride = int(getattr(scanout, "stride", 0) or width * 4)
+        fd = int(getattr(scanout, "fd", -1))
+    except Exception:
+        return None, None, False
+    flip = not _scanout_y0_top(scanout)
+    texture = _texture_from_gl_scanout(scanout)
+    if texture is not None:
+        if Graphene is not None:
+            return texture, None, flip
+        surface = _cairo_from_texture(texture, width, height, flip)
+        return texture, surface, False
+    if not _scanout_is_linear(scanout):
+        log.debug(
+            "Skipping mmap of tiled spice GL scanout modifier=%s",
+            _scanout_modifier(scanout),
+        )
+        return None, None, False
+    surface = _mmap_gl_scanout(fd, width, height, stride)
+    if surface is not None and flip:
+        surface = _cairo_flip_y(surface)
+    return None, surface, False
+
+
+def _cairo_from_gl_scanout(scanout):
+    """Import a Spice GL dmabuf scanout into a cairo surface."""
+    texture, surface, flip = _import_gl_scanout(scanout)
+    if surface is not None:
+        return surface
+    if texture is None:
+        return None
+    try:
+        width = int(getattr(scanout, "width", 0) or 0)
+        height = int(getattr(scanout, "height", 0) or 0)
+    except Exception:
+        return None
+    return _cairo_from_texture(texture, width, height, flip)
 
 
 def _mmap_gl_scanout(fd, width, height, stride):

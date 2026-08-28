@@ -475,6 +475,8 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         self._registered = False
         self._items = {0: None}
         self._children = {0: []}
+        self._retry_id = 0
+        self._sni_name = "org.kde.StatusNotifierItem-%s-1" % os.getpid()
         self._window = Gtk.Window()
         self._window.set_title(_("Virtual Machine Manager"))
         self._window.set_default_size(1, 1)
@@ -500,7 +502,7 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
             )
             self._owner_id = Gio.bus_own_name_on_connection(
                 self._bus,
-                "org.kde.StatusNotifierItem-%s-1" % os.getpid(),
+                self._sni_name,
                 Gio.BusNameOwnerFlags.NONE,
                 self._on_name_acquired,
                 None,
@@ -535,33 +537,43 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
 
     def _on_name_acquired(self, connection, name):
         ignore = connection
-        try:
-            watcher = Gio.DBusProxy.new_sync(
-                self._bus,
-                0,
-                None,
-                "org.kde.StatusNotifierWatcher",
-                "/StatusNotifierWatcher",
-                "org.kde.StatusNotifierWatcher",
-                None,
-            )
-            watcher.RegisterStatusNotifierItem("(s)", name)
-            self._registered = True
-        except Exception:
+        self._sni_name = name
+        self._register_with_watcher(name)
+
+    def _register_with_watcher(self, name=None):
+        """Register with StatusNotifierWatcher. Retry when it appears later."""
+        name = name or self._sni_name
+        if not self._bus or not name or self._registered:
+            return self._registered
+        for busname in (
+            "org.kde.StatusNotifierWatcher",
+            "org.freedesktop.StatusNotifierWatcher",
+        ):
             try:
                 watcher = Gio.DBusProxy.new_sync(
                     self._bus,
                     0,
                     None,
-                    "org.freedesktop.StatusNotifierWatcher",
+                    busname,
                     "/StatusNotifierWatcher",
-                    "org.freedesktop.StatusNotifierWatcher",
+                    "org.kde.StatusNotifierWatcher",
                     None,
                 )
                 watcher.RegisterStatusNotifierItem("(s)", name)
                 self._registered = True
+                log.debug("Registered StatusNotifierItem with %s", busname)
+                return True
             except Exception:
-                log.debug("No StatusNotifierWatcher to register with")
+                continue
+        log.debug("No StatusNotifierWatcher to register with")
+        return False
+
+    def _retry_register(self):
+        if self._registered or self._status != "Active":
+            self._retry_id = 0
+            return False
+        self._register_with_watcher()
+        return not self._registered
 
     def _on_method(self, _conn, _sender, _path, _iface, method, params, invocation):
         ignore = params
@@ -759,10 +771,20 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
     def show(self):
         self._status = "Active"
         self._emit_status()
+        if not self._registered:
+            self._register_with_watcher()
+            if not self._registered and not self._retry_id:
+                self._retry_id = GLib.timeout_add_seconds(2, self._retry_register)
 
     def hide(self):
         self._status = "Passive"
         self._emit_status()
+        if self._retry_id:
+            try:
+                GLib.source_remove(self._retry_id)
+            except Exception:
+                pass
+            self._retry_id = 0
 
 
 class _SystrayWindow(_Systray):
@@ -1083,11 +1105,11 @@ class vmmSystray(vmmGObject):
 
     @staticmethod
     def systray_disabled_message():  # pragma: no cover
-        if "WAYLAND_DISPLAY" not in os.environ:
-            return
-        if _USING_APPINDICATOR:
-            return
-        return _("AppIndicator not installed or usable, system tray icon not available on Wayland")
+        # GTK 4 has no Gtk.StatusIcon. StatusNotifierItem is implemented
+        # here and retried until a watcher (GNOME extension, KDE, etc.)
+        # appears, with an X11 XEmbed/standalone fallback. Do not hard
+        # disable the preference on Wayland.
+        return None
 
     def __init__(self):
         vmmGObject.__init__(self)
@@ -1132,7 +1154,9 @@ class vmmSystray(vmmGObject):
                 self._systray = _SystrayWindow()
             elif _USING_APPINDICATOR:  # pragma: no cover
                 self._systray = _SystrayIndicator()
-            elif _has_appindicator_dbus():  # pragma: no cover
+            elif _has_appindicator_dbus() or "WAYLAND_DISPLAY" in os.environ:
+                # Wayland has no XEmbed tray. Register SNI even if the
+                # watcher is not up yet; show() retries registration.
                 self._systray = _SystrayStatusNotifier()
             else:  # pragma: no cover
                 self._systray = _SystrayStatusIcon()
