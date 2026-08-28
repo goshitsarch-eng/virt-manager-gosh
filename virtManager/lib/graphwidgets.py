@@ -396,8 +396,11 @@ class Sparkline(Gtk.DrawingArea):
         self.reversed = False
         self.rgb = []
 
-        ctxt = self.get_style_context()
-        ctxt.add_class("entry")
+        self.add_css_class("entry")
+        # GTK 3 gave this a size request and let the container stretch it.
+        # do_size_request is not a GTK 4 vfunc, so ask for the height here.
+        self.set_vexpand(True)
+        self.set_content_height(80)
         self.set_draw_func(self._draw_func)
 
     def set_data_array(self, val):
@@ -419,19 +422,31 @@ class Sparkline(Gtk.DrawingArea):
         pixels_per_point = float(w) / (float((points_per_set - 1) or 1))
 
         widget = self
-        ctx = widget.get_style_context()
 
-        # This draws the light gray backing rectangle
-        Gtk.render_background(ctx, cr, 0, 0, w - 1, h - 1)
+        # GTK 3 drew the backing rectangle, ticks and frame through the
+        # "entry" style class. In GTK 4 that class paints nothing on a
+        # GtkDrawingArea node, which left the graph as three bare tick
+        # lines on the window background, so draw them directly -- from
+        # theme colours, so this still follows light/dark.
+        border = _theme_border_rgba(widget)
 
-        # This draws the marker ticks
+        red, green, blue = _theme_base_rgb(widget)
+        cr.set_source_rgb(red, green, blue)
+        cr.rectangle(0, 0, w - 1, h - 1)
+        cr.fill()
+
+        cr.set_line_width(1)
+        cr.set_source_rgba(border[0], border[1], border[2], border[3] * 0.5)
         max_ticks = 4
         for index in range(1, max_ticks):
-            Gtk.render_line(ctx, cr, 1, (h // max_ticks) * index, w - 2, (h // max_ticks) * index)
+            tick_y = (h // max_ticks) * index + 0.5
+            cr.move_to(1, tick_y)
+            cr.line_to(w - 2, tick_y)
+            cr.stroke()
 
-        # Foreground-color graphics context
-        # This draws the black border
-        Gtk.render_frame(ctx, cr, 0, 0, w - 1, h - 1)
+        cr.set_source_rgba(*border)
+        cr.rectangle(0.5, 0.5, w - 2, h - 2)
+        cr.stroke()
 
         # Draw the actual sparkline
         def get_y(dataset, index):
@@ -453,7 +468,9 @@ class Sparkline(Gtk.DrawingArea):
                 cr.set_source_rgb(
                     self.rgb[(dataset * 3)],
                     self.rgb[(dataset * 3) + 1],
-                    self.rgb[(dataset * 1) + 2],
+                    # Was (dataset * 1) + 2, so the second data set drew
+                    # its blue channel from the first set's.
+                    self.rgb[(dataset * 3) + 2],
                 )
             points = []
             for index in range(0, points_per_set):

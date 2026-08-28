@@ -21,19 +21,19 @@ CSSDATA = """
     color: alpha(@window_fg_color, 0.55);
 }
 
-/* Text on the blue header in our wizards */
-.vmm-header-text {
-    color: white;
-}
-
-/* Subtext on the blue header in our wizards */
-.vmm-header-subtext {
-    color: #59B0E2;
-}
-
-/* The blue header */
+/* The wizard header. GTK 3 hardcoded #0072A8 with white text, which
+   ignores both the Adwaita palette and the user's accent colour and
+   stays the same bright blue in dark mode. Follow the accent instead. */
 .vmm-header {
-    background-color: #0072A8;
+    background-color: @accent_bg_color;
+}
+
+.vmm-header-text {
+    color: @accent_fg_color;
+}
+
+.vmm-header-subtext {
+    color: alpha(@accent_fg_color, 0.75);
 }
 
 /* Parked menubar submenus stay in the AT-SPI tree but are not shown */

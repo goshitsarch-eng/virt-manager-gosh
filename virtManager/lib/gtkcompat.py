@@ -2558,6 +2558,9 @@ def _a11y_global_sidecar_box():
     Fallback always-mapped window. Keep it named with a leading '.' so
     uitests do not treat it as the app toplevel.
     """
+    if not _a11y_runtime_enabled():
+        # Do not conjure an extra toplevel for a normal session.
+        return _a11y_orphan_box()
     if _A11Y_SIDECAR["win"] is None:
         win = Gtk.Window()
         win.set_decorated(False)
@@ -2768,7 +2771,22 @@ def start_add_conn_poll():
     uitest.poll_add(50, _ADD_CONN_POLL["tick"])
 
 
+def _a11y_orphan_box():
+    """A box that is never parented into a window.
+
+    The expose_a11y_* helpers all append proxy widgets to "the sidecar
+    box". Outside a ui test there is nothing to expose them to, and a
+    mapped box would paint the proxies over the real UI, so hand every
+    builder this one instead of special-casing each of them.
+    """
+    if _A11Y_SIDECAR.get("orphan") is None:
+        _A11Y_SIDECAR["orphan"] = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    return _A11Y_SIDECAR["orphan"]
+
+
 def _a11y_sidecar_box(window=None):
+    if not _a11y_runtime_enabled():
+        return _a11y_orphan_box()
     if window is None:
         window = _A11Y_SIDECAR.get("last_window")
     if window is not None:
@@ -4185,6 +4203,8 @@ def expose_createvm_methods_window(createvm):
     often missing after GetItems cache errors; a new add_window()'d
     window stays findable. Clicking a button selects the real radio.
     """
+    if not _a11y_runtime_enabled():
+        return None
     win = getattr(createvm, "_vmm_methods_win", None)
     if win is not None:
         try:
@@ -4340,6 +4360,8 @@ def expose_conn_menu_window(manager):
     GetItems so later toplevels (New VM) disappear. The tree mirror
     is already mapped and walked by dogtail.
     """
+    if not _a11y_runtime_enabled():
+        return None
     if manager is None:
         return None
     items = _sync_conn_menu_sensitivity(manager)
@@ -4477,6 +4499,8 @@ def hide_conn_menu_window(manager):
 
 def expose_createconn_window(createconn):
     """Findable Add Connection dialog after GetItems cache errors."""
+    if not _a11y_runtime_enabled():
+        return None
     if createconn is None:
         return None
     win = getattr(createconn, "_vmm_createconn_win", None)
@@ -4700,6 +4724,8 @@ def _start_combo_select_poll(createconn):
 
 def expose_storagebrowse_window(browser):
     """Findable storage browser with pool/volume rows."""
+    if not _a11y_runtime_enabled():
+        return None
     if browser is None:
         return None
     if getattr(browser, "_vmm_browse_hidden", False):
@@ -5135,6 +5161,8 @@ def expose_oslist_a11y(oslist, window=None):
 
 def expose_oslist_activate_window(oslist):
     """Always-mapped window so Enter can confirm an OS after GetItems errors."""
+    if not _a11y_runtime_enabled():
+        return None
     if oslist is None:
         return None
     win = getattr(oslist, "_vmm_activate_win", None)
@@ -5924,6 +5952,8 @@ def present_a11y_alert(primary, buttons, secondary=""):
     invisible after GetItems cache errors; a new window is not.
     buttons: [(label, callback), ...]
     """
+    if not _a11y_runtime_enabled():
+        return None
     win = Gtk.Window()
     win.set_decorated(False)
     win.set_modal(False)
