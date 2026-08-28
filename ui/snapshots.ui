@@ -296,6 +296,7 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="snapshot-delete">
+                    <property name="css-classes">destructive-action</property>
                     <property name="halign">center</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>

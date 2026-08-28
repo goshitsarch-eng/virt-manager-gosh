@@ -230,6 +230,7 @@
                   </child>
                 <child>
                   <object class="GtkButton" id="snapshot-new-ok">
+                    <property name="css-classes">suggested-action</property>
                     <property name="label" translatable="1">_Finish</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>

@@ -474,6 +474,7 @@ like change passwords or static IPs, please see the virt-sysprep(1) tool.&lt;/sp
                   </child>
                 <child>
                   <object class="GtkButton" id="clone-ok">
+                    <property name="css-classes">suggested-action</property>
                     <property name="label" translatable="1">C_lone</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>

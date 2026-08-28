@@ -2882,14 +2882,29 @@ class VNCDisplay(_DisplayBase):
             self._pixels[dst : dst + w * 4] = rowbytes
 
     def _copy_rect(self, width, height, x, y, w, h, srcx, srcy):
-        src = bytearray(self._pixels)
-        for row in range(h):
+        """Move a rectangle within the framebuffer (RFB CopyRect).
+
+        This used to snapshot the entire framebuffer first -- an 8.3MB
+        allocation and copy at 1080p -- to avoid the source and
+        destination aliasing. They can only alias row-wise, and a slice
+        assignment materialises its right-hand side before writing, so a
+        row never aliases itself; only the row *order* matters when the
+        two rectangles overlap vertically.
+        """
+        ignore = height
+        if w <= 0 or h <= 0:
+            return
+        span = w * 4
+        pixels = self._pixels
+        rows = range(h - 1, -1, -1) if y > srcy else range(h)
+        for row in rows:
             s = ((srcy + row) * width + srcx) * 4
             d = ((y + row) * width + x) * 4
             if s < 0 or d < 0:
                 continue
-            self._pixels[d : d + w * 4] = src[s : s + w * 4]
-        ignore = height
+            if s + span > len(pixels) or d + span > len(pixels):
+                continue
+            pixels[d : d + span] = pixels[s : s + span]
 
     def _inflate_zhex(self, rawz):
         import zlib
@@ -3167,19 +3182,25 @@ class VNCDisplay(_DisplayBase):
                 elif 2 <= sub <= 16:
                     palette = [take(4) for _ in range(sub)]
                     bits = 1 if sub <= 2 else 2 if sub <= 4 else 4
+                    tile = bytearray(tw * th * 4)
                     for row in range(th):
                         packed = take((tw * bits + 7) // 8)
                         bitpos = 0
+                        base = row * tw * 4
                         for col in range(tw):
                             byte = packed[bitpos // 8]
                             shift = 8 - bits - (bitpos % 8)
                             idx = (byte >> shift) & ((1 << bits) - 1)
                             bitpos += bits
                             pix = palette[idx] if idx < len(palette) else palette[0]
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                            off = base + col * 4
+                            tile[off : off + 4] = pix
+                    self._blit_raw(width, tx, ty, tw, th, tile)
                 elif sub == 128:
+                    total = tw * th
+                    tile = bytearray(total * 4)
                     count = 0
-                    while count < tw * th:
+                    while count < total:
                         pix = take(4)
                         run = 1
                         while True:
@@ -3187,18 +3208,17 @@ class VNCDisplay(_DisplayBase):
                             run += b
                             if b != 255:
                                 break
-                        for _ in range(run):
-                            col = count % tw
-                            row = count // tw
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
-                            count += 1
-                            if count >= tw * th:
-                                break
+                        run = min(run, total - count)
+                        tile[count * 4 : (count + run) * 4] = pix * run
+                        count += run
+                    self._blit_raw(width, tx, ty, tw, th, tile)
                 elif 130 <= sub <= 255:
                     ncolors = sub - 128
                     palette = [take(4) for _ in range(ncolors)]
+                    total = tw * th
+                    tile = bytearray(total * 4)
                     count = 0
-                    while count < tw * th:
+                    while count < total:
                         idx = take(1)[0]
                         run = 1
                         if idx & 0x80:
@@ -3209,13 +3229,10 @@ class VNCDisplay(_DisplayBase):
                                 if b != 255:
                                     break
                         pix = palette[idx] if idx < len(palette) else palette[0]
-                        for _ in range(run):
-                            col = count % tw
-                            row = count // tw
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
-                            count += 1
-                            if count >= tw * th:
-                                break
+                        run = min(run, total - count)
+                        tile[count * 4 : (count + run) * 4] = pix * run
+                        count += run
+                    self._blit_raw(width, tx, ty, tw, th, tile)
 
     def _read_zrle(self, sock, width, x, y, w, h):
         import zlib

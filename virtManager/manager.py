@@ -626,8 +626,8 @@ class vmmManager(vmmGObjectUI):
         return vm
 
     def init_toolbar(self):
-        self.widget("vm-new").set_icon_name("vm_new")
-        self.widget("vm-open").set_icon_name("icon_console")
+        gtkcompat.set_button_icon(self.widget("vm-new"), "vm_new")
+        gtkcompat.set_button_icon(self.widget("vm-open"), "icon_console")
 
         self.widget("vm-shutdown").set_icon_name("system-shutdown")
         self.widget("vm-shutdown").set_menu(self.shutdownmenu)
@@ -1727,7 +1727,7 @@ class vmmManager(vmmGObjectUI):
         strip_text = text.replace("_", "")
 
         self.vmmenu.change_run_text(text)
-        self.widget("vm-run").set_label(strip_text)
+        gtkcompat.set_button_text(self.widget("vm-run"), strip_text)
 
     def update_current_selection(self, ignore=None):
         vm = self.current_vm()

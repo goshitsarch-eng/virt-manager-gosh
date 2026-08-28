@@ -436,6 +436,7 @@ If 'temporary' is selected, the migration is considered only a temporary move: t
                   </child>
                 <child>
                   <object class="GtkButton" id="migrate-finish">
+                    <property name="css-classes">suggested-action</property>
                     <property name="label" translatable="1">_Migrate</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>

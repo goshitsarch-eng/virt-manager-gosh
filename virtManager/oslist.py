@@ -8,6 +8,7 @@ import os
 from gi.repository import Gdk, GLib, Gtk
 
 import virtinst
+from virtinst import log
 from virtinst import xmlutil
 
 from .baseclass import vmmGObjectUI
@@ -590,6 +591,35 @@ class vmmOSList(vmmGObjectUI):
         self.select_os(pick)
         return True
 
+    def _queue_os_list_sync(self, vmosobj):
+        """Clear the search filter and highlight vmosobj's row, on idle."""
+        if getattr(self, "_vmm_oslist_sync_id", 0):
+            return
+
+        def _sync():
+            self._vmm_oslist_sync_id = 0
+            try:
+                if getattr(vmosobj, "eol", False):
+                    self._set_include_eol_quiet(True)
+                self._clear_filter()
+                os_list = self.widget("os-list")
+                model = os_list.get_model()
+                for row in model:
+                    osobj = row[0]
+                    if osobj is None or osobj.name != vmosobj.name:
+                        continue
+                    os_list.get_selection().select_iter(row.iter)
+                    try:
+                        os_list.scroll_to_cell(row.path, None, True, 0.5, 0)
+                    except Exception:  # pragma: no cover
+                        pass
+                    break
+            except Exception:  # pragma: no cover
+                log.debug("Could not sync the OS list selection", exc_info=True)
+            return False
+
+        self._vmm_oslist_sync_id = GLib.idle_add(_sync)
+
     def select_os(self, vmosobj):
         if vmosobj is not None:
             self._kept_os = vmosobj
@@ -604,8 +634,13 @@ class vmmOSList(vmmGObjectUI):
                 open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(vmosobj.label)
             except Exception:
                 pass
-        # Do not set_active/refilter here: walking the full OS model after
-        # GetItems blocks longer than the 2s Forward pagenum check.
+        # Walking the full OS model after AT-SPI GetItems can block the
+        # main loop longer than the New VM Forward check allows, so this
+        # is deferred rather than dropped -- dropping it left the list
+        # showing whatever the last search filtered it to, with the OS the
+        # user just picked nowhere in sight and nothing highlighted.
+        if vmosobj is not None:
+            self._queue_os_list_sync(vmosobj)
         if vmosobj is not None and getattr(vmosobj, "eol", False):
             self._set_include_eol_quiet(True)
         else:

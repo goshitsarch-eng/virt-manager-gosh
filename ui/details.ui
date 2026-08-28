@@ -3348,6 +3348,7 @@
             <property name="spacing">12</property>
             <child>
               <object class="GtkButton" id="config-remove">
+                <property name="css-classes">destructive-action</property>
                 <property name="label" translatable="1">_Remove</property>
                 <property name="focusable">1</property>
                 <property name="use-underline">1</property>

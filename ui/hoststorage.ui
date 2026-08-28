@@ -50,6 +50,7 @@
             </child>
             <child>
               <object class="GtkButton" id="pool-delete">
+                <property name="css-classes">destructive-action</property>
                 <property name="halign">center</property>
                 <property name="focusable">1</property>
                 <property name="tooltip-text" translatable="1">Delete Pool</property>
@@ -323,6 +324,7 @@
                                     </child>
                                     <child>
                                       <object class="GtkButton" id="vol-delete">
+                                        <property name="css-classes">destructive-action</property>
                                         <property name="halign">center</property>
                                         <property name="focusable">1</property>
                                         <property name="tooltip-text" translatable="1">Delete volume</property>

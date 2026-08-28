@@ -206,11 +206,15 @@
                 <property name="css-classes">toolbar</property>
                 <child>
                   <object class="GtkButton" id="vm-new">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">vm_new</property>
+                        <property name="label" translatable="1">New</property>
+                        <property name="use-underline">1</property>
+                      </object>
+                    </property>
                     <property name="has-tooltip">1</property>
                     <property name="tooltip-text" translatable="1">Create a new virtual machine</property>
-                    <property name="label" translatable="1">New</property>
-                    <property name="use-underline">1</property>
-                    <property name="icon-name">vm_new_wizard</property>
                     <signal name="clicked" handler="on_vm_new_clicked" swapped="no" />
                   </object>
                 </child>
@@ -221,31 +225,43 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="vm-open">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">icon_console</property>
+                        <property name="label" translatable="1">_Open</property>
+                        <property name="use-underline">1</property>
+                      </object>
+                    </property>
                     <property name="has-tooltip">1</property>
                     <property name="tooltip-text" translatable="1">Show the virtual machine console and details</property>
-                    <property name="label" translatable="1">_Open</property>
-                    <property name="use-underline">1</property>
-                    <property name="icon-name">icon_console</property>
                     <signal name="clicked" handler="on_vm_open_clicked" swapped="no" />
                   </object>
                 </child>
                 <child>
                   <object class="GtkButton" id="vm-run">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">media-playback-start</property>
+                        <property name="label" translatable="1">_Run</property>
+                        <property name="use-underline">1</property>
+                      </object>
+                    </property>
                     <property name="has-tooltip">1</property>
                     <property name="tooltip-text" translatable="1">Power on the virtual machine</property>
-                    <property name="label" translatable="1">_Run</property>
-                    <property name="use-underline">1</property>
-                    <property name="icon-name">media-playback-start</property>
                     <signal name="clicked" handler="on_vm_run_clicked" swapped="no" />
                   </object>
                 </child>
                 <child>
                   <object class="GtkToggleButton" id="vm-pause">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">media-playback-pause</property>
+                        <property name="label" translatable="1">_Pause</property>
+                        <property name="use-underline">1</property>
+                      </object>
+                    </property>
                     <property name="has-tooltip">1</property>
                     <property name="tooltip-text" translatable="1">Pause the virtual machine</property>
-                    <property name="label" translatable="1">_Pause</property>
-                    <property name="use-underline">1</property>
-                    <property name="icon-name">media-playback-pause</property>
                     <signal name="clicked" handler="on_vm_pause_clicked" swapped="no" />
                   </object>
                 </child>
