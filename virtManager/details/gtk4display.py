@@ -72,6 +72,11 @@ _VNC_ENC_QEMU_AUDIO = -259
 _VNC_ENC_LED_STATE = -261
 # TigerVNC / gtk-vnc Extended Clipboard (0xC0A1E5CE)
 _VNC_ENC_EXT_CLIPBOARD = struct.unpack("!i", b"\xc0\xa1\xe5\xce")[0]
+
+# Generous ceiling for a single read off the VNC socket: an 8K screen at
+# 32bpp is 132MB, so this allows any real framebuffer while still bounding
+# a server-supplied length.
+_VNC_MAX_READ = 256 * 1024 * 1024
 _CLIP_TEXT = 1 << 0
 _CLIP_CAPS = 1 << 24
 _CLIP_REQUEST = 1 << 25
@@ -458,6 +463,12 @@ _VNC_VENCRYPT_PLAIN_AUTH = (
     _VNC_VENCRYPT_PLAIN,
     _VNC_VENCRYPT_TLSPLAIN,
     _VNC_VENCRYPT_X509PLAIN,
+)
+_VNC_VENCRYPT_X509 = (
+    _VNC_VENCRYPT_X509NONE,
+    _VNC_VENCRYPT_X509VNC,
+    _VNC_VENCRYPT_X509PLAIN,
+    _VNC_VENCRYPT_X509SASL,
 )
 _VNC_VENCRYPT_VNC_AUTH = (_VNC_VENCRYPT_TLSVNC, _VNC_VENCRYPT_X509VNC)
 _VNC_VENCRYPT_SASL_AUTH = (_VNC_VENCRYPT_TLSSASL, _VNC_VENCRYPT_X509SASL)
@@ -2016,13 +2027,30 @@ class VNCDisplay(_DisplayBase):
         self._handshake(sock)
 
     def _recv_n(self, sock, n):
-        buf = b""
+        """Read exactly ``n`` bytes, refusing an implausible length.
+
+        Every ``n`` here comes off the wire: a rect's 16-bit width and
+        height multiply out to as much as 17TB, and the ServerInit name
+        length, the SASL lengths and the tunnel/auth counts are all raw
+        32-bit values. An unbounded read lets a hostile or simply broken
+        server exhaust this process's memory, so cap it well above any
+        real framebuffer (a 4K screen at 32bpp is 33MB) and treat
+        anything larger as a protocol error.
+
+        Accumulating into a bytearray rather than re-joining bytes also
+        keeps a full-screen update linear: a 33MB rect arriving in 64KB
+        chunks copied ~8GB the old way.
+        """
+        n = int(n)
+        if n < 0 or n > _VNC_MAX_READ:
+            raise ValueError("VNC server sent an implausible length: %d" % n)
+        buf = bytearray()
         while len(buf) < n:
             chunk = sock.recv(n - len(buf))
             if not chunk:
                 raise EOFError("VNC connection closed")
             buf += chunk
-        return buf
+        return bytes(buf)
 
     def _handshake(self, sock):
         self._sock = sock
@@ -2156,7 +2184,7 @@ class VNCDisplay(_DisplayBase):
         self._open = True
         GLib.idle_add(self.emit, "vnc-initialized")
         GLib.idle_add(self.emit, "vnc-desktop-resize", width, height)
-        self._request_update(sock, width, height)
+        self._request_update(sock, width, height, incremental=False)
         sock.settimeout(0.25)
         while not self._stop:
             try:
@@ -2170,7 +2198,7 @@ class VNCDisplay(_DisplayBase):
                     width, height = self._read_fb_update(sock, width, height)
                 except Exception as exc:
                     log.debug("VNC framebuffer update failed: %s", exc, exc_info=True)
-                    self._request_update(sock, width, height)
+                    self._request_update(sock, width, height, incremental=False)
                     continue
             elif msg[0] == 1:
                 self._recv_n(sock, 3)
@@ -2220,16 +2248,26 @@ class VNCDisplay(_DisplayBase):
         sock.sendall(_vnc_auth_response(challenge, self._password))
 
     def _choose_vencrypt_subtype(self, subtypes):
+        """Pick the strongest subtype the server offers.
+
+        This list was in the opposite order, with bare VeNCrypt "Plain"
+        first. Plain is the one subtype with no TLS at all: choosing it
+        sends the console username and password over the wire in the
+        clear, and a server that offers X509Plain almost always offers
+        Plain too, so the strong option was never taken. Order it
+        X509 (TLS with a server certificate) before TLS (anonymous DH,
+        still encrypted) before Plain (nothing).
+        """
         prefer = (
-            _VNC_VENCRYPT_PLAIN,
-            _VNC_VENCRYPT_TLSPLAIN,
-            _VNC_VENCRYPT_TLSVNC,
-            _VNC_VENCRYPT_TLSNONE,
-            _VNC_VENCRYPT_X509PLAIN,
+            _VNC_VENCRYPT_X509SASL,
             _VNC_VENCRYPT_X509VNC,
+            _VNC_VENCRYPT_X509PLAIN,
             _VNC_VENCRYPT_X509NONE,
             _VNC_VENCRYPT_TLSSASL,
-            _VNC_VENCRYPT_X509SASL,
+            _VNC_VENCRYPT_TLSVNC,
+            _VNC_VENCRYPT_TLSPLAIN,
+            _VNC_VENCRYPT_TLSNONE,
+            _VNC_VENCRYPT_PLAIN,
         )
         for cand in prefer:
             if cand in subtypes:
@@ -2338,6 +2376,10 @@ class VNCDisplay(_DisplayBase):
         import ssl
 
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        # Deliberate: virt-manager routinely reaches the console through an
+        # SSH tunnel, so the socket peer is 127.0.0.1 while the certificate
+        # names the real host. The certificate chain is still verified
+        # below; only the name match is skipped.
         ctx.check_hostname = False
         ca = self._tls_ca_file()
         cert = getattr(self, "_tls_client_cert", None) or os.environ.get("VNC_TLS_CERT")
@@ -2345,14 +2387,16 @@ class VNCDisplay(_DisplayBase):
         do_verify = bool(verify or ca)
         if do_verify:
             ctx.verify_mode = ssl.CERT_REQUIRED
-            try:
-                if ca:
-                    ctx.load_verify_locations(cafile=ca)
-                else:
-                    ctx.load_default_certs()
-            except Exception:
-                ctx.verify_mode = ssl.CERT_NONE
+            # Failing to load the trust store used to fall through to
+            # CERT_NONE, turning "could not verify" into "did not try".
+            # Let the error reach the user instead.
+            if ca:
+                ctx.load_verify_locations(cafile=ca)
+            else:
+                ctx.load_default_certs()
         else:
+            # The VeNCrypt TLS* subtypes are anonymous DH: there is no
+            # certificate to check, only encryption.
             ctx.verify_mode = ssl.CERT_NONE
         if cert:
             try:
@@ -2570,7 +2614,12 @@ class VNCDisplay(_DisplayBase):
         if suback == 0:
             raise RuntimeError("VeNCrypt subtype rejected")
         if chosen in _VNC_VENCRYPT_TLS:
-            sock = self._wrap_tls(sock, verify=bool(self._tls_ca_file()))
+            # X509* means the server presents a certificate, so verify it;
+            # the anonymous-DH TLS* subtypes have nothing to verify.
+            sock = self._wrap_tls(
+                sock,
+                verify=chosen in _VNC_VENCRYPT_X509 or bool(self._tls_ca_file()),
+            )
         if chosen in _VNC_VENCRYPT_PLAIN_AUTH:
             self._send_plain_creds(sock)
         elif chosen in _VNC_VENCRYPT_VNC_AUTH:
@@ -2739,8 +2788,23 @@ class VNCDisplay(_DisplayBase):
         self._pixels = bytearray(max(width, 1) * max(height, 1) * 4)
         self._fb_size = (width, height)
 
-    def _request_update(self, sock, width, height):
-        sock.sendall(struct.pack("!BBHHHH", 3, 0, 0, 0, width, height))
+    def _request_update(self, sock, width, height, incremental=True):
+        """Send a FramebufferUpdateRequest.
+
+        The incremental flag was hardcoded to 0, so after every update the
+        client immediately asked for the *whole* screen again. With Raw
+        advertised first (see SetEncodings) that is width * height * 4
+        bytes per frame for as long as the console is open -- 8.3MB a
+        frame on a 1080p guest, in a loop bounded only by link speed.
+        Only the first request after connecting, after an error, or after
+        a desktop resize needs the full screen; the rest want just the
+        rectangles that changed.
+        """
+        sock.sendall(
+            struct.pack(
+                "!BBHHHH", 3, 1 if incremental else 0, 0, 0, width, height
+            )
+        )
 
     def _blit_raw(self, width, x, y, w, h, raw):
         for row in range(h):
@@ -3202,6 +3266,7 @@ class VNCDisplay(_DisplayBase):
         GLib.idle_add(self._set_framebuffer, surface, width, height)
 
     def _read_fb_update(self, sock, width, height):
+        started_at = (width, height)
         self._recv_n(sock, 1)
         nrects = struct.unpack("!H", self._recv_n(sock, 2))[0]
         for _ in range(nrects):
@@ -3287,7 +3352,9 @@ class VNCDisplay(_DisplayBase):
                 log.debug("Ignoring unsupported VNC encoding %s", enc)
         self._publish_fb(width, height)
         try:
-            self._request_update(sock, width, height)
+            self._request_update(
+                sock, width, height, incremental=(width, height) == started_at
+            )
         except Exception:
             pass
         return width, height

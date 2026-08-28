@@ -1809,7 +1809,7 @@ class vmmManager(vmmGObjectUI):
         if event.button != 3:
             return False
 
-        tup = vmlist.get_path_at_pos(int(event.x), int(event.y))
+        tup = gtkcompat.treeview_path_at_event(vmlist, event)
         if tup is None:
             return False  # pragma: no cover
         path = tup[0]

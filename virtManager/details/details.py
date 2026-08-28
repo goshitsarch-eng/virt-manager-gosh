@@ -3050,7 +3050,7 @@ class vmmDetails(vmmGObjectUI):
             return
 
         # force select the list entry before showing popup_menu
-        path_tuple = widget.get_path_at_pos(int(event.x), int(event.y))
+        path_tuple = gtkcompat.treeview_path_at_event(widget, event)
         if path_tuple is None:
             return False  # pragma: no cover
         path = path_tuple[0]

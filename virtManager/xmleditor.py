@@ -453,6 +453,10 @@ class vmmXMLEditor(vmmGObjectUI):
             )
         except Exception:
             pass
+        # The domain XML carries <graphics passwd='...'> in the clear, along
+        # with every disk and chardev path. Publish it for the ui tests only.
+        if not uitest.enabled():
+            return
         try:
             xml = self.get_xml() or self._srcxml or ""
             if not (xml or "").strip():

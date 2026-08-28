@@ -128,6 +128,7 @@ virtManager/delete.py
 virtManager/details/console.py
 virtManager/details/details.py
 virtManager/details/__init__.py
+virtManager/details/gtk4display.py
 virtManager/details/serialcon.py
 virtManager/details/snapshots.py
 virtManager/details/sshtunnels.py
@@ -149,6 +150,7 @@ virtManager/__init__.py
 virtManager/lib/connectauth.py
 virtManager/lib/graphwidgets.py
 virtManager/lib/__init__.py
+virtManager/lib/gtkcompat.py
 virtManager/lib/inspection.py
 virtManager/lib/keyring.py
 virtManager/lib/libvirtenummap.py

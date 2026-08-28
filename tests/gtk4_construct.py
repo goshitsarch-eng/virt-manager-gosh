@@ -1879,10 +1879,14 @@ def main():
         disp._clip_from_guest = False
         disp._send_client_cut_text("naïve")
         assert any(st.unpack("!Bxxxi", chunk[:8])[1] < 0 for chunk in sent if len(chunk) >= 8)
-        assert disp._choose_vencrypt_subtype([258, 256]) == 256
+        # Strongest subtype offered wins. 256 is bare Plain (no TLS at
+        # all), 258 TLSVNC, 263 TLSSASL (anonymous DH), 264 X509SASL
+        # (TLS with a server certificate).
+        assert disp._choose_vencrypt_subtype([258, 256]) == 258
+        assert disp._choose_vencrypt_subtype([256]) == 256
         assert disp._choose_vencrypt_subtype([258]) == 258
         assert disp._choose_vencrypt_subtype([263]) == 263
-        assert disp._choose_vencrypt_subtype([264, 263]) == 263
+        assert disp._choose_vencrypt_subtype([264, 263]) == 264
         assert disp._sasl_choose_mech("GSSAPI,PLAIN") == "PLAIN"
         assert disp._sasl_choose_mech("DIGEST-MD5") == "DIGEST-MD5"
         assert disp._sasl_choose_mech("GSSAPI") == "GSSAPI"
@@ -3627,9 +3631,12 @@ def main():
         sni._status = "Active"
         sni._registered = False
         assert not sni.is_embedded()
-        assert sni._retry_register() is True
+        # Registration waits on a StatusNotifierWatcher bus-name watch now,
+        # rather than re-probing the bus every two seconds forever.
+        sni._watch_for_watcher()
+        sni._unwatch_for_watcher()
+        assert sni._watch_ids == []
         sni._registered = True
-        assert sni._retry_register() is False
         assert sni.is_embedded()
         sni.hide()
         assert not sni.is_embedded()

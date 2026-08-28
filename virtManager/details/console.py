@@ -1192,7 +1192,10 @@ class vmmConsolePages(vmmGObjectUI):
             open(uitest.path("vmm-a11y-console-auth.txt"), "w").write("1" if auth_on else "0")
             open(uitest.path("vmm-a11y-console-connect.txt"), "w").write("1" if connect_on else "0")
             open(uitest.path("vmm-a11y-console-serial.txt"), "w").write("1" if serial_on else "0")
-            if auth_on:
+            # The rest mirrors the credential entries for the ui tests. A
+            # normal session must not put a live console password on disk,
+            # so only do it when a ui test is actually driving the app.
+            if auth_on and uitest.enabled():
                 if not os.path.exists(uitest.path("vmm-a11y-console-auth-password.txt.set")):
                     open(uitest.path("vmm-a11y-console-auth-password.txt"), "w").write(
                         self.widget("console-auth-password").get_text() or ""

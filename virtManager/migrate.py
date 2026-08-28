@@ -434,7 +434,11 @@ class vmmMigrateDialog(vmmGObjectUI):
     # Listeners #
     #############
 
-    def _delete_event(self, ignore1, ignore2):
+    def _delete_event(self, ignore1=None, ignore2=None):
+        # GTK 4 close-request passes only the window, so the second
+        # argument must be optional or closing the dialog with the window
+        # manager raises TypeError -- and the window is then destroyed
+        # rather than hidden, leaving this reused dialog unusable.
         self.close()
         return 1
 

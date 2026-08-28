@@ -478,6 +478,7 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         self._items = {0: None}
         self._children = {0: []}
         self._retry_id = 0
+        self._watch_ids = []
         self._sni_name = "org.kde.StatusNotifierItem-%s-1" % os.getpid()
         self._window = Gtk.Window()
         self._window.set_title(_("Virtual Machine Manager"))
@@ -554,7 +555,9 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
             try:
                 watcher = Gio.DBusProxy.new_sync(
                     self._bus,
-                    0,
+                    # Do not ask the bus to activate a watcher that is
+                    # simply not running on this desktop.
+                    Gio.DBusProxyFlags.DO_NOT_AUTO_START,
                     None,
                     busname,
                     "/StatusNotifierWatcher",
@@ -563,6 +566,7 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
                 )
                 watcher.RegisterStatusNotifierItem("(s)", name)
                 self._registered = True
+                self._unwatch_for_watcher()
                 log.debug("Registered StatusNotifierItem with %s", busname)
                 return True
             except Exception:
@@ -570,12 +574,42 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         log.debug("No StatusNotifierWatcher to register with")
         return False
 
-    def _retry_register(self):
-        if self._registered or self._status != "Active":
-            self._retry_id = 0
-            return False
-        self._register_with_watcher()
-        return not self._registered
+    def _watch_for_watcher(self):
+        """Register as soon as a StatusNotifierWatcher appears on the bus.
+
+        This used to be a 2-second GLib timeout that never stopped: on a
+        desktop with no watcher at all -- stock GNOME without an
+        AppIndicator extension, the common case -- it made two
+        synchronous, auto-activating D-Bus round trips on the main loop
+        every two seconds for the lifetime of the process. Let the bus
+        tell us instead; watching an unowned name costs nothing.
+        """
+        if self._watch_ids or not self._bus:
+            return
+        for busname in (
+            "org.kde.StatusNotifierWatcher",
+            "org.freedesktop.StatusNotifierWatcher",
+        ):
+            try:
+                self._watch_ids.append(
+                    Gio.bus_watch_name_on_connection(
+                        self._bus,
+                        busname,
+                        Gio.BusNameWatcherFlags.NONE,
+                        lambda *_a: self._register_with_watcher(),
+                        None,
+                    )
+                )
+            except Exception:  # pragma: no cover
+                log.debug("Could not watch for %s", busname, exc_info=True)
+
+    def _unwatch_for_watcher(self):
+        for wid in self._watch_ids:
+            try:
+                Gio.bus_unwatch_name(wid)
+            except Exception:  # pragma: no cover
+                pass
+        self._watch_ids = []
 
     def _on_method(self, _conn, _sender, _path, _iface, method, params, invocation):
         ignore = params
@@ -775,12 +809,13 @@ class _SystrayStatusNotifier(_Systray):  # pragma: no cover
         self._emit_status()
         if not self._registered:
             self._register_with_watcher()
-            if not self._registered and not self._retry_id:
-                self._retry_id = GLib.timeout_add_seconds(2, self._retry_register)
+            if not self._registered:
+                self._watch_for_watcher()
 
     def hide(self):
         self._status = "Passive"
         self._emit_status()
+        self._unwatch_for_watcher()
         if self._retry_id:
             try:
                 GLib.source_remove(self._retry_id)

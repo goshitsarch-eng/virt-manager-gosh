@@ -932,7 +932,7 @@ class vmmSnapshotPage(vmmGObjectUI):
         if event.button != 3:
             return
         try:
-            tup = src.get_path_at_pos(int(event.x), int(event.y))
+            tup = gtkcompat.treeview_path_at_event(src, event)
         except Exception:
             tup = None
         if tup is not None:

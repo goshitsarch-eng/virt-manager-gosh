@@ -9,6 +9,7 @@ virtmanager_lib_sources = files(
   'module_trace.py',
   'statsmanager.py',
   'testmock.py',
+  'uitest.py',
   'uiutil.py',
 )
 

@@ -369,6 +369,14 @@ def _window_move(window, x, y):
     except Exception:
         pass
     _x11_move_window(xid, want[0], want[1])
+    if not uitest.enabled():
+        # The XMoveWindow/XResizeWindow call above is the whole feature.
+        # What follows is a convergence loop that shells out to xdotool up
+        # to eight times, sleeping on the GTK main thread between tries, to
+        # land the window on an exact pixel for the ui tests. Do not stall
+        # a real session for that -- and do not make xdotool a hidden
+        # runtime dependency.
+        return
     try:
         got = _xdotool_geometry(xid)
         if abs(got[0] - want[0]) <= 2 and abs(got[1] - want[1]) <= 2:
@@ -675,6 +683,14 @@ def _window_resize(window, width, height):
     if not xid:
         return
     _x11_resize_window(xid, width, height)
+    if not uitest.enabled():
+        # The XMoveWindow/XResizeWindow call above is the whole feature.
+        # What follows is a convergence loop that shells out to xdotool up
+        # to eight times, sleeping on the GTK main thread between tries, to
+        # land the window on an exact pixel for the ui tests. Do not stall
+        # a real session for that -- and do not make xdotool a hidden
+        # runtime dependency.
+        return
     try:
         import subprocess
         import time
@@ -1005,6 +1021,25 @@ def _apply_x11_window_hints(window):
     if applied:
         window._vmm_hints_applied = True
     return applied
+
+
+def treeview_path_at_event(treeview, event):
+    """Resolve a click event to the TreeView path actually under it.
+
+    Gtk.TreeView.get_path_at_pos() takes bin-window coordinates. Under
+    GTK 3 a button-press-event was delivered on the bin window, so the
+    event coordinates already were that; the Gtk.GestureClick this port
+    replaces it with reports coordinates relative to the whole widget,
+    header strip included. Feeding those straight in shifts the answer by
+    a row or two on any list with headers -- the manager's VM list, whose
+    context menu carries Delete, Force Off and Migrate.
+    """
+    x, y = int(event.x), int(event.y)
+    try:
+        x, y = treeview.convert_widget_to_bin_window_coords(x, y)
+    except Exception:  # pragma: no cover
+        pass
+    return treeview.get_path_at_pos(int(x), int(y))
 
 
 def wrap_in_toolbar_view(content, window=None, title=None):
@@ -9617,6 +9652,55 @@ def _patch_widget_methods():
 
         Gtk.FileChooser.get_filename = get_filename
 
+    # GTK 3 signals that GTK 4 dropped are re-implemented below with tick
+    # callbacks and event controllers. Those return ids from namespaces
+    # Gtk.Widget.disconnect() knows nothing about, so hand out ids of our
+    # own and teach disconnect() to undo them -- otherwise a caller that
+    # disconnects (vmwindow's one-shot initial-size handler, say) leaves a
+    # tick callback running at the display refresh rate for the life of
+    # the widget, and may disconnect an unrelated real handler by luck.
+    _shim_handles = {}
+    _shim_handle_seq = [1 << 30]
+
+    def _register_shim_handle(undo):
+        """Hand out an id that disconnect() can actually undo.
+
+        One GTK 3 signal can become several GTK 4 registrations -- the
+        configure-event shim below uses two notify:: handlers *and* a tick
+        callback -- so a handle owns the teardown for all of them.
+        Returning just one of the three left the rest live: the callback
+        kept firing and kept re-disconnecting an id already spent.
+        """
+        hid = _shim_handle_seq[0]
+        _shim_handle_seq[0] += 1
+        _shim_handles[hid] = undo
+        return hid
+
+    orig_disconnect = Gtk.Widget.disconnect
+
+    def disconnect(self, handler_id):
+        undo = _shim_handles.pop(handler_id, None)
+        if undo is None:
+            return orig_disconnect(self, handler_id)
+        try:
+            undo()
+        except Exception:  # pragma: no cover
+            pass
+        return None
+
+    Gtk.Widget.disconnect = disconnect
+
+    def _shim_handler_is_connected(self, handler_id):
+        if handler_id in _shim_handles:
+            return True
+        try:
+            return orig_handler_is_connected(self, handler_id)
+        except Exception:  # pragma: no cover
+            return False
+
+    orig_handler_is_connected = Gtk.Widget.handler_is_connected
+    Gtk.Widget.handler_is_connected = _shim_handler_is_connected
+
     orig_connect = Gtk.Widget.connect
 
     def connect(self, signal, callback, *args):
@@ -9632,7 +9716,10 @@ def _patch_widget_methods():
                     callback(w, w.get_allocation() if hasattr(w, "get_allocation") else None, *args)
                 return True
 
-            return self.add_tick_callback(_tick)
+            tick_id = self.add_tick_callback(_tick)
+            return _register_shim_handle(
+                lambda w=self, t=tick_id: w.remove_tick_callback(t)
+            )
         if signal == "configure-event":
             last = [None]
 
@@ -9649,9 +9736,19 @@ def _patch_widget_methods():
                     callback(w, None, *args)
                 return True
 
-            orig_connect(self, "notify::default-width", _on_notify)
-            orig_connect(self, "notify::default-height", _on_notify)
-            return self.add_tick_callback(_tick)
+            width_hid = orig_connect(self, "notify::default-width", _on_notify)
+            height_hid = orig_connect(self, "notify::default-height", _on_notify)
+            tick_id = self.add_tick_callback(_tick)
+
+            def _undo(w=self, a=width_hid, b=height_hid, t=tick_id):
+                for sid in (a, b):
+                    try:
+                        orig_disconnect(w, sid)
+                    except Exception:  # pragma: no cover
+                        pass
+                w.remove_tick_callback(t)
+
+            return _register_shim_handle(_undo)
         if signal == "button-press-event":
             gesture = Gtk.GestureClick()
             # virt-manager only uses this for GTK 3 context menus (button 3).
@@ -9665,7 +9762,9 @@ def _patch_widget_methods():
 
             gesture.connect("pressed", _pressed)
             self.add_controller(gesture)
-            return id(gesture)
+            return _register_shim_handle(
+                lambda w=self, c=gesture: w.remove_controller(c)
+            )
         if signal in ("key-press-event", "key-release-event"):
             controller = Gtk.EventControllerKey()
             sig = "key-pressed" if signal == "key-press-event" else "key-released"
@@ -9677,7 +9776,9 @@ def _patch_widget_methods():
 
             controller.connect(sig, _key)
             self.add_controller(controller)
-            return id(controller)
+            return _register_shim_handle(
+                lambda w=self, c=controller: w.remove_controller(c)
+            )
         if signal == "icon-press":
 
             def _icon(entry, icon_pos, *_rest):
@@ -9696,7 +9797,9 @@ def _patch_widget_methods():
 
             controller.connect(evname, _focus)
             self.add_controller(controller)
-            return id(controller)
+            return _register_shim_handle(
+                lambda w=self, c=controller: w.remove_controller(c)
+            )
         if signal in ("enter-notify-event", "leave-notify-event"):
             controller = Gtk.EventControllerMotion()
             evname = "enter" if signal == "enter-notify-event" else "leave"
@@ -9706,7 +9809,9 @@ def _patch_widget_methods():
 
             controller.connect(evname, _motion)
             self.add_controller(controller)
-            return id(controller)
+            return _register_shim_handle(
+                lambda w=self, c=controller: w.remove_controller(c)
+            )
         return orig_connect(self, signal, callback, *args)
 
     Gtk.Widget.connect = connect
