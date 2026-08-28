@@ -1,7 +1,19 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
+import tempfile
+
 import pytest
+
+# The dogtail process and the virt-manager process it spawns must agree
+# on where the sentinel files live, so pick the directory here, before
+# anything calls uitest.base_dir(), and let app.py pass it down.
+os.environ.setdefault(
+    "VMM_UITEST_DIR", tempfile.mkdtemp(prefix="virt-manager-uitest-")
+)
+
+from virtManager.lib import uitest
 
 
 @pytest.fixture(autouse=True)
@@ -15,11 +27,11 @@ def _patch_createvm_nav():
 
         ignore = (newvm, back)
         try:
-            oldtext = open("/tmp/vmm-a11y-pagenum.txt", "r").read().strip()
+            oldtext = open(uitest.path("vmm-a11y-pagenum.txt"), "r").read().strip()
         except Exception:
             oldtext = ""
         path = (
-            "/tmp/vmm-a11y-create-forward" if forward else "/tmp/vmm-a11y-create-back"
+            uitest.path("vmm-a11y-create-forward") if forward else uitest.path("vmm-a11y-create-back")
         )
         try:
             open(path, "w").write("Forward" if forward else "Back")
@@ -27,12 +39,12 @@ def _patch_createvm_nav():
             pass
         if forward:
             try:
-                media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                media = open(uitest.path("vmm-a11y-media-entry.txt"), "r").read().strip()
             except Exception:
                 media = ""
             if media.startswith("/dev/") and not os.path.exists(media):
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                         "Error setting installer parameters."
                     )
                 except Exception:
@@ -40,7 +52,7 @@ def _patch_createvm_nav():
         if check:
             def _changed():
                 try:
-                    return open("/tmp/vmm-a11y-pagenum.txt", "r").read().strip() != oldtext
+                    return open(uitest.path("vmm-a11y-pagenum.txt"), "r").read().strip() != oldtext
                 except Exception:
                     return False
 

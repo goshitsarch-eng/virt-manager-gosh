@@ -14,18 +14,26 @@ from gi.repository import Gtk
 
 from virtinst import log
 
-# GTK4 VTE is API 3.91
+# GTK 4 VTE is API 3.91. VTE 2.91 is the GTK 3 build: importing it into
+# this process fails outright (Gtk 4.0 is already loaded), and even if it
+# did import, a GTK 3 terminal cannot be packed into a GTK 4 window. So
+# treat "no VTE 3.91" as "no serial console" instead of letting the
+# ImportError escape and take the whole VM window down with it.
 try:
     gi.require_version("Vte", "3.91")
+    from gi.repository import Vte
+
     log.debug("Using VTE API 3.91")
-except ValueError:  # pragma: no cover
-    gi.require_version("Vte", "2.91")
-    log.debug("Using VTE API 2.91")
-from gi.repository import Vte
+    VTE_IMPORT_ERROR = None
+except (ValueError, ImportError) as _e:  # pragma: no cover
+    Vte = None
+    VTE_IMPORT_ERROR = str(_e)
+    log.debug("No GTK 4 VTE (API 3.91): %s", VTE_IMPORT_ERROR)
 
 import libvirt
 
 from ..baseclass import vmmGObject
+from ..lib import uitest
 
 
 class _DataStream(vmmGObject):
@@ -188,7 +196,9 @@ class vmmSerialConsole(vmmGObject):
 
         err = ""
 
-        if ctype not in usable_types:
+        if Vte is None:  # pragma: no cover
+            err = _("Serial console support is not installed (VTE 3.91)")
+        elif ctype not in usable_types:
             err = _("Console for device type '%s' is not supported") % ctype
 
         return err
@@ -373,9 +383,9 @@ class vmmSerialConsole(vmmGObject):
                 if self.vm is None:
                     return False
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-serial-type.txt"):
-                        text = open("/tmp/vmm-a11y-serial-type.txt", "r").read()
-                        os.remove("/tmp/vmm-a11y-serial-type.txt")
+                    if os.path.exists(uitest.path("vmm-a11y-serial-type.txt")):
+                        text = open(uitest.path("vmm-a11y-serial-type.txt"), "r").read()
+                        os.remove(uitest.path("vmm-a11y-serial-type.txt"))
                         if self._vteterminal is not None and text:
                             try:
                                 self._vteterminal.feed_child(text.encode("utf-8"))
@@ -393,19 +403,19 @@ class vmmSerialConsole(vmmGObject):
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-serial-popup-show"):
-                        os.remove("/tmp/vmm-a11y-serial-popup-show")
+                    if os.path.exists(uitest.path("vmm-a11y-serial-popup-show")):
+                        os.remove(uitest.path("vmm-a11y-serial-popup-show"))
                         class _Ev:
                             button = 3
                             x = 1
                             y = 1
 
                         self._show_serial_rcpopup(self._vteterminal, _Ev())
-                        open("/tmp/vmm-a11y-serial-popup.txt", "w").write("1")
+                        open(uitest.path("vmm-a11y-serial-popup.txt"), "w").write("1")
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-serial-popup-action.txt"
+                    path = uitest.path("vmm-a11y-serial-popup-action.txt")
                     if os.path.exists(path):
                         action = open(path, "r").read().strip().lower()
                         os.remove(path)
@@ -413,7 +423,7 @@ class vmmSerialConsole(vmmGObject):
                             self._serial_copy_text(None)
                         elif "paste" in action:
                             self._serial_paste_text(None)
-                        open("/tmp/vmm-a11y-serial-popup.txt", "w").write("0")
+                        open(uitest.path("vmm-a11y-serial-popup.txt"), "w").write("0")
                 except Exception:
                     pass
                 try:
@@ -423,12 +433,12 @@ class vmmSerialConsole(vmmGObject):
                             text = self._vteterminal.get_text_format(Vte.Format.TEXT)
                         except Exception:
                             text = ""
-                    open("/tmp/vmm-a11y-serial-text.txt", "w").write(text or "")
+                    open(uitest.path("vmm-a11y-serial-text.txt"), "w").write(text or "")
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(80, _poll_serial_a11y)
+            uitest.poll_add(80, _poll_serial_a11y)
 
     ###################
     # Private methods #
@@ -438,7 +448,7 @@ class vmmSerialConsole(vmmGObject):
         self._error_label.set_markup("<b>%s</b>" % msg)
         self._box.set_visible_child_name("error")
         try:
-            open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+            open(uitest.path("vmm-a11y-console-error.txt"), "w").write(msg)
         except Exception:
             pass
 
@@ -629,7 +639,7 @@ class vmmSerialConsole(vmmGObject):
                 except Exception:
                     pass
                 try:
-                    open("/tmp/vmm-a11y-clipboard.txt", "w").write(text)
+                    open(uitest.path("vmm-a11y-clipboard.txt"), "w").write(text)
                 except Exception:
                     pass
         except Exception:

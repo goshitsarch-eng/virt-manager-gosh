@@ -22,6 +22,7 @@ from .connmanager import vmmConnectionManager
 from .engine import vmmEngine
 from .object.domain import vmmDomain
 from .xmleditor import vmmXMLEditor
+from .lib import uitest
 
 
 NUM_COLS = 3
@@ -92,23 +93,23 @@ class vmmMigrateDialog(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-migrate-shown.txt"), "w").write("1")
             except Exception:
                 pass
             self._publish_a11y_state()
             return
         log.debug("Showing migrate wizard")
         try:
-            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-migrate-shown.txt"), "w").write("1")
         except Exception:
             pass
         for path in (
-            "/tmp/vmm-a11y-migrate-finish",
-            "/tmp/vmm-a11y-migrate-cancel",
-            "/tmp/vmm-a11y-migrate-advanced",
-            "/tmp/vmm-a11y-migrate-unsafe",
-            "/tmp/vmm-a11y-migrate-temporary",
-            "/tmp/vmm-a11y-window-close.txt",
+            uitest.path("vmm-a11y-migrate-finish"),
+            uitest.path("vmm-a11y-migrate-cancel"),
+            uitest.path("vmm-a11y-migrate-advanced"),
+            uitest.path("vmm-a11y-migrate-unsafe"),
+            uitest.path("vmm-a11y-migrate-temporary"),
+            uitest.path("vmm-a11y-window-close.txt"),
         ):
             try:
                 os.remove(path)
@@ -146,7 +147,7 @@ class vmmMigrateDialog(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-migrate-shown.txt"), "w").write("1")
         except Exception:
             pass
         self.topwin.present()
@@ -158,7 +159,7 @@ class vmmMigrateDialog(vmmGObjectUI):
         log.debug("Closing migrate wizard")
         self.topwin.hide()
         try:
-            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-migrate-shown.txt"), "w").write("0")
         except Exception:
             pass
         if getattr(self, "_vmm_window_counted", False):
@@ -184,26 +185,26 @@ class vmmMigrateDialog(vmmGObjectUI):
 
     def _publish_a11y_state(self):
         try:
-            open("/tmp/vmm-a11y-migrate-shown.txt", "w").write(
+            open(uitest.path("vmm-a11y-migrate-shown.txt"), "w").write(
                 "1" if self.topwin.get_visible() else "0"
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-migrate-address.txt", "w").write(
+            open(uitest.path("vmm-a11y-migrate-address.txt"), "w").write(
                 self.widget("migrate-address").get_text() or ""
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-migrate-address-check.txt", "w").write(
+            open(uitest.path("vmm-a11y-migrate-address-check.txt"), "w").write(
                 "1" if self.widget("migrate-set-address").get_active() else "0"
             )
         except Exception:
             pass
         try:
             visible = bool(self.widget("migrate-address-label").get_visible())
-            open("/tmp/vmm-a11y-migrate-libvirt-decide.txt", "w").write(
+            open(uitest.path("vmm-a11y-migrate-libvirt-decide.txt"), "w").write(
                 "1" if visible else "0"
             )
         except Exception:
@@ -215,13 +216,13 @@ class vmmMigrateDialog(vmmGObjectUI):
             if model is not None:
                 for row in model:
                     labels.append(str(row[COL_LABEL] or ""))
-            open("/tmp/vmm-a11y-migrate-dest.txt", "w").write("\n".join(labels))
+            open(uitest.path("vmm-a11y-migrate-dest.txt"), "w").write("\n".join(labels))
         except Exception:
             pass
         try:
             combo = self.widget("migrate-mode")
             row = uiutil.get_list_selected_row(combo) if combo is not None else None
-            open("/tmp/vmm-a11y-migrate-mode.txt", "w").write(
+            open(uitest.path("vmm-a11y-migrate-mode.txt"), "w").write(
                 str(row[0] if row else "")
             )
         except Exception:
@@ -234,13 +235,13 @@ class vmmMigrateDialog(vmmGObjectUI):
 
         def _tick():
             try:
-                if open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() != "1":
+                if open(uitest.path("vmm-a11y-migrate-shown.txt"), "r").read().strip() != "1":
                     # Still handle cancel/close so a leftover finish cannot fire.
                     pass
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-combo-select.txt"
+                path = uitest.path("vmm-a11y-combo-select.txt")
                 if os.path.exists(path):
                     text = open(path, "r").read().strip()
                     key = text.split("\t", 1)[0].strip()
@@ -271,7 +272,7 @@ class vmmMigrateDialog(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-migrate-address.txt"
+                path = uitest.path("vmm-a11y-migrate-address.txt")
                 if os.path.exists(path):
                     text = open(path, "r").read()
                     stamp = os.path.getmtime(path)
@@ -282,8 +283,8 @@ class vmmMigrateDialog(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-migrate-address-check-click"):
-                    os.remove("/tmp/vmm-a11y-migrate-address-check-click")
+                if os.path.exists(uitest.path("vmm-a11y-migrate-address-check-click")):
+                    os.remove(uitest.path("vmm-a11y-migrate-address-check-click"))
                     chk = self.widget("migrate-set-address")
                     chk.set_active(not chk.get_active())
                     self._set_address_toggled(chk)
@@ -291,54 +292,54 @@ class vmmMigrateDialog(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-migrate-advanced"):
-                    os.remove("/tmp/vmm-a11y-migrate-advanced")
+                if os.path.exists(uitest.path("vmm-a11y-migrate-advanced")):
+                    os.remove(uitest.path("vmm-a11y-migrate-advanced"))
                     exp = self.widget("migrate-advanced-expander")
                     exp.set_expanded(not exp.get_expanded())
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-migrate-unsafe"):
-                    os.remove("/tmp/vmm-a11y-migrate-unsafe")
+                if os.path.exists(uitest.path("vmm-a11y-migrate-unsafe")):
+                    os.remove(uitest.path("vmm-a11y-migrate-unsafe"))
                     chk = self.widget("migrate-unsafe")
                     chk.set_active(not chk.get_active())
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-migrate-temporary"):
-                    os.remove("/tmp/vmm-a11y-migrate-temporary")
+                if os.path.exists(uitest.path("vmm-a11y-migrate-temporary")):
+                    os.remove(uitest.path("vmm-a11y-migrate-temporary"))
                     chk = self.widget("migrate-temporary")
                     chk.set_active(not chk.get_active())
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-migrate-cancel"):
-                    os.remove("/tmp/vmm-a11y-migrate-cancel")
+                if os.path.exists(uitest.path("vmm-a11y-migrate-cancel")):
+                    os.remove(uitest.path("vmm-a11y-migrate-cancel"))
                     self.close()
                     return True
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-window-close.txt"
+                path = uitest.path("vmm-a11y-window-close.txt")
                 if os.path.exists(path):
                     want = open(path, "r").read().strip()
                     if want == "Migrate the virtual machine":
                         os.remove(path)
                         self.close()
-                        open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                        open(uitest.path("vmm-a11y-window-close-done"), "w").write("1")
                         return True
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-migrate-finish"):
-                    os.remove("/tmp/vmm-a11y-migrate-finish")
+                if os.path.exists(uitest.path("vmm-a11y-migrate-finish")):
+                    os.remove(uitest.path("vmm-a11y-migrate-finish"))
                     self._finish()
                     return True
             except Exception:
                 pass
             return True
 
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _tick)
 
     ################
     # Init helpers #

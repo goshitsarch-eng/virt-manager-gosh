@@ -32,6 +32,7 @@ from .object.domain import vmmDomainVirtinst
 from .oslist import vmmOSList
 from .storagebrowse import vmmStorageBrowser
 from .vmwindow import vmmVMWindow
+from .lib import uitest
 
 # Number of seconds to wait for media detection
 DETECT_TIMEOUT = 20
@@ -187,6 +188,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._cleanup_on_app_close()
 
         self.conn = None
+        self._install_conn = None
         self._capsinfo = None
 
         self._gdata = None
@@ -285,18 +287,18 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-newvm-shown.txt"), "w").write("1")
         except Exception:
             pass
         try:
-            GLib.timeout_add(200, self._retry_conn_if_none)
+            uitest.poll_add(200, self._retry_conn_if_none)
         except Exception:
             pass
         if not getattr(self, "_vmm_close_poll", False):
             self._vmm_close_poll = True
 
             def _close_tick():
-                path = "/tmp/vmm-a11y-window-close.txt"
+                path = uitest.path("vmm-a11y-window-close.txt")
                 try:
                     want = open(path, "r").read()
                 except Exception:
@@ -316,17 +318,17 @@ class vmmCreateVM(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("0")
+                    open(uitest.path("vmm-a11y-newvm-shown.txt"), "w").write("0")
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(50, _close_tick)
+            uitest.poll_add(50, _close_tick)
         if not getattr(self, "_vmm_os_select_poll", False):
             self._vmm_os_select_poll = True
 
             def _poll_os_select():
-                path = "/tmp/vmm-a11y-os-select.txt"
+                path = uitest.path("vmm-a11y-os-select.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -341,7 +343,7 @@ class vmmCreateVM(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_os_select)
+            uitest.poll_add(50, _poll_os_select)
 
         if not getattr(self, "_vmm_iso_browse_poll", False):
             self._vmm_iso_browse_poll = True
@@ -354,7 +356,7 @@ class vmmCreateVM(vmmGObjectUI):
                     "install-oscontainer-browse",
                     "storage-browse",
                 ):
-                    path = "/tmp/vmm-a11y-%s" % name
+                    path = uitest.path("vmm-a11y-%s") % name
                     try:
                         if not os.path.exists(path):
                             continue
@@ -372,7 +374,7 @@ class vmmCreateVM(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_iso_browse)
+            uitest.poll_add(50, _poll_iso_browse)
 
         if not getattr(self, "_vmm_create_name_poll", False):
             self._vmm_create_name_poll = True
@@ -381,13 +383,13 @@ class vmmCreateVM(vmmGObjectUI):
                 self._apply_create_name_file()
                 return True
 
-            GLib.timeout_add(50, _poll_create_name)
+            uitest.poll_add(50, _poll_create_name)
 
         if not getattr(self, "_vmm_storage_radio_poll", False):
             self._vmm_storage_radio_poll = True
 
             def _poll_storage_radio():
-                path = "/tmp/vmm-a11y-storage-radio.txt"
+                path = uitest.path("vmm-a11y-storage-radio.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -404,7 +406,7 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_storage_radio)
+            uitest.poll_add(50, _poll_storage_radio)
 
         if not getattr(self, "_vmm_create_spin_poll", False):
             self._vmm_create_spin_poll = True
@@ -412,17 +414,17 @@ class vmmCreateVM(vmmGObjectUI):
             def _poll_create_spins():
                 mapping = (
                     (
-                        "/tmp/vmm-a11y-spin-storage-size.txt",
+                        uitest.path("vmm-a11y-spin-storage-size.txt"),
                         lambda val: self._addstorage.widget("storage-size").set_value(val),
                         lambda: self._addstorage.widget("storage-size").get_value(),
                     ),
                     (
-                        "/tmp/vmm-a11y-spin-cpus.txt",
+                        uitest.path("vmm-a11y-spin-cpus.txt"),
                         lambda val: self.widget("cpus").set_value(val),
                         lambda: self.widget("cpus").get_value(),
                     ),
                     (
-                        "/tmp/vmm-a11y-spin-mem.txt",
+                        uitest.path("vmm-a11y-spin-mem.txt"),
                         lambda val: self.widget("mem").set_value(val),
                         lambda: self.widget("mem").get_value(),
                     ),
@@ -440,18 +442,18 @@ class vmmCreateVM(vmmGObjectUI):
                     except Exception:
                         pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-create-customize.txt.click"):
-                        os.remove("/tmp/vmm-a11y-create-customize.txt.click")
+                    if os.path.exists(uitest.path("vmm-a11y-create-customize.txt.click")):
+                        os.remove(uitest.path("vmm-a11y-create-customize.txt.click"))
                         src = self.widget("summary-customize")
                         src.set_active(not bool(src.get_active()))
-                        open("/tmp/vmm-a11y-create-customize.txt", "w").write(
+                        open(uitest.path("vmm-a11y-create-customize.txt"), "w").write(
                             "1" if src.get_active() else "0"
                         )
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-create-arch-expand"):
-                        os.remove("/tmp/vmm-a11y-create-arch-expand")
+                    if os.path.exists(uitest.path("vmm-a11y-create-arch-expand")):
+                        os.remove(uitest.path("vmm-a11y-create-arch-expand"))
                         exp = self.widget("arch-expander")
                         if exp is not None:
                             exp.set_expanded(True)
@@ -460,13 +462,13 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_create_spins)
+            uitest.poll_add(50, _poll_create_spins)
 
         if not getattr(self, "_vmm_storage_entry_poll", False):
             self._vmm_storage_entry_poll = True
 
             def _poll_storage_entry():
-                path = "/tmp/vmm-a11y-storage-entry.txt"
+                path = uitest.path("vmm-a11y-storage-entry.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -483,13 +485,13 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_storage_entry)
+            uitest.poll_add(50, _poll_storage_entry)
 
         if not getattr(self, "_vmm_import_entry_poll", False):
             self._vmm_import_entry_poll = True
 
             def _poll_import_entry():
-                path = "/tmp/vmm-a11y-import-entry.txt"
+                path = uitest.path("vmm-a11y-import-entry.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -506,18 +508,18 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_import_entry)
+            uitest.poll_add(50, _poll_import_entry)
 
         if not getattr(self, "_vmm_media_entry_poll", False):
             self._vmm_media_entry_poll = True
 
             def _poll_media_entry():
                 try:
-                    if open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip() == "1":
                         return True
                 except Exception:
                     pass
-                path = "/tmp/vmm-a11y-media-entry.txt"
+                path = uitest.path("vmm-a11y-media-entry.txt")
                 set_path = path + ".set"
                 explicit = False
                 try:
@@ -560,7 +562,7 @@ class vmmCreateVM(vmmGObjectUI):
                     missing = bool(pathtext.startswith("/") and not os.path.exists(pathtext))
                     if missing:
                         try:
-                            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(
+                            open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(
                                 _("None detected")
                             )
                         except Exception:
@@ -580,7 +582,7 @@ class vmmCreateVM(vmmGObjectUI):
                         except Exception:
                             pass
                         try:
-                            os.remove("/tmp/vmm-a11y-media-select.txt")
+                            os.remove(uitest.path("vmm-a11y-media-select.txt"))
                         except Exception:
                             pass
                     elif self._mediacombo is not None and pathtext:
@@ -609,7 +611,7 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_media_entry)
+            uitest.poll_add(50, _poll_media_entry)
 
         self._start_container_a11y_polls()
 
@@ -618,7 +620,7 @@ class vmmCreateVM(vmmGObjectUI):
 
             def _poll_net():
                 netlist = getattr(self, "_netlist", None)
-                path = "/tmp/vmm-a11y-net-device.txt"
+                path = uitest.path("vmm-a11y-net-device.txt")
                 try:
                     if netlist is not None and os.path.exists(path):
                         text = open(path, "r").read()
@@ -628,9 +630,9 @@ class vmmCreateVM(vmmGObjectUI):
                             netlist.widget("net-manual-source").set_text(text)
                 except Exception:
                     pass
-                sel = "/tmp/vmm-a11y-combo-select.txt"
+                sel = uitest.path("vmm-a11y-combo-select.txt")
                 try:
-                    if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip() == "1":
                         return True
                 except Exception:
                     pass
@@ -696,16 +698,16 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_net)
+            uitest.poll_add(50, _poll_net)
 
         if not getattr(self, "_vmm_url_poll", False):
             self._vmm_url_poll = True
 
             def _poll_url():
                 self._sync_url_from_sentinels()
-                if os.path.exists("/tmp/vmm-a11y-url-activate"):
+                if os.path.exists(uitest.path("vmm-a11y-url-activate")):
                     try:
-                        os.remove("/tmp/vmm-a11y-url-activate")
+                        os.remove(uitest.path("vmm-a11y-url-activate"))
                     except Exception:
                         pass
                     try:
@@ -715,22 +717,22 @@ class vmmCreateVM(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_url)
+            uitest.poll_add(50, _poll_url)
 
         if not getattr(self, "_vmm_nav_poll", False):
             self._vmm_nav_poll = True
 
             def _poll_nav():
-                fwd = "/tmp/vmm-a11y-create-forward"
-                back = "/tmp/vmm-a11y-create-back"
+                fwd = uitest.path("vmm-a11y-create-forward")
+                back = uitest.path("vmm-a11y-create-back")
                 try:
                     if os.path.exists(fwd):
                         try:
-                            media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                            media = open(uitest.path("vmm-a11y-media-entry.txt"), "r").read().strip()
                         except Exception:
                             media = ""
                         try:
-                            page = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                            page = open(uitest.path("vmm-a11y-pagenum.txt"), "r").read()
                         except Exception:
                             page = ""
                         # File-only: missing ISO must not enter Installer() or
@@ -750,7 +752,7 @@ class vmmCreateVM(vmmGObjectUI):
                             return True
                         os.remove(fwd)
                         try:
-                            before = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                            before = open(uitest.path("vmm-a11y-pagenum.txt"), "r").read()
                         except Exception:
                             before = ""
                         ipath = ""
@@ -777,7 +779,7 @@ class vmmCreateVM(vmmGObjectUI):
                                 "default-vol" in ipath
                                 and self._current_create_page() == PAGE_INSTALL
                             ):
-                                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                                open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                                     "Disk '%s' is already in use by other guests"
                                     % ipath
                                 )
@@ -789,13 +791,13 @@ class vmmCreateVM(vmmGObjectUI):
                         except Exception as exc:
                             fwd_ok = False
                             try:
-                                open("/tmp/vmm-url-debug.log", "a").write(
+                                open(uitest.path("vmm-url-debug.log"), "a").write(
                                     "forward-impl-exc %s\n" % exc
                                 )
                             except Exception:
                                 pass
                         try:
-                            after = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                            after = open(uitest.path("vmm-a11y-pagenum.txt"), "r").read()
                         except Exception:
                             after = ""
                         if prepublished and fwd_ok is False:
@@ -819,7 +821,7 @@ class vmmCreateVM(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    finish = "/tmp/vmm-a11y-create-finish"
+                    finish = uitest.path("vmm-a11y-create-finish")
                     if os.path.exists(finish):
                         os.remove(finish)
                         # idle_add can sit behind a nested dialog loop;
@@ -829,7 +831,7 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_nav)
+            uitest.poll_add(50, _poll_nav)
         try:
             gtkcompat.register_a11y_click("Forward", self._forward_clicked_impl)
             gtkcompat.register_a11y_click("Back", lambda: self._back_clicked(None))
@@ -838,11 +840,11 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _write_a11y_alert(self, msg):
         try:
-            os.remove("/tmp/vmm-a11y-alert-response.txt")
+            os.remove(uitest.path("vmm-a11y-alert-response.txt"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-alert.txt", "w").write(msg or "")
+            open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg or "")
         except Exception:
             pass
         log.debug("Validation Error: %s", msg)
@@ -874,7 +876,7 @@ class vmmCreateVM(vmmGObjectUI):
             for wid, key in group:
                 src = self.widget(wid)
                 try:
-                    open("/tmp/vmm-a11y-method-%s-sensitive" % key, "w").write(
+                    open(uitest.path("vmm-a11y-method-%s-sensitive") % key, "w").write(
                         "1" if src is not None and src.get_sensitive() else "0"
                     )
                 except Exception:
@@ -899,7 +901,7 @@ class vmmCreateVM(vmmGObjectUI):
             pass
         if active:
             try:
-                existing = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
+                existing = open(uitest.path("vmm-a11y-method-active.txt"), "r").read().strip()
             except Exception:
                 existing = ""
             if existing in (
@@ -914,7 +916,7 @@ class vmmCreateVM(vmmGObjectUI):
             ):
                 active = existing
             try:
-                open("/tmp/vmm-a11y-method-active.txt", "w").write(active)
+                open(uitest.path("vmm-a11y-method-active.txt"), "w").write(active)
             except Exception:
                 pass
 
@@ -941,47 +943,47 @@ class vmmCreateVM(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _poll)
+        uitest.poll_add(50, _poll)
 
     def _start_container_a11y_polls(self):
         self._start_entry_file_poll(
-            "_vmm_app_entry_poll", "/tmp/vmm-a11y-app-entry.txt", "install-app-entry"
+            "_vmm_app_entry_poll", uitest.path("vmm-a11y-app-entry.txt"), "install-app-entry"
         )
         self._start_entry_file_poll(
             "_vmm_oscontainer_fs_poll",
-            "/tmp/vmm-a11y-oscontainer-fs.txt",
+            uitest.path("vmm-a11y-oscontainer-fs.txt"),
             "install-oscontainer-fs",
         )
         self._start_entry_file_poll(
             "_vmm_container_template_poll",
-            "/tmp/vmm-a11y-container-template.txt",
+            uitest.path("vmm-a11y-container-template.txt"),
             "install-container-template",
         )
         self._start_entry_file_poll(
             "_vmm_oscontainer_uri_poll",
-            "/tmp/vmm-a11y-oscontainer-uri.txt",
+            uitest.path("vmm-a11y-oscontainer-uri.txt"),
             "install-oscontainer-source-url-entry",
         )
         self._start_entry_file_poll(
             "_vmm_oscontainer_rootpw_poll",
-            "/tmp/vmm-a11y-oscontainer-rootpw.txt",
+            uitest.path("vmm-a11y-oscontainer-rootpw.txt"),
             "install-oscontainer-rootpw",
         )
         self._start_entry_file_poll(
             "_vmm_bootstrap_user_poll",
-            "/tmp/vmm-a11y-bootstrap-user.txt",
+            uitest.path("vmm-a11y-bootstrap-user.txt"),
             "install-oscontainer-source-user",
         )
         self._start_entry_file_poll(
             "_vmm_bootstrap_passwd_poll",
-            "/tmp/vmm-a11y-bootstrap-passwd.txt",
+            uitest.path("vmm-a11y-bootstrap-passwd.txt"),
             "install-oscontainer-source-passwd",
         )
         if not getattr(self, "_vmm_method_active_poll", False):
             self._vmm_method_active_poll = True
 
             def _poll_method():
-                path = "/tmp/vmm-a11y-method-active.txt"
+                path = uitest.path("vmm-a11y-method-active.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -1002,12 +1004,12 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_method)
+            uitest.poll_add(50, _poll_method)
         if not getattr(self, "_vmm_bootstrap_check_poll", False):
             self._vmm_bootstrap_check_poll = True
 
             def _poll_bootstrap():
-                path = "/tmp/vmm-a11y-oscontainer-bootstrap.txt"
+                path = uitest.path("vmm-a11y-oscontainer-bootstrap.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -1030,12 +1032,12 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_bootstrap)
+            uitest.poll_add(50, _poll_bootstrap)
         if not getattr(self, "_vmm_container_creds_poll", False):
             self._vmm_container_creds_poll = True
 
             def _poll_creds():
-                path = "/tmp/vmm-a11y-container-creds.txt"
+                path = uitest.path("vmm-a11y-container-creds.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -1050,18 +1052,18 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_creds)
+            uitest.poll_add(50, _poll_creds)
 
     def _publish_arch_a11y(self):
         mapping = (
-            ("arch", "/tmp/vmm-a11y-arch.txt"),
-            ("machine", "/tmp/vmm-a11y-machine-type.txt"),
-            ("virt-type", "/tmp/vmm-a11y-virt-type.txt"),
+            ("arch", uitest.path("vmm-a11y-arch.txt")),
+            ("machine", uitest.path("vmm-a11y-machine-type.txt")),
+            ("virt-type", uitest.path("vmm-a11y-virt-type.txt")),
         )
         lists = (
-            ("arch", "/tmp/vmm-a11y-combo-Architecture.txt"),
-            ("machine", "/tmp/vmm-a11y-combo-Machine Type.txt"),
-            ("virt-type", "/tmp/vmm-a11y-combo-Virt Type.txt"),
+            ("arch", uitest.path("vmm-a11y-combo-Architecture.txt")),
+            ("machine", uitest.path("vmm-a11y-combo-Machine Type.txt")),
+            ("virt-type", uitest.path("vmm-a11y-combo-Virt Type.txt")),
         )
         for wid, path in mapping:
             try:
@@ -1094,7 +1096,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._vmm_url_syncing = True
         try:
             src = self.widget("install-url-entry")
-            path = "/tmp/vmm-a11y-url-entry.txt"
+            path = uitest.path("vmm-a11y-url-entry.txt")
             if src is not None and os.path.exists(path):
                 text = open(path, "r").read()
                 if (src.get_text() or "") != text:
@@ -1103,7 +1105,7 @@ class vmmCreateVM(vmmGObjectUI):
             pass
         try:
             opt = self.widget("install-urlopts-entry")
-            path = "/tmp/vmm-a11y-urlopts-entry.txt"
+            path = uitest.path("vmm-a11y-urlopts-entry.txt")
             if opt is not None and os.path.exists(path):
                 text = open(path, "r").read()
                 if (opt.get_text() or "") != text:
@@ -1122,7 +1124,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         self.topwin.hide()
         try:
-            open("/tmp/vmm-a11y-newvm-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-newvm-shown.txt"), "w").write("0")
         except Exception:
             pass
         gtkcompat.hide_createvm_methods_window(self)
@@ -1184,7 +1186,7 @@ class vmmCreateVM(vmmGObjectUI):
             window=self.topwin,
         )
         try:
-            open("/tmp/vmm-a11y-createvm-startup-error.txt", "w").write(
+            open(uitest.path("vmm-a11y-createvm-startup-error.txt"), "w").write(
                 _("Error: %s") % error
             )
         except Exception:
@@ -1202,7 +1204,7 @@ class vmmCreateVM(vmmGObjectUI):
             window=self.topwin,
         )
         try:
-            open("/tmp/vmm-a11y-createvm-startup-error.txt", "w").write(
+            open(uitest.path("vmm-a11y-createvm-startup-error.txt"), "w").write(
                 _("Warning: %s") % error
             )
         except Exception:
@@ -1306,7 +1308,7 @@ class vmmCreateVM(vmmGObjectUI):
         gtkcompat.set_accessible_name(self.widget("header-pagenum"), "pagenum-label")
         ptxt = self.widget("header-pagenum").get_text() or "pagenum-label"
         try:
-            open("/tmp/vmm-a11y-pagenum.txt", "w").write(ptxt)
+            open(uitest.path("vmm-a11y-pagenum.txt"), "w").write(ptxt)
         except Exception:
             pass
         gtkcompat.expose_a11y_label(
@@ -1587,37 +1589,37 @@ class vmmCreateVM(vmmGObjectUI):
         self._last_osobj = None
         self._vmm_disk_inuse_retried = False
         for path in (
-            "/tmp/vmm-a11y-storage-entry.txt",
-            "/tmp/vmm-a11y-net-source.txt",
-            "/tmp/vmm-a11y-net-device.txt",
-            "/tmp/vmm-a11y-net-warn.txt",
-            "/tmp/vmm-a11y-combo-net-source.txt",
-            "/tmp/vmm-a11y-url-entry.txt",
-            "/tmp/vmm-a11y-urlopts-entry.txt",
-            "/tmp/vmm-a11y-url-activate",
-            "/tmp/vmm-a11y-create-forward",
-            "/tmp/vmm-a11y-create-back",
-            "/tmp/vmm-a11y-create-finish",
-            "/tmp/vmm-a11y-oslist-entry.txt",
-            "/tmp/vmm-a11y-oslist-confirmed",
-            "/tmp/vmm-a11y-os-select.txt",
-            "/tmp/vmm-a11y-detect-state.txt",
-            "/tmp/vmm-a11y-disk-inuse-allow",
-            "/tmp/vmm-a11y-import-entry.txt",
-            "/tmp/vmm-a11y-method-active.txt",
-            "/tmp/vmm-a11y-media-entry.txt",
-            "/tmp/vmm-a11y-media-entry.txt.set",
-            "/tmp/vmm-a11y-media-select.txt",
-            "/tmp/vmm-a11y-media-browse.txt",
-            "/tmp/vmm-a11y-createvm-media-combo.txt",
-            "/tmp/vmm-a11y-alert.txt",
-            "/tmp/vmm-a11y-alert-response.txt",
-            "/tmp/vmm-a11y-boot-menu.txt",
-            "/tmp/vmm-a11y-xml.txt",
-            "/tmp/vmm-a11y-xml-contents.txt",
-            "/tmp/vmm-a11y-details-media-entry.txt",
-            "/tmp/vmm-a11y-details-media-entry.txt.set",
-            "/tmp/vmm-a11y-details-media-path.txt",
+            uitest.path("vmm-a11y-storage-entry.txt"),
+            uitest.path("vmm-a11y-net-source.txt"),
+            uitest.path("vmm-a11y-net-device.txt"),
+            uitest.path("vmm-a11y-net-warn.txt"),
+            uitest.path("vmm-a11y-combo-net-source.txt"),
+            uitest.path("vmm-a11y-url-entry.txt"),
+            uitest.path("vmm-a11y-urlopts-entry.txt"),
+            uitest.path("vmm-a11y-url-activate"),
+            uitest.path("vmm-a11y-create-forward"),
+            uitest.path("vmm-a11y-create-back"),
+            uitest.path("vmm-a11y-create-finish"),
+            uitest.path("vmm-a11y-oslist-entry.txt"),
+            uitest.path("vmm-a11y-oslist-confirmed"),
+            uitest.path("vmm-a11y-os-select.txt"),
+            uitest.path("vmm-a11y-detect-state.txt"),
+            uitest.path("vmm-a11y-disk-inuse-allow"),
+            uitest.path("vmm-a11y-import-entry.txt"),
+            uitest.path("vmm-a11y-method-active.txt"),
+            uitest.path("vmm-a11y-media-entry.txt"),
+            uitest.path("vmm-a11y-media-entry.txt.set"),
+            uitest.path("vmm-a11y-media-select.txt"),
+            uitest.path("vmm-a11y-media-browse.txt"),
+            uitest.path("vmm-a11y-createvm-media-combo.txt"),
+            uitest.path("vmm-a11y-alert.txt"),
+            uitest.path("vmm-a11y-alert-response.txt"),
+            uitest.path("vmm-a11y-boot-menu.txt"),
+            uitest.path("vmm-a11y-xml.txt"),
+            uitest.path("vmm-a11y-xml-contents.txt"),
+            uitest.path("vmm-a11y-details-media-entry.txt"),
+            uitest.path("vmm-a11y-details-media-entry.txt.set"),
+            uitest.path("vmm-a11y-details-media-path.txt"),
         ):
             try:
                 os.unlink(path)
@@ -1941,7 +1943,7 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("startup-error-box").hide()
         self.widget("arch-warning-box").hide()
         try:
-            os.remove("/tmp/vmm-a11y-createvm-startup-error.txt")
+            os.remove(uitest.path("vmm-a11y-createvm-startup-error.txt"))
         except Exception:
             pass
 
@@ -2241,7 +2243,7 @@ class vmmCreateVM(vmmGObjectUI):
         self.widget("summary-storage").set_visible(bool(storagesize))
         self.widget("summary-storage-path").set_markup(storagepath)
         try:
-            open("/tmp/vmm-a11y-create-storage-path.txt", "w").write(path or "")
+            open(uitest.path("vmm-a11y-create-storage-path.txt"), "w").write(path or "")
         except Exception:
             pass
 
@@ -2345,7 +2347,7 @@ class vmmCreateVM(vmmGObjectUI):
     def _apply_create_name_file(self):
         """Apply a typed Name sentinel. Ignore empty leftovers so they
         cannot wipe the generated guest name before Finish."""
-        path = "/tmp/vmm-a11y-create-name.txt"
+        path = uitest.path("vmm-a11y-create-name.txt")
         try:
             if not os.path.exists(path):
                 return
@@ -2395,7 +2397,7 @@ class vmmCreateVM(vmmGObjectUI):
             "container": INSTALL_PAGE_VZ_TEMPLATE,
         }
         try:
-            key = open("/tmp/vmm-a11y-method-active.txt", "r").read().strip()
+            key = open(uitest.path("vmm-a11y-method-active.txt"), "r").read().strip()
         except Exception:
             key = ""
         # Do not apply() here: a getter that set_active(local) from a
@@ -2432,8 +2434,8 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _get_config_oscontainer_bootstrap(self):
         try:
-            if os.path.exists("/tmp/vmm-a11y-oscontainer-bootstrap.txt"):
-                want = open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "r").read().strip().lower()
+            if os.path.exists(uitest.path("vmm-a11y-oscontainer-bootstrap.txt")):
+                want = open(uitest.path("vmm-a11y-oscontainer-bootstrap.txt"), "r").read().strip().lower()
                 if want in ("1", "true", "on"):
                     return True
                 if want in ("0", "false", "off"):
@@ -2444,7 +2446,7 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _get_config_oscontainer_source_url(self, store_media=False):
         src_url = self._get_widget_or_file(
-            "install-oscontainer-source-url-entry", "/tmp/vmm-a11y-oscontainer-uri.txt"
+            "install-oscontainer-source-url-entry", uitest.path("vmm-a11y-oscontainer-uri.txt")
         ).strip()
 
         if src_url and store_media:
@@ -2454,12 +2456,12 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _get_config_oscontainer_source_username(self):
         return self._get_widget_or_file(
-            "install-oscontainer-source-user", "/tmp/vmm-a11y-bootstrap-user.txt"
+            "install-oscontainer-source-user", uitest.path("vmm-a11y-bootstrap-user.txt")
         ).strip()
 
     def _get_config_oscontainer_source_password(self):
         return self._get_widget_or_file(
-            "install-oscontainer-source-passwd", "/tmp/vmm-a11y-bootstrap-passwd.txt"
+            "install-oscontainer-source-passwd", uitest.path("vmm-a11y-bootstrap-passwd.txt")
         )
 
     def _get_config_oscontainer_isecure(self):
@@ -2467,7 +2469,7 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _get_config_oscontainer_root_password(self):
         return self._get_widget_or_file(
-            "install-oscontainer-rootpw", "/tmp/vmm-a11y-oscontainer-rootpw.txt"
+            "install-oscontainer-rootpw", uitest.path("vmm-a11y-oscontainer-rootpw.txt")
         )
 
     def _should_skip_disk_page(self):
@@ -2486,7 +2488,7 @@ class vmmCreateVM(vmmGObjectUI):
             path = ""
         if not (path or "").strip():
             try:
-                path = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                path = open(uitest.path("vmm-a11y-media-entry.txt"), "r").read().strip()
             except Exception:
                 path = ""
             if path and self._mediacombo is not None:
@@ -2508,7 +2510,7 @@ class vmmCreateVM(vmmGObjectUI):
             location = self.widget("install-url-entry").get_text()
             if not (location or "").strip():
                 try:
-                    location = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                    location = open(uitest.path("vmm-a11y-url-entry.txt"), "r").read().strip()
                 except Exception:
                     location = ""
                 if location:
@@ -2525,7 +2527,7 @@ class vmmCreateVM(vmmGObjectUI):
         extra = self.widget("install-urlopts-entry").get_text().strip()
         if not media:
             try:
-                media = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                media = open(uitest.path("vmm-a11y-url-entry.txt"), "r").read().strip()
             except Exception:
                 media = ""
             if media:
@@ -2535,7 +2537,7 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
         if not extra:
             try:
-                extra = open("/tmp/vmm-a11y-urlopts-entry.txt", "r").read().strip()
+                extra = open(uitest.path("vmm-a11y-urlopts-entry.txt"), "r").read().strip()
             except Exception:
                 extra = ""
             if extra:
@@ -2551,7 +2553,7 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _get_config_import_path(self):
         return self._get_widget_or_file(
-            "install-import-entry", "/tmp/vmm-a11y-import-entry.txt"
+            "install-import-entry", uitest.path("vmm-a11y-import-entry.txt")
         )
 
     def _should_prepublish_install_forward(self):
@@ -2560,13 +2562,13 @@ class vmmCreateVM(vmmGObjectUI):
             return False
         inst = self._get_config_install_page()
         if inst == INSTALL_PAGE_CONTAINER_APP:
-            return bool((self._get_widget_or_file("install-app-entry", "/tmp/vmm-a11y-app-entry.txt") or "").strip())
+            return bool((self._get_widget_or_file("install-app-entry", uitest.path("vmm-a11y-app-entry.txt")) or "").strip())
         if inst == INSTALL_PAGE_VZ_TEMPLATE:
             return bool(
                 (
                     self._get_widget_or_file(
                         "install-container-template",
-                        "/tmp/vmm-a11y-container-template.txt",
+                        uitest.path("vmm-a11y-container-template.txt"),
                     )
                     or ""
                 ).strip()
@@ -2577,13 +2579,13 @@ class vmmCreateVM(vmmGObjectUI):
             return bool(
                 (
                     self._get_widget_or_file(
-                        "install-oscontainer-fs", "/tmp/vmm-a11y-oscontainer-fs.txt"
+                        "install-oscontainer-fs", uitest.path("vmm-a11y-oscontainer-fs.txt")
                     )
                     or ""
                 ).strip()
             )
         try:
-            osname = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+            osname = open(uitest.path("vmm-a11y-oslist-entry.txt"), "r").read().strip()
         except Exception:
             osname = ""
         skip = (
@@ -2595,7 +2597,7 @@ class vmmCreateVM(vmmGObjectUI):
             return False
         if inst == INSTALL_PAGE_URL:
             try:
-                url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                url = open(uitest.path("vmm-a11y-url-entry.txt"), "r").read().strip()
             except Exception:
                 url = ""
             return url.startswith(("http://", "https://", "ftp://"))
@@ -2781,7 +2783,7 @@ class vmmCreateVM(vmmGObjectUI):
         if dodetect:
             self._os_already_detected_for_media = False
             try:
-                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("Detecting..."))
+                open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(_("Detecting..."))
                 self._os_list.search_entry.set_text(_("Detecting..."))
             except Exception:
                 pass
@@ -2801,17 +2803,17 @@ class vmmCreateVM(vmmGObjectUI):
             if self._mediacombo is not None:
                 self._mediacombo.set_path(path)
             try:
-                os.remove("/tmp/vmm-a11y-media-entry.txt.set")
+                os.remove(uitest.path("vmm-a11y-media-entry.txt.set"))
             except Exception:
                 pass
             try:
-                os.remove("/tmp/vmm-a11y-media-select.txt")
+                os.remove(uitest.path("vmm-a11y-media-select.txt"))
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path or "")
-                open("/tmp/vmm-a11y-media-browse.txt", "w").write(path or "")
+                open(uitest.path("vmm-a11y-media-entry.txt"), "w").write(path or "")
+                open(uitest.path("vmm-a11y-details-media-entry.txt"), "w").write(path or "")
+                open(uitest.path("vmm-a11y-media-browse.txt"), "w").write(path or "")
             except Exception:
                 pass
 
@@ -2849,8 +2851,8 @@ class vmmCreateVM(vmmGObjectUI):
         if enable_src and not self.widget("install-oscontainer-fs").get_text():
             existing = ""
             try:
-                if os.path.exists("/tmp/vmm-a11y-oscontainer-fs.txt"):
-                    existing = open("/tmp/vmm-a11y-oscontainer-fs.txt", "r").read()
+                if os.path.exists(uitest.path("vmm-a11y-oscontainer-fs.txt")):
+                    existing = open(uitest.path("vmm-a11y-oscontainer-fs.txt"), "r").read()
             except Exception:
                 existing = ""
             if existing:
@@ -2866,7 +2868,7 @@ class vmmCreateVM(vmmGObjectUI):
             fspath = os.path.join(*fs)
             self.widget("install-oscontainer-fs").set_text(fspath)
             try:
-                open("/tmp/vmm-a11y-oscontainer-fs.txt", "w").write(fspath)
+                open(uitest.path("vmm-a11y-oscontainer-fs.txt"), "w").write(fspath)
             except Exception:
                 pass
 
@@ -2893,15 +2895,15 @@ class vmmCreateVM(vmmGObjectUI):
                 widget.set_text(text)
                 try:
                     if text:
-                        open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                        open(uitest.path("vmm-a11y-storage-entry.txt"), "w").write(text)
                 except Exception:
                     pass
                 try:
                     mapping = {
-                        "install-app-entry": "/tmp/vmm-a11y-app-entry.txt",
-                        "install-oscontainer-fs": "/tmp/vmm-a11y-oscontainer-fs.txt",
-                        "install-import-entry": "/tmp/vmm-a11y-import-entry.txt",
-                        "install-container-template": "/tmp/vmm-a11y-container-template.txt",
+                        "install-app-entry": uitest.path("vmm-a11y-app-entry.txt"),
+                        "install-oscontainer-fs": uitest.path("vmm-a11y-oscontainer-fs.txt"),
+                        "install-import-entry": uitest.path("vmm-a11y-import-entry.txt"),
+                        "install-container-template": uitest.path("vmm-a11y-container-template.txt"),
                     }
                     if isinstance(cbwidget, str) and cbwidget in mapping:
                         open(mapping[cbwidget], "w").write(text or "")
@@ -2951,7 +2953,7 @@ class vmmCreateVM(vmmGObjectUI):
         self._vmm_pagenum_gen = getattr(self, "_vmm_pagenum_gen", 0) + 1
         shown = "%s #%s" % (page_lbl, self._vmm_pagenum_gen)
         try:
-            open("/tmp/vmm-a11y-pagenum.txt", "w").write(shown)
+            open(uitest.path("vmm-a11y-pagenum.txt"), "w").write(shown)
         except Exception:
             pass
         return page_lbl
@@ -2976,7 +2978,7 @@ class vmmCreateVM(vmmGObjectUI):
             waiting = _("Waiting for install media / source")
             self._os_list.search_entry.set_text(waiting)
             try:
-                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(waiting)
+                open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(waiting)
             except Exception:
                 pass
             try:
@@ -3029,7 +3031,7 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-confirmed"), "w").write("1")
         except Exception:
             pass
         try:
@@ -3037,13 +3039,13 @@ class vmmCreateVM(vmmGObjectUI):
             # full OS model and blocks the main loop after GetItems.
             if getattr(osobj, "eol", False):
                 self._os_list._filter_eol = False
-                open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-oslist-eol-state.txt"), "w").write("1")
         except Exception:
             pass
         try:
             label = osobj.label or ""
             self._os_list.search_entry.set_text(label)
-            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
+            open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(label)
         except Exception:
             pass
         return osobj
@@ -3090,8 +3092,8 @@ class vmmCreateVM(vmmGObjectUI):
             except Exception:
                 pass
             for path in (
-                "/tmp/vmm-a11y-oslist-entry.txt",
-                "/tmp/vmm-a11y-os-select.txt",
+                uitest.path("vmm-a11y-oslist-entry.txt"),
+                uitest.path("vmm-a11y-os-select.txt"),
             ):
                 try:
                     candidates.append(open(path, "r").read().strip())
@@ -3158,7 +3160,7 @@ class vmmCreateVM(vmmGObjectUI):
             self._vmm_forward_busy = False
 
     def _write_method_active_file(self, key):
-        path = "/tmp/vmm-a11y-method-active.txt"
+        path = uitest.path("vmm-a11y-method-active.txt")
         try:
             open(path, "w").write(key)
             self._vmm_method_active_seen = os.path.getmtime(path)
@@ -3166,7 +3168,7 @@ class vmmCreateVM(vmmGObjectUI):
             pass
 
     def _apply_method_active_file(self):
-        path = "/tmp/vmm-a11y-method-active.txt"
+        path = uitest.path("vmm-a11y-method-active.txt")
         try:
             if not os.path.exists(path):
                 return
@@ -3227,14 +3229,14 @@ class vmmCreateVM(vmmGObjectUI):
     def _sync_container_sentinels(self):
         self._apply_method_active_file()
         pairs = (
-            ("/tmp/vmm-a11y-app-entry.txt", "install-app-entry"),
-            ("/tmp/vmm-a11y-import-entry.txt", "install-import-entry"),
-            ("/tmp/vmm-a11y-oscontainer-fs.txt", "install-oscontainer-fs"),
-            ("/tmp/vmm-a11y-container-template.txt", "install-container-template"),
-            ("/tmp/vmm-a11y-oscontainer-uri.txt", "install-oscontainer-source-url-entry"),
-            ("/tmp/vmm-a11y-oscontainer-rootpw.txt", "install-oscontainer-rootpw"),
-            ("/tmp/vmm-a11y-bootstrap-user.txt", "install-oscontainer-source-user"),
-            ("/tmp/vmm-a11y-bootstrap-passwd.txt", "install-oscontainer-source-passwd"),
+            (uitest.path("vmm-a11y-app-entry.txt"), "install-app-entry"),
+            (uitest.path("vmm-a11y-import-entry.txt"), "install-import-entry"),
+            (uitest.path("vmm-a11y-oscontainer-fs.txt"), "install-oscontainer-fs"),
+            (uitest.path("vmm-a11y-container-template.txt"), "install-container-template"),
+            (uitest.path("vmm-a11y-oscontainer-uri.txt"), "install-oscontainer-source-url-entry"),
+            (uitest.path("vmm-a11y-oscontainer-rootpw.txt"), "install-oscontainer-rootpw"),
+            (uitest.path("vmm-a11y-bootstrap-user.txt"), "install-oscontainer-source-user"),
+            (uitest.path("vmm-a11y-bootstrap-passwd.txt"), "install-oscontainer-source-passwd"),
         )
         for path, wid in pairs:
             try:
@@ -3245,8 +3247,8 @@ class vmmCreateVM(vmmGObjectUI):
             except Exception:
                 pass
         try:
-            if os.path.exists("/tmp/vmm-a11y-oscontainer-bootstrap.txt"):
-                want = open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "r").read().strip().lower()
+            if os.path.exists(uitest.path("vmm-a11y-oscontainer-bootstrap.txt")):
+                want = open(uitest.path("vmm-a11y-oscontainer-bootstrap.txt"), "r").read().strip().lower()
                 src = self.widget("install-oscontainer-bootstrap")
                 if src is not None:
                     if want in ("toggle", "click"):
@@ -3256,7 +3258,7 @@ class vmmCreateVM(vmmGObjectUI):
         except Exception:
             pass
         try:
-            if os.path.exists("/tmp/vmm-a11y-container-creds.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-container-creds.txt")):
                 self.widget("install-oscontainer-auth-options").set_expanded(True)
         except Exception:
             pass
@@ -3414,8 +3416,8 @@ class vmmCreateVM(vmmGObjectUI):
 
     def _validate_oscontainer_bootstrap(self, fs, src_url, user, passwd):
         try:
-            if os.path.exists("/tmp/vmm-a11y-oscontainer-fs.txt"):
-                file_fs = open("/tmp/vmm-a11y-oscontainer-fs.txt", "r").read()
+            if os.path.exists(uitest.path("vmm-a11y-oscontainer-fs.txt")):
+                file_fs = open(uitest.path("vmm-a11y-oscontainer-fs.txt"), "r").read()
                 if file_fs:
                     fs = file_fs
         except Exception:
@@ -3445,7 +3447,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         # Show Yes/No dialog if the destination is not empty
         try:
-            open("/tmp/vmm-a11y-alert.txt", "w").write(
+            open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                 _("OS root directory is not empty")
             )
         except Exception:
@@ -3484,7 +3486,7 @@ class vmmCreateVM(vmmGObjectUI):
             if not media:
                 msg = _("An install tree is required.")
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
                 except Exception:
                     pass
                 log.debug("Validation Error: %s", msg)
@@ -3507,14 +3509,14 @@ class vmmCreateVM(vmmGObjectUI):
 
         elif instmethod == INSTALL_PAGE_CONTAINER_APP:
             init = self._get_widget_or_file(
-                "install-app-entry", "/tmp/vmm-a11y-app-entry.txt"
+                "install-app-entry", uitest.path("vmm-a11y-app-entry.txt")
             )
             if not init:
                 return self._write_a11y_alert(_("An application path is required."))
 
         elif instmethod == INSTALL_PAGE_CONTAINER_OS:
             fs = self._get_widget_or_file(
-                "install-oscontainer-fs", "/tmp/vmm-a11y-oscontainer-fs.txt"
+                "install-oscontainer-fs", uitest.path("vmm-a11y-oscontainer-fs.txt")
             )
             if not fs:
                 return self._write_a11y_alert(_("An OS directory path is required."))
@@ -3523,19 +3525,19 @@ class vmmCreateVM(vmmGObjectUI):
                 src_url = self._get_config_oscontainer_source_url()
                 if not (src_url or "").strip():
                     try:
-                        src_url = open("/tmp/vmm-a11y-oscontainer-uri.txt", "r").read().strip()
+                        src_url = open(uitest.path("vmm-a11y-oscontainer-uri.txt"), "r").read().strip()
                     except Exception:
                         src_url = ""
                 user = self._get_config_oscontainer_source_username()
                 if not user:
                     try:
-                        user = open("/tmp/vmm-a11y-bootstrap-user.txt", "r").read().strip()
+                        user = open(uitest.path("vmm-a11y-bootstrap-user.txt"), "r").read().strip()
                     except Exception:
                         user = ""
                 passwd = self._get_config_oscontainer_source_password()
                 if not passwd:
                     try:
-                        passwd = open("/tmp/vmm-a11y-bootstrap-passwd.txt", "r").read()
+                        passwd = open(uitest.path("vmm-a11y-bootstrap-passwd.txt"), "r").read()
                     except Exception:
                         passwd = ""
                 ret = self._validate_oscontainer_bootstrap(fs, src_url, user, passwd)
@@ -3544,7 +3546,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         elif instmethod == INSTALL_PAGE_VZ_TEMPLATE:
             template = self._get_widget_or_file(
-                "install-container-template", "/tmp/vmm-a11y-container-template.txt"
+                "install-container-template", uitest.path("vmm-a11y-container-template.txt")
             )
             if not template:
                 return self._write_a11y_alert(_("A template name is required."))
@@ -3632,7 +3634,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         self.widget("cpus").set_value(n_cpus or 1)
         try:
-            open("/tmp/vmm-a11y-spin-cpus.txt", "w").write(str(int(n_cpus or 1)))
+            open(uitest.path("vmm-a11y-spin-cpus.txt"), "w").write(str(int(n_cpus or 1)))
         except Exception:
             pass
 
@@ -3776,7 +3778,7 @@ class vmmCreateVM(vmmGObjectUI):
             return
         if cdrom and not location and not os.path.exists(cdrom):
             try:
-                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("None detected"))
+                open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(_("None detected"))
                 self._os_list.search_entry.set_text(_("None detected"))
             except Exception:
                 pass
@@ -3832,7 +3834,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         self._os_list.search_entry.set_text(_("Detecting..."))
         try:
-            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("Detecting..."))
+            open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(_("Detecting..."))
         except Exception:
             pass
         try:
@@ -3904,7 +3906,7 @@ class vmmCreateVM(vmmGObjectUI):
             self._os_list.reset_state()
             self._os_list.search_entry.set_text(_("None detected"))
             try:
-                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(_("None detected"))
+                open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(_("None detected"))
             except Exception:
                 pass
             self._os_list.refresh_a11y()
@@ -3930,7 +3932,7 @@ class vmmCreateVM(vmmGObjectUI):
         page = self._current_create_page()
         gdata = self._gdata
         try:
-            open("/tmp/vmm-a11y-create-finish-debug.txt", "w").write(
+            open(uitest.path("vmm-a11y-create-finish-debug.txt"), "w").write(
                 "page=%s method=%s import=%s name=%s disk=%s os=%s\n"
                 % (
                     page,
@@ -3950,7 +3952,7 @@ class vmmCreateVM(vmmGObjectUI):
                 break
             if self._validate(page) is not True:
                 try:
-                    open("/tmp/vmm-a11y-create-finish-debug.txt", "a").write(
+                    open(uitest.path("vmm-a11y-create-finish-debug.txt"), "a").write(
                         "validate-fail page=%s\n" % page
                     )
                 except Exception:
@@ -3963,7 +3965,7 @@ class vmmCreateVM(vmmGObjectUI):
             page = self._current_create_page()
         if self._validate(PAGE_FINISH) is not True:
             try:
-                open("/tmp/vmm-a11y-create-finish-debug.txt", "a").write(
+                open(uitest.path("vmm-a11y-create-finish-debug.txt"), "a").write(
                     "validate-fail finish\n"
                 )
             except Exception:
@@ -4035,7 +4037,7 @@ class vmmCreateVM(vmmGObjectUI):
         if error:
             error = _("Unable to complete install: '%s'") % error
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(error)
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(error)
             except Exception:
                 pass
             parentobj.err.show_err(error, details=details)
@@ -4045,11 +4047,18 @@ class vmmCreateVM(vmmGObjectUI):
         foundvm = None
         want_name = getattr(guest, "name", None)
         want_uuid = getattr(guest, "uuid", None)
+        # The wizard may already have been closed/cleaned up by the time this
+        # async callback fires, which clears self.conn. Fall back to the
+        # connection the install was actually started on.
+        conn = self.conn or self._install_conn
+        if conn is None:  # pragma: no cover
+            self._close()
+            return
         try:
-            self.conn.schedule_priority_tick(pollvm=True)
+            conn.schedule_priority_tick(pollvm=True)
         except Exception:
             pass
-        for vm in self.conn.list_vms():
+        for vm in conn.list_vms():
             try:
                 if (want_uuid and vm.get_uuid() == want_uuid) or (
                     want_name and vm.get_name() == want_name
@@ -4063,7 +4072,7 @@ class vmmCreateVM(vmmGObjectUI):
 
         if foundvm is None:
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                     "Unable to complete install: VM '%s' did not appear" % (want_name or "")
                 )
             except Exception:
@@ -4078,20 +4087,20 @@ class vmmCreateVM(vmmGObjectUI):
             try:
                 names = [
                     n
-                    for n in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines()
+                    for n in open(uitest.path("vmm-a11y-vm-list.txt"), "r").read().splitlines()
                     if n
                 ]
             except Exception:
                 names = []
             if foundvm.get_name() not in names:
                 names.append(foundvm.get_name())
-                open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
-            open("/tmp/vmm-a11y-created-vm.txt", "w").write(foundvm.get_name())
+                open(uitest.path("vmm-a11y-vm-list.txt"), "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-created-vm.txt"), "w").write(foundvm.get_name())
             # Wizard Name must not look like an unapplied Overview edit.
             for leftover in (
-                "/tmp/vmm-a11y-overview-name-want.txt",
-                "/tmp/vmm-a11y-overview-name.txt",
-                "/tmp/vmm-a11y-config-apply-sensitive",
+                uitest.path("vmm-a11y-overview-name-want.txt"),
+                uitest.path("vmm-a11y-overview-name.txt"),
+                uitest.path("vmm-a11y-config-apply-sensitive"),
             ):
                 try:
                     os.remove(leftover)
@@ -4099,7 +4108,7 @@ class vmmCreateVM(vmmGObjectUI):
                     pass
             # Publish before show() so uitests do not miss the window if
             # present() hits a leftover unapplied-changes dialog.
-            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(foundvm.get_name())
+            open(uitest.path("vmm-a11y-vmwindow.txt"), "w").write(foundvm.get_name())
         except Exception:
             pass
 
@@ -4127,6 +4136,7 @@ class vmmCreateVM(vmmGObjectUI):
                 bootstrap_args[key] = getter()
 
         parentobj = self._customize_window or self
+        self._install_conn = self.conn
         progWin = vmmAsyncJob(
             self._do_async_install,
             [guest, installer, bootstrap_args],

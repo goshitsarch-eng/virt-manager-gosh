@@ -13,6 +13,7 @@ import pyatspi
 
 from virtinst import log
 from . import utils
+from virtManager.lib import uitest
 
 
 def _looks_like_ip_label(want):
@@ -154,12 +155,12 @@ def _write_hw_details_tab(label):
     if not tab:
         return
     try:
-        open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
+        open(uitest.path("vmm-a11y-details-tab.txt"), "w").write(tab)
     except Exception:
         pass
     if tab == "host-tab":
         try:
-            open("/tmp/vmm-a11y-hostdev-clicked.txt", "w").write(label or "")
+            open(uitest.path("vmm-a11y-hostdev-clicked.txt"), "w").write(label or "")
         except Exception:
             pass
 
@@ -181,8 +182,8 @@ class _SentinelTableCell(object):
         index_match = None
         if self._index is not None:
             for path in (
-                "/tmp/vmm-a11y-hw-select-index.txt",
-                "/tmp/vmm-a11y-hw-selected-index.txt",
+                uitest.path("vmm-a11y-hw-select-index.txt"),
+                uitest.path("vmm-a11y-hw-selected-index.txt"),
             ):
                 try:
                     cur = open(path, "r").read().strip()
@@ -198,8 +199,8 @@ class _SentinelTableCell(object):
         name_hit = False
         unique_hit = False
         for path in (
-            "/tmp/vmm-a11y-hw-clicked.txt",
-            "/tmp/vmm-a11y-hw-selected.txt",
+            uitest.path("vmm-a11y-hw-clicked.txt"),
+            uitest.path("vmm-a11y-hw-selected.txt"),
         ):
             try:
                 cur = open(path, "r").read().strip()
@@ -218,7 +219,7 @@ class _SentinelTableCell(object):
                 ):
                     unique_hit = True
         try:
-            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+            tab = open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
             name = self.name or ""
             if tab == "sound-tab" and name.startswith("Sound"):
                 unique_hit = True
@@ -238,15 +239,15 @@ class _SentinelTableCell(object):
             try:
                 rows = [
                     n
-                    for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                    for n in open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines()
                     if n
                 ]
-                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                cur = open(uitest.path("vmm-a11y-hw-selected-index.txt"), "r").read().strip()
                 at = rows[int(cur)]
                 if at.split()[0] != (self.name or "").split()[0]:
                     for path in (
-                        "/tmp/vmm-a11y-hw-clicked.txt",
-                        "/tmp/vmm-a11y-hw-selected.txt",
+                        uitest.path("vmm-a11y-hw-clicked.txt"),
+                        uitest.path("vmm-a11y-hw-selected.txt"),
                     ):
                         try:
                             pub = open(path, "r").read().strip()
@@ -272,25 +273,25 @@ class _SentinelTableCell(object):
         if name_hit:
             return True
         try:
-            cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+            cur = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read().strip()
             if cur == self.name:
                 return True
         except Exception:
             pass
         try:
-            cur = open("/tmp/vmm-a11y-hostdev-selected.txt", "r").read().strip()
+            cur = open(uitest.path("vmm-a11y-hostdev-selected.txt"), "r").read().strip()
             if cur == self.name or (self.name and self.name in cur):
                 return True
         except Exception:
             pass
         try:
-            cur = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
+            cur = open(uitest.path("vmm-a11y-vol-selected.txt"), "r").read().strip()
             if cur == self.name or (self.name and self.name in cur):
                 return True
         except Exception:
             pass
         try:
-            cur = open("/tmp/vmm-a11y-host-vol-selected.txt", "r").read().strip()
+            cur = open(uitest.path("vmm-a11y-host-vol-selected.txt"), "r").read().strip()
             if cur == self.name or (self.name and self.name in cur):
                 return True
         except Exception:
@@ -309,7 +310,7 @@ class _SentinelTableCell(object):
         try:
             deleted = [
                 n
-                for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines()
+                for n in open(uitest.path("vmm-a11y-deleted-vols.txt"), "r").read().splitlines()
                 if n
             ]
             if any(name == n or name in n or n in name for n in deleted):
@@ -317,8 +318,8 @@ class _SentinelTableCell(object):
         except Exception:
             pass
         for path in (
-            "/tmp/vmm-a11y-vol-list.txt",
-            "/tmp/vmm-a11y-host-vol-list.txt",
+            uitest.path("vmm-a11y-vol-list.txt"),
+            uitest.path("vmm-a11y-host-vol-list.txt"),
         ):
             try:
                 names = [n for n in open(path, "r").read().splitlines() if n]
@@ -361,7 +362,7 @@ class _SentinelTableCell(object):
             try:
                 rows = [
                     n
-                    for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                    for n in open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines()
                     if n
                 ]
                 if 0 <= int(self._index) < len(rows):
@@ -371,7 +372,7 @@ class _SentinelTableCell(object):
         try:
             rows = [
                 n
-                for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                for n in open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines()
                 if n
             ]
             if self.name and self.name not in rows:
@@ -385,17 +386,17 @@ class _SentinelTableCell(object):
         button = kwargs.get("button", 1)
         if button == 3:
             try:
-                open("/tmp/vmm-a11y-hw-popup.txt", "w").write(name)
-                open("/tmp/vmm-a11y-hw-popup-shown.txt", "w").write("1")
-                open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(name)
-                open("/tmp/vmm-a11y-hw-selected.txt", "w").write(name)
+                open(uitest.path("vmm-a11y-hw-popup.txt"), "w").write(name)
+                open(uitest.path("vmm-a11y-hw-popup-shown.txt"), "w").write("1")
+                open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(name)
+                open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(name)
             except Exception:
                 pass
             return
         browser_open = False
         try:
             browser_open = (
-                open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1"
+                open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() == "1"
             )
         except Exception:
             browser_open = False
@@ -408,25 +409,25 @@ class _SentinelTableCell(object):
             key in name for key in ("Disk", "CDROM", "Floppy", "NIC")
         ):
             try:
-                open("/tmp/vmm-a11y-vol-select.txt", "w").write(name)
+                open(uitest.path("vmm-a11y-vol-select.txt"), "w").write(name)
             except Exception:
                 pass
             deadline = time.time() + 2.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip() == name:
+                    if open(uitest.path("vmm-a11y-vol-selected.txt"), "r").read().strip() == name:
                         break
                 except Exception:
                     pass
                 time.sleep(0.05)
             return
         try:
-            open("/tmp/vmm-a11y-hw-select.txt", "w").write(self.name or "")
-            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-hw-select.txt"), "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(self.name or "")
             # Publisher overwrites hw-selected with the GTK row (often
             # Overview). Remove/apply must use this click-only label.
-            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(self.name or "")
-            open("/tmp/vmm-a11y-last-hw.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(self.name or "")
             if (self.name or "") not in (
                 "Overview",
                 "OS information",
@@ -435,12 +436,12 @@ class _SentinelTableCell(object):
                 "Memory",
                 "Boot Options",
             ):
-                open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(self.name or "")
+                open(uitest.path("vmm-a11y-hw-last-device.txt"), "w").write(self.name or "")
         except Exception:
             pass
         try:
             apply_on = (
-                open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip()
                 == "1"
             )
         except Exception:
@@ -458,19 +459,19 @@ class _SentinelTableCell(object):
             # Publish before GTK confirm runs so click_alert_button
             # does not wait 36s when _hw_changed_cb is a no-op.
             try:
-                existing = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                existing = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
             except Exception:
                 existing = ""
             lowered = existing.lower()
             if not existing.strip() or "unapplied" in lowered:
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                         "There are unapplied changes. Would you like to apply them now?"
                     )
                 except Exception:
                     pass
             try:
-                os.remove("/tmp/vmm-a11y-unapplied-prompt.txt")
+                os.remove(uitest.path("vmm-a11y-unapplied-prompt.txt"))
             except Exception:
                 pass
         wrote_index = False
@@ -482,10 +483,10 @@ class _SentinelTableCell(object):
                 self.name or ""
             ):
                 try:
-                    open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(
+                    open(uitest.path("vmm-a11y-hw-select-index.txt"), "w").write(
                         str(self._index)
                     )
-                    open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+                    open(uitest.path("vmm-a11y-hw-selected-index.txt"), "w").write(
                         str(self._index)
                     )
                     wrote_index = True
@@ -499,10 +500,10 @@ class _SentinelTableCell(object):
         while time.time() < deadline:
             try:
                 if wrote_index:
-                    cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                    cur = open(uitest.path("vmm-a11y-hw-selected-index.txt"), "r").read().strip()
                     if cur != "" and int(cur) == int(self._index):
                         break
-                elif open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == (
+                elif open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read().strip() == (
                     self.name or ""
                 ):
                     break
@@ -515,9 +516,9 @@ class _SentinelTableCell(object):
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                if not os.path.exists("/tmp/vmm-a11y-hw-select.txt"):
+                if not os.path.exists(uitest.path("vmm-a11y-hw-select.txt")):
                     break
-                if open("/tmp/vmm-a11y-hw-select.txt", "r").read().strip() != (
+                if open(uitest.path("vmm-a11y-hw-select.txt"), "r").read().strip() != (
                     self.name or ""
                 ):
                     break
@@ -541,7 +542,7 @@ class _SentinelTableCell(object):
             while time.time() < deadline:
                 try:
                     if (
-                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        open(uitest.path("vmm-a11y-config-apply-sensitive"), "r")
                         .read()
                         .strip()
                         != "1"
@@ -549,7 +550,7 @@ class _SentinelTableCell(object):
                         break
                 except Exception:
                     break
-                if os.path.exists("/tmp/vmm-a11y-unapplied-prompt.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-unapplied-prompt.txt")):
                     break
                 time.sleep(0.05)
         if "NIC" in (self.name or ""):
@@ -557,9 +558,9 @@ class _SentinelTableCell(object):
             while time.time() < deadline:
                 try:
                     for_dev = open(
-                        "/tmp/vmm-a11y-network-ip-for.txt", "r"
+                        uitest.path("vmm-a11y-network-ip-for.txt"), "r"
                     ).read().strip()
-                    ips = open("/tmp/vmm-a11y-network-ip.txt", "r").read()
+                    ips = open(uitest.path("vmm-a11y-network-ip.txt"), "r").read()
                     if ips and for_dev == (self.name or ""):
                         break
                 except Exception:
@@ -569,14 +570,14 @@ class _SentinelTableCell(object):
     def doubleClick(self, *args, **kwargs):
         self.click(*args, **kwargs)
         try:
-            open("/tmp/vmm-a11y-choose-volume", "w").write("1")
-            open("/tmp/vmm-a11y-click.txt", "w").write("Choose Volume")
+            open(uitest.path("vmm-a11y-choose-volume"), "w").write("1")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("Choose Volume")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() != "1":
                     return
             except Exception:
                 return
@@ -630,13 +631,13 @@ class _OslistRowSentinel(object):
         want = self._want or "generic"
         try:
             if want == "include-eol":
-                open("/tmp/vmm-a11y-oslist-eol.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-oslist-eol.txt"), "w").write("1")
                 return
-            open("/tmp/vmm-a11y-os-select.txt", "w").write(want)
-            open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
-            open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+            open(uitest.path("vmm-a11y-os-select.txt"), "w").write(want)
+            open(uitest.path("vmm-a11y-oslist-confirmed"), "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-popover-hidden"), "w").write("1")
             try:
-                os.remove("/tmp/vmm-a11y-oslist-reopen")
+                os.remove(uitest.path("vmm-a11y-oslist-reopen"))
             except Exception:
                 pass
         except Exception:
@@ -644,12 +645,12 @@ class _OslistRowSentinel(object):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                got = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+                got = open(uitest.path("vmm-a11y-oslist-entry.txt"), "r").read().strip()
             except Exception:
                 got = ""
             hidden = False
             try:
-                hidden = open("/tmp/vmm-a11y-oslist-popover-hidden", "r").read().strip() == "1"
+                hidden = open(uitest.path("vmm-a11y-oslist-popover-hidden"), "r").read().strip() == "1"
             except Exception:
                 hidden = False
             if got and want and want.lower() not in ("include-eol",):
@@ -670,8 +671,8 @@ class _OslistPopoverSentinel(object):
     def _hidden(self):
         try:
             return os.path.exists(
-                "/tmp/vmm-a11y-oslist-popover-hidden"
-            ) or os.path.exists("/tmp/vmm-a11y-oslist-escape")
+                uitest.path("vmm-a11y-oslist-popover-hidden")
+            ) or os.path.exists(uitest.path("vmm-a11y-oslist-escape"))
         except Exception:
             return False
 
@@ -733,7 +734,7 @@ class _SentinelOslistEntry(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-oslist-entry.txt"), "r").read().strip()
         except Exception:
             return ""
 
@@ -766,30 +767,30 @@ class _SentinelOslistEntry(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         for marker in (
-            "/tmp/vmm-a11y-oslist-escape",
-            "/tmp/vmm-a11y-oslist-popover-hidden",
+            uitest.path("vmm-a11y-oslist-escape"),
+            uitest.path("vmm-a11y-oslist-popover-hidden"),
         ):
             try:
                 os.remove(marker)
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-oslist-reopen", "w").write("1")
-            open("/tmp/vmm-a11y-oslist-focus", "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-reopen"), "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-focus"), "w").write("1")
         except Exception:
             pass
 
     def set_text(self, text):
         # Typing only filters the popover. Confirming a row writes os-select.
         try:
-            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(text or "")
-            open("/tmp/vmm-a11y-entry.txt", "w").write(text or "")
-            open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(text or "")
+            open(uitest.path("vmm-a11y-entry.txt"), "w").write(text or "")
+            open(uitest.path("vmm-a11y-oslist-typed"), "w").write("1")
         except Exception:
             pass
         _oslist_start_search()
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(".entry-load-oslist-entry")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write(".entry-load-oslist-entry")
         except Exception:
             pass
 
@@ -848,11 +849,11 @@ class _StorageRadioSentinel(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-storage-radio.txt", "w").write(self._want)
+            open(uitest.path("vmm-a11y-storage-radio.txt"), "w").write(self._want)
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-click.txt"), "w").write(self.name)
         except Exception:
             pass
 
@@ -897,7 +898,7 @@ class _EnableStorageSentinel(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("Enable storage")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("Enable storage")
         except Exception:
             pass
 
@@ -915,18 +916,18 @@ class _SentinelEntry(object):
         path = self._path
         if self.name == "media-entry":
             try:
-                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
             except Exception:
                 shown = ""
             try:
-                customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip()
+                customize = open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip()
             except Exception:
                 customize = "0"
             details_val = None
             try:
-                if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-details-media-entry.txt")):
                     details_val = open(
-                        "/tmp/vmm-a11y-details-media-entry.txt", "r"
+                        uitest.path("vmm-a11y-details-media-entry.txt"), "r"
                     ).read()
             except Exception:
                 details_val = None
@@ -940,7 +941,7 @@ class _SentinelEntry(object):
                     return raw
                 try:
                     for line in open(
-                        "/tmp/vmm-a11y-details-media-combo.txt", "r"
+                        uitest.path("vmm-a11y-details-media-combo.txt"), "r"
                     ).read().splitlines():
                         line = line.strip()
                         if line.endswith("(%s)" % text) or (
@@ -956,9 +957,9 @@ class _SentinelEntry(object):
             # to leftover wizard /pool- paths.
             if details_val is not None and shown and customize != "1":
                 try:
-                    src = open("/tmp/vmm-a11y-disk-source-path.txt", "r").read()
+                    src = open(uitest.path("vmm-a11y-disk-source-path.txt"), "r").read()
                     sens = open(
-                        "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                        uitest.path("vmm-a11y-config-apply-sensitive"), "r"
                     ).read().strip()
                     if src == "" and sens != "1":
                         return ""
@@ -968,9 +969,9 @@ class _SentinelEntry(object):
             if details_val is not None and not details_val.strip():
                 return details_val
             for alt in (
-                "/tmp/vmm-a11y-disk-source-path.txt",
-                "/tmp/vmm-a11y-media-browse.txt",
-                "/tmp/vmm-a11y-details-media-entry.txt",
+                uitest.path("vmm-a11y-disk-source-path.txt"),
+                uitest.path("vmm-a11y-media-browse.txt"),
+                uitest.path("vmm-a11y-details-media-entry.txt"),
             ):
                 try:
                     val = open(alt, "r").read().strip()
@@ -983,13 +984,13 @@ class _SentinelEntry(object):
                 ):
                     return val
             try:
-                if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt"):
-                    path = "/tmp/vmm-a11y-details-media-entry.txt"
+                if os.path.exists(uitest.path("vmm-a11y-details-media-entry.txt")):
+                    path = uitest.path("vmm-a11y-details-media-entry.txt")
             except Exception:
                 pass
         if str(self.name).startswith("Title"):
             try:
-                return open("/tmp/vmm-a11y-overview-title-current.txt", "r").read()
+                return open(uitest.path("vmm-a11y-overview-title-current.txt"), "r").read()
             except Exception:
                 pass
         try:
@@ -1044,11 +1045,11 @@ class _SentinelEntry(object):
         except Exception:
             pass
         if self._path in (
-            "/tmp/vmm-a11y-boot-init-path.txt",
-            "/tmp/vmm-a11y-boot-init-args.txt",
+            uitest.path("vmm-a11y-boot-init-path.txt"),
+            uitest.path("vmm-a11y-boot-init-args.txt"),
         ):
             try:
-                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+                open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("1")
             except Exception:
                 pass
         if self.name == "media-entry":
@@ -1057,24 +1058,24 @@ class _SentinelEntry(object):
             except Exception:
                 pass
             try:
-                os.remove("/tmp/vmm-a11y-media-select.txt")
+                os.remove(uitest.path("vmm-a11y-media-select.txt"))
             except Exception:
                 pass
             if not (text or "").strip():
                 try:
-                    os.remove("/tmp/vmm-a11y-media-browse.txt")
+                    os.remove(uitest.path("vmm-a11y-media-browse.txt"))
                 except Exception:
                     pass
         needs_set = self._path in (
-            "/tmp/vmm-a11y-details-model.txt",
-            "/tmp/vmm-a11y-gfx-password.txt",
-            "/tmp/vmm-a11y-fs-source.txt",
-            "/tmp/vmm-a11y-fs-target.txt",
-            "/tmp/vmm-a11y-disk-bus.txt",
-            "/tmp/vmm-a11y-details-mac-entry.txt",
-            "/tmp/vmm-a11y-mac-entry.txt",
+            uitest.path("vmm-a11y-details-model.txt"),
+            uitest.path("vmm-a11y-gfx-password.txt"),
+            uitest.path("vmm-a11y-fs-source.txt"),
+            uitest.path("vmm-a11y-fs-target.txt"),
+            uitest.path("vmm-a11y-disk-bus.txt"),
+            uitest.path("vmm-a11y-details-mac-entry.txt"),
+            uitest.path("vmm-a11y-mac-entry.txt"),
         ) or (
-            self._path.startswith("/tmp/vmm-a11y-combo-")
+            self._path.startswith(uitest.path("vmm-a11y-combo-"))
             and not self._path.endswith("-current.txt")
         )
         if needs_set:
@@ -1088,7 +1089,7 @@ class _SentinelEntry(object):
                 sens = False
                 try:
                     sens = (
-                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        open(uitest.path("vmm-a11y-config-apply-sensitive"), "r")
                         .read()
                         .strip()
                         == "1"
@@ -1099,20 +1100,20 @@ class _SentinelEntry(object):
                     sens
                     or self._path
                     not in (
-                        "/tmp/vmm-a11y-details-model.txt",
-                        "/tmp/vmm-a11y-fs-source.txt",
-                        "/tmp/vmm-a11y-fs-target.txt",
+                        uitest.path("vmm-a11y-details-model.txt"),
+                        uitest.path("vmm-a11y-fs-source.txt"),
+                        uitest.path("vmm-a11y-fs-target.txt"),
                     )
-                    and not self._path.startswith("/tmp/vmm-a11y-combo-")
+                    and not self._path.startswith(uitest.path("vmm-a11y-combo-"))
                 ):
                     return
                 time.sleep(0.05)
-        if self._path == "/tmp/vmm-a11y-overview-desc.txt":
+        if self._path == uitest.path("vmm-a11y-overview-desc.txt"):
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
                     if (
-                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        open(uitest.path("vmm-a11y-config-apply-sensitive"), "r")
                         .read()
                         .strip()
                         == "1"
@@ -1122,19 +1123,19 @@ class _SentinelEntry(object):
                     pass
                 time.sleep(0.05)
         try:
-            open("/tmp/vmm-a11y-entry.txt", "w").write(text if text is not None else "")
+            open(uitest.path("vmm-a11y-entry.txt"), "w").write(text if text is not None else "")
         except Exception:
             pass
         if self.name == "install-url-entry":
             try:
-                open("/tmp/vmm-a11y-url-entry.txt", "w").write(
+                open(uitest.path("vmm-a11y-url-entry.txt"), "w").write(
                     text if text is not None else ""
                 )
             except Exception:
                 pass
         if self.name == "install-urlopts-entry":
             try:
-                open("/tmp/vmm-a11y-urlopts-entry.txt", "w").write(
+                open(uitest.path("vmm-a11y-urlopts-entry.txt"), "w").write(
                     text if text is not None else ""
                 )
             except Exception:
@@ -1142,27 +1143,27 @@ class _SentinelEntry(object):
         if str(self.name).startswith("Device name"):
             newvm = False
             try:
-                newvm = open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
+                newvm = open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() == "1"
             except Exception:
                 newvm = False
             details_net = False
             try:
                 details_net = (
-                    open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+                    open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
                     == "network-tab"
                 )
             except Exception:
                 details_net = False
             if details_net or not newvm:
                 try:
-                    open("/tmp/vmm-a11y-net-device.txt.set", "w").write(
+                    open(uitest.path("vmm-a11y-net-device.txt.set"), "w").write(
                         text if text is not None else ""
                     )
                 except Exception:
                     pass
         if str(self.name).startswith("Name"):
             try:
-                open("/tmp/vmm-a11y-create-name.txt", "w").write(
+                open(uitest.path("vmm-a11y-create-name.txt"), "w").write(
                     text if text is not None else ""
                 )
             except Exception:
@@ -1171,53 +1172,53 @@ class _SentinelEntry(object):
             # The New VM Name field must not leave overview-name-want.
             if "overview-name" in (self._path or ""):
                 try:
-                    open("/tmp/vmm-a11y-overview-name.txt", "w").write(
+                    open(uitest.path("vmm-a11y-overview-name.txt"), "w").write(
                         text if text is not None else ""
                     )
-                    open("/tmp/vmm-a11y-overview-name-want.txt", "w").write(
+                    open(uitest.path("vmm-a11y-overview-name-want.txt"), "w").write(
                         text if text is not None else ""
                     )
                 except Exception:
                     pass
                 deadline = time.time() + 2.0
                 while time.time() < deadline:
-                    if not os.path.exists("/tmp/vmm-a11y-overview-name.txt"):
+                    if not os.path.exists(uitest.path("vmm-a11y-overview-name.txt")):
                         break
                     time.sleep(0.05)
         if str(self.name).startswith("Title"):
             try:
-                open("/tmp/vmm-a11y-overview-title.txt", "w").write(
+                open(uitest.path("vmm-a11y-overview-title.txt"), "w").write(
                     text if text is not None else ""
                 )
             except Exception:
                 pass
             deadline = time.time() + 2.0
             while time.time() < deadline:
-                if not os.path.exists("/tmp/vmm-a11y-overview-title.txt"):
+                if not os.path.exists(uitest.path("vmm-a11y-overview-title.txt")):
                     break
                 time.sleep(0.05)
         if str(self.name).startswith("Description"):
             try:
-                open("/tmp/vmm-a11y-overview-desc.txt", "w").write(
+                open(uitest.path("vmm-a11y-overview-desc.txt"), "w").write(
                     text if text is not None else ""
                 )
             except Exception:
                 pass
             deadline = time.time() + 2.0
             while time.time() < deadline:
-                if not os.path.exists("/tmp/vmm-a11y-overview-desc.txt"):
+                if not os.path.exists(uitest.path("vmm-a11y-overview-desc.txt")):
                     break
                 time.sleep(0.05)
         if str(self.name).startswith("Init "):
             try:
-                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+                open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("1")
             except Exception:
                 pass
         if self.name == "media-entry":
             value = text if text is not None else ""
             for path in (
-                "/tmp/vmm-a11y-media-entry.txt",
-                "/tmp/vmm-a11y-details-media-entry.txt",
+                uitest.path("vmm-a11y-media-entry.txt"),
+                uitest.path("vmm-a11y-details-media-entry.txt"),
             ):
                 try:
                     open(path, "w").write(value)
@@ -1227,15 +1228,15 @@ class _SentinelEntry(object):
             newvm = False
             vm_open = False
             try:
-                customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip()
+                customize = open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip()
             except Exception:
                 customize = "0"
             try:
-                newvm = open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
+                newvm = open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() == "1"
             except Exception:
                 newvm = False
             try:
-                vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
+                vm_open = bool(open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip())
             except Exception:
                 vm_open = False
             # Wizard ISO/media typing must not leave a details .set file.
@@ -1244,7 +1245,7 @@ class _SentinelEntry(object):
             details_owns = customize == "1" or (vm_open and not newvm)
             if details_owns:
                 try:
-                    open("/tmp/vmm-a11y-details-media-entry.txt.set", "w").write(value)
+                    open(uitest.path("vmm-a11y-details-media-entry.txt.set"), "w").write(value)
                 except Exception:
                     pass
                 deadline = time.time() + 3.0
@@ -1252,9 +1253,9 @@ class _SentinelEntry(object):
                     try:
                         if (
                             not os.path.exists(
-                                "/tmp/vmm-a11y-details-media-entry.txt.set"
+                                uitest.path("vmm-a11y-details-media-entry.txt.set")
                             )
-                            and open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                            and open(uitest.path("vmm-a11y-config-apply-sensitive"), "r")
                             .read()
                             .strip()
                             == "1"
@@ -1265,7 +1266,7 @@ class _SentinelEntry(object):
                     time.sleep(0.05)
             else:
                 try:
-                    os.remove("/tmp/vmm-a11y-details-media-entry.txt.set")
+                    os.remove(uitest.path("vmm-a11y-details-media-entry.txt.set"))
                 except Exception:
                     pass
                 # Wait for the New VM media poller to apply the path and
@@ -1275,13 +1276,13 @@ class _SentinelEntry(object):
                 while time.time() < deadline:
                     try:
                         set_gone = not os.path.exists(
-                            "/tmp/vmm-a11y-media-entry.txt.set"
+                            uitest.path("vmm-a11y-media-entry.txt.set")
                         )
                     except Exception:
                         set_gone = True
                     try:
                         osname = open(
-                            "/tmp/vmm-a11y-oslist-entry.txt", "r"
+                            uitest.path("vmm-a11y-oslist-entry.txt"), "r"
                         ).read().strip()
                     except Exception:
                         osname = ""
@@ -1294,17 +1295,17 @@ class _SentinelEntry(object):
             path = value
             vm_open = False
             try:
-                vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
+                vm_open = bool(open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip())
             except Exception:
                 vm_open = False
             if path.startswith("/") and not os.path.exists(path) and not vm_open:
                 try:
-                    open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("None detected")
+                    open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write("None detected")
                 except Exception:
                     pass
                 if path.startswith("/dev/"):
                     try:
-                        open("/tmp/vmm-a11y-alert.txt", "w").write(
+                        open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                             "Error setting installer parameters."
                         )
                     except Exception:
@@ -1335,7 +1336,7 @@ class _ArchOptionsSentinel(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("Architecture options")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("Architecture options")
         except Exception:
             pass
 
@@ -1351,7 +1352,7 @@ class _SentinelMethodRadio(object):
 
     def _flag(self, suffix):
         try:
-            return open("/tmp/vmm-a11y-method-%s-%s" % (self._key, suffix), "r").read().strip()
+            return open(uitest.path("vmm-a11y-method-%s-%s") % (self._key, suffix), "r").read().strip()
         except Exception:
             return ""
 
@@ -1370,7 +1371,7 @@ class _SentinelMethodRadio(object):
     @property
     def checked(self):
         try:
-            return open("/tmp/vmm-a11y-method-active.txt", "r").read().strip() == self._key
+            return open(uitest.path("vmm-a11y-method-active.txt"), "r").read().strip() == self._key
         except Exception:
             return False
 
@@ -1380,17 +1381,17 @@ class _SentinelMethodRadio(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-method-active.txt", "w").write(self._key)
+            open(uitest.path("vmm-a11y-method-active.txt"), "w").write(self._key)
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-click.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-method-active.txt", "r").read().strip() == self._key:
+                if open(uitest.path("vmm-a11y-method-active.txt"), "r").read().strip() == self._key:
                     return
             except Exception:
                 pass
@@ -1458,12 +1459,12 @@ class _SentinelClickButton(object):
     def sensitive(self):
         if self.name == "Choose Volume":
             try:
-                return open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-choose-volume-sensitive.txt"), "r").read().strip() == "1"
             except Exception:
                 return False
         if self.name == "Browse Local":
             try:
-                return open("/tmp/vmm-a11y-browse-local-sensitive.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-browse-local-sensitive.txt"), "r").read().strip() == "1"
             except Exception:
                 return True
         return True
@@ -1489,21 +1490,21 @@ class _SentinelClickButton(object):
         # _in_prompt and the Are-you-sure alert disappears.
         if self.name != "config-remove":
             try:
-                open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+                open(uitest.path("vmm-a11y-click.txt"), "w").write(self.name)
             except Exception:
                 pass
         if self.name == "vol-refresh":
             try:
-                open("/tmp/vmm-a11y-vol-refresh", "w").write("1")
+                open(uitest.path("vmm-a11y-vol-refresh"), "w").write("1")
             except Exception:
                 pass
         if self.name == "config-remove":
             target = ""
             for path in (
-                "/tmp/vmm-a11y-hw-last-device.txt",
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-hw-selected.txt",
-                "/tmp/vmm-a11y-last-hw.txt",
+                uitest.path("vmm-a11y-hw-last-device.txt"),
+                uitest.path("vmm-a11y-hw-clicked.txt"),
+                uitest.path("vmm-a11y-hw-selected.txt"),
+                uitest.path("vmm-a11y-last-hw.txt"),
             ):
                 try:
                     cand = open(path, "r").read().strip()
@@ -1523,7 +1524,7 @@ class _SentinelClickButton(object):
                 try:
                     rows = [
                         n
-                        for n in open("/tmp/vmm-a11y-hw-list.txt", "r")
+                        for n in open(uitest.path("vmm-a11y-hw-list.txt"), "r")
                         .read()
                         .splitlines()
                         if n
@@ -1542,9 +1543,9 @@ class _SentinelClickButton(object):
                     target = disks[-1]
             try:
                 if target:
-                    open("/tmp/vmm-a11y-config-remove-target.txt", "w").write(target)
-                open("/tmp/vmm-a11y-config-remove", "w").write("1")
-                open("/tmp/vmm-a11y-config-remove-debug.txt", "a").write(
+                    open(uitest.path("vmm-a11y-config-remove-target.txt"), "w").write(target)
+                open(uitest.path("vmm-a11y-config-remove"), "w").write("1")
+                open(uitest.path("vmm-a11y-config-remove-debug.txt"), "a").write(
                     "click target=%r\n" % target
                 )
             except Exception:
@@ -1553,12 +1554,12 @@ class _SentinelClickButton(object):
             last_retry = time.time()
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
                 try:
-                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+                    alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
                 except Exception:
                     alert = ""
                 if alert and (
@@ -1573,7 +1574,7 @@ class _SentinelClickButton(object):
                     if not target:
                         try:
                             target = open(
-                                "/tmp/vmm-a11y-hw-last-device.txt", "r"
+                                uitest.path("vmm-a11y-hw-last-device.txt"), "r"
                             ).read().strip()
                         except Exception:
                             target = ""
@@ -1587,12 +1588,12 @@ class _SentinelClickButton(object):
                         ):
                             target = ""
                     try:
-                        if not os.path.exists("/tmp/vmm-a11y-config-remove"):
+                        if not os.path.exists(uitest.path("vmm-a11y-config-remove")):
                             if target:
                                 open(
-                                    "/tmp/vmm-a11y-config-remove-target.txt", "w"
+                                    uitest.path("vmm-a11y-config-remove-target.txt"), "w"
                                 ).write(target)
-                            open("/tmp/vmm-a11y-config-remove", "w").write("1")
+                            open(uitest.path("vmm-a11y-config-remove"), "w").write("1")
                     except Exception:
                         pass
                     last_retry = time.time()
@@ -1601,7 +1602,7 @@ class _SentinelClickButton(object):
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() != "1":
+                    if open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip() != "1":
                         return
                 except Exception:
                     return
@@ -1617,39 +1618,39 @@ class _SentinelClickButton(object):
             "storage-browse",
         ):
             try:
-                open("/tmp/vmm-a11y-%s" % self.name, "w").write("1")
+                open(uitest.path("vmm-a11y-%s") % self.name, "w").write("1")
             except Exception:
                 pass
             deadline = time.time() + 8.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
                 time.sleep(0.05)
         if self.name == "browse-cancel":
             try:
-                open("/tmp/vmm-a11y-browse-cancel", "w").write("1")
+                open(uitest.path("vmm-a11y-browse-cancel"), "w").write("1")
             except Exception:
                 pass
             deadline = time.time() + 4.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                    if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() != "1":
                         return
                 except Exception:
                     return
                 time.sleep(0.05)
         if self.name == "create-cancel":
             try:
-                open("/tmp/vmm-a11y-window-close.txt", "w").write("New VM")
+                open(uitest.path("vmm-a11y-window-close.txt"), "w").write("New VM")
             except Exception:
                 pass
             deadline = time.time() + 4.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() != "1":
+                    if open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() != "1":
                         return
                 except Exception:
                     return
@@ -1658,20 +1659,20 @@ class _SentinelClickButton(object):
             deadline = time.time() + 8.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
                 time.sleep(0.05)
         if self.name == "Choose Volume":
             try:
-                open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+                open(uitest.path("vmm-a11y-choose-volume"), "w").write("1")
             except Exception:
                 pass
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                    if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() != "1":
                         return
                 except Exception:
                     return
@@ -1680,32 +1681,32 @@ class _SentinelClickButton(object):
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() != "1":
+                    if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() != "1":
                         return
                 except Exception:
                     return
                 time.sleep(0.05)
         if self.name == "Browse":
             try:
-                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                xml = open(uitest.path("vmm-a11y-xml-contents.txt"), "r").read()
                 names = re.findall(r"/([^/\s\"]+\.qcow2)", xml)
                 if names:
-                    open("/tmp/vmm-a11y-extra-vols.txt", "w").write("\n".join(names))
+                    open(uitest.path("vmm-a11y-extra-vols.txt"), "w").write("\n".join(names))
                     existing = []
                     try:
-                        existing = open("/tmp/vmm-a11y-vol-list.txt", "r").read().splitlines()
+                        existing = open(uitest.path("vmm-a11y-vol-list.txt"), "r").read().splitlines()
                     except Exception:
                         existing = []
                     for vol in names:
                         if vol not in existing:
                             existing.append(vol)
-                    open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(existing))
+                    open(uitest.path("vmm-a11y-vol-list.txt"), "w").write("\n".join(existing))
             except Exception:
                 pass
             deadline = time.time() + 8.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() == "1":
                         break
                 except Exception:
                     pass
@@ -1713,22 +1714,22 @@ class _SentinelClickButton(object):
         if self.name in ("IP address", "IP address:"):
             old = ""
             try:
-                old = open("/tmp/vmm-a11y-network-ip-stamp", "r").read()
+                old = open(uitest.path("vmm-a11y-network-ip-stamp"), "r").read()
             except Exception:
                 old = ""
             nic = ""
             try:
-                nic = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                nic = open(uitest.path("vmm-a11y-hw-clicked.txt"), "r").read().strip()
             except Exception:
                 nic = ""
             try:
-                open("/tmp/vmm-a11y-network-ip-refresh", "w").write(nic or "1")
+                open(uitest.path("vmm-a11y-network-ip-refresh"), "w").write(nic or "1")
             except Exception:
                 pass
             deadline = time.time() + 5.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-network-ip-stamp", "r").read() != old:
+                    if open(uitest.path("vmm-a11y-network-ip-stamp"), "r").read() != old:
                         return
                 except Exception:
                     pass
@@ -1754,7 +1755,7 @@ class _SentinelBootstrapCheck(object):
     @property
     def checked(self):
         try:
-            return open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "r").read().strip() in (
+            return open(uitest.path("vmm-a11y-oscontainer-bootstrap.txt"), "r").read().strip() in (
                 "1",
                 "true",
                 "on",
@@ -1768,7 +1769,7 @@ class _SentinelBootstrapCheck(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-oscontainer-bootstrap.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-oscontainer-bootstrap.txt"), "w").write("1")
         except Exception:
             pass
 
@@ -1794,18 +1795,18 @@ class _SentinelCredentials(object):
     def click_expander(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-container-creds.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-container-creds.txt"), "w").write("1")
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("Credentials")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("Credentials")
         except Exception:
             pass
 
 
 def _vm_page():
     try:
-        return open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() or "details"
+        return open(uitest.path("vmm-a11y-vm-page-current.txt"), "r").read().strip() or "details"
     except Exception:
         return "details"
 
@@ -1820,7 +1821,7 @@ class _SentinelGuestNotRunning(object):
 
     def _error_text(self):
         try:
-            return open("/tmp/vmm-a11y-console-error.txt", "r").read()
+            return open(uitest.path("vmm-a11y-console-error.txt"), "r").read()
         except Exception:
             return ""
 
@@ -1848,12 +1849,12 @@ class _SentinelConsolePassword(object):
     roleName = "password text"
 
     def _path(self):
-        return "/tmp/vmm-a11y-console-auth-password.txt"
+        return uitest.path("vmm-a11y-console-auth-password.txt")
 
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-auth.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -1892,12 +1893,12 @@ class _SentinelConsoleUsername(object):
     roleName = "text"
 
     def _path(self):
-        return "/tmp/vmm-a11y-console-auth-username.txt"
+        return uitest.path("vmm-a11y-console-auth-username.txt")
 
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-auth.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -1938,7 +1939,7 @@ class _SentinelConsoleLogin(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-auth.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -1952,15 +1953,15 @@ class _SentinelConsoleLogin(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-console-login", "w").write("1")
+            open(uitest.path("vmm-a11y-console-login"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
             try:
-                if open("/tmp/vmm-a11y-console-gfx-viewport.txt", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-console-gfx-viewport.txt"), "r").read().strip() == "1":
                     return
             except Exception:
                 pass
@@ -1974,7 +1975,7 @@ class _SentinelConsoleSavePassword(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-auth.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -1985,7 +1986,7 @@ class _SentinelConsoleSavePassword(object):
     @property
     def checked(self):
         try:
-            return open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-auth-remember.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -1996,13 +1997,13 @@ class _SentinelConsoleSavePassword(object):
         ignore = (args, kwargs)
         want = "0" if self.checked else "1"
         try:
-            open("/tmp/vmm-a11y-console-auth-remember.txt.click", "w").write("1")
-            open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(want)
+            open(uitest.path("vmm-a11y-console-auth-remember.txt.click"), "w").write("1")
+            open(uitest.path("vmm-a11y-console-auth-remember.txt"), "w").write(want)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt.click"):
+            if not os.path.exists(uitest.path("vmm-a11y-console-auth-remember.txt.click")):
                 return
             time.sleep(0.05)
 
@@ -2014,7 +2015,7 @@ class _SentinelConnectConsole(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-console-connect.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-connect.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -2031,18 +2032,18 @@ class _SentinelConnectConsole(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-console-connect-click", "w").write("1")
+            open(uitest.path("vmm-a11y-console-connect-click"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-console-gfx-viewport.txt", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-console-gfx-viewport.txt"), "r").read().strip() == "1":
                     return
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-console-serial.txt", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-console-serial.txt"), "r").read().strip() == "1":
                     return
             except Exception:
                 pass
@@ -2056,7 +2057,7 @@ class _SentinelSerialTerminal(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-console-serial.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-serial.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -2067,7 +2068,7 @@ class _SentinelSerialTerminal(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-serial-text.txt", "r").read()
+            return open(uitest.path("vmm-a11y-serial-text.txt"), "r").read()
         except Exception:
             return ""
 
@@ -2076,12 +2077,12 @@ class _SentinelSerialTerminal(object):
 
     def typeText(self, string):
         try:
-            open("/tmp/vmm-a11y-serial-type.txt", "w").write(string or "")
+            open(uitest.path("vmm-a11y-serial-type.txt"), "w").write(string or "")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-serial-type.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-serial-type.txt")):
                 return
             time.sleep(0.05)
 
@@ -2089,23 +2090,23 @@ class _SentinelSerialTerminal(object):
         button = kwargs.get("button", args[0] if args else 1)
         if button == 3:
             try:
-                open("/tmp/vmm-a11y-serial-popup-show", "w").write("1")
-                open("/tmp/vmm-a11y-serial-popup.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-serial-popup-show"), "w").write("1")
+                open(uitest.path("vmm-a11y-serial-popup.txt"), "w").write("1")
             except Exception:
                 pass
             deadline = time.time() + 3.0
             while time.time() < deadline:
-                if not os.path.exists("/tmp/vmm-a11y-serial-popup-show"):
+                if not os.path.exists(uitest.path("vmm-a11y-serial-popup-show")):
                     return
                 time.sleep(0.05)
             return
         try:
-            open("/tmp/vmm-a11y-serial-focus", "w").write("1")
+            open(uitest.path("vmm-a11y-serial-focus"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-serial-focus"):
+            if not os.path.exists(uitest.path("vmm-a11y-serial-focus")):
                 return
             time.sleep(0.05)
 
@@ -2126,12 +2127,12 @@ class _SentinelSerialPopupItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-serial-popup-action.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-serial-popup-action.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-serial-popup-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-serial-popup-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -2143,7 +2144,7 @@ class _SentinelSerialPopup(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-serial-popup.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-serial-popup.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -2195,8 +2196,8 @@ class _SentinelVMWindowToolbarMenu(object):
         if not self._vmname:
             return
         try:
-            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vmname)
-            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vmname)
+            open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(self._vmname)
+            open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(self._vmname)
         except Exception:
             pass
 
@@ -2255,11 +2256,11 @@ class _SentinelAddHardwareButton(object):
         try:
             vm = ""
             try:
-                vm = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                vm = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
             except Exception:
                 vm = ""
-            open("/tmp/vmm-a11y-addhw-show.txt", "w").write(vm or "1")
-            open("/tmp/vmm-a11y-click.txt", "w").write("add-hardware")
+            open(uitest.path("vmm-a11y-addhw-show.txt"), "w").write(vm or "1")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("add-hardware")
         except Exception:
             pass
         deadline = time.time() + 8.0
@@ -2285,7 +2286,7 @@ class _SentinelAddhwError(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-addhw-error.txt", "r").read()
+            return open(uitest.path("vmm-a11y-addhw-error.txt"), "r").read()
         except Exception:
             return self.name
 
@@ -2308,18 +2309,18 @@ class _SentinelConfigApply(object):
     @property
     def sensitive(self):
         try:
-            hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+            hw = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read()
         except Exception:
             hw = ""
         try:
             if "Boot" in hw and open(
-                "/tmp/vmm-a11y-boot-init-path.txt", "r"
+                uitest.path("vmm-a11y-boot-init-path.txt"), "r"
             ).read().strip():
                 return True
         except Exception:
             pass
         try:
-            return open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -2331,11 +2332,11 @@ class _SentinelConfigApply(object):
 
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
-        if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+        if os.path.exists(uitest.path("vmm-a11y-boot-init-path.txt")):
             deadline = time.time() + 2.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == (
+                    if open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read().strip() == (
                         "Boot Options"
                     ):
                         break
@@ -2343,23 +2344,23 @@ class _SentinelConfigApply(object):
                     pass
                 time.sleep(0.05)
         try:
-            open("/tmp/vmm-a11y-config-apply", "w").write("1")
+            open(uitest.path("vmm-a11y-config-apply"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 8.0
-        while time.time() < deadline and os.path.exists("/tmp/vmm-a11y-config-apply"):
+        while time.time() < deadline and os.path.exists(uitest.path("vmm-a11y-config-apply")):
             time.sleep(0.05)
         try:
-            pending = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
+            pending = open(uitest.path("vmm-a11y-boot-init-path.txt"), "r").read().strip()
         except Exception:
             pending = None
         deadline = time.time() + (8.0 if pending == "" else 2.0)
         while time.time() < deadline:
             try:
-                if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                     break
                 if pending != "" and open(
-                    "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                    uitest.path("vmm-a11y-config-apply-sensitive"), "r"
                 ).read().strip() == "0":
                     break
             except Exception:
@@ -2388,7 +2389,7 @@ class _SentinelBootCell(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-boot-select.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-boot-select.txt"), "w").write(self.name or "")
         except Exception:
             pass
 
@@ -2403,24 +2404,24 @@ def _sentinel_boot_widgets(name, roleName, labeller_text=None):
     ):
         return _SentinelDetailsCheck(
             "Start virtual machine on host boot",
-            "/tmp/vmm-a11y-boot-autostart.txt",
+            uitest.path("vmm-a11y-boot-autostart.txt"),
         )
     if "direct kernel" in compact and "enable" not in compact:
         return _SentinelDetailsExpander(
-            "Direct kernel boot", "/tmp/vmm-a11y-boot-kernel-expand"
+            "Direct kernel boot", uitest.path("vmm-a11y-boot-kernel-expand")
         )
     if "enable direct kernel" in compact:
         return _SentinelDetailsCheck(
-            "Enable direct kernel boot", "/tmp/vmm-a11y-boot-kernel-enable.txt"
+            "Enable direct kernel boot", uitest.path("vmm-a11y-boot-kernel-enable.txt")
         )
     if "kernel args" in compact:
-        return _SentinelEntry("Kernel args:", "/tmp/vmm-a11y-boot-kernel-args.txt")
+        return _SentinelEntry("Kernel args:", uitest.path("vmm-a11y-boot-kernel-args.txt"))
     if "initrd path" in compact:
-        return _SentinelEntry("Initrd path:", "/tmp/vmm-a11y-boot-initrd.txt")
+        return _SentinelEntry("Initrd path:", uitest.path("vmm-a11y-boot-initrd.txt"))
     if "kernel path" in compact:
-        return _SentinelEntry("Kernel path:", "/tmp/vmm-a11y-boot-kernel.txt")
+        return _SentinelEntry("Kernel path:", uitest.path("vmm-a11y-boot-kernel.txt"))
     if "dtb path" in compact:
-        return _SentinelEntry("DTB path:", "/tmp/vmm-a11y-boot-dtb.txt")
+        return _SentinelEntry("DTB path:", uitest.path("vmm-a11y-boot-dtb.txt"))
     if "initrd-browse" in compact:
         return _SentinelClickButton("initrd-browse")
     if "kernel-browse" in compact:
@@ -2448,19 +2449,19 @@ class _SentinelBootMenu(object):
 
     def _state(self):
         try:
-            hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+            hw = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read()
         except Exception:
             hw = ""
         if "Boot" in hw:
             try:
-                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                xml = open(uitest.path("vmm-a11y-xml-contents.txt"), "r").read()
                 xml_l = (xml or "").replace('"', "'").lower()
                 if "<bootmenu" in xml_l and "enable='yes'" in xml_l:
                     return "1"
             except Exception:
                 pass
         try:
-            return open("/tmp/vmm-a11y-boot-menu.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-boot-menu.txt"), "r").read().strip()
         except Exception:
             return "0"
 
@@ -2487,11 +2488,11 @@ class _SentinelBootMenu(object):
         ignore = (args, kwargs)
         nxt = "0" if self.checked else "1"
         try:
-            open("/tmp/vmm-a11y-boot-menu.txt", "w").write(nxt)
+            open(uitest.path("vmm-a11y-boot-menu.txt"), "w").write(nxt)
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("Enable boot menu")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("Enable boot menu")
         except Exception:
             pass
 
@@ -2523,9 +2524,9 @@ class _SentinelBootTab(object):
     ):
         ignore = (check_active, recursive, focusable, timeout)
         if name and "init path" in str(name).replace(".*", "").lower():
-            return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
+            return _SentinelEntry("Init path:", uitest.path("vmm-a11y-boot-init-path.txt"))
         if name and "init args" in str(name).replace(".*", "").lower():
-            return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
+            return _SentinelEntry("Init args:", uitest.path("vmm-a11y-boot-init-args.txt"))
         if name and "boot menu" in str(name).replace(".*", "").lower():
             return _SentinelBootMenu()
         sent = _sentinel_boot_widgets(name, roleName, labeller_text)
@@ -2636,7 +2637,7 @@ class _SentinelArchCombo(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-combo-open.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-combo-open.txt"), "w").write(self.name)
         except Exception:
             pass
 
@@ -2672,16 +2673,16 @@ def _sentinel_arch_combo_item(name, roleName):
         return None
     raw = str(name).replace(".*", "")
     files = (
-        ("Virt Type", "/tmp/vmm-a11y-combo-Virt Type.txt", "/tmp/vmm-a11y-virt-type.txt"),
+        ("Virt Type", uitest.path("vmm-a11y-combo-Virt Type.txt"), uitest.path("vmm-a11y-virt-type.txt")),
         (
             "Machine Type",
-            "/tmp/vmm-a11y-combo-Machine Type.txt",
-            "/tmp/vmm-a11y-machine-type.txt",
+            uitest.path("vmm-a11y-combo-Machine Type.txt"),
+            uitest.path("vmm-a11y-machine-type.txt"),
         ),
         (
             "Architecture",
-            "/tmp/vmm-a11y-combo-Architecture.txt",
-            "/tmp/vmm-a11y-arch.txt",
+            uitest.path("vmm-a11y-combo-Architecture.txt"),
+            uitest.path("vmm-a11y-arch.txt"),
         ),
     )
     try:
@@ -2725,121 +2726,121 @@ def _sentinel_named_entry(name, roleName, labeller_text=None):
     compact = blob.replace(".*", "").lower()
     if compact == "storage-entry" or raw == "storage-entry":
         try:
-            if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip() == "1":
                 return _SentinelWizardField(
                     "storage-entry",
-                    "/tmp/vmm-a11y-storage-entry.txt",
+                    uitest.path("vmm-a11y-storage-entry.txt"),
                     _addhw_dialog_open,
                 )
         except Exception:
             pass
-        return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
+        return _SentinelEntry("storage-entry", uitest.path("vmm-a11y-storage-entry.txt"))
     if "disk-source-path" in compact or raw == "disk-source-path":
-        return _SentinelEntry("disk-source-path", "/tmp/vmm-a11y-disk-source-path.txt")
+        return _SentinelEntry("disk-source-path", uitest.path("vmm-a11y-disk-source-path.txt"))
     if compact in ("name", "name:") or raw in ("Name", "Name:"):
         try:
-            if open("/tmp/vmm-a11y-createpool-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-createpool-shown.txt"), "r").read().strip() == "1":
                 return _SentinelWizardField(
-                    "Name:", "/tmp/vmm-a11y-createpool-name.txt", _createpool_dialog_open
+                    "Name:", uitest.path("vmm-a11y-createpool-name.txt"), _createpool_dialog_open
                 )
         except Exception:
             pass
         try:
-            if open("/tmp/vmm-a11y-createvol-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-createvol-shown.txt"), "r").read().strip() == "1":
                 return _SentinelWizardField(
-                    "Name:", "/tmp/vmm-a11y-createvol-name.txt", _createvol_dialog_open
+                    "Name:", uitest.path("vmm-a11y-createvol-name.txt"), _createvol_dialog_open
                 )
         except Exception:
             pass
         try:
-            if open("/tmp/vmm-a11y-createnet-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-createnet-shown.txt"), "r").read().strip() == "1":
                 return _SentinelWizardField(
-                    "Name:", "/tmp/vmm-a11y-createnet-name.txt", _createnet_dialog_open
+                    "Name:", uitest.path("vmm-a11y-createnet-name.txt"), _createnet_dialog_open
                 )
         except Exception:
             pass
         try:
-            if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1":
-                return _SentinelEntry("Name:", "/tmp/vmm-a11y-clone-name.txt")
+            if open(uitest.path("vmm-a11y-clone-shown.txt"), "r").read().strip() == "1":
+                return _SentinelEntry("Name:", uitest.path("vmm-a11y-clone-name.txt"))
         except Exception:
             pass
         try:
-            if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+            if open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip():
                 addhw = False
                 try:
-                    addhw = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1"
+                    addhw = open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip() == "1"
                 except Exception:
-                    addhw = os.path.exists("/tmp/vmm-a11y-addhw-open")
+                    addhw = os.path.exists(uitest.path("vmm-a11y-addhw-open"))
                 if not addhw:
-                    return _SentinelEntry("Name:", "/tmp/vmm-a11y-overview-name.txt")
+                    return _SentinelEntry("Name:", uitest.path("vmm-a11y-overview-name.txt"))
         except Exception:
             pass
-        return _SentinelEntry("Name:", "/tmp/vmm-a11y-create-name.txt")
+        return _SentinelEntry("Name:", uitest.path("vmm-a11y-create-name.txt"))
     if compact in ("title", "title:") or raw in ("Title", "Title:"):
-        return _SentinelEntry("Title:", "/tmp/vmm-a11y-overview-title.txt")
+        return _SentinelEntry("Title:", uitest.path("vmm-a11y-overview-title.txt"))
     if compact in ("description", "description:") or raw in (
         "Description",
         "Description:",
     ):
         try:
-            if open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-snapshot-new-shown.txt"), "r").read().strip() == "1":
                 return _SentinelWizardField(
                     "Description:",
-                    "/tmp/vmm-a11y-snapshot-new-desc.txt",
+                    uitest.path("vmm-a11y-snapshot-new-desc.txt"),
                     _snapshot_new_open,
                 )
         except Exception:
             pass
-        return _SentinelEntry("Description:", "/tmp/vmm-a11y-overview-desc.txt")
+        return _SentinelEntry("Description:", uitest.path("vmm-a11y-overview-desc.txt"))
     if "new path" in compact:
-        return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
+        return _SentinelEntry("New Path:", uitest.path("vmm-a11y-clone-stg-path.txt"))
     if compact == "import-entry" or raw == "import-entry":
-        return _SentinelEntry("import-entry", "/tmp/vmm-a11y-import-entry.txt")
+        return _SentinelEntry("import-entry", uitest.path("vmm-a11y-import-entry.txt"))
     if "disk bus" in compact:
-        return _SentinelEntry("Disk bus:", "/tmp/vmm-a11y-disk-bus.txt")
+        return _SentinelEntry("Disk bus:", uitest.path("vmm-a11y-disk-bus.txt"))
     if compact in ("mac-entry",) or raw == "mac-entry":
-        return _SentinelEntry("mac-entry", "/tmp/vmm-a11y-details-mac-entry.txt")
+        return _SentinelEntry("mac-entry", uitest.path("vmm-a11y-details-mac-entry.txt"))
     if compact == "media-entry" or raw == "media-entry":
-        path = "/tmp/vmm-a11y-media-entry.txt"
+        path = uitest.path("vmm-a11y-media-entry.txt")
         try:
-            if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt"):
-                path = "/tmp/vmm-a11y-details-media-entry.txt"
+            if os.path.exists(uitest.path("vmm-a11y-details-media-entry.txt")):
+                path = uitest.path("vmm-a11y-details-media-entry.txt")
         except Exception:
             pass
         return _SentinelEntry("media-entry", path)
     if compact == "install-url-entry" or raw == "install-url-entry":
-        return _SentinelEntry("install-url-entry", "/tmp/vmm-a11y-url-entry.txt")
+        return _SentinelEntry("install-url-entry", uitest.path("vmm-a11y-url-entry.txt"))
     if compact == "install-urlopts-entry" or raw == "install-urlopts-entry":
-        return _SentinelEntry("install-urlopts-entry", "/tmp/vmm-a11y-urlopts-entry.txt")
+        return _SentinelEntry("install-urlopts-entry", uitest.path("vmm-a11y-urlopts-entry.txt"))
     if "device name" in compact:
-        return _SentinelEntry("Device name:", "/tmp/vmm-a11y-net-device.txt")
+        return _SentinelEntry("Device name:", uitest.path("vmm-a11y-net-device.txt"))
     if "application path" in compact or "install-app-entry" in compact:
-        return _SentinelEntry("install-app-entry", "/tmp/vmm-a11y-app-entry.txt")
+        return _SentinelEntry("install-app-entry", uitest.path("vmm-a11y-app-entry.txt"))
     if "root directory" in compact or "install-oscontainer-fs" in compact:
-        return _SentinelEntry("install-oscontainer-fs", "/tmp/vmm-a11y-oscontainer-fs.txt")
+        return _SentinelEntry("install-oscontainer-fs", uitest.path("vmm-a11y-oscontainer-fs.txt"))
     if "container template" in compact or "install-container-template" in compact:
         return _SentinelEntry(
-            "install-container-template", "/tmp/vmm-a11y-container-template.txt"
+            "install-container-template", uitest.path("vmm-a11y-container-template.txt")
         )
     if "init path" in compact:
-        return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
+        return _SentinelEntry("Init path:", uitest.path("vmm-a11y-boot-init-path.txt"))
     if "init args" in compact:
-        return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
+        return _SentinelEntry("Init args:", uitest.path("vmm-a11y-boot-init-args.txt"))
     if "install-oscontainer-source-uri" in compact:
         return _SentinelEntry(
-            "install-oscontainer-source-uri", "/tmp/vmm-a11y-oscontainer-uri.txt"
+            "install-oscontainer-source-uri", uitest.path("vmm-a11y-oscontainer-uri.txt")
         )
     if "install-oscontainer-root-passwd" in compact:
         return _SentinelEntry(
-            "install-oscontainer-root-passwd", "/tmp/vmm-a11y-oscontainer-rootpw.txt"
+            "install-oscontainer-root-passwd", uitest.path("vmm-a11y-oscontainer-rootpw.txt")
         )
     if "bootstrap-registry-user" in compact:
         return _SentinelEntry(
-            "bootstrap-registry-user", "/tmp/vmm-a11y-bootstrap-user.txt"
+            "bootstrap-registry-user", uitest.path("vmm-a11y-bootstrap-user.txt")
         )
     if "bootstrap-registry-password" in compact:
         return _SentinelEntry(
-            "bootstrap-registry-password", "/tmp/vmm-a11y-bootstrap-passwd.txt"
+            "bootstrap-registry-password", uitest.path("vmm-a11y-bootstrap-passwd.txt")
         )
     return None
 
@@ -2879,7 +2880,7 @@ class _SentinelNetMenuItem(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (self._combo, self.name)
             )
         except Exception:
@@ -2892,7 +2893,7 @@ class _SentinelNetCombo(object):
     def __init__(self):
         self.name = "net-source"
         self.roleName = "combo box"
-        self._selected_path = "/tmp/vmm-a11y-net-source.txt"
+        self._selected_path = uitest.path("vmm-a11y-net-source.txt")
 
     @property
     def showing(self):
@@ -2942,7 +2943,7 @@ class _SentinelNetCombo(object):
         except Exception:
             pass
         try:
-            for line in open("/tmp/vmm-a11y-combo-net-source.txt", "r").read().splitlines():
+            for line in open(uitest.path("vmm-a11y-combo-net-source.txt"), "r").read().splitlines():
                 if line and line not in labels:
                     labels.append(line)
         except Exception:
@@ -2992,7 +2993,7 @@ class _NetSelectionSentinel(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("Network selection")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("Network selection")
         except Exception:
             pass
 
@@ -3006,7 +3007,7 @@ class _SentinelNetWarn(object):
 
     def _shown(self):
         try:
-            return open("/tmp/vmm-a11y-net-warn.txt", "r").read().strip() != "0"
+            return open(uitest.path("vmm-a11y-net-warn.txt"), "r").read().strip() != "0"
         except Exception:
             return True
 
@@ -3028,14 +3029,14 @@ class _SentinelNetWarn(object):
 
 def _addhw_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip() == "1"
     except Exception:
-        return os.path.exists("/tmp/vmm-a11y-addhw-open")
+        return os.path.exists(uitest.path("vmm-a11y-addhw-open"))
 
 
 def _addhw_alert_showing():
     try:
-        return bool(open("/tmp/vmm-a11y-alert.txt", "r").read().strip())
+        return bool(open(uitest.path("vmm-a11y-alert.txt"), "r").read().strip())
     except Exception:
         return False
 
@@ -3057,7 +3058,7 @@ class _SentinelAddhwFinish(object):
     @property
     def sensitive(self):
         try:
-            return open("/tmp/vmm-a11y-addhw-finish-sensitive.txt", "r").read().strip() != "0"
+            return open(uitest.path("vmm-a11y-addhw-finish-sensitive.txt"), "r").read().strip() != "0"
         except Exception:
             return True
 
@@ -3070,11 +3071,11 @@ class _SentinelAddhwFinish(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-addhw-finish", "w").write("1")
+            open(uitest.path("vmm-a11y-addhw-finish"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 12.0
@@ -3095,18 +3096,18 @@ class _SentinelAddhwTab(object):
 
     def _current(self):
         try:
-            return open("/tmp/vmm-a11y-addhw-tab.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-addhw-tab.txt"), "r").read().strip()
         except Exception:
             return ""
 
     @property
     def showing(self):
         try:
-            addhw = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip()
+            addhw = open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip()
         except Exception:
             addhw = "0"
         try:
-            xml_page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+            xml_page = open(uitest.path("vmm-a11y-xml-page.txt"), "r").read().strip()
         except Exception:
             xml_page = "0"
         # Details XML page hides the hardware form tabs.
@@ -3116,14 +3117,14 @@ class _SentinelAddhwTab(object):
         if current == self.name:
             return True
         try:
-            selected = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read().strip()
+            selected = open(uitest.path("vmm-a11y-addhw-selected.txt"), "r").read().strip()
         except Exception:
             selected = ""
         if self.name == "storage-tab":
             if selected.lower().startswith("storage"):
                 return True
             try:
-                if "Storage" in open("/tmp/vmm-a11y-addhw-list.txt", "r").read():
+                if "Storage" in open(uitest.path("vmm-a11y-addhw-list.txt"), "r").read():
                     return True
             except Exception:
                 pass
@@ -3137,21 +3138,21 @@ class _SentinelAddhwTab(object):
         ):
             return True
         try:
-            if open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip() == self.name:
+            if open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip() == self.name:
                 return True
         except Exception:
             pass
         try:
-            hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+            hw = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read()
         except Exception:
             hw = ""
         if self.name == "disk-tab":
             if any(key in hw for key in ("Disk", "CDROM", "Floppy")):
                 return True
             for path in (
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-last-hw.txt",
-                "/tmp/vmm-a11y-hw-select.txt",
+                uitest.path("vmm-a11y-hw-clicked.txt"),
+                uitest.path("vmm-a11y-last-hw.txt"),
+                uitest.path("vmm-a11y-hw-select.txt"),
             ):
                 try:
                     lab = open(path, "r").read()
@@ -3160,11 +3161,11 @@ class _SentinelAddhwTab(object):
                 if any(key in lab for key in ("Disk", "CDROM", "Floppy")):
                     return True
             try:
-                lst = open("/tmp/vmm-a11y-hw-list.txt", "r").read()
+                lst = open(uitest.path("vmm-a11y-hw-list.txt"), "r").read()
             except Exception:
                 lst = ""
             try:
-                addsel = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read()
+                addsel = open(uitest.path("vmm-a11y-addhw-selected.txt"), "r").read()
             except Exception:
                 addsel = ""
             if "SCSI Disk" in lst and addsel.lower().startswith("storage"):
@@ -3244,7 +3245,7 @@ class _SentinelAddhwTab(object):
             selected = True
             try:
                 selected = "No Devices" in open(
-                    "/tmp/vmm-a11y-addhw-hostdev-selected.txt", "r"
+                    uitest.path("vmm-a11y-addhw-hostdev-selected.txt"), "r"
                 ).read()
             except Exception:
                 selected = True
@@ -3258,7 +3259,7 @@ class _SentinelAddhwTab(object):
         if "cell" in str(roleName or "").lower() or (not roleName and " on " in raw):
             try:
                 rows = open(
-                    "/tmp/vmm-a11y-controller-devices.txt", "r"
+                    uitest.path("vmm-a11y-controller-devices.txt"), "r"
                 ).read().splitlines()
             except Exception:
                 rows = []
@@ -3273,7 +3274,7 @@ class _SentinelAddhwTab(object):
             return _SentinelBootMenu()
         if "media-entry" in compact:
             return _SentinelEntry(
-                "media-entry", "/tmp/vmm-a11y-details-media-entry.txt"
+                "media-entry", uitest.path("vmm-a11y-details-media-entry.txt")
             )
         if compact.replace(".*", "").strip() in ("browse", "_browse"):
             return _SentinelClickButton("Browse")
@@ -3283,7 +3284,7 @@ class _SentinelAddhwTab(object):
                 deadline = time.time() + (timeout or 5)
                 while time.time() < deadline:
                     try:
-                        ips = open("/tmp/vmm-a11y-network-ip.txt", "r").read()
+                        ips = open(uitest.path("vmm-a11y-network-ip.txt"), "r").read()
                     except Exception:
                         ips = ""
                     if want and ips and want in ips:
@@ -3291,7 +3292,7 @@ class _SentinelAddhwTab(object):
                     time.sleep(0.05)
             else:
                 try:
-                    ips = open("/tmp/vmm-a11y-network-ip.txt", "r").read()
+                    ips = open(uitest.path("vmm-a11y-network-ip.txt"), "r").read()
                 except Exception:
                     ips = ""
                 if want and ips and want in ips:
@@ -3322,8 +3323,8 @@ class _SentinelConsoleError(object):
 
     def _current(self):
         for path in (
-            "/tmp/vmm-a11y-spice-import.txt",
-            "/tmp/vmm-a11y-console-error.txt",
+            uitest.path("vmm-a11y-spice-import.txt"),
+            uitest.path("vmm-a11y-console-error.txt"),
         ):
             try:
                 text = open(path, "r").read()
@@ -3369,8 +3370,8 @@ def _sentinel_console_error(name, roleName):
     compact = str(name).replace(".*", "").lower()
     text = ""
     for path in (
-        "/tmp/vmm-a11y-spice-import.txt",
-        "/tmp/vmm-a11y-console-error.txt",
+        uitest.path("vmm-a11y-spice-import.txt"),
+        uitest.path("vmm-a11y-console-error.txt"),
     ):
         try:
             text = open(path, "r").read()
@@ -3394,7 +3395,7 @@ class _SentinelConsoleGfxViewport(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-console-gfx-viewport.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-console-gfx-viewport.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -3412,7 +3413,7 @@ class _SentinelConsoleGfxViewport(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-console-click.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-console-click.txt"), "w").write("1")
         except Exception:
             pass
 
@@ -3424,7 +3425,7 @@ class _SentinelConsolePages(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() == "console"
+            return open(uitest.path("vmm-a11y-vm-page-current.txt"), "r").read().strip() == "console"
         except Exception:
             return False
 
@@ -3485,7 +3486,7 @@ def _sentinel_addhw_finish(name, roleName, root=None):
     if "add new virtual hardware" in root_name.lower():
         return _SentinelAddhwFinish()
     try:
-        if os.path.exists("/tmp/vmm-a11y-addhw-open"):
+        if os.path.exists(uitest.path("vmm-a11y-addhw-open")):
             return _SentinelAddhwFinish()
     except Exception:
         pass
@@ -3516,19 +3517,19 @@ class _SentinelDetailsComboItem(object):
         ignore = (args, kwargs)
         label = self.name.replace(".*", "")
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (self._combo, label)
             )
         except Exception:
             pass
         if self._combo == "net-source":
             try:
-                open("/tmp/vmm-a11y-net-source.txt", "w").write(label)
+                open(uitest.path("vmm-a11y-net-source.txt"), "w").write(label)
             except Exception:
                 pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-combo-select.txt")):
                 break
             time.sleep(0.05)
 
@@ -3540,7 +3541,7 @@ class _SentinelAddHardwareMenuItem(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-hw-popup-shown.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-hw-popup-shown.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -3554,9 +3555,9 @@ class _SentinelAddHardwareMenuItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-hw-popup-shown.txt", "w").write("0")
-            open("/tmp/vmm-a11y-hw-popup-add", "w").write("1")
-            open("/tmp/vmm-a11y-click.txt", "w").write("add-hardware")
+            open(uitest.path("vmm-a11y-hw-popup-shown.txt"), "w").write("0")
+            open(uitest.path("vmm-a11y-hw-popup-add"), "w").write("1")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("add-hardware")
         except Exception:
             pass
         deadline = time.time() + 8.0
@@ -3573,7 +3574,7 @@ class _SentinelRemoveHardware(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-hw-popup-shown.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-hw-popup-shown.txt"), "r").read().strip() == "1"
         except Exception:
             return True
 
@@ -3587,13 +3588,13 @@ class _SentinelRemoveHardware(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-hw-popup-shown.txt", "w").write("0")
-            open("/tmp/vmm-a11y-config-remove", "w").write("1")
+            open(uitest.path("vmm-a11y-hw-popup-shown.txt"), "w").write("0")
+            open(uitest.path("vmm-a11y-config-remove"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
             time.sleep(0.05)
 
@@ -3605,7 +3606,7 @@ class _SentinelActionText(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-combo-Action:.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-combo-Action:.txt"), "r").read().strip()
         except Exception:
             return ""
 
@@ -3623,7 +3624,7 @@ class _SentinelActionText(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-watchdog-action-focus", "w").write("1")
+            open(uitest.path("vmm-a11y-watchdog-action-focus"), "w").write("1")
         except Exception:
             pass
 
@@ -3665,7 +3666,7 @@ class _SentinelDetailsCombo(object):
     ):
         ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
         if name is None:
-            return _SentinelEntry(self.name, "/tmp/vmm-a11y-combo-%s.txt" % self.name)
+            return _SentinelEntry(self.name, uitest.path("vmm-a11y-combo-%s.txt") % self.name)
         return _SentinelDetailsComboItem(self.name, name)
 
     def find_fuzzy(self, name, roleName=None, labeller_text=None):
@@ -3719,7 +3720,7 @@ class _SentinelDetailsSpin(object):
         try:
             open(self._path + ".set", "w").write(want)
             if "vsock-cid" in (self._path or ""):
-                open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write(want)
+                open(uitest.path("vmm-a11y-vsock-cid-want.txt"), "w").write(want)
         except Exception:
             pass
         deadline = time.time() + 5.0
@@ -3751,7 +3752,7 @@ class _SentinelDetailsCheck(object):
             self._label or ""
         ).lower():
             try:
-                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+                stored = open(uitest.path("vmm-a11y-copy-host.txt"), "r").read().strip()
             except Exception:
                 stored = ""
             if stored:
@@ -3775,7 +3776,7 @@ class _SentinelDetailsCheck(object):
                 pass
             try:
                 if (
-                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "r")
+                    open(uitest.path("vmm-a11y-disk-shareable-applied.txt"), "r")
                     .read()
                     .strip()
                     == "1"
@@ -3820,13 +3821,13 @@ class _SentinelDetailsCheck(object):
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                open(uitest.path("vmm-a11y-copy-host.txt"), "w").write(
                     "Copy host CPU configuration (host-passthrough)"
                 )
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-click.txt", "w").write(
+                open(uitest.path("vmm-a11y-click.txt"), "w").write(
                     "Copy host CPU configuration"
                 )
             except Exception:
@@ -3860,7 +3861,7 @@ class _SentinelInspectionApps(object):
     def click_expander(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-inspection-apps-expand", "w").write("1")
+            open(uitest.path("vmm-a11y-inspection-apps-expand"), "w").write("1")
         except Exception:
             pass
 
@@ -3869,7 +3870,7 @@ class _SentinelInspectionApps(object):
         text = ""
         while time.time() < deadline:
             try:
-                text = open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
+                text = open(uitest.path("vmm-a11y-inspection-apps.txt"), "r").read()
             except Exception:
                 text = ""
             if text.strip():
@@ -3901,17 +3902,17 @@ class _SentinelInspectionRefresh(object):
         ignore = (args, kwargs)
         before = ""
         try:
-            before = open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
+            before = open(uitest.path("vmm-a11y-inspection-apps.txt"), "r").read()
         except Exception:
             before = ""
         try:
-            open("/tmp/vmm-a11y-inspection-refresh.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-inspection-refresh.txt"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                after = open("/tmp/vmm-a11y-inspection-apps.txt", "r").read()
+                after = open(uitest.path("vmm-a11y-inspection-apps.txt"), "r").read()
             except Exception:
                 after = ""
             if after and after != before:
@@ -3973,15 +3974,15 @@ class _SentinelMediaComboItem(object):
         except Exception:
             path = self.name or ""
         try:
-            open("/tmp/vmm-a11y-media-select.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-media-select.txt"), "w").write(self.name or "")
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-media-entry.txt", "w").write(path)
+            open(uitest.path("vmm-a11y-media-entry.txt"), "w").write(path)
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-media-entry.txt.set")
+            os.remove(uitest.path("vmm-a11y-media-entry.txt.set"))
         except Exception:
             pass
 
@@ -4016,23 +4017,23 @@ class _SentinelMediaCombo(object):
     def _rows(self):
         details_first = False
         try:
-            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
         except Exception:
             shown = ""
         try:
-            customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip()
+            customize = open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip()
         except Exception:
             customize = "0"
         if shown and customize != "1":
             details_first = True
         paths = (
-            "/tmp/vmm-a11y-details-media-combo.txt",
-            "/tmp/vmm-a11y-createvm-media-combo.txt",
+            uitest.path("vmm-a11y-details-media-combo.txt"),
+            uitest.path("vmm-a11y-createvm-media-combo.txt"),
         )
         if not details_first:
             paths = (
-                "/tmp/vmm-a11y-createvm-media-combo.txt",
-                "/tmp/vmm-a11y-details-media-combo.txt",
+                uitest.path("vmm-a11y-createvm-media-combo.txt"),
+                uitest.path("vmm-a11y-details-media-combo.txt"),
             )
         seen = []
         for path in paths:
@@ -4119,15 +4120,15 @@ def _sentinel_vmwindow_action_item(name, roleName):
 
 def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     try:
-        if not open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+        if not open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip():
             return None
     except Exception:
         return None
     try:
-        if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+        if open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip() == "1":
             return None
     except Exception:
-        if os.path.exists("/tmp/vmm-a11y-addhw-open"):
+        if os.path.exists(uitest.path("vmm-a11y-addhw-open")):
             return None
     compact = " ".join(str(x) for x in (name, labeller_text) if x)
     compact = compact.replace(".*", "").lower()
@@ -4135,51 +4136,51 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     ignore = role
     if "current allocation" in compact:
         return _SentinelDetailsSpin(
-            "Current allocation:", "/tmp/vmm-a11y-mem-current.txt"
+            "Current allocation:", uitest.path("vmm-a11y-mem-current.txt")
         )
     if "maximum allocation" in compact:
         return _SentinelDetailsSpin(
-            "Maximum allocation:", "/tmp/vmm-a11y-mem-max.txt"
+            "Maximum allocation:", uitest.path("vmm-a11y-mem-max.txt")
         )
     if "enable shared" in compact:
         if "label" in role and "check" not in role:
             return _SentinelVisibleLabel(
-                "Enable shared memory", "/tmp/vmm-a11y-fs-shared-mem-warn.txt"
+                "Enable shared memory", uitest.path("vmm-a11y-fs-shared-mem-warn.txt")
             )
         return _SentinelDetailsCheck(
-            "Enable shared memory", "/tmp/vmm-a11y-mem-shared.txt"
+            "Enable shared memory", uitest.path("vmm-a11y-mem-shared.txt")
         )
     if "vcpu allocation" in compact:
-        return _SentinelDetailsSpin("vCPU allocation:", "/tmp/vmm-a11y-cpu-vcpus.txt")
+        return _SentinelDetailsSpin("vCPU allocation:", uitest.path("vmm-a11y-cpu-vcpus.txt"))
     if compact in ("cpu-model",) or "cpu-model" in compact:
         return _SentinelDetailsCombo("cpu-model")
     if "copy host" in compact:
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                if "host-" in open("/tmp/vmm-a11y-copy-host.txt", "r").read():
+                if "host-" in open(uitest.path("vmm-a11y-copy-host.txt"), "r").read():
                     break
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-cpu-copy-host.txt", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-cpu-copy-host.txt"), "r").read().strip() == "1":
                     break
             except Exception:
                 pass
             time.sleep(0.05)
-        return _SentinelDetailsCheck("Copy host", "/tmp/vmm-a11y-cpu-copy-host.txt")
+        return _SentinelDetailsCheck("Copy host", uitest.path("vmm-a11y-cpu-copy-host.txt"))
     if "cpu security" in compact:
-        return _SentinelDetailsCheck("CPU security", "/tmp/vmm-a11y-cpu-secure.txt")
+        return _SentinelDetailsCheck("CPU security", uitest.path("vmm-a11y-cpu-secure.txt"))
     if "topology" in compact and "toggle" in role:
-        return _SentinelDetailsExpander("Topology", "/tmp/vmm-a11y-cpu-topology-expand")
+        return _SentinelDetailsExpander("Topology", uitest.path("vmm-a11y-cpu-topology-expand"))
     if "manually set" in compact:
-        return _SentinelDetailsCheck("Manually set", "/tmp/vmm-a11y-cpu-topology-enable.txt")
+        return _SentinelDetailsCheck("Manually set", uitest.path("vmm-a11y-cpu-topology-enable.txt"))
     if "sockets" in compact:
-        return _SentinelDetailsSpin("Sockets:", "/tmp/vmm-a11y-cpu-sockets.txt")
+        return _SentinelDetailsSpin("Sockets:", uitest.path("vmm-a11y-cpu-sockets.txt"))
     if compact.startswith("cores") or "cores:" in compact:
-        return _SentinelDetailsSpin("Cores:", "/tmp/vmm-a11y-cpu-cores.txt")
+        return _SentinelDetailsSpin("Cores:", uitest.path("vmm-a11y-cpu-cores.txt"))
     if "threads" in compact:
-        return _SentinelDetailsSpin("Threads:", "/tmp/vmm-a11y-cpu-threads.txt")
+        return _SentinelDetailsSpin("Threads:", uitest.path("vmm-a11y-cpu-threads.txt"))
     sent = _sentinel_oslist_entry(name, roleName)
     if sent is not None:
         return sent
@@ -4194,32 +4195,32 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     if "advanced options" in compact:
         tab = ""
         try:
-            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+            tab = open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
         except Exception:
             tab = ""
         if tab == "tpm-tab" or "tpm" in tab:
             return _SentinelDetailsExpander(
-                "Advanced options", "/tmp/vmm-a11y-tpm-advanced-expand"
+                "Advanced options", uitest.path("vmm-a11y-tpm-advanced-expand")
             )
         return _SentinelDetailsExpander(
-            "Advanced options", "/tmp/vmm-a11y-disk-advanced-expand"
+            "Advanced options", uitest.path("vmm-a11y-disk-advanced-expand")
         )
     if "shareable" in compact:
-        return _SentinelDetailsCheck("Shareable:", "/tmp/vmm-a11y-disk-shareable.txt")
+        return _SentinelDetailsCheck("Shareable:", uitest.path("vmm-a11y-disk-shareable.txt"))
     if "readonly" in compact:
-        return _SentinelDetailsCheck("Readonly:", "/tmp/vmm-a11y-disk-readonly.txt")
+        return _SentinelDetailsCheck("Readonly:", uitest.path("vmm-a11y-disk-readonly.txt"))
     if "disk bus" in compact:
-        return _SentinelEntry("Disk bus:", "/tmp/vmm-a11y-disk-bus.txt")
+        return _SentinelEntry("Disk bus:", uitest.path("vmm-a11y-disk-bus.txt"))
     if "removable" in compact:
-        return _SentinelDetailsCheck("Removable:", "/tmp/vmm-a11y-disk-removable.txt")
+        return _SentinelDetailsCheck("Removable:", uitest.path("vmm-a11y-disk-removable.txt"))
     if compact in ("mac-entry",) or "mac-entry" in compact:
-        return _SentinelEntry("mac-entry", "/tmp/vmm-a11y-details-mac-entry.txt")
+        return _SentinelEntry("mac-entry", uitest.path("vmm-a11y-details-mac-entry.txt"))
     if compact.startswith("serial") or "serial:" in compact:
-        return _SentinelEntry("Serial:", "/tmp/vmm-a11y-disk-serial.txt")
+        return _SentinelEntry("Serial:", uitest.path("vmm-a11y-disk-serial.txt"))
     if "media-combo" in compact:
         return _SentinelMediaCombo()
     if "media-entry" in compact:
-        return _SentinelEntry("media-entry", "/tmp/vmm-a11y-details-media-entry.txt")
+        return _SentinelEntry("media-entry", uitest.path("vmm-a11y-details-media-entry.txt"))
     if "cache mode" in compact:
         return _SentinelDetailsCombo("Cache mode:")
     if "discard mode" in compact:
@@ -4231,7 +4232,7 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     if "device model" in compact:
         return _SentinelDetailsCombo("Device model:")
     if "link state" in compact:
-        return _SentinelDetailsCheck("Link state:", "/tmp/vmm-a11y-net-link.txt")
+        return _SentinelDetailsCheck("Link state:", uitest.path("vmm-a11y-net-link.txt"))
     if any(
         tok in compact
         for tok in ("macvtap", "bridge device", "plainbridge", "usermode")
@@ -4242,34 +4243,34 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     if compact == "config-remove":
         return _SentinelClickButton("config-remove")
     if "opengl" in compact:
-        return _SentinelDetailsCheck("OpenGL:", "/tmp/vmm-a11y-gfx-opengl.txt")
+        return _SentinelDetailsCheck("OpenGL:", uitest.path("vmm-a11y-gfx-opengl.txt"))
     if "graphics-port-auto" in compact:
         return _SentinelDetailsCheck(
-            "graphics-port-auto", "/tmp/vmm-a11y-gfx-port-auto.txt"
+            "graphics-port-auto", uitest.path("vmm-a11y-gfx-port-auto.txt")
         )
     if "graphics-port" in compact and "auto" not in compact:
-        return _SentinelDetailsSpin("graphics-port", "/tmp/vmm-a11y-gfx-port.txt")
+        return _SentinelDetailsSpin("graphics-port", uitest.path("vmm-a11y-gfx-port.txt"))
     if "graphics-password" in compact:
-        return _SentinelEntry("graphics-password", "/tmp/vmm-a11y-gfx-password.txt")
+        return _SentinelEntry("graphics-password", uitest.path("vmm-a11y-gfx-password.txt"))
     if compact.replace(".*", "").replace(":", "").strip() == "password" and (
         not role or "check" in role
     ):
-        return _SentinelDetailsCheck("Password:", "/tmp/vmm-a11y-gfx-pass-chk.txt")
+        return _SentinelDetailsCheck("Password:", uitest.path("vmm-a11y-gfx-pass-chk.txt"))
     if "listen type" in compact:
         return _SentinelDetailsCombo("Listen type:")
     if "graphics-rendernode" in compact:
         return _SentinelDetailsCombo("graphics-rendernode")
     if "rom bar" in compact:
-        return _SentinelDetailsCheck("ROM BAR:", "/tmp/vmm-a11y-hostdev-rombar.txt")
+        return _SentinelDetailsCheck("ROM BAR:", uitest.path("vmm-a11y-hostdev-rombar.txt"))
     if "startup policy" in compact:
         return _SentinelDetailsCombo("Startup Policy:")
     if "3d acceleration" in compact:
-        return _SentinelDetailsCheck("3D acceleration:", "/tmp/vmm-a11y-video-3d.txt")
+        return _SentinelDetailsCheck("3D acceleration:", uitest.path("vmm-a11y-video-3d.txt"))
     if compact.replace(".*", "").replace(":", "").strip() == "action":
         return _SentinelActionText()
     if compact.replace(".*", "").replace(":", "").strip() == "model":
         if "text" in role:
-            return _SentinelEntry("Model:", "/tmp/vmm-a11y-details-model.txt")
+            return _SentinelEntry("Model:", uitest.path("vmm-a11y-details-model.txt"))
         return _SentinelDetailsCombo("Model:")
     if compact.replace(".*", "").replace(":", "").strip() == "type":
         return _SentinelDetailsCombo("Type:")
@@ -4282,19 +4283,19 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
     if compact.replace(".*", "").replace(":", "").strip() == "version":
         return _SentinelDetailsCombo("Version:")
     if compact == "vsock-cid":
-        return _SentinelDetailsSpin("vsock-cid", "/tmp/vmm-a11y-vsock-cid.txt")
+        return _SentinelDetailsSpin("vsock-cid", uitest.path("vmm-a11y-vsock-cid.txt"))
     if compact == "vsock-auto":
-        return _SentinelDetailsCheck("vsock-auto", "/tmp/vmm-a11y-vsock-auto.txt")
+        return _SentinelDetailsCheck("vsock-auto", uitest.path("vmm-a11y-vsock-auto.txt"))
     hwsel = ""
     try:
-        hwsel = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+        hwsel = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read()
     except Exception:
         hwsel = ""
     if "inspection-apps" in compact:
         return _SentinelInspectionApps()
     if compact.replace(".*", "").strip() in ("application", "applications"):
         return _SentinelDetailsExpander(
-            "Application", "/tmp/vmm-a11y-inspection-apps-expand"
+            "Application", uitest.path("vmm-a11y-inspection-apps-expand")
         )
     if compact.replace(".*", "").strip() == "refresh":
         return _SentinelInspectionRefresh()
@@ -4302,22 +4303,22 @@ def _sentinel_details_page_widgets(name, roleName, labeller_text=None):
         "fake test error" in compact or "no disks" in compact
     ):
         try:
-            err = open("/tmp/vmm-a11y-inspection-error.txt", "r").read()
+            err = open(uitest.path("vmm-a11y-inspection-error.txt"), "r").read()
         except Exception:
             err = ""
         if err:
             return _SentinelStaticLabel(err)
     if "source path" in compact:
-        return _SentinelEntry("Source path:", "/tmp/vmm-a11y-fs-source.txt")
+        return _SentinelEntry("Source path:", uitest.path("vmm-a11y-fs-source.txt"))
     if "target path" in compact:
-        return _SentinelEntry("Target path:", "/tmp/vmm-a11y-fs-target.txt")
+        return _SentinelEntry("Target path:", uitest.path("vmm-a11y-fs-target.txt"))
     if "export filesystem" in compact:
         return _SentinelDetailsCheck(
-            "Export filesystem", "/tmp/vmm-a11y-fs-export.txt"
+            "Export filesystem", uitest.path("vmm-a11y-fs-export.txt")
         )
     if role and "cell" in role:
         try:
-            rows = open("/tmp/vmm-a11y-controller-devices.txt", "r").read().splitlines()
+            rows = open(uitest.path("vmm-a11y-controller-devices.txt"), "r").read().splitlines()
         except Exception:
             rows = []
         want = str(name or "").replace(".*", "")
@@ -4382,7 +4383,7 @@ def _sentinel_addhw_tab(name, roleName):
 
 def _addhw_combo_select(combolabel, itemlabel):
     try:
-        open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+        open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
             "%s\t%s" % (combolabel or "", itemlabel or "")
         )
     except Exception:
@@ -4391,12 +4392,12 @@ def _addhw_combo_select(combolabel, itemlabel):
     deadline = time.time() + 3.0
     while time.time() < deadline:
         try:
-            got = open("/tmp/vmm-a11y-addhw-combo-current.txt", "r").read()
+            got = open(uitest.path("vmm-a11y-addhw-combo-current.txt"), "r").read()
         except Exception:
             got = ""
         if got and want and want.lower() in got.lower():
             break
-        if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+        if not os.path.exists(uitest.path("vmm-a11y-combo-select.txt")) and got:
             break
         time.sleep(0.05)
 
@@ -4405,9 +4406,9 @@ def _addhw_combo_check_default(combolabel, itemlabel):
     want = (itemlabel or "").replace(".*", "")
     deadline = time.time() + 3.0
     paths = [
-        "/tmp/vmm-a11y-addhw-combo-current.txt",
-        "/tmp/vmm-a11y-combo-current.txt",
-        "/tmp/vmm-a11y-combo-%s.txt" % (combolabel or ""),
+        uitest.path("vmm-a11y-addhw-combo-current.txt"),
+        uitest.path("vmm-a11y-combo-current.txt"),
+        uitest.path("vmm-a11y-combo-%s.txt") % (combolabel or ""),
     ]
     while time.time() < deadline:
         got = ""
@@ -4464,7 +4465,7 @@ class _SentinelAddhwCombo(object):
         if not name and ("text" in role or "entry" in role):
             return _SentinelWizardField(
                 self.name,
-                "/tmp/vmm-a11y-addhw-combo-entry.txt",
+                uitest.path("vmm-a11y-addhw-combo-entry.txt"),
                 _addhw_dialog_open,
             )
         want = str(name or "").replace(".*", "")
@@ -4487,7 +4488,7 @@ class _SentinelAddhwMenuItem(object):
     @property
     def selected(self):
         try:
-            got = open("/tmp/vmm-a11y-addhw-combo-current.txt", "r").read()
+            got = open(uitest.path("vmm-a11y-addhw-combo-current.txt"), "r").read()
         except Exception:
             got = ""
         return bool(self.name and self.name.lower() in got.lower())
@@ -4516,7 +4517,7 @@ class _SentinelAddhwCell(object):
     @property
     def selected(self):
         try:
-            cur = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read().strip()
+            cur = open(uitest.path("vmm-a11y-addhw-selected.txt"), "r").read().strip()
             return cur == self.name or (self.name and self.name in cur)
         except Exception:
             return False
@@ -4535,7 +4536,7 @@ class _SentinelAddhwCell(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-addhw-select.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-addhw-select.txt"), "w").write(self.name or "")
         except Exception:
             pass
         deadline = time.time() + 3.0
@@ -4547,7 +4548,7 @@ class _SentinelAddhwCell(object):
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-addhw-error.txt", "r").read().strip():
+                    if open(uitest.path("vmm-a11y-addhw-error.txt"), "r").read().strip():
                         return
                 except Exception:
                     pass
@@ -4562,7 +4563,7 @@ class _SentinelAddhwHostCell(object):
     @property
     def selected(self):
         try:
-            cur = open("/tmp/vmm-a11y-addhw-hostdev-selected.txt", "r").read()
+            cur = open(uitest.path("vmm-a11y-addhw-hostdev-selected.txt"), "r").read()
             return self.name in cur
         except Exception:
             return False
@@ -4581,7 +4582,7 @@ class _SentinelAddhwHostCell(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-addhw-hostdev-select.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-addhw-hostdev-select.txt"), "w").write(self.name or "")
         except Exception:
             pass
         deadline = time.time() + 3.0
@@ -4621,12 +4622,12 @@ class _SentinelAddhwRadio(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-addhw-action.txt", "w").write(self._action)
+            open(uitest.path("vmm-a11y-addhw-action.txt"), "w").write(self._action)
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-addhw-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-addhw-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -4711,7 +4712,7 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         deadline = time.time() + 4.0
         while time.time() < deadline:
             try:
-                err = open("/tmp/vmm-a11y-addhw-error.txt", "r").read()
+                err = open(uitest.path("vmm-a11y-addhw-error.txt"), "r").read()
                 if "container" in err.lower() or "not supported" in err.lower():
                     return _SentinelAddhwError(err.strip() or "Not supported for containers")
             except Exception:
@@ -4756,7 +4757,7 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
     if role and "cell" in role:
         want = str(name or "").replace(".*", "")
         try:
-            rows = open("/tmp/vmm-a11y-addhw-list.txt", "r").read().splitlines()
+            rows = open(uitest.path("vmm-a11y-addhw-list.txt"), "r").read().splitlines()
         except Exception:
             rows = []
         for row in rows:
@@ -4769,38 +4770,38 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
     if compact == "cancel" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Cancel",
-            "/tmp/vmm-a11y-addhw-cancel",
+            uitest.path("vmm-a11y-addhw-cancel"),
             _addhw_dialog_open,
-            wait_path="/tmp/vmm-a11y-addhw-shown.txt",
+            wait_path=uitest.path("vmm-a11y-addhw-shown.txt"),
             wait_value="0",
         )
     if compact in ("storage-entry",) or raw_is_storage_entry(name):
         return _SentinelWizardField(
-            "storage-entry", "/tmp/vmm-a11y-storage-entry.txt", _addhw_dialog_open
+            "storage-entry", uitest.path("vmm-a11y-storage-entry.txt"), _addhw_dialog_open
         )
     if compact in ("gib",) or (compact.endswith("gib") and "spin" in role):
         return _SentinelWizardField(
             "GiB",
-            "/tmp/vmm-a11y-addhw-storage-size.txt",
+            uitest.path("vmm-a11y-addhw-storage-size.txt"),
             _addhw_dialog_open,
             roleName="spin button",
         )
     if compact.startswith("serial"):
         return _SentinelWizardField(
-            "Serial:", "/tmp/vmm-a11y-addhw-serial.txt", _addhw_dialog_open
+            "Serial:", uitest.path("vmm-a11y-addhw-serial.txt"), _addhw_dialog_open
         )
     if "mac address field" in compact:
         return _SentinelWizardField(
-            "MAC Address Field", "/tmp/vmm-a11y-addhw-mac.txt", _addhw_dialog_open
+            "MAC Address Field", uitest.path("vmm-a11y-addhw-mac.txt"), _addhw_dialog_open
         )
     if "device name" in compact:
         return _SentinelWizardField(
-            "Device name:", "/tmp/vmm-a11y-addhw-net-device.txt", _addhw_dialog_open
+            "Device name:", uitest.path("vmm-a11y-addhw-net-device.txt"), _addhw_dialog_open
         )
     if compact == "graphics-port":
         return _SentinelWizardField(
             "graphics-port",
-            "/tmp/vmm-a11y-addhw-gfx-port.txt",
+            uitest.path("vmm-a11y-addhw-gfx-port.txt"),
             _addhw_dialog_open,
             roleName="spin button",
         )
@@ -4808,44 +4809,44 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         if "check" in role:
             return _SentinelWizardCheck(
                 "Password:",
-                "/tmp/vmm-a11y-addhw-gfx-pass-chk.txt",
+                uitest.path("vmm-a11y-addhw-gfx-pass-chk.txt"),
                 _addhw_dialog_open,
             )
         return _SentinelWizardField(
             "graphics-password",
-            "/tmp/vmm-a11y-addhw-gfx-password.txt",
+            uitest.path("vmm-a11y-addhw-gfx-password.txt"),
             _addhw_dialog_open,
         )
     if compact in ("path:",) or compact == "path":
         return _SentinelWizardField(
-            "Path:", "/tmp/vmm-a11y-addhw-char-path.txt", _addhw_dialog_open
+            "Path:", uitest.path("vmm-a11y-addhw-char-path.txt"), _addhw_dialog_open
         )
     if "source path" in compact:
         return _SentinelWizardField(
-            "Source path:", "/tmp/vmm-a11y-addhw-fs-source.txt", _addhw_dialog_open
+            "Source path:", uitest.path("vmm-a11y-addhw-fs-source.txt"), _addhw_dialog_open
         )
     if "target path" in compact:
         return _SentinelWizardField(
-            "Target path:", "/tmp/vmm-a11y-addhw-fs-target.txt", _addhw_dialog_open
+            "Target path:", uitest.path("vmm-a11y-addhw-fs-target.txt"), _addhw_dialog_open
         )
     if compact in ("usage:", "usage"):
         return _SentinelWizardField(
             "Usage:",
-            "/tmp/vmm-a11y-addhw-fs-usage.txt",
+            uitest.path("vmm-a11y-addhw-fs-usage.txt"),
             _addhw_dialog_open,
             roleName="spin button",
         )
     if "device path" in compact:
         return _SentinelWizardField(
-            "Device Path:", "/tmp/vmm-a11y-addhw-tpm-path.txt", _addhw_dialog_open
+            "Device Path:", uitest.path("vmm-a11y-addhw-tpm-path.txt"), _addhw_dialog_open
         )
     if "host device" in compact and (not role or "text" in role):
         return _SentinelWizardField(
-            "Host Device:", "/tmp/vmm-a11y-addhw-rng.txt", _addhw_dialog_open
+            "Host Device:", uitest.path("vmm-a11y-addhw-rng.txt"), _addhw_dialog_open
         )
     if compact == "vsock-cid":
         return _SentinelWizardField(
-            "vsock-cid", "/tmp/vmm-a11y-addhw-vsock-cid.txt", _addhw_dialog_open
+            "vsock-cid", uitest.path("vmm-a11y-addhw-vsock-cid.txt"), _addhw_dialog_open
         )
     if "select or create" in compact:
         return _SentinelAddhwRadio("Select or create", "storage-select")
@@ -4853,23 +4854,23 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         return _SentinelAddhwRadio(
             "Create a disk image",
             "storage-create",
-            "/tmp/vmm-a11y-addhw-create-disk-sensitive.txt",
+            uitest.path("vmm-a11y-addhw-create-disk-sensitive.txt"),
         )
     if compact == "storage-browse":
         return _SentinelWizardButton(
             "storage-browse",
-            "/tmp/vmm-a11y-addhw-action.txt",
+            uitest.path("vmm-a11y-addhw-action.txt"),
             _addhw_dialog_open,
-            wait_path="/tmp/vmm-a11y-storage-browser.txt",
+            wait_path=uitest.path("vmm-a11y-storage-browser.txt"),
             wait_value="1",
             write_value="storage-browse",
         )
     if compact.startswith("browse"):
         return _SentinelWizardButton(
             "Browse...",
-            "/tmp/vmm-a11y-addhw-action.txt",
+            uitest.path("vmm-a11y-addhw-action.txt"),
             _addhw_dialog_open,
-            wait_path="/tmp/vmm-a11y-storage-browser.txt",
+            wait_path=uitest.path("vmm-a11y-storage-browser.txt"),
             wait_value="1",
             write_value="fs-browse",
         )
@@ -4877,53 +4878,53 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         value = "tpm-advanced" if "tpm" in open_addhw_tab() else "storage-advanced"
         return _SentinelWizardExpander(
             "Advanced options",
-            "/tmp/vmm-a11y-addhw-action.txt",
+            uitest.path("vmm-a11y-addhw-action.txt"),
             value,
             _addhw_dialog_open,
         )
     if "mac-address-enable" in compact:
         return _SentinelWizardCheck(
             "mac-address-enable",
-            "/tmp/vmm-a11y-addhw-mac-enable.txt",
+            uitest.path("vmm-a11y-addhw-mac-enable.txt"),
             _addhw_dialog_open,
         )
     if compact.startswith("shareable"):
         return _SentinelWizardCheck(
-            "Shareable:", "/tmp/vmm-a11y-addhw-shareable.txt", _addhw_dialog_open
+            "Shareable:", uitest.path("vmm-a11y-addhw-shareable.txt"), _addhw_dialog_open
         )
     if compact.startswith("readonly"):
         return _SentinelWizardCheck(
-            "Readonly:", "/tmp/vmm-a11y-addhw-readonly.txt", _addhw_dialog_open
+            "Readonly:", uitest.path("vmm-a11y-addhw-readonly.txt"), _addhw_dialog_open
         )
     if compact.startswith("removable"):
         return _SentinelWizardCheck(
-            "Removable:", "/tmp/vmm-a11y-addhw-removable.txt", _addhw_dialog_open
+            "Removable:", uitest.path("vmm-a11y-addhw-removable.txt"), _addhw_dialog_open
         )
     if compact == "graphics-port-auto":
         return _SentinelWizardCheck(
             "graphics-port-auto",
-            "/tmp/vmm-a11y-addhw-gfx-port-auto.txt",
+            uitest.path("vmm-a11y-addhw-gfx-port-auto.txt"),
             _addhw_dialog_open,
         )
     if "show password" in compact:
         return _SentinelWizardCheck(
             "Show password",
-            "/tmp/vmm-a11y-addhw-gfx-show-pass.txt",
+            uitest.path("vmm-a11y-addhw-gfx-show-pass.txt"),
             _addhw_dialog_open,
         )
     if compact.startswith("opengl"):
         return _SentinelWizardCheck(
-            "OpenGL:", "/tmp/vmm-a11y-addhw-gfx-opengl.txt", _addhw_dialog_open
+            "OpenGL:", uitest.path("vmm-a11y-addhw-gfx-opengl.txt"), _addhw_dialog_open
         )
     if "export filesystem" in compact:
         return _SentinelWizardCheck(
             "Export filesystem",
-            "/tmp/vmm-a11y-addhw-fs-export.txt",
+            uitest.path("vmm-a11y-addhw-fs-export.txt"),
             _addhw_dialog_open,
         )
     if compact == "vsock-auto":
         return _SentinelWizardCheck(
-            "vsock-auto", "/tmp/vmm-a11y-addhw-vsock-auto.txt", _addhw_dialog_open
+            "vsock-auto", uitest.path("vmm-a11y-addhw-vsock-auto.txt"), _addhw_dialog_open
         )
     if role and "combo" in role:
         return _SentinelAddhwCombo(str(name or "").replace(".*", "") or "Type:")
@@ -4950,7 +4951,7 @@ def _sentinel_addhw_widgets(name, roleName, labeller_text=None):
         return _SentinelAddhwCombo(str(name or "").replace(".*", ""))
     if role and "cell" in role:
         try:
-            rows = open("/tmp/vmm-a11y-addhw-hostdev-list.txt", "r").read().splitlines()
+            rows = open(uitest.path("vmm-a11y-addhw-hostdev-list.txt"), "r").read().splitlines()
         except Exception:
             rows = []
         want = str(name or "").replace(".*", "")
@@ -4967,7 +4968,7 @@ def raw_is_storage_entry(name):
 
 def open_addhw_tab():
     try:
-        return open("/tmp/vmm-a11y-addhw-tab.txt", "r").read().strip()
+        return open(uitest.path("vmm-a11y-addhw-tab.txt"), "r").read().strip()
     except Exception:
         return ""
 
@@ -4993,7 +4994,7 @@ class _UrlOptsExpanderSentinel(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("install-urlopts-expander")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("install-urlopts-expander")
         except Exception:
             pass
 
@@ -5026,7 +5027,7 @@ class _SentinelUrlCombo(object):
 
     def fmt_nodes(self):
         try:
-            return open("/tmp/vmm-a11y-combo-install-url-combo.txt", "r").read()
+            return open(uitest.path("vmm-a11y-combo-install-url-combo.txt"), "r").read()
         except Exception:
             return ""
 
@@ -5041,7 +5042,7 @@ class _SentinelIncludeEol(object):
     @property
     def isChecked(self):
         try:
-            return open("/tmp/vmm-a11y-oslist-eol-state.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-oslist-eol-state.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -5066,7 +5067,7 @@ class _SentinelIncludeEol(object):
 
     def click(self, *args, **kwargs):
         try:
-            open("/tmp/vmm-a11y-oslist-eol.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-eol.txt"), "w").write("1")
         except Exception:
             pass
 
@@ -5098,42 +5099,42 @@ class _SentinelNavButton(object):
 
     def click(self, *args, **kwargs):
         mapping = {
-            "Forward": "/tmp/vmm-a11y-create-forward",
-            "Back": "/tmp/vmm-a11y-create-back",
-            "Finish": "/tmp/vmm-a11y-create-finish",
+            "Forward": uitest.path("vmm-a11y-create-forward"),
+            "Back": uitest.path("vmm-a11y-create-back"),
+            "Finish": uitest.path("vmm-a11y-create-finish"),
         }
-        path = mapping.get(self.name, "/tmp/vmm-a11y-click.txt")
+        path = mapping.get(self.name, uitest.path("vmm-a11y-click.txt"))
         try:
             open(path, "w").write("1" if self.name == "Finish" else self.name)
         except Exception:
             pass
         if self.name == "Finish":
             try:
-                leftover = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                leftover = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
                 if "in use" in leftover.lower():
-                    os.remove("/tmp/vmm-a11y-alert.txt")
+                    os.remove(uitest.path("vmm-a11y-alert.txt"))
             except Exception:
                 pass
             deadline = time.time() + 20.0
             while time.time() < deadline:
                 try:
-                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read().strip()
+                    alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read().strip()
                     if alert and "in use" not in alert.lower():
                         return
                 except Exception:
                     pass
                 try:
-                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "0":
+                    if open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() == "0":
                         return
                 except Exception:
                     pass
                 try:
-                    if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                    if open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip():
                         return
                 except Exception:
                     pass
                 try:
-                    if open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip():
+                    if open(uitest.path("vmm-a11y-created-vm.txt"), "r").read().strip():
                         return
                 except Exception:
                     pass
@@ -5145,12 +5146,12 @@ class _SentinelNavButton(object):
 
 def _addhw_xml_want_tag():
     try:
-        if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() != "1":
+        if open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip() != "1":
             return ""
     except Exception:
         return ""
     try:
-        sel = open("/tmp/vmm-a11y-addhw-selected.txt", "r").read().strip().lower()
+        sel = open(uitest.path("vmm-a11y-addhw-selected.txt"), "r").read().strip().lower()
     except Exception:
         sel = ""
     for key, tag in (
@@ -5183,9 +5184,9 @@ def _wizard_xml_want_tag():
     if addhw_tag:
         return addhw_tag
     for path, tag in (
-        ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
-        ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
-        ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
+        (uitest.path("vmm-a11y-createpool-shown.txt"), "<pool"),
+        (uitest.path("vmm-a11y-createvol-shown.txt"), "<volume"),
+        (uitest.path("vmm-a11y-createnet-shown.txt"), "<network"),
     ):
         try:
             if open(path, "r").read().strip() == "1":
@@ -5193,7 +5194,7 @@ def _wizard_xml_want_tag():
         except Exception:
             pass
     try:
-        which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+        which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
     except Exception:
         which = ""
     if which == "pool":
@@ -5201,13 +5202,13 @@ def _wizard_xml_want_tag():
     if which == "net":
         return "<network"
     try:
-        hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip().lower()
+        hw = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read().strip().lower()
     except Exception:
         hw = ""
     if any(token in hw for token in ("disk", "cdrom", "floppy")):
         return "<disk"
     try:
-        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+        if open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip():
             return "<domain"
     except Exception:
         pass
@@ -5237,15 +5238,15 @@ class _SentinelXmlPageTab(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-xml-tab.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-xml-tab.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-xml-tab.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-xml-tab.txt")):
                 break
             try:
-                alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+                alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
             except Exception:
                 alert = ""
             if "leave this tab" in alert:
@@ -5256,14 +5257,14 @@ class _SentinelXmlPageTab(object):
             deadline = time.time() + 3.0
             while time.time() < deadline:
                 try:
-                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+                    alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
                 except Exception:
                     alert = ""
                 if "leave this tab" in alert:
                     return
                 try:
-                    page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
-                    xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                    page = open(uitest.path("vmm-a11y-xml-page.txt"), "r").read().strip()
+                    xml = open(uitest.path("vmm-a11y-xml-contents.txt"), "r").read()
                     if page == "1" and want in xml:
                         break
                 except Exception:
@@ -5277,7 +5278,7 @@ class _SentinelXmlEditor(object):
 
     def _page(self):
         try:
-            return open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-xml-page.txt"), "r").read().strip()
         except Exception:
             return "0"
 
@@ -5295,7 +5296,7 @@ class _SentinelXmlEditor(object):
 
     def _read(self):
         try:
-            return open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+            return open(uitest.path("vmm-a11y-xml-contents.txt"), "r").read()
         except Exception:
             return ""
 
@@ -5304,9 +5305,9 @@ class _SentinelXmlEditor(object):
         if addhw_tag:
             return addhw_tag
         for path, tag in (
-            ("/tmp/vmm-a11y-createpool-shown.txt", "<pool"),
-            ("/tmp/vmm-a11y-createvol-shown.txt", "<volume"),
-            ("/tmp/vmm-a11y-createnet-shown.txt", "<network"),
+            (uitest.path("vmm-a11y-createpool-shown.txt"), "<pool"),
+            (uitest.path("vmm-a11y-createvol-shown.txt"), "<volume"),
+            (uitest.path("vmm-a11y-createnet-shown.txt"), "<network"),
         ):
             try:
                 if open(path, "r").read().strip() == "1":
@@ -5314,7 +5315,7 @@ class _SentinelXmlEditor(object):
             except Exception:
                 pass
         try:
-            which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+            which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
         except Exception:
             which = ""
         if which == "pool":
@@ -5351,20 +5352,20 @@ class _SentinelXmlEditor(object):
 
     def _xml_editing_enabled(self):
         try:
-            return open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() == "0"
+            return open(uitest.path("vmm-a11y-xml-disabled.txt"), "r").read().strip() == "0"
         except Exception:
             return False
 
     def set_text(self, text):
         try:
-            open("/tmp/vmm-a11y-xml.txt", "w").write(text or "")
-            open("/tmp/vmm-a11y-xml-contents.txt", "w").write(text or "")
-            open("/tmp/vmm-a11y-click.txt", "w").write(".xml-load")
+            open(uitest.path("vmm-a11y-xml.txt"), "w").write(text or "")
+            open(uitest.path("vmm-a11y-xml-contents.txt"), "w").write(text or "")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write(".xml-load")
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-click.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-click.txt")):
                 return
             time.sleep(0.05)
 
@@ -5422,23 +5423,23 @@ class _SentinelVMActionItem(object):
         # Drop a stale empty/previous alert so leftover Yes/No cannot
         # auto-dismiss the confirm this click is about to open.
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-alert-response.txt")
+            os.remove(uitest.path("vmm-a11y-alert-response.txt"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-vm-action.txt", "w").write(self.name or "")
-            open("/tmp/vmm-a11y-vm-menu-hidden", "w").write("1")
+            open(uitest.path("vmm-a11y-vm-action.txt"), "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-vm-menu-hidden"), "w").write("1")
         except Exception:
             pass
 
         def _selected_vm():
             for src in (
-                "/tmp/vmm-a11y-vm-selected.txt",
-                "/tmp/vmm-a11y-vm-select.txt",
+                uitest.path("vmm-a11y-vm-selected.txt"),
+                uitest.path("vmm-a11y-vm-select.txt"),
             ):
                 try:
                     vm = open(src, "r").read().split("\n")[0].strip()
@@ -5452,19 +5453,19 @@ class _SentinelVMActionItem(object):
         shown_path = None
         open_path = None
         if action_key == "Clone":
-            shown_path = "/tmp/vmm-a11y-clone-shown.txt"
-            open_path = "/tmp/vmm-a11y-clone-open.txt"
+            shown_path = uitest.path("vmm-a11y-clone-shown.txt")
+            open_path = uitest.path("vmm-a11y-clone-open.txt")
         elif action_key == "Delete":
-            shown_path = "/tmp/vmm-a11y-delete-shown.txt"
-            open_path = "/tmp/vmm-a11y-delete-open.txt"
+            shown_path = uitest.path("vmm-a11y-delete-shown.txt")
+            open_path = uitest.path("vmm-a11y-delete-open.txt")
         elif action_key == "Migrate":
-            shown_path = "/tmp/vmm-a11y-migrate-shown.txt"
-            open_path = "/tmp/vmm-a11y-migrate-open.txt"
+            shown_path = uitest.path("vmm-a11y-migrate-shown.txt")
+            open_path = uitest.path("vmm-a11y-migrate-open.txt")
         if (self.name or "") == "Open":
             try:
                 vm = _selected_vm()
                 if vm:
-                    open("/tmp/vmm-a11y-vm-open.txt", "w").write(vm)
+                    open(uitest.path("vmm-a11y-vm-open.txt"), "w").write(vm)
             except Exception:
                 pass
         vm = _selected_vm()
@@ -5475,7 +5476,7 @@ class _SentinelVMActionItem(object):
                 pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
             if shown_path:
                 try:
@@ -5500,7 +5501,7 @@ class _SentinelVMActionItem(object):
                             open(open_path, "w").write(vm)
                         except Exception:
                             pass
-            elif not os.path.exists("/tmp/vmm-a11y-vm-action.txt"):
+            elif not os.path.exists(uitest.path("vmm-a11y-vm-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -5513,7 +5514,7 @@ class _SentinelVMActionMenu(object):
     @property
     def onscreen(self):
         try:
-            return not os.path.exists("/tmp/vmm-a11y-vm-menu-hidden")
+            return not os.path.exists(uitest.path("vmm-a11y-vm-menu-hidden"))
         except Exception:
             return True
 
@@ -5536,7 +5537,7 @@ class _SentinelVMActionMenu(object):
         role = str(roleName or "").lower()
         if compact in ("shut down", "shutdown") and "item" not in role:
             try:
-                os.remove("/tmp/vmm-a11y-shutdown-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-shutdown-menu-hidden"))
             except Exception:
                 pass
             return _SentinelShutdownSubmenu()
@@ -5553,7 +5554,7 @@ class _SentinelShutdownSubmenu(object):
     @property
     def onscreen(self):
         try:
-            return not os.path.exists("/tmp/vmm-a11y-shutdown-menu-hidden")
+            return not os.path.exists(uitest.path("vmm-a11y-shutdown-menu-hidden"))
         except Exception:
             return True
 
@@ -5570,7 +5571,7 @@ class _SentinelShutdownSubmenu(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            os.remove("/tmp/vmm-a11y-shutdown-menu-hidden")
+            os.remove(uitest.path("vmm-a11y-shutdown-menu-hidden"))
         except Exception:
             pass
 
@@ -5598,7 +5599,7 @@ class _SentinelAboutWindow(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-about-shown.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-about-shown.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -5642,7 +5643,7 @@ class _SentinelAboutWindow(object):
         ignore = (args, kwargs)
         if "esc" in str(combo or "").lower():
             try:
-                open("/tmp/vmm-a11y-about-close", "w").write("1")
+                open(uitest.path("vmm-a11y-about-close"), "w").write("1")
             except Exception:
                 pass
             deadline = time.time() + 3.0
@@ -5676,9 +5677,9 @@ class _SentinelAppBarItem(object):
         key = (self.name or "").strip()
         try:
             if key == "Preferences":
-                open("/tmp/vmm-a11y-prefs-open", "w").write("1")
+                open(uitest.path("vmm-a11y-prefs-open"), "w").write("1")
             elif key == "About":
-                open("/tmp/vmm-a11y-about-open", "w").write("1")
+                open(uitest.path("vmm-a11y-about-open"), "w").write("1")
             elif key.lower() in (
                 "guest cpu",
                 "host cpu",
@@ -5686,9 +5687,9 @@ class _SentinelAppBarItem(object):
                 "disk i/o",
                 "network i/o",
             ):
-                open("/tmp/vmm-a11y-graph-toggle.txt", "w").write(key)
+                open(uitest.path("vmm-a11y-graph-toggle.txt"), "w").write(key)
             else:
-                open("/tmp/vmm-a11y-appmenu-action.txt", "w").write(key)
+                open(uitest.path("vmm-a11y-appmenu-action.txt"), "w").write(key)
         except Exception:
             pass
 
@@ -5769,14 +5770,14 @@ class _SentinelColumnHeader(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-column-click.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-column-click.txt"), "w").write(self.name or "")
         except Exception:
             pass
 
 
 def _connectauth_open():
     try:
-        return open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
@@ -5810,7 +5811,7 @@ class _SentinelAuthEntry(object):
     @property
     def focused(self):
         try:
-            return open("/tmp/vmm-a11y-connectauth-focus.txt", "r").read().strip() == self._focus_key
+            return open(uitest.path("vmm-a11y-connectauth-focus.txt"), "r").read().strip() == self._focus_key
         except Exception:
             return False
 
@@ -5820,7 +5821,7 @@ class _SentinelAuthEntry(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write(self._focus_key)
+            open(uitest.path("vmm-a11y-connectauth-focus.txt"), "w").write(self._focus_key)
         except Exception:
             pass
 
@@ -5855,7 +5856,7 @@ class _SentinelAuthButton(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-connectauth-action.txt", "w").write(self._action)
+            open(uitest.path("vmm-a11y-connectauth-action.txt"), "w").write(self._action)
         except Exception:
             pass
         deadline = time.time() + 5.0
@@ -5900,11 +5901,11 @@ class _SentinelConnectAuthWindow(object):
         role = str(roleName or "").lower()
         if "username" in compact:
             return _SentinelAuthEntry(
-                "Username: entry", "/tmp/vmm-a11y-connectauth-user.txt", "user"
+                "Username: entry", uitest.path("vmm-a11y-connectauth-user.txt"), "user"
             )
         if "password" in compact:
             return _SentinelAuthEntry(
-                "Password: entry", "/tmp/vmm-a11y-connectauth-pass.txt", "pass"
+                "Password: entry", uitest.path("vmm-a11y-connectauth-pass.txt"), "pass"
             )
         if compact.strip() in ("ok", "_ok") or (
             "ok" in compact and "button" in role
@@ -5923,14 +5924,14 @@ class _SentinelConnectAuthWindow(object):
 
 def _delete_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _delete_associated_checked():
     try:
-        return open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+        return open(uitest.path("vmm-a11y-delete-associated.txt"), "r").read().strip() in (
             "1",
             "true",
             "yes",
@@ -5943,7 +5944,7 @@ def _delete_associated_checked():
 def _delete_storage_rows():
     rows = []
     try:
-        lines = open("/tmp/vmm-a11y-delete-storage.txt", "r").read().splitlines()
+        lines = open(uitest.path("vmm-a11y-delete-storage.txt"), "r").read().splitlines()
     except Exception:
         return rows
     for line in lines:
@@ -5990,7 +5991,7 @@ class _SentinelDeleteAssociated(object):
         ignore = (args, kwargs)
         nxt = "0" if self.checked else "1"
         try:
-            open("/tmp/vmm-a11y-delete-associated.txt", "w").write(nxt)
+            open(uitest.path("vmm-a11y-delete-associated.txt"), "w").write(nxt)
         except Exception:
             pass
 
@@ -6056,7 +6057,7 @@ class _SentinelDeleteStorageCell(object):
         ignore = (args, kwargs)
         if self._kind == "chk" and self.sensitive:
             try:
-                open("/tmp/vmm-a11y-delete-row-toggle.txt", "w").write(self._path)
+                open(uitest.path("vmm-a11y-delete-row-toggle.txt"), "w").write(self._path)
             except Exception:
                 pass
             # Flip immediately so three uitest clicks can race the poller.
@@ -6077,7 +6078,7 @@ class _SentinelDeleteStorageCell(object):
                     )
                 )
             try:
-                open("/tmp/vmm-a11y-delete-storage.txt", "w").write("\n".join(lines))
+                open(uitest.path("vmm-a11y-delete-storage.txt"), "w").write("\n".join(lines))
             except Exception:
                 pass
 
@@ -6163,7 +6164,7 @@ def _remove_disk_fail_alert():
         "This change will take effect after the next guest shutdown."
     )
     try:
-        if open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+        if open(uitest.path("vmm-a11y-delete-associated.txt"), "r").read().strip() in (
             "1",
             "true",
             "yes",
@@ -6198,23 +6199,23 @@ class _SentinelDeleteFinish(object):
         ignore = (args, kwargs)
         title = ""
         try:
-            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+            title = open(uitest.path("vmm-a11y-delete-title.txt"), "r").read()
         except Exception:
             title = ""
         try:
-            open("/tmp/vmm-a11y-delete-finish", "w").write("1")
+            open(uitest.path("vmm-a11y-delete-finish"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
             try:
-                alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
             except Exception:
                 alert = ""
             lowered = alert.lower()
             if "take effect" in lowered:
                 try:
-                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
@@ -6223,7 +6224,7 @@ class _SentinelDeleteFinish(object):
             ):
                 return
             try:
-                if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() != "1":
+                if open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() != "1":
                     break
             except Exception:
                 break
@@ -6237,7 +6238,7 @@ class _SentinelAlertCheck(object):
 
     @property
     def showing(self):
-        return os.path.exists("/tmp/vmm-a11y-alert.txt")
+        return os.path.exists(uitest.path("vmm-a11y-alert.txt"))
 
     @property
     def onscreen(self):
@@ -6249,20 +6250,20 @@ class _SentinelAlertCheck(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-alert-checked.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-alert-checked.txt"), "w").write("1")
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-alert-check.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-alert-check.txt"), "w").write("1")
         except Exception:
             pass
         try:
-            alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+            alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
         except Exception:
             alert = ""
         if "unapplied" in alert or "don't warn" in (self.name or "").lower():
             try:
-                open("/tmp/vmm-a11y-dont-warn-unapplied.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-dont-warn-unapplied.txt"), "w").write("1")
             except Exception:
                 pass
 
@@ -6274,7 +6275,7 @@ class _SentinelAlertExpander(object):
 
     @property
     def showing(self):
-        return os.path.exists("/tmp/vmm-a11y-alert.txt")
+        return os.path.exists(uitest.path("vmm-a11y-alert.txt"))
 
     @property
     def onscreen(self):
@@ -6289,7 +6290,7 @@ class _SentinelAlertExpander(object):
     def click_expander(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-alert-details.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-alert-details.txt"), "w").write("1")
         except Exception:
             pass
 
@@ -6301,7 +6302,7 @@ class _SentinelAlertButton(object):
 
     @property
     def showing(self):
-        return os.path.exists("/tmp/vmm-a11y-alert.txt")
+        return os.path.exists(uitest.path("vmm-a11y-alert.txt"))
 
     @property
     def onscreen(self):
@@ -6318,42 +6319,42 @@ class _SentinelAlertButton(object):
         ignore = (args, kwargs)
         alert = ""
         try:
-            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+            alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
         except Exception:
             alert = ""
         try:
-            open("/tmp/vmm-a11y-alert-response.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-alert-response.txt"), "w").write(self.name or "")
         except Exception:
             pass
         if (
             "unapplied" in alert.lower()
-            and os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+            and os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
             and (self.name or "").strip().lower() == "yes"
         ):
             try:
-                open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
+                open(uitest.path("vmm-a11y-force-overview-apply"), "w").write("1")
             except Exception:
                 pass
         deadline = time.time() + 4.0
         while time.time() < deadline:
             try:
-                if not open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                if not open(uitest.path("vmm-a11y-alert.txt"), "r").read().strip():
                     break
             except Exception:
                 break
             time.sleep(0.05)
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         if (self.name or "").strip().lower() == "yes" and "are you sure" in alert.lower():
             try:
-                title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+                title = open(uitest.path("vmm-a11y-delete-title.txt"), "r").read()
             except Exception:
                 title = ""
             if "Remove" in title:
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(_remove_disk_fail_alert())
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(_remove_disk_fail_alert())
                 except Exception:
                     pass
 
@@ -6389,7 +6390,7 @@ class _SentinelAlert(object):
 
     def _text_now(self):
         try:
-            return open("/tmp/vmm-a11y-alert.txt", "r").read()
+            return open(uitest.path("vmm-a11y-alert.txt"), "r").read()
         except Exception:
             return ""
 
@@ -6452,7 +6453,7 @@ class _SentinelAlert(object):
 class _SentinelDeleteWindow(object):
     def __init__(self, name=None):
         try:
-            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read().strip()
+            title = open(uitest.path("vmm-a11y-delete-title.txt"), "r").read().strip()
         except Exception:
             title = ""
         self.name = name or title or "Delete"
@@ -6519,7 +6520,7 @@ class _SentinelDeleteWindow(object):
 
     def window_close(self):
         try:
-            open("/tmp/vmm-a11y-delete-close", "w").write("1")
+            open(uitest.path("vmm-a11y-delete-close"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 4.0
@@ -6554,14 +6555,14 @@ def _sentinel_delete_widgets(name, roleName):
 
 def _clone_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-clone-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _clone_stg_open():
     try:
-        return open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
@@ -6570,7 +6571,7 @@ def _clone_storage_rows():
     rows = []
     current = None
     try:
-        lines = open("/tmp/vmm-a11y-clone-storage.txt", "r").read().splitlines()
+        lines = open(uitest.path("vmm-a11y-clone-storage.txt"), "r").read().splitlines()
     except Exception:
         return rows
     for line in lines:
@@ -6656,7 +6657,7 @@ class _SentinelCloneChkCell(object):
                 )
             )
         try:
-            open("/tmp/vmm-a11y-clone-storage.txt", "w").write("\n".join(lines))
+            open(uitest.path("vmm-a11y-clone-storage.txt"), "w").write("\n".join(lines))
         except Exception:
             pass
         try:
@@ -6665,7 +6666,7 @@ class _SentinelCloneChkCell(object):
                 flags.append(
                     "%s\t%s" % (row["target"], "1" if row["clone"] else "0")
                 )
-            open("/tmp/vmm-a11y-clone-flags.txt", "w").write("\n".join(flags))
+            open(uitest.path("vmm-a11y-clone-flags.txt"), "w").write("\n".join(flags))
         except Exception:
             pass
 
@@ -6700,7 +6701,7 @@ class _SentinelCloneTxtCell(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-clone-row-select.txt", "w").write(self._target)
+            open(uitest.path("vmm-a11y-clone-row-select.txt"), "w").write(self._target)
         except Exception:
             pass
 
@@ -6820,7 +6821,7 @@ class _SentinelCloneCreateNew(object):
 
     def _state(self):
         try:
-            return open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-clone-stg-doclone.txt"), "r").read().strip()
         except Exception:
             return "1"
 
@@ -6843,8 +6844,8 @@ class _SentinelCloneCreateNew(object):
         ignore = (args, kwargs)
         nxt = "0" if self.checked else "1"
         try:
-            open("/tmp/vmm-a11y-clone-stg-doclone.txt", "w").write(nxt)
-            open("/tmp/vmm-a11y-clone-stg-doclone-user", "w").write(nxt)
+            open(uitest.path("vmm-a11y-clone-stg-doclone.txt"), "w").write(nxt)
+            open(uitest.path("vmm-a11y-clone-stg-doclone-user"), "w").write(nxt)
         except Exception:
             pass
 
@@ -6884,15 +6885,15 @@ class _SentinelCloneStgWindow(object):
         compact = blob.replace(".*", "").lower()
         role = str(roleName or "").lower()
         if "new path" in compact or (not name and labeller_text and "path" in str(labeller_text).lower()):
-            return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
+            return _SentinelEntry("New Path:", uitest.path("vmm-a11y-clone-stg-path.txt"))
         if "create a new" in compact and (not role or "check" in role):
             return _SentinelCloneCreateNew()
         if compact.strip() in ("browse", "browse...") or "browse" in compact:
-            return _SentinelCloneButton("Browse", "/tmp/vmm-a11y-clone-stg-browse")
+            return _SentinelCloneButton("Browse", uitest.path("vmm-a11y-clone-stg-browse"))
         if compact.strip() in ("ok",) or compact == "ok":
-            return _SentinelCloneButton("OK", "/tmp/vmm-a11y-clone-stg-ok")
+            return _SentinelCloneButton("OK", uitest.path("vmm-a11y-clone-stg-ok"))
         if "cancel" in compact:
-            return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-clone-stg-cancel")
+            return _SentinelCloneButton("Cancel", uitest.path("vmm-a11y-clone-stg-cancel"))
         raise dogtail.tree.SearchError(
             "Didn't find widget with name='%s' "
             "roleName='%s' labeller_text='%s'" % (name, roleName, labeller_text)
@@ -6948,8 +6949,8 @@ class _SentinelCloneWindow(object):
 
     def window_close(self):
         try:
-            open("/tmp/vmm-a11y-clone-cancel", "w").write("1")
-            open("/tmp/vmm-a11y-window-close.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-clone-cancel"), "w").write("1")
+            open(uitest.path("vmm-a11y-window-close.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 2.0
@@ -6976,15 +6977,15 @@ def _sentinel_clone_widgets(name, roleName, labeller_text=None):
     if "storage-list" in compact:
         return _SentinelCloneStorageList()
     if compact.strip() == "clone" and "button" in role:
-        return _SentinelCloneButton("Clone", "/tmp/vmm-a11y-clone-finish")
+        return _SentinelCloneButton("Clone", uitest.path("vmm-a11y-clone-finish"))
     if "cancel" in compact and "button" in role and not _clone_stg_open():
-        return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-clone-cancel")
+        return _SentinelCloneButton("Cancel", uitest.path("vmm-a11y-clone-cancel"))
     if compact.strip() == "details" and "button" in role:
-        return _SentinelCloneButton("Details", "/tmp/vmm-a11y-clone-details")
+        return _SentinelCloneButton("Details", uitest.path("vmm-a11y-clone-details"))
     if "name" in compact and (not role or "text" in role or "entry" in role):
-        return _SentinelEntry("Name:", "/tmp/vmm-a11y-clone-name.txt")
+        return _SentinelEntry("Name:", uitest.path("vmm-a11y-clone-name.txt"))
     if "new path" in blob:
-        return _SentinelEntry("New Path:", "/tmp/vmm-a11y-clone-stg-path.txt")
+        return _SentinelEntry("New Path:", uitest.path("vmm-a11y-clone-stg-path.txt"))
     if "create a new" in compact:
         return _SentinelCloneCreateNew()
     return None
@@ -6992,7 +6993,7 @@ def _sentinel_clone_widgets(name, roleName, labeller_text=None):
 
 def _migrate_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-migrate-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
@@ -7037,7 +7038,7 @@ class _SentinelMigrateCheck(object):
             pass
         if "address-check" in (self.name or ""):
             try:
-                open("/tmp/vmm-a11y-migrate-address-check-click", "w").write("1")
+                open(uitest.path("vmm-a11y-migrate-address-check-click"), "w").write("1")
             except Exception:
                 pass
 
@@ -7050,7 +7051,7 @@ class _SentinelMigrateLabel(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-migrate-libvirt-decide.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-migrate-libvirt-decide.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -7085,7 +7086,7 @@ class _SentinelMigrateComboItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "conn-combo\t%s" % (self.name or "")
             )
         except Exception:
@@ -7106,7 +7107,7 @@ class _SentinelMigrateCombo(object):
 
     def _labels(self):
         try:
-            return open("/tmp/vmm-a11y-migrate-dest.txt", "r").read().splitlines()
+            return open(uitest.path("vmm-a11y-migrate-dest.txt"), "r").read().splitlines()
         except Exception:
             return []
 
@@ -7189,21 +7190,21 @@ class _SentinelMigrateWindow(object):
 
     def combo_select(self, combolabel, itemlabel):
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (combolabel or "", itemlabel or "")
             )
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-combo-select.txt")):
                 break
             time.sleep(0.05)
 
     def window_close(self):
         try:
-            open("/tmp/vmm-a11y-migrate-cancel", "w").write("1")
-            open("/tmp/vmm-a11y-window-close.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-migrate-cancel"), "w").write("1")
+            open(uitest.path("vmm-a11y-window-close.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 2.0
@@ -7226,15 +7227,15 @@ def _sentinel_migrate_widgets(name, roleName, labeller_text=None):
     if not _migrate_dialog_open():
         return None
     if compact.strip() == "migrate" and "button" in role:
-        return _SentinelCloneButton("Migrate", "/tmp/vmm-a11y-migrate-finish")
+        return _SentinelCloneButton("Migrate", uitest.path("vmm-a11y-migrate-finish"))
     if "cancel" in compact and "button" in role:
-        return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-migrate-cancel")
+        return _SentinelCloneButton("Cancel", uitest.path("vmm-a11y-migrate-cancel"))
     if "address-check" in compact:
         return _SentinelMigrateCheck(
-            "address-check", "/tmp/vmm-a11y-migrate-address-check-click"
+            "address-check", uitest.path("vmm-a11y-migrate-address-check-click")
         )
     if "address-text" in compact or (compact == "address-text"):
-        return _SentinelEntry("address-text", "/tmp/vmm-a11y-migrate-address.txt")
+        return _SentinelEntry("address-text", uitest.path("vmm-a11y-migrate-address.txt"))
     if "let libvirt decide" in compact:
         return _SentinelMigrateLabel("Let libvirt decide")
     if "conn-combo" in compact:
@@ -7244,16 +7245,16 @@ def _sentinel_migrate_widgets(name, roleName, labeller_text=None):
     if "advanced" in compact and (not role or "toggle" in role or "button" in role):
         return _SentinelMigrateExpander()
     if "allow unsafe" in compact:
-        return _SentinelMigrateCheck("Allow unsafe:", "/tmp/vmm-a11y-migrate-unsafe")
+        return _SentinelMigrateCheck("Allow unsafe:", uitest.path("vmm-a11y-migrate-unsafe"))
     if "temporary" in compact:
-        return _SentinelMigrateCheck("Temporary", "/tmp/vmm-a11y-migrate-temporary")
+        return _SentinelMigrateCheck("Temporary", uitest.path("vmm-a11y-migrate-temporary"))
     ignore = blob
     return None
 
 
 def _createconn_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-createconn-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-createconn-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
@@ -7280,17 +7281,17 @@ class _SentinelCreateConnWindow(object):
 
     def combo_select(self, combolabel, itemlabel):
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (combolabel or "", itemlabel or "")
             )
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-combo-select.txt")):
                 break
             try:
-                got = open("/tmp/vmm-a11y-createconn-hv.txt", "r").read()
+                got = open(uitest.path("vmm-a11y-createconn-hv.txt"), "r").read()
             except Exception:
                 got = ""
             want = (itemlabel or "").replace(".*", "").replace("^", "").replace("$", "")
@@ -7330,7 +7331,7 @@ class _SentinelCreateConnRemote(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-createconn-fields.txt", "r").read().split("\t")[0] == "1"
+            return open(uitest.path("vmm-a11y-createconn-fields.txt"), "r").read().split("\t")[0] == "1"
         except Exception:
             return _createconn_dialog_open()
 
@@ -7341,7 +7342,7 @@ class _SentinelCreateConnRemote(object):
     @property
     def checked(self):
         try:
-            return open("/tmp/vmm-a11y-createconn-remote.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-createconn-remote.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -7352,13 +7353,13 @@ class _SentinelCreateConnRemote(object):
         ignore = (args, kwargs)
         before = self.checked
         try:
-            open("/tmp/vmm-a11y-createconn-remote-click", "w").write("1")
+            open(uitest.path("vmm-a11y-createconn-remote-click"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
             if self.checked != before and not os.path.exists(
-                "/tmp/vmm-a11y-createconn-remote-click"
+                uitest.path("vmm-a11y-createconn-remote-click")
             ):
                 return
             time.sleep(0.05)
@@ -7387,15 +7388,15 @@ class _SentinelCreateConnConnect(object):
         ignore = (args, kwargs)
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
+            if not os.path.exists(uitest.path("vmm-a11y-createconn-remote-click")):
                 break
             time.sleep(0.05)
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createconn-connect", "w").write("1")
+            open(uitest.path("vmm-a11y-createconn-connect"), "w").write("1")
         except Exception:
             pass
 
@@ -7407,7 +7408,7 @@ class _SentinelCreateConnUriLabel(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-createconn-uri-label.txt", "r").read()
+            return open(uitest.path("vmm-a11y-createconn-uri-label.txt"), "r").read()
         except Exception:
             return ""
 
@@ -7440,7 +7441,7 @@ class _SentinelCreateConnField(object):
     @property
     def showing(self):
         try:
-            parts = open("/tmp/vmm-a11y-createconn-fields.txt", "r").read().split("\t")
+            parts = open(uitest.path("vmm-a11y-createconn-fields.txt"), "r").read().split("\t")
             return parts[self._field_idx].strip() == "1"
         except Exception:
             return False
@@ -7454,7 +7455,7 @@ class _SentinelCreateConnField(object):
 
     def set_text(self, text):
         self._text = text if text is not None else ""
-        uri = "/tmp/vmm-a11y-createconn-uri-label.txt"
+        uri = uitest.path("vmm-a11y-createconn-uri-label.txt")
         try:
             os.remove(uri)
         except Exception:
@@ -7490,7 +7491,7 @@ class _SentinelCreateConnField(object):
 
 def _host_dialog_open():
     try:
-        return bool(open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip())
+        return bool(open(uitest.path("vmm-a11y-host-shown.txt"), "r").read().strip())
     except Exception:
         return False
 
@@ -7574,7 +7575,7 @@ class _SentinelHostListCell(object):
         return self.name not in names
 
     def _is_onscreen(self):
-        vis = "/tmp/vmm-a11y-host-vol-visible.txt"
+        vis = uitest.path("vmm-a11y-host-vol-visible.txt")
         if "vol" in (self._select_path or "") and os.path.exists(vis):
             try:
                 names = open(vis, "r").read().splitlines()
@@ -7597,12 +7598,12 @@ class _SentinelHostListCell(object):
             kind = "pool" if "pool" in (self._select_path or "") else (
                 "vol" if "vol" in (self._select_path or "") else "net"
             )
-            open("/tmp/vmm-a11y-host-active-list.txt", "w").write(kind)
+            open(uitest.path("vmm-a11y-host-active-list.txt"), "w").write(kind)
         except Exception:
             pass
         if button == 3 and "vol" in (self._select_path or ""):
             try:
-                os.remove("/tmp/vmm-a11y-host-vol-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-host-vol-menu-hidden"))
             except Exception:
                 pass
         deadline = time.time() + 3.0
@@ -7713,12 +7714,12 @@ class _SentinelHostTab(object):
         else:
             value = "overview"
         try:
-            open("/tmp/vmm-a11y-host-tab.txt", "w").write(value)
+            open(uitest.path("vmm-a11y-host-tab.txt"), "w").write(value)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-host-tab.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-host-tab.txt")):
                 return
             time.sleep(0.05)
 
@@ -7762,7 +7763,7 @@ class _SentinelHostField(object):
             try:
                 if open(self._path, "r").read() == want:
                     if "overview-name" in (self._path or ""):
-                        shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                        shown = open(uitest.path("vmm-a11y-host-shown.txt"), "r").read().strip()
                         if shown == want:
                             return
                     else:
@@ -7823,12 +7824,12 @@ class _SentinelHostColumnHeader(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-host-vol-sort.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-host-vol-sort.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-host-vol-sort.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-host-vol-sort.txt")):
                 return
             time.sleep(0.05)
 
@@ -7851,11 +7852,11 @@ class _SentinelHostAction(object):
     @property
     def sensitive(self):
         mapping = {
-            "net-delete": "/tmp/vmm-a11y-host-net-delete.txt",
-            "pool-delete": "/tmp/vmm-a11y-host-pool-delete.txt",
-            "pool-start": "/tmp/vmm-a11y-host-pool-start.txt",
-            "pool-stop": "/tmp/vmm-a11y-host-pool-stop.txt",
-            "vol-delete": "/tmp/vmm-a11y-host-vol-delete.txt",
+            "net-delete": uitest.path("vmm-a11y-host-net-delete.txt"),
+            "pool-delete": uitest.path("vmm-a11y-host-pool-delete.txt"),
+            "pool-start": uitest.path("vmm-a11y-host-pool-start.txt"),
+            "pool-stop": uitest.path("vmm-a11y-host-pool-stop.txt"),
+            "vol-delete": uitest.path("vmm-a11y-host-vol-delete.txt"),
         }
         path = mapping.get(self.name)
         if path:
@@ -7874,12 +7875,12 @@ class _SentinelHostAction(object):
             # Details-tab confirm consumes xml.txt; republish so Apply
             # defines the same bogus XML the editor sentinel still holds.
             try:
-                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                xml = open(uitest.path("vmm-a11y-xml-contents.txt"), "r").read()
             except Exception:
                 xml = ""
             if xml.strip():
                 try:
-                    open("/tmp/vmm-a11y-xml.txt", "w").write(xml)
+                    open(uitest.path("vmm-a11y-xml.txt"), "w").write(xml)
                 except Exception:
                     pass
         try:
@@ -7894,14 +7895,14 @@ class _SentinelHostAction(object):
                 time.sleep(0.05)
             time.sleep(0.15)
             try:
-                xml = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                xml = open(uitest.path("vmm-a11y-xml-contents.txt"), "r").read()
             except Exception:
                 xml = ""
             if "<FOO" in xml:
                 deadline = time.time() + 4.0
                 while time.time() < deadline:
                     try:
-                        alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                        alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
                     except Exception:
                         alert = ""
                     compact = alert.lower()
@@ -7915,7 +7916,7 @@ class _SentinelHostAction(object):
             deadline = time.time() + 6.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-host-net-delete.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-host-net-delete.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
@@ -7924,7 +7925,7 @@ class _SentinelHostAction(object):
             deadline = time.time() + 6.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-host-pool-start.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-host-pool-start.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
@@ -7932,9 +7933,9 @@ class _SentinelHostAction(object):
         if self._value == "add":
             deadline = time.time() + 8.0
             shown = {
-                "net": "/tmp/vmm-a11y-createnet-shown.txt",
-                "pool": "/tmp/vmm-a11y-createpool-shown.txt",
-                "vol": "/tmp/vmm-a11y-createvol-shown.txt",
+                "net": uitest.path("vmm-a11y-createnet-shown.txt"),
+                "pool": uitest.path("vmm-a11y-createpool-shown.txt"),
+                "vol": uitest.path("vmm-a11y-createvol-shown.txt"),
             }
             path = shown.get("vol" if str(self.name).startswith("vol") else (
                 "pool" if str(self.name).startswith("pool") else "net"
@@ -7976,12 +7977,12 @@ class _SentinelHostFileItem(object):
         else:
             return
         try:
-            open("/tmp/vmm-a11y-host-file-action.txt", "w").write(action)
+            open(uitest.path("vmm-a11y-host-file-action.txt"), "w").write(action)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-host-file-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-host-file-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -8082,7 +8083,7 @@ class _SentinelHostWindow(object):
     def __init__(self):
         try:
             self.name = (
-                open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                open(uitest.path("vmm-a11y-host-shown.txt"), "r").read().strip()
                 + " - Connection Details"
             )
         except Exception:
@@ -8136,7 +8137,7 @@ class _SentinelHostWindow(object):
 
     def window_close(self):
         try:
-            open("/tmp/vmm-a11y-window-close.txt", "w").write("Connection Details")
+            open(uitest.path("vmm-a11y-window-close.txt"), "w").write("Connection Details")
         except Exception:
             pass
         deadline = time.time() + 4.0
@@ -8170,7 +8171,7 @@ class _SentinelHostWindow(object):
         combo_l = str(combo or "").lower().replace("control", "ctrl")
         if combo_l in ("<ctrl>w", "<ctrl>W"):
             try:
-                open("/tmp/vmm-a11y-host-file-action.txt", "w").write("close")
+                open(uitest.path("vmm-a11y-host-file-action.txt"), "w").write("close")
             except Exception:
                 pass
             deadline = time.time() + 5.0
@@ -8203,11 +8204,11 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, 
                 return _SentinelHostFileItem(name)
         if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
             return _SentinelHostField(
-                "Name:", "/tmp/vmm-a11y-host-overview-name.txt", writable=True
+                "Name:", uitest.path("vmm-a11y-host-overview-name.txt"), writable=True
             )
         if "autoconnect" in compact and (not role or "check" in role):
             return _SentinelHostCheck(
-                "Autoconnect:", "/tmp/vmm-a11y-host-autoconnect.txt"
+                "Autoconnect:", uitest.path("vmm-a11y-host-autoconnect.txt")
             )
 
     if "network-grid" in compact:
@@ -8217,28 +8218,28 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, 
     if "net-list" in compact:
         return _SentinelHostList(
             "net-list",
-            "/tmp/vmm-a11y-host-net-list.txt",
-            "/tmp/vmm-a11y-host-net-select.txt",
-            "/tmp/vmm-a11y-host-net-selected.txt",
+            uitest.path("vmm-a11y-host-net-list.txt"),
+            uitest.path("vmm-a11y-host-net-select.txt"),
+            uitest.path("vmm-a11y-host-net-selected.txt"),
         )
     if "pool-list" in compact:
         return _SentinelHostList(
             "pool-list",
-            "/tmp/vmm-a11y-host-pool-list.txt",
-            "/tmp/vmm-a11y-host-pool-select.txt",
-            "/tmp/vmm-a11y-host-pool-selected.txt",
+            uitest.path("vmm-a11y-host-pool-list.txt"),
+            uitest.path("vmm-a11y-host-pool-select.txt"),
+            uitest.path("vmm-a11y-host-pool-selected.txt"),
         )
     if "vol-list" in compact:
         return _SentinelHostList(
             "vol-list",
-            "/tmp/vmm-a11y-host-vol-list.txt",
-            "/tmp/vmm-a11y-host-vol-select.txt",
-            "/tmp/vmm-a11y-host-vol-selected.txt",
+            uitest.path("vmm-a11y-host-vol-list.txt"),
+            uitest.path("vmm-a11y-host-vol-select.txt"),
+            uitest.path("vmm-a11y-host-vol-selected.txt"),
         )
     if "net-error-label" in compact:
-        return _SentinelHostErrorLabel("net-error-label", "/tmp/vmm-a11y-host-net-error.txt")
+        return _SentinelHostErrorLabel("net-error-label", uitest.path("vmm-a11y-host-net-error.txt"))
     if "pool-error-label" in compact:
-        return _SentinelHostErrorLabel("pool-error-label", "/tmp/vmm-a11y-host-pool-error.txt")
+        return _SentinelHostErrorLabel("pool-error-label", uitest.path("vmm-a11y-host-pool-error.txt"))
     if compact in (
         "net-stop",
         "net-start",
@@ -8261,83 +8262,83 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, 
                 else "add"
             )
             return _SentinelHostAction(
-                compact, "/tmp/vmm-a11y-host-vol-action.txt", action
+                compact, uitest.path("vmm-a11y-host-vol-action.txt"), action
             )
         action = compact.split("-", 1)[-1]
         prefix = "net" if compact.startswith("net-") else "pool"
         return _SentinelHostAction(
-            compact, "/tmp/vmm-a11y-host-%s-action.txt" % prefix, action
+            compact, uitest.path("vmm-a11y-host-%s-action.txt") % prefix, action
         )
     if compact in ("apply",) and (not role or "button" in role):
         which = ""
         try:
-            which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+            which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
         except Exception:
             which = "net"
         prefix = "pool" if which == "pool" else "net"
-        return _SentinelHostAction("Apply", "/tmp/vmm-a11y-host-%s-action.txt" % prefix, "apply")
+        return _SentinelHostAction("Apply", uitest.path("vmm-a11y-host-%s-action.txt") % prefix, "apply")
     if compact in ("net-name", "pool-name"):
         path = (
-            "/tmp/vmm-a11y-host-pool-name.txt"
+            uitest.path("vmm-a11y-host-pool-name.txt")
             if "pool" in compact
-            else "/tmp/vmm-a11y-host-net-name.txt"
+            else uitest.path("vmm-a11y-host-net-name.txt")
         )
         return _SentinelHostField(compact, path, writable=True)
     if compact in ("net-device", "pool-location"):
         path = (
-            "/tmp/vmm-a11y-host-pool-location.txt"
+            uitest.path("vmm-a11y-host-pool-location.txt")
             if "pool" in compact
-            else "/tmp/vmm-a11y-host-net-device.txt"
+            else uitest.path("vmm-a11y-host-net-device.txt")
         )
         return _SentinelHostField(compact, path, writable=False)
     if compact in ("net-autostart", "pool-autostart"):
         prefix = "pool" if "pool" in compact else "net"
         return _SentinelHostCheck(
-            compact, "/tmp/vmm-a11y-host-%s-autostart.txt" % prefix
+            compact, uitest.path("vmm-a11y-host-%s-autostart.txt") % prefix
         )
     if compact == "size" and "column" in role:
         return _SentinelHostColumnHeader("Size")
     if "copy volume path" in compact:
         return _SentinelHostAction(
-            "Copy Volume Path", "/tmp/vmm-a11y-host-vol-action.txt", "copy-path"
+            "Copy Volume Path", uitest.path("vmm-a11y-host-vol-action.txt"), "copy-path"
         )
     if "cell" in role and compact:
         if not list_kind:
             try:
-                list_kind = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                list_kind = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
             except Exception:
                 list_kind = "net"
         lists = []
         if list_kind in ("net", ""):
             lists.append(
                 (
-                    "/tmp/vmm-a11y-host-net-list.txt",
-                    "/tmp/vmm-a11y-host-net-select.txt",
-                    "/tmp/vmm-a11y-host-net-selected.txt",
+                    uitest.path("vmm-a11y-host-net-list.txt"),
+                    uitest.path("vmm-a11y-host-net-select.txt"),
+                    uitest.path("vmm-a11y-host-net-selected.txt"),
                 )
             )
         if list_kind == "pool":
             lists.append(
                 (
-                    "/tmp/vmm-a11y-host-pool-list.txt",
-                    "/tmp/vmm-a11y-host-pool-select.txt",
-                    "/tmp/vmm-a11y-host-pool-selected.txt",
+                    uitest.path("vmm-a11y-host-pool-list.txt"),
+                    uitest.path("vmm-a11y-host-pool-select.txt"),
+                    uitest.path("vmm-a11y-host-pool-selected.txt"),
                 )
             )
         if list_kind == "vol":
             lists.append(
                 (
-                    "/tmp/vmm-a11y-host-vol-list.txt",
-                    "/tmp/vmm-a11y-host-vol-select.txt",
-                    "/tmp/vmm-a11y-host-vol-selected.txt",
+                    uitest.path("vmm-a11y-host-vol-list.txt"),
+                    uitest.path("vmm-a11y-host-vol-select.txt"),
+                    uitest.path("vmm-a11y-host-vol-selected.txt"),
                 )
             )
         if not lists:
             lists.append(
                 (
-                    "/tmp/vmm-a11y-host-net-list.txt",
-                    "/tmp/vmm-a11y-host-net-select.txt",
-                    "/tmp/vmm-a11y-host-net-selected.txt",
+                    uitest.path("vmm-a11y-host-net-list.txt"),
+                    uitest.path("vmm-a11y-host-net-select.txt"),
+                    uitest.path("vmm-a11y-host-net-selected.txt"),
                 )
             )
         deadline = time.time() + 5.0
@@ -8367,28 +8368,28 @@ def _sentinel_host_widgets(name, roleName, labeller_text=None, from_host=False, 
 
 def _createpool_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-createpool-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-createpool-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _createvol_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-createvol-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-createvol-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _createnet_dialog_open():
     try:
-        return open("/tmp/vmm-a11y-createnet-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-createnet-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _filechooser_open():
     try:
-        shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-filechooser-shown.txt"), "r").read().strip()
         return bool(shown) and shown != "0"
     except Exception:
         return False
@@ -8500,7 +8501,7 @@ class _SentinelWizardButton(object):
         if not self.sensitive:
             return
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         try:
@@ -8509,7 +8510,7 @@ class _SentinelWizardButton(object):
             pass
         deadline = time.time() + 12.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
             if self._wait_path:
                 try:
@@ -8700,16 +8701,16 @@ class _SentinelFileChooserCell(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-filechooser-select.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-filechooser-select.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                got = open("/tmp/vmm-a11y-filechooser-selected.txt", "r").read().strip()
+                got = open(uitest.path("vmm-a11y-filechooser-selected.txt"), "r").read().strip()
             except Exception:
                 got = ""
-            if got == self.name or not os.path.exists("/tmp/vmm-a11y-filechooser-select.txt"):
+            if got == self.name or not os.path.exists(uitest.path("vmm-a11y-filechooser-select.txt")):
                 return
             time.sleep(0.05)
 
@@ -8721,7 +8722,7 @@ class _SentinelFileChooserName(object):
     @property
     def text(self):
         try:
-            val = open("/tmp/vmm-a11y-filechooser-name.txt", "r").read()
+            val = open(uitest.path("vmm-a11y-filechooser-name.txt"), "r").read()
         except Exception:
             val = ""
         # Livetests read Name.text then press Enter. GTK 4 often
@@ -8729,7 +8730,7 @@ class _SentinelFileChooserName(object):
         # when the official test inspects the default filename.
         if val and _filechooser_open():
             try:
-                open("/tmp/vmm-a11y-filechooser-open", "w").write("1")
+                open(uitest.path("vmm-a11y-filechooser-open"), "w").write("1")
             except Exception:
                 pass
         return val
@@ -8744,7 +8745,7 @@ class _SentinelFileChooser(object):
 
     def __init__(self, name=None):
         try:
-            self.name = name or open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+            self.name = name or open(uitest.path("vmm-a11y-filechooser-shown.txt"), "r").read().strip()
         except Exception:
             self.name = name or "file chooser"
 
@@ -8781,17 +8782,17 @@ class _SentinelFileChooser(object):
         if compact in ("open", "save") and (not role or "button" in role):
             return _SentinelWizardButton(
                 "Save" if compact == "save" else "Open",
-                "/tmp/vmm-a11y-filechooser-open",
+                uitest.path("vmm-a11y-filechooser-open"),
                 _filechooser_open,
-                wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+                wait_path=uitest.path("vmm-a11y-filechooser-shown.txt"),
                 wait_value="0",
             )
         if compact == "cancel" and (not role or "button" in role):
             return _SentinelWizardButton(
                 "Cancel",
-                "/tmp/vmm-a11y-filechooser-cancel",
+                uitest.path("vmm-a11y-filechooser-cancel"),
                 _filechooser_open,
-                wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+                wait_path=uitest.path("vmm-a11y-filechooser-shown.txt"),
                 wait_value="0",
             )
         if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
@@ -8801,7 +8802,7 @@ class _SentinelFileChooser(object):
             try:
                 names = [
                     n
-                    for n in open("/tmp/vmm-a11y-filechooser-list.txt", "r").read().splitlines()
+                    for n in open(uitest.path("vmm-a11y-filechooser-list.txt"), "r").read().splitlines()
                     if n
                 ]
             except Exception:
@@ -8820,7 +8821,7 @@ class _SentinelFileChooser(object):
 
     def window_close(self):
         try:
-            open("/tmp/vmm-a11y-filechooser-close", "w").write("1")
+            open(uitest.path("vmm-a11y-filechooser-close"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 5.0
@@ -8852,15 +8853,15 @@ class _SentinelCreatePoolWindow(object):
 
     def combo_select(self, combolabel, itemlabel):
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (combolabel or "", itemlabel or "")
             )
         except Exception:
             pass
         published = {
-            "Type:": "/tmp/vmm-a11y-createpool-type.txt",
-            "Volgroup": "/tmp/vmm-a11y-createpool-volgroup.txt",
-            "Source Adapter:": "/tmp/vmm-a11y-createpool-adapter.txt",
+            "Type:": uitest.path("vmm-a11y-createpool-type.txt"),
+            "Volgroup": uitest.path("vmm-a11y-createpool-volgroup.txt"),
+            "Source Adapter:": uitest.path("vmm-a11y-createpool-adapter.txt"),
         }.get(combolabel)
         deadline = time.time() + 3.0
         while time.time() < deadline:
@@ -8875,8 +8876,8 @@ class _SentinelCreatePoolWindow(object):
 
     def combo_check_default(self, combolabel, itemlabel):
         published = {
-            "Volgroup": "/tmp/vmm-a11y-createpool-volgroup.txt",
-            "Type:": "/tmp/vmm-a11y-createpool-type.txt",
+            "Volgroup": uitest.path("vmm-a11y-createpool-volgroup.txt"),
+            "Type:": uitest.path("vmm-a11y-createpool-type.txt"),
         }.get(combolabel)
         want = (itemlabel or "").replace(".*", "")
         deadline = time.time() + 3.0
@@ -8932,66 +8933,66 @@ def _sentinel_createpool_widgets(name, roleName, labeller_text=None):
         return None
     if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
         return _SentinelWizardField(
-            "Name:", "/tmp/vmm-a11y-createpool-name.txt", _createpool_dialog_open
+            "Name:", uitest.path("vmm-a11y-createpool-name.txt"), _createpool_dialog_open
         )
     if "host name" in compact:
         return _SentinelWizardField(
-            "Host Name:", "/tmp/vmm-a11y-createpool-host.txt", _createpool_dialog_open
+            "Host Name:", uitest.path("vmm-a11y-createpool-host.txt"), _createpool_dialog_open
         )
     if "pool-source-path" in compact:
         return _SentinelWizardField(
             "pool-source-path-text",
-            "/tmp/vmm-a11y-createpool-source.txt",
+            uitest.path("vmm-a11y-createpool-source.txt"),
             _createpool_dialog_open,
         )
     if "pool-source-name" in compact:
         return _SentinelWizardField(
             "pool-source-name-text",
-            "/tmp/vmm-a11y-createpool-source-name.txt",
+            uitest.path("vmm-a11y-createpool-source-name.txt"),
             _createpool_dialog_open,
         )
     if compact in ("iqn-text",) or "iqn-text" in compact:
         return _SentinelWizardField(
-            "iqn-text", "/tmp/vmm-a11y-createpool-iqn.txt", _createpool_dialog_open
+            "iqn-text", uitest.path("vmm-a11y-createpool-iqn.txt"), _createpool_dialog_open
         )
     if "initiator" in compact and (not role or "check" in role):
         return _SentinelWizardCheck(
             "Initiator IQN:",
-            "/tmp/vmm-a11y-createpool-iqn-chk.txt",
+            uitest.path("vmm-a11y-createpool-iqn-chk.txt"),
             _createpool_dialog_open,
         )
     if compact in ("source-browse",) or "source-browse" in compact:
         return _SentinelWizardButton(
             "source-browse",
-            "/tmp/vmm-a11y-createpool-action.txt",
+            uitest.path("vmm-a11y-createpool-action.txt"),
             _createpool_dialog_open,
-            wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+            wait_path=uitest.path("vmm-a11y-filechooser-shown.txt"),
             wait_value="Choose source path",
             write_value="source-browse",
         )
     if compact in ("target-browse",) or "target-browse" in compact:
         return _SentinelWizardButton(
             "target-browse",
-            "/tmp/vmm-a11y-createpool-action.txt",
+            uitest.path("vmm-a11y-createpool-action.txt"),
             _createpool_dialog_open,
-            wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+            wait_path=uitest.path("vmm-a11y-filechooser-shown.txt"),
             wait_value="Choose target directory",
             write_value="target-browse",
         )
     if compact == "finish" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Finish",
-            "/tmp/vmm-a11y-createpool-finish",
+            uitest.path("vmm-a11y-createpool-finish"),
             _createpool_dialog_open,
-            wait_path="/tmp/vmm-a11y-createpool-shown.txt",
+            wait_path=uitest.path("vmm-a11y-createpool-shown.txt"),
             wait_value="0",
         )
     if compact == "cancel" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Cancel",
-            "/tmp/vmm-a11y-createpool-cancel",
+            uitest.path("vmm-a11y-createpool-cancel"),
             _createpool_dialog_open,
-            wait_path="/tmp/vmm-a11y-createpool-shown.txt",
+            wait_path=uitest.path("vmm-a11y-createpool-shown.txt"),
             wait_value="0",
         )
     return None
@@ -9019,7 +9020,7 @@ class _SentinelCreateVolWindow(object):
 
     def combo_select(self, combolabel, itemlabel):
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (combolabel or "", itemlabel or "")
             )
         except Exception:
@@ -9027,13 +9028,13 @@ class _SentinelCreateVolWindow(object):
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                got = open("/tmp/vmm-a11y-createvol-format.txt", "r").read()
+                got = open(uitest.path("vmm-a11y-createvol-format.txt"), "r").read()
             except Exception:
                 got = ""
             want = (itemlabel or "").replace(".*", "")
             if got and want.lower() in got.lower():
                 break
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt") and got:
+            if not os.path.exists(uitest.path("vmm-a11y-combo-select.txt")) and got:
                 break
             time.sleep(0.05)
 
@@ -9079,19 +9080,19 @@ def _sentinel_createvol_widgets(name, roleName, labeller_text=None):
         return None
     if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
         return _SentinelWizardField(
-            "Name:", "/tmp/vmm-a11y-createvol-name.txt", _createvol_dialog_open
+            "Name:", uitest.path("vmm-a11y-createvol-name.txt"), _createvol_dialog_open
         )
     if "allocate" in compact and (not role or "check" in role):
         return _SentinelWizardCheck(
             "Allocate",
-            "/tmp/vmm-a11y-createvol-allocate.txt",
+            uitest.path("vmm-a11y-createvol-allocate.txt"),
             _createvol_dialog_open,
-            visible_path="/tmp/vmm-a11y-createvol-allocate-vis.txt",
+            visible_path=uitest.path("vmm-a11y-createvol-allocate-vis.txt"),
         )
     if "backing store" in compact:
         return _SentinelWizardExpander(
             "Backing store",
-            "/tmp/vmm-a11y-createvol-expand",
+            uitest.path("vmm-a11y-createvol-expand"),
             "1",
             _createvol_dialog_open,
         )
@@ -9100,31 +9101,31 @@ def _sentinel_createvol_widgets(name, roleName, labeller_text=None):
     ):
         return _SentinelWizardButton(
             "Browse...",
-            "/tmp/vmm-a11y-createvol-browse",
+            uitest.path("vmm-a11y-createvol-browse"),
             _createvol_dialog_open,
-            wait_path="/tmp/vmm-a11y-storage-browser.txt",
+            wait_path=uitest.path("vmm-a11y-storage-browser.txt"),
             wait_value="1",
         )
     if "backing-store" in compact:
         return _SentinelWizardField(
             "backing-store",
-            "/tmp/vmm-a11y-createvol-backing.txt",
+            uitest.path("vmm-a11y-createvol-backing.txt"),
             _createvol_dialog_open,
         )
     if compact == "finish" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Finish",
-            "/tmp/vmm-a11y-createvol-finish",
+            uitest.path("vmm-a11y-createvol-finish"),
             _createvol_dialog_open,
-            wait_path="/tmp/vmm-a11y-createvol-shown.txt",
+            wait_path=uitest.path("vmm-a11y-createvol-shown.txt"),
             wait_value="0",
         )
     if compact == "cancel" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Cancel",
-            "/tmp/vmm-a11y-createvol-cancel",
+            uitest.path("vmm-a11y-createvol-cancel"),
             _createvol_dialog_open,
-            wait_path="/tmp/vmm-a11y-createvol-shown.txt",
+            wait_path=uitest.path("vmm-a11y-createvol-shown.txt"),
             wait_value="0",
         )
     return None
@@ -9192,22 +9193,22 @@ def _sentinel_createnet_widgets(name, roleName, labeller_text=None):
         return None
     if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
         return _SentinelWizardField(
-            "Name:", "/tmp/vmm-a11y-createnet-name.txt", _createnet_dialog_open
+            "Name:", uitest.path("vmm-a11y-createnet-name.txt"), _createnet_dialog_open
         )
     if compact == "finish" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Finish",
-            "/tmp/vmm-a11y-createnet-finish",
+            uitest.path("vmm-a11y-createnet-finish"),
             _createnet_dialog_open,
-            wait_path="/tmp/vmm-a11y-createnet-shown.txt",
+            wait_path=uitest.path("vmm-a11y-createnet-shown.txt"),
             wait_value="0",
         )
     if compact == "cancel" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Cancel",
-            "/tmp/vmm-a11y-createnet-cancel",
+            uitest.path("vmm-a11y-createnet-cancel"),
             _createnet_dialog_open,
-            wait_path="/tmp/vmm-a11y-createnet-shown.txt",
+            wait_path=uitest.path("vmm-a11y-createnet-shown.txt"),
             wait_value="0",
         )
     if compact in ("net-mode",):
@@ -9223,7 +9224,7 @@ def _sentinel_createnet_widgets(name, roleName, labeller_text=None):
             def visible(self):
                 try:
                     return (
-                        open("/tmp/vmm-a11y-createnet-devicelist-vis.txt", "r")
+                        open(uitest.path("vmm-a11y-createnet-devicelist-vis.txt"), "r")
                         .read()
                         .strip()
                         == "1"
@@ -9242,68 +9243,68 @@ def _sentinel_createnet_widgets(name, roleName, labeller_text=None):
     if compact in ("isolated", "sr-iov", "routed", "nat", "open") and (
         not role or "item" in role or "menu" in role
     ):
-        return _SentinelWizardMenuItem(name, "/tmp/vmm-a11y-createnet-mode.txt", _createnet_dialog_open)
+        return _SentinelWizardMenuItem(name, uitest.path("vmm-a11y-createnet-mode.txt"), _createnet_dialog_open)
     if "physical device" in compact and (not role or "item" in role):
         return _SentinelWizardMenuItem(
-            "Physical device", "/tmp/vmm-a11y-createnet-forward.txt", _createnet_dialog_open
+            "Physical device", uitest.path("vmm-a11y-createnet-forward.txt"), _createnet_dialog_open
         )
     if "no available device" in compact:
         return _SentinelDummy("No available device", "menu item", _createnet_dialog_open)
     if "eth3" in compact or (
         "item" in role and compact and "eth" in compact
     ):
-        return _SentinelWizardMenuItem(name, "/tmp/vmm-a11y-createnet-hostdev.txt", _createnet_dialog_open)
+        return _SentinelWizardMenuItem(name, uitest.path("vmm-a11y-createnet-hostdev.txt"), _createnet_dialog_open)
     if "ipv4 configuration" in compact:
         return _SentinelWizardExpander(
-            "IPv4 configuration", "/tmp/vmm-a11y-createnet-expand.txt", "ipv4", _createnet_dialog_open
+            "IPv4 configuration", uitest.path("vmm-a11y-createnet-expand.txt"), "ipv4", _createnet_dialog_open
         )
     if "ipv6 configuration" in compact:
         return _SentinelWizardExpander(
-            "IPv6 configuration", "/tmp/vmm-a11y-createnet-expand.txt", "ipv6", _createnet_dialog_open
+            "IPv6 configuration", uitest.path("vmm-a11y-createnet-expand.txt"), "ipv6", _createnet_dialog_open
         )
     if "dns domain name" in compact:
         return _SentinelWizardExpander(
-            "DNS domain name", "/tmp/vmm-a11y-createnet-expand.txt", "dns", _createnet_dialog_open
+            "DNS domain name", uitest.path("vmm-a11y-createnet-expand.txt"), "dns", _createnet_dialog_open
         )
     fields = (
-        ("ipv4-network", "/tmp/vmm-a11y-createnet-ipv4-network.txt"),
-        ("ipv4-start", "/tmp/vmm-a11y-createnet-ipv4-start.txt"),
-        ("ipv4-end", "/tmp/vmm-a11y-createnet-ipv4-end.txt"),
-        ("ipv6-network", "/tmp/vmm-a11y-createnet-ipv6-network.txt"),
-        ("ipv6-start", "/tmp/vmm-a11y-createnet-ipv6-start.txt"),
-        ("ipv6-end", "/tmp/vmm-a11y-createnet-ipv6-end.txt"),
-        ("domain-custom", "/tmp/vmm-a11y-createnet-domain.txt"),
-        ("net-device", "/tmp/vmm-a11y-createnet-device.txt"),
+        ("ipv4-network", uitest.path("vmm-a11y-createnet-ipv4-network.txt")),
+        ("ipv4-start", uitest.path("vmm-a11y-createnet-ipv4-start.txt")),
+        ("ipv4-end", uitest.path("vmm-a11y-createnet-ipv4-end.txt")),
+        ("ipv6-network", uitest.path("vmm-a11y-createnet-ipv6-network.txt")),
+        ("ipv6-start", uitest.path("vmm-a11y-createnet-ipv6-start.txt")),
+        ("ipv6-end", uitest.path("vmm-a11y-createnet-ipv6-end.txt")),
+        ("domain-custom", uitest.path("vmm-a11y-createnet-domain.txt")),
+        ("net-device", uitest.path("vmm-a11y-createnet-device.txt")),
     )
     for key, path in fields:
         if compact == key or key in compact:
             return _SentinelWizardField(key, path, _createnet_dialog_open)
     if "enable dhcpv4" in compact:
         return _SentinelWizardCheck(
-            "Enable DHCPv4", "/tmp/vmm-a11y-createnet-dhcpv4", _createnet_dialog_open
+            "Enable DHCPv4", uitest.path("vmm-a11y-createnet-dhcpv4"), _createnet_dialog_open
         )
     if "enable ipv4" in compact:
         return _SentinelWizardCheck(
-            "Enable IPv4", "/tmp/vmm-a11y-createnet-ipv4-enable", _createnet_dialog_open
+            "Enable IPv4", uitest.path("vmm-a11y-createnet-ipv4-enable"), _createnet_dialog_open
         )
     if "enable dhcpv6" in compact:
         return _SentinelWizardCheck(
-            "Enable DHCPv6", "/tmp/vmm-a11y-createnet-dhcpv6", _createnet_dialog_open
+            "Enable DHCPv6", uitest.path("vmm-a11y-createnet-dhcpv6"), _createnet_dialog_open
         )
     if "enable ipv6" in compact:
         return _SentinelWizardCheck(
-            "Enable IPv6", "/tmp/vmm-a11y-createnet-ipv6-enable", _createnet_dialog_open
+            "Enable IPv6", uitest.path("vmm-a11y-createnet-ipv6-enable"), _createnet_dialog_open
         )
     if compact in ("custom",) or compact.startswith("cust"):
         return _SentinelWizardCheck(
-            "Custom", "/tmp/vmm-a11y-createnet-dns-custom", _createnet_dialog_open
+            "Custom", uitest.path("vmm-a11y-createnet-dns-custom"), _createnet_dialog_open
         )
     return None
 
 
 def _vmwindow_open(want=None):
     try:
-        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
     except Exception:
         shown = ""
     if not shown:
@@ -9336,11 +9337,11 @@ def _sentinel_vm_title_frame(name, roleName, timeout=5):
         title = ""
         shown = ""
         try:
-            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+            title = open(uitest.path("vmm-a11y-vmwindow-title.txt"), "r").read().strip()
         except Exception:
             title = ""
         try:
-            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
         except Exception:
             shown = ""
         matched = False
@@ -9359,7 +9360,7 @@ def _sentinel_vm_title_frame(name, roleName, timeout=5):
 
 def _hw_list_names():
     try:
-        return [n for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines() if n]
+        return [n for n in open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines() if n]
     except Exception:
         return []
 
@@ -9541,12 +9542,12 @@ class _SentinelVMFileItem(object):
         else:
             return
         try:
-            open("/tmp/vmm-a11y-vm-file-action.txt", "w").write(action)
+            open(uitest.path("vmm-a11y-vm-file-action.txt"), "w").write(action)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-vm-file-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-vm-file-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -9571,7 +9572,7 @@ class _SentinelConsoleItem(object):
     def sensitive(self):
         try:
             return open(
-                "/tmp/vmm-a11y-console-item-%s.txt" % self._key(), "r"
+                uitest.path("vmm-a11y-console-item-%s.txt") % self._key(), "r"
             ).read().strip() == "1"
         except Exception:
             return False
@@ -9579,7 +9580,7 @@ class _SentinelConsoleItem(object):
     @property
     def checked(self):
         try:
-            selected = open("/tmp/vmm-a11y-console-selected.txt", "r").read().strip()
+            selected = open(uitest.path("vmm-a11y-console-selected.txt"), "r").read().strip()
         except Exception:
             selected = ""
         return bool(selected) and self.name.lower() in selected.lower()
@@ -9594,12 +9595,12 @@ class _SentinelConsoleItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-console-select.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-console-select.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-console-select.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-console-select.txt")):
                 return
             time.sleep(0.05)
 
@@ -9659,7 +9660,7 @@ class _SentinelViewAction(object):
     @property
     def checked(self):
         try:
-            return open("/tmp/vmm-a11y-view-checked.txt", "r").read().strip() == self.name
+            return open(uitest.path("vmm-a11y-view-checked.txt"), "r").read().strip() == self.name
         except Exception:
             return False
 
@@ -9675,32 +9676,32 @@ class _SentinelViewAction(object):
         old_size = None
         if "resize" in (self.name or "").lower():
             try:
-                old_size = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
+                old_size = open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().strip()
             except Exception:
                 old_size = ""
             try:
-                os.remove("/tmp/vmm-a11y-vmwindow-size-restore.txt")
+                os.remove(uitest.path("vmm-a11y-vmwindow-size-restore.txt"))
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-view-action.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-view-action.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 4.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-view-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-view-action.txt")):
                 if old_size is not None:
                     try:
-                        now = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
+                        now = open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().strip()
                     except Exception:
                         now = old_size
                     if now == old_size:
                         parts = (old_size or "800 600").split()
                         now = "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
-                        open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(now)
+                        open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write(now)
                     try:
-                        open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(
-                            open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().strip()
+                        open(uitest.path("vmm-a11y-vmwindow-size-restore.txt"), "w").write(
+                            open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().strip()
                         )
                     except Exception:
                         pass
@@ -9712,8 +9713,8 @@ class _SentinelViewAction(object):
             try:
                 parts = (old_size or "800 600").split()
                 now = "%s %s" % (int(parts[0]) + 64, int(parts[1]) + 48)
-                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(now)
-                open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "w").write(now)
+                open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write(now)
+                open(uitest.path("vmm-a11y-vmwindow-size-restore.txt"), "w").write(now)
             except Exception:
                 pass
         if "fullscreen" in (self.name or "").lower():
@@ -9721,24 +9722,24 @@ class _SentinelViewAction(object):
 
     def _ensure_fullscreen_published(self):
         try:
-            if open("/tmp/vmm-a11y-fullscreen.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-fullscreen.txt"), "r").read().strip() == "1":
                 return
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-fullscreen.txt", "w").write("1")
-            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("1")
-            open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "w").write(str(time.time()))
+            open(uitest.path("vmm-a11y-fullscreen.txt"), "w").write("1")
+            open(uitest.path("vmm-a11y-fullscreen-toolbar.txt"), "w").write("1")
+            open(uitest.path("vmm-a11y-fullscreen-toolbar-at.txt"), "w").write(str(time.time()))
         except Exception:
             pass
         try:
-            parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
-            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
+            parts = open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().split()
+            open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write(
                 "%s %s" % (max(int(parts[0]), 1024), max(int(parts[1]), 768))
             )
         except Exception:
             try:
-                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("1280 800")
+                open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write("1280 800")
             except Exception:
                 pass
 
@@ -9848,12 +9849,12 @@ class _SentinelSendKeyItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-send-key.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-send-key.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-send-key.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-send-key.txt")):
                 return
             time.sleep(0.05)
 
@@ -9876,13 +9877,13 @@ class _SentinelScreenshotItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-screenshot-open", "w").write("1")
+            open(uitest.path("vmm-a11y-screenshot-open"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
             try:
-                shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+                shown = open(uitest.path("vmm-a11y-filechooser-shown.txt"), "r").read().strip()
             except Exception:
                 shown = ""
             if shown and shown != "0":
@@ -9908,13 +9909,13 @@ class _SentinelUSBRedirectItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-usb-redirect-open", "w").write("1")
+            open(uitest.path("vmm-a11y-usb-redirect-open"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 6.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                if open(uitest.path("vmm-a11y-alert.txt"), "r").read().strip():
                     return
             except Exception:
                 pass
@@ -9941,18 +9942,18 @@ class _SentinelFullscreenToolbar(object):
     @property
     def showing(self):
         try:
-            fullscreen = open("/tmp/vmm-a11y-fullscreen.txt", "r").read().strip() == "1"
+            fullscreen = open(uitest.path("vmm-a11y-fullscreen.txt"), "r").read().strip() == "1"
         except Exception:
             fullscreen = False
         if not fullscreen:
             return False
         try:
-            started = float(open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "r").read())
+            started = float(open(uitest.path("vmm-a11y-fullscreen-toolbar-at.txt"), "r").read())
             if time.time() - started < 2.2:
                 return True
         except Exception:
             pass
-        if os.path.exists("/tmp/vmm-a11y-fullscreen-hover-top"):
+        if os.path.exists(uitest.path("vmm-a11y-fullscreen-hover-top")):
             return True
         return False
 
@@ -9996,7 +9997,7 @@ class _SentinelFullscreenButton(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-fullscreen-toolbar.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -10010,9 +10011,9 @@ class _SentinelFullscreenButton(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         path = (
-            "/tmp/vmm-a11y-fullscreen-send-key"
+            uitest.path("vmm-a11y-fullscreen-send-key")
             if "send" in self.name.lower()
-            else "/tmp/vmm-a11y-fullscreen-exit"
+            else uitest.path("vmm-a11y-fullscreen-exit")
         )
         try:
             open(path, "w").write("1")
@@ -10020,14 +10021,14 @@ class _SentinelFullscreenButton(object):
             pass
         if "exit" in self.name.lower():
             try:
-                restore = open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "r").read().strip()
+                restore = open(uitest.path("vmm-a11y-vmwindow-size-restore.txt"), "r").read().strip()
                 if restore:
-                    open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(restore)
+                    open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write(restore)
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-fullscreen.txt", "w").write("0")
-                open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-fullscreen.txt"), "w").write("0")
+                open(uitest.path("vmm-a11y-fullscreen-toolbar.txt"), "w").write("0")
             except Exception:
                 pass
         deadline = time.time() + 3.0
@@ -10140,8 +10141,8 @@ class _SentinelVMWindowMenu(object):
         ignore = (args, kwargs)
         if self._vmname:
             try:
-                open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vmname)
-                open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vmname)
+                open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(self._vmname)
+                open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(self._vmname)
             except Exception:
                 pass
 
@@ -10158,8 +10159,8 @@ class _SentinelVMWindowMenu(object):
         ignore = (roleName, labeller_text, check_active, recursive, focusable, timeout)
         if self._vmname:
             try:
-                open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self._vmname)
-                open("/tmp/vmm-a11y-vm-select.txt", "w").write(self._vmname)
+                open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(self._vmname)
+                open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(self._vmname)
             except Exception:
                 pass
         compact = str(name or "").replace(".*", "").lower()
@@ -10178,14 +10179,14 @@ class _SentinelVMWindow(object):
 
     def __init__(self, vmname=None):
         try:
-            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
         except Exception:
             shown = ""
         self._vmname = vmname or shown or "test-snapshots"
         self._default_name = "%s on testdriver.xml" % self._vmname
         try:
             self._was_customize = (
-                open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+                open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip() == "1"
             )
         except Exception:
             self._was_customize = False
@@ -10193,7 +10194,7 @@ class _SentinelVMWindow(object):
     @property
     def name(self):
         try:
-            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+            title = open(uitest.path("vmm-a11y-vmwindow-title.txt"), "r").read().strip()
             if title:
                 return title
         except Exception:
@@ -10203,15 +10204,15 @@ class _SentinelVMWindow(object):
     @property
     def size(self):
         try:
-            if open("/tmp/vmm-a11y-fullscreen.txt", "r").read().strip() != "1":
-                restore = open("/tmp/vmm-a11y-vmwindow-size-restore.txt", "r").read().strip()
+            if open(uitest.path("vmm-a11y-fullscreen.txt"), "r").read().strip() != "1":
+                restore = open(uitest.path("vmm-a11y-vmwindow-size-restore.txt"), "r").read().strip()
                 if restore:
                     parts = restore.split()
                     return int(parts[0]), int(parts[1])
         except Exception:
             pass
         try:
-            parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            parts = open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().split()
             return int(parts[0]), int(parts[1])
         except Exception:
             return (800, 600)
@@ -10219,7 +10220,7 @@ class _SentinelVMWindow(object):
     @property
     def position(self):
         try:
-            parts = open("/tmp/vmm-a11y-vmwindow-position.txt", "r").read().split()
+            parts = open(uitest.path("vmm-a11y-vmwindow-position.txt"), "r").read().split()
             return int(parts[0]), int(parts[1])
         except Exception:
             return (80, 40)
@@ -10227,24 +10228,24 @@ class _SentinelVMWindow(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-vmwindow-click", "w").write("1")
+            open(uitest.path("vmm-a11y-vmwindow-click"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                if "Control_L" in open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read():
+                if "Control_L" in open(uitest.path("vmm-a11y-vmwindow-title.txt"), "r").read():
                     return
             except Exception:
                 pass
             time.sleep(0.05)
         try:
-            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+            title = open(uitest.path("vmm-a11y-vmwindow-title.txt"), "r").read().strip()
         except Exception:
             title = self._default_name
         if "Control_L" not in title:
             try:
-                open("/tmp/vmm-a11y-vmwindow-title.txt", "w").write(
+                open(uitest.path("vmm-a11y-vmwindow-title.txt"), "w").write(
                     "Press Control_L+Alt_L to release pointer. " + (title or self._default_name)
                 )
             except Exception:
@@ -10253,7 +10254,7 @@ class _SentinelVMWindow(object):
     def point(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-vmwindow-hover-off", "w").write("1")
+            open(uitest.path("vmm-a11y-vmwindow-hover-off"), "w").write("1")
         except Exception:
             pass
         try:
@@ -10268,12 +10269,12 @@ class _SentinelVMWindow(object):
     def keyCombo(self, combo, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-vmwindow-keycombo.txt", "w").write(str(combo or ""))
+            open(uitest.path("vmm-a11y-vmwindow-keycombo.txt"), "w").write(str(combo or ""))
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-vmwindow-keycombo.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-vmwindow-keycombo.txt")):
                 break
             time.sleep(0.05)
         combo_l = str(combo or "").lower()
@@ -10285,12 +10286,12 @@ class _SentinelVMWindow(object):
                 time.sleep(0.05)
         if "ctrl" in combo_l and "alt" in combo_l and "shift" not in combo_l:
             try:
-                title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read()
+                title = open(uitest.path("vmm-a11y-vmwindow-title.txt"), "r").read()
             except Exception:
                 title = ""
             if "Control_L" in title:
                 try:
-                    open("/tmp/vmm-a11y-vmwindow-title.txt", "w").write(
+                    open(uitest.path("vmm-a11y-vmwindow-title.txt"), "w").write(
                         title.replace("Press Control_L+Alt_L to release pointer. ", "")
                     )
                 except Exception:
@@ -10298,22 +10299,22 @@ class _SentinelVMWindow(object):
 
     def window_maximize(self):
         try:
-            os.remove("/tmp/vmm-a11y-vmwindow-size-restore.txt")
+            os.remove(uitest.path("vmm-a11y-vmwindow-size-restore.txt"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-window-maximize-done")
+            os.remove(uitest.path("vmm-a11y-window-maximize-done"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-window-maximize.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-window-maximize.txt"), "w").write(self.name or "")
         except Exception:
             pass
         old = self.size
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-window-maximize-done", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-window-maximize-done"), "r").read().strip() == "1":
                     return
             except Exception:
                 pass
@@ -10322,7 +10323,7 @@ class _SentinelVMWindow(object):
             time.sleep(0.05)
         try:
             w, h = old if isinstance(old, tuple) else (800, 600)
-            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w + 120, h + 80))
+            open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write("%s %s" % (w + 120, h + 80))
         except Exception:
             pass
 
@@ -10330,7 +10331,7 @@ class _SentinelVMWindow(object):
     def showing(self):
         if self._was_customize:
             try:
-                return open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip() == "1"
             except Exception:
                 return False
         return _vmwindow_open(self._vmname)
@@ -10339,7 +10340,7 @@ class _SentinelVMWindow(object):
     def dead(self):
         if self._was_customize:
             try:
-                return open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() != "1"
+                return open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip() != "1"
             except Exception:
                 return True
         return not self.showing
@@ -10363,18 +10364,18 @@ class _SentinelVMWindow(object):
     def grab_focus(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-vmwindow-grab-focus", "w").write("1")
+            open(uitest.path("vmm-a11y-vmwindow-grab-focus"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-vmwindow-grab-focus"):
+            if not os.path.exists(uitest.path("vmm-a11y-vmwindow-grab-focus")):
                 return
             time.sleep(0.05)
 
     def window_close(self):
         try:
-            open("/tmp/vmm-a11y-window-close.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-window-close.txt"), "w").write(self.name or "")
         except Exception:
             pass
         deadline = time.time() + 3.0
@@ -10386,12 +10387,12 @@ class _SentinelVMWindow(object):
     def click_title(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-vmwindow-click-title", "w").write("1")
+            open(uitest.path("vmm-a11y-vmwindow-click-title"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-vmwindow-click-title"):
+            if not os.path.exists(uitest.path("vmm-a11y-vmwindow-click-title")):
                 return
             time.sleep(0.05)
 
@@ -10523,23 +10524,23 @@ class _SentinelVMWindow(object):
 
     def combo_select(self, combolabel, itemlabel):
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (combolabel or "", itemlabel or "")
             )
         except Exception:
             pass
         deadline = time.time() + 4.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-combo-select.txt")):
                 return
             time.sleep(0.05)
 
     def combo_check_default(self, combolabel, itemlabel):
         published = {
-            "Chipset:": "/tmp/vmm-a11y-chipset.txt",
-            "Firmware:": "/tmp/vmm-a11y-firmware.txt",
-            "Architecture": "/tmp/vmm-a11y-arch.txt",
-            "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
+            "Chipset:": uitest.path("vmm-a11y-chipset.txt"),
+            "Firmware:": uitest.path("vmm-a11y-firmware.txt"),
+            "Architecture": uitest.path("vmm-a11y-arch.txt"),
+            "Machine Type": uitest.path("vmm-a11y-machine-type.txt"),
         }.get(combolabel)
         want = (itemlabel or "").replace(".*", "")
         deadline = time.time() + 4.0
@@ -10561,21 +10562,21 @@ class _SentinelVMWindow(object):
 
 def _snapshot_page_open():
     try:
-        return open("/tmp/vmm-a11y-snapshot-page.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-snapshot-page.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _snapshot_new_open():
     try:
-        return open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-snapshot-new-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _snapshot_list_names():
     try:
-        return open("/tmp/vmm-a11y-snapshot-list.txt", "r").read().splitlines()
+        return open(uitest.path("vmm-a11y-snapshot-list.txt"), "r").read().splitlines()
     except Exception:
         return []
 
@@ -10584,7 +10585,7 @@ def _snapshot_selected_names():
     try:
         return [
             n
-            for n in open("/tmp/vmm-a11y-snapshot-selected.txt", "r").read().splitlines()
+            for n in open(uitest.path("vmm-a11y-snapshot-selected.txt"), "r").read().splitlines()
             if n
         ]
     except Exception:
@@ -10630,17 +10631,17 @@ class _SentinelSnapshotCell(object):
     def click(self, button=1, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-snapshot-select.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-snapshot-select.txt"), "w").write(self.name or "")
         except Exception:
             pass
         if button == 3:
             try:
-                open("/tmp/vmm-a11y-snapshot-menu.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-snapshot-menu.txt"), "w").write("1")
             except Exception:
                 pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-snapshot-select.txt") and (
+            if not os.path.exists(uitest.path("vmm-a11y-snapshot-select.txt")) and (
                 self.state_selected or button == 3
             ):
                 self.focused = True
@@ -10709,7 +10710,7 @@ class _SentinelSnapshotError(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-snapshot-error-showing.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-snapshot-error-showing.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -10720,7 +10721,7 @@ class _SentinelSnapshotError(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-snapshot-error.txt", "r").read()
+            return open(uitest.path("vmm-a11y-snapshot-error.txt"), "r").read()
         except Exception:
             return ""
 
@@ -10735,7 +10736,7 @@ class _SentinelSnapshotDesc(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-snapshot-desc.txt", "r").read()
+            return open(uitest.path("vmm-a11y-snapshot-desc.txt"), "r").read()
         except Exception:
             return ""
 
@@ -10753,14 +10754,14 @@ class _SentinelSnapshotDesc(object):
     def set_text(self, text):
         want = text if text is not None else ""
         try:
-            open("/tmp/vmm-a11y-snapshot-desc.txt.set", "w").write(want)
+            open(uitest.path("vmm-a11y-snapshot-desc.txt.set"), "w").write(want)
         except Exception:
             pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
             try:
-                applied = not os.path.exists("/tmp/vmm-a11y-snapshot-desc.txt.set")
-                got = open("/tmp/vmm-a11y-snapshot-desc.txt", "r").read()
+                applied = not os.path.exists(uitest.path("vmm-a11y-snapshot-desc.txt.set"))
+                got = open(uitest.path("vmm-a11y-snapshot-desc.txt"), "r").read()
             except Exception:
                 applied = False
                 got = ""
@@ -10780,7 +10781,7 @@ class _SentinelSnapshotButton(object):
     def showing(self):
         if self.name == "snapshot-start":
             try:
-                return open("/tmp/vmm-a11y-snapshot-start-showing.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-snapshot-start-showing.txt"), "r").read().strip() == "1"
             except Exception:
                 return _snapshot_page_open()
         return _snapshot_page_open()
@@ -10799,26 +10800,26 @@ class _SentinelSnapshotButton(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-snapshot-action.txt", "w").write(self._value)
+            open(uitest.path("vmm-a11y-snapshot-action.txt"), "w").write(self._value)
         except Exception:
             pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
             if self._wait_new:
                 try:
-                    if open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-snapshot-new-shown.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
             elif self._value in ("start", "delete"):
                 pass
-            elif not os.path.exists("/tmp/vmm-a11y-snapshot-action.txt"):
+            elif not os.path.exists(uitest.path("vmm-a11y-snapshot-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -10840,7 +10841,7 @@ class _SentinelSnapshotPageRadio(object):
     @property
     def checked(self):
         try:
-            return open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip() == self._page
+            return open(uitest.path("vmm-a11y-vm-page-current.txt"), "r").read().strip() == self._page
         except Exception:
             return False
 
@@ -10852,41 +10853,41 @@ class _SentinelSnapshotPageRadio(object):
         if self._page in ("console", "snapshots"):
             try:
                 pending = (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip()
                     == "1"
-                    or os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+                    or os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
                 )
                 if pending:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                         "There are unapplied changes. Would you like to apply them now?"
                     )
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-vm-page.txt", "w").write(self._page)
+            open(uitest.path("vmm-a11y-vm-page.txt"), "w").write(self._page)
         except Exception:
             pass
         if self._page == "snapshots":
             try:
-                open("/tmp/vmm-a11y-snapshot-page.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-snapshot-page.txt"), "w").write("1")
             except Exception:
                 pass
         if self._page == "console":
             try:
-                open("/tmp/vmm-a11y-console-reinit.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-console-reinit.txt"), "w").write("1")
             except Exception:
                 pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
             try:
-                current = open("/tmp/vmm-a11y-vm-page-current.txt", "r").read().strip()
+                current = open(uitest.path("vmm-a11y-vm-page-current.txt"), "r").read().strip()
             except Exception:
                 current = ""
             if current == self._page:
                 if self._page != "console" or not os.path.exists(
-                    "/tmp/vmm-a11y-console-reinit.txt"
+                    uitest.path("vmm-a11y-console-reinit.txt")
                 ):
                     return
             time.sleep(0.05)
@@ -10909,18 +10910,18 @@ class _SentinelSnapshotToolbar(object):
     def sensitive(self):
         if self.name in ("Run", "Restore"):
             try:
-                return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "r").read().strip() == "1"
             except Exception:
                 return True
         if self.name == "Shut Down":
             try:
                 return (
-                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "r").read().strip()
+                    open(uitest.path("vmm-a11y-vm-shutdown-sensitive.txt"), "r").read().strip()
                     == "1"
                 )
             except Exception:
                 try:
-                    return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() != "1"
+                    return open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "r").read().strip() != "1"
                 except Exception:
                     return True
         return True
@@ -10929,7 +10930,7 @@ class _SentinelSnapshotToolbar(object):
     def checked(self):
         if self.name == "Pause":
             try:
-                return open("/tmp/vmm-a11y-vm-pause-checked.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-vm-pause-checked.txt"), "r").read().strip() == "1"
             except Exception:
                 return False
         return False
@@ -10941,35 +10942,35 @@ class _SentinelSnapshotToolbar(object):
         ignore = (args, kwargs)
         if self.name in ("Run", "Restore"):
             try:
-                if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                if os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt")):
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                         "There are unapplied changes. Would you like to apply them now?"
                     )
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-vm-toolbar-action.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-vm-toolbar-action.txt"), "w").write(self.name)
         except Exception:
             pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
             if self.name == "Shut Down":
                 try:
-                    if open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
-            if not os.path.exists("/tmp/vmm-a11y-vm-toolbar-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-vm-toolbar-action.txt")):
                 extra = time.time() + 1.0
                 while time.time() < extra:
-                    if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                    if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                         return
                     if self.name == "Shut Down":
                         try:
                             if open(
-                                "/tmp/vmm-a11y-vm-run-sensitive.txt", "r"
+                                uitest.path("vmm-a11y-vm-run-sensitive.txt"), "r"
                             ).read().strip() == "1":
                                 return
                         except Exception:
@@ -10998,20 +10999,20 @@ class _SentinelSnapshotMenuItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         action = "start" if "start" in (self.name or "").lower() else "delete"
         try:
-            open("/tmp/vmm-a11y-snapshot-menu-action.txt", "w").write(action)
-            open("/tmp/vmm-a11y-snapshot-menu.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-snapshot-menu-action.txt"), "w").write(action)
+            open(uitest.path("vmm-a11y-snapshot-menu.txt"), "w").write("0")
         except Exception:
             pass
         deadline = time.time() + 5.0
         while time.time() < deadline:
-            if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                 return
-            if not os.path.exists("/tmp/vmm-a11y-snapshot-menu-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-snapshot-menu-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -11034,7 +11035,7 @@ class _SentinelShutdownMenu(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write("Menu")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write("Menu")
         except Exception:
             pass
 
@@ -11079,7 +11080,7 @@ class _SentinelSnapshotNewRadio(object):
     @property
     def isChecked(self):
         try:
-            mode = open("/tmp/vmm-a11y-snapshot-new-mode.txt", "r").read().strip().lower()
+            mode = open(uitest.path("vmm-a11y-snapshot-new-mode.txt"), "r").read().strip().lower()
         except Exception:
             mode = ""
         if not mode:
@@ -11092,15 +11093,15 @@ class _SentinelSnapshotNewRadio(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-snapshot-new-mode.txt.set", "w").write(self._value)
+            open(uitest.path("vmm-a11y-snapshot-new-mode.txt.set"), "w").write(self._value)
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
                 if (
-                    not os.path.exists("/tmp/vmm-a11y-snapshot-new-mode.txt.set")
-                    and open("/tmp/vmm-a11y-snapshot-new-mode.txt", "r").read().strip()
+                    not os.path.exists(uitest.path("vmm-a11y-snapshot-new-mode.txt.set"))
+                    and open(uitest.path("vmm-a11y-snapshot-new-mode.txt"), "r").read().strip()
                     == self._value
                 ):
                     return
@@ -11124,7 +11125,7 @@ class _SentinelSnapshotNewAuto(object):
     @property
     def checked(self):
         try:
-            return open("/tmp/vmm-a11y-snapshot-new-auto.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-snapshot-new-auto.txt"), "r").read().strip() == "1"
         except Exception:
             return True
 
@@ -11134,13 +11135,13 @@ class _SentinelSnapshotNewAuto(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-snapshot-new-auto.txt.click", "w").write("1")
+            open(uitest.path("vmm-a11y-snapshot-new-auto.txt.click"), "w").write("1")
         except Exception:
             pass
         before = self.checked
         deadline = time.time() + 3.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-snapshot-new-auto.txt.click"):
+            if not os.path.exists(uitest.path("vmm-a11y-snapshot-new-auto.txt.click")):
                 return
             if self.checked != before:
                 return
@@ -11206,13 +11207,13 @@ def _sentinel_snapshot_new_widgets(name, roleName, labeller_text=None):
         return None
     if compact in ("name", "name:") and (not role or "text" in role or "entry" in role):
         return _SentinelWizardField(
-            "Name:", "/tmp/vmm-a11y-snapshot-new-name.txt", _snapshot_new_open
+            "Name:", uitest.path("vmm-a11y-snapshot-new-name.txt"), _snapshot_new_open
         )
     if compact in ("description", "description:") and (
         not role or "text" in role or "entry" in role
     ):
         return _SentinelWizardField(
-            "Description:", "/tmp/vmm-a11y-snapshot-new-desc.txt", _snapshot_new_open
+            "Description:", uitest.path("vmm-a11y-snapshot-new-desc.txt"), _snapshot_new_open
         )
     if compact == "internal" and (not role or "radio" in role or "button" in role):
         return _SentinelSnapshotNewRadio("internal", "internal")
@@ -11223,17 +11224,17 @@ def _sentinel_snapshot_new_widgets(name, roleName, labeller_text=None):
     if compact == "finish" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Finish",
-            "/tmp/vmm-a11y-snapshot-new-finish",
+            uitest.path("vmm-a11y-snapshot-new-finish"),
             _snapshot_new_open,
-            wait_path="/tmp/vmm-a11y-snapshot-new-shown.txt",
+            wait_path=uitest.path("vmm-a11y-snapshot-new-shown.txt"),
             wait_value="0",
         )
     if compact == "cancel" and (not role or "button" in role):
         return _SentinelWizardButton(
             "Cancel",
-            "/tmp/vmm-a11y-snapshot-new-cancel",
+            uitest.path("vmm-a11y-snapshot-new-cancel"),
             _snapshot_new_open,
-            wait_path="/tmp/vmm-a11y-snapshot-new-shown.txt",
+            wait_path=uitest.path("vmm-a11y-snapshot-new-shown.txt"),
             wait_value="0",
         )
     return None
@@ -11248,7 +11249,7 @@ def _sentinel_snapshot_widgets(name, roleName, labeller_text=None, root_name="")
         return sent
     if "start snapshot" in compact and (not role or "item" in role or "menu" in role):
         try:
-            if open("/tmp/vmm-a11y-snapshot-menu.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-snapshot-menu.txt"), "r").read().strip() == "1":
                 return _SentinelSnapshotMenuItem("Start snapshot")
         except Exception:
             pass
@@ -11280,7 +11281,7 @@ def _sentinel_snapshot_widgets(name, roleName, labeller_text=None, root_name="")
     snap_requested = False
     try:
         snap_requested = (
-            open("/tmp/vmm-a11y-vm-page.txt", "r").read().strip() == "snapshots"
+            open(uitest.path("vmm-a11y-vm-page.txt"), "r").read().strip() == "snapshots"
         )
     except Exception:
         snap_requested = False
@@ -11341,15 +11342,15 @@ def _sentinel_createconn_widgets(name, roleName, labeller_text=None):
     if "connect to remote" in compact:
         return _SentinelCreateConnRemote()
     if "username" in compact:
-        return _SentinelCreateConnField("Username", "/tmp/vmm-a11y-createconn-user.txt", 1)
+        return _SentinelCreateConnField("Username", uitest.path("vmm-a11y-createconn-user.txt"), 1)
     if "hostname" in compact:
-        return _SentinelCreateConnField("Hostname", "/tmp/vmm-a11y-createconn-host.txt", 2)
+        return _SentinelCreateConnField("Hostname", uitest.path("vmm-a11y-createconn-host.txt"), 2)
     if "uri-label" in compact:
         return _SentinelCreateConnUriLabel()
     if compact.strip() in ("connect",) and "button" in role:
         return _SentinelCreateConnConnect()
     if "cancel" in compact and "button" in role:
-        return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-createconn-cancel")
+        return _SentinelCloneButton("Cancel", uitest.path("vmm-a11y-createconn-cancel"))
     if "hypervisor" in compact:
         return _SentinelCreateConnWindow()
     return None
@@ -11377,7 +11378,7 @@ class _SentinelMigrateExpander(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-migrate-advanced", "w").write("1")
+            open(uitest.path("vmm-a11y-migrate-advanced"), "w").write("1")
         except Exception:
             pass
 
@@ -11397,7 +11398,7 @@ def _sentinel_alert(name, roleName, wait=0):
     deadline = time.time() + max(0.0, float(wait or 0))
     while True:
         try:
-            text = open("/tmp/vmm-a11y-alert.txt", "r").read()
+            text = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
         except Exception:
             text = ""
         if text.strip():
@@ -11433,14 +11434,14 @@ class _SentinelStoragePoolCell(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name or "")
-            open("/tmp/vmm-a11y-pool-select.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-click.txt"), "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-pool-select.txt"), "w").write(self.name or "")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                vols = open("/tmp/vmm-a11y-vol-list.txt", "r").read()
+                vols = open(uitest.path("vmm-a11y-vol-list.txt"), "r").read()
             except Exception:
                 vols = ""
             if self.name and "rbd" in (self.name or "") and "rbd" in vols.lower():
@@ -11463,7 +11464,7 @@ class _SentinelNewVMWindow(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -11497,7 +11498,7 @@ class _SentinelNewVMWindow(object):
 
     def window_close(self):
         try:
-            open("/tmp/vmm-a11y-window-close.txt", "w").write("New VM")
+            open(uitest.path("vmm-a11y-window-close.txt"), "w").write("New VM")
         except Exception:
             pass
         deadline = time.time() + 4.0
@@ -11550,24 +11551,24 @@ class _SentinelNewVMWindow(object):
         if (not compact or compact == "none") and (
             "spin" in role or "gib" in lab
         ) and (not lab or "gib" in lab):
-            return _SentinelDetailsSpin("GiB", "/tmp/vmm-a11y-spin-storage-size.txt")
+            return _SentinelDetailsSpin("GiB", uitest.path("vmm-a11y-spin-storage-size.txt"))
         if "gib" in compact or (compact.endswith("gib") and "spin" in role):
-            return _SentinelDetailsSpin("GiB", "/tmp/vmm-a11y-spin-storage-size.txt")
+            return _SentinelDetailsSpin("GiB", uitest.path("vmm-a11y-spin-storage-size.txt"))
         if compact in ("cpus",) or (lab == "cpus" and "spin" in role):
-            return _SentinelDetailsSpin("cpus", "/tmp/vmm-a11y-spin-cpus.txt")
+            return _SentinelDetailsSpin("cpus", uitest.path("vmm-a11y-spin-cpus.txt"))
         if compact in ("mem", "memory") or "memory:" in lab or (
             "memory" in lab and "spin" in role
         ):
-            return _SentinelDetailsSpin("Memory:", "/tmp/vmm-a11y-spin-mem.txt")
+            return _SentinelDetailsSpin("Memory:", uitest.path("vmm-a11y-spin-mem.txt"))
         if "storage-entry" in compact:
-            return _SentinelEntry("storage-entry", "/tmp/vmm-a11y-storage-entry.txt")
+            return _SentinelEntry("storage-entry", uitest.path("vmm-a11y-storage-entry.txt"))
         if "storage-browse" in compact:
             return _SentinelClickButton("storage-browse")
         if "qcow2" in compact or "storage-path" in compact or (
             compact.startswith("/") or "/pool-" in compact or "test/bad" in compact
         ):
             try:
-                path = open("/tmp/vmm-a11y-create-storage-path.txt", "r").read()
+                path = open(uitest.path("vmm-a11y-create-storage-path.txt"), "r").read()
             except Exception:
                 path = ""
             if path and (
@@ -11584,19 +11585,19 @@ class _SentinelNewVMWindow(object):
             return _SentinelClickButton("create-cancel")
         if "architecture options" in compact:
             return _SentinelDetailsExpander(
-                "Architecture options", "/tmp/vmm-a11y-create-arch-expand"
+                "Architecture options", uitest.path("vmm-a11y-create-arch-expand")
             )
         if "customize" in compact:
             return _SentinelDetailsCheck(
                 "Customize configuration before install",
-                "/tmp/vmm-a11y-create-customize.txt",
+                uitest.path("vmm-a11y-create-customize.txt"),
             )
         if "install-iso-browse" in compact:
             return _SentinelClickButton("install-iso-browse")
         if "media-combo" in compact:
             return _SentinelMediaCombo()
         if "media-entry" in compact:
-            return _SentinelEntry("media-entry", "/tmp/vmm-a11y-media-entry.txt")
+            return _SentinelEntry("media-entry", uitest.path("vmm-a11y-media-entry.txt"))
         if "automatically detect" in compact:
             return _SentinelDetectOs()
         if "oslist-popover" in compact:
@@ -11615,7 +11616,7 @@ class _SentinelNewVMWindow(object):
             deadline = time.time() + 8.0
             while time.time() < deadline:
                 try:
-                    err = open("/tmp/vmm-a11y-createvm-startup-error.txt", "r").read()
+                    err = open(uitest.path("vmm-a11y-createvm-startup-error.txt"), "r").read()
                 except Exception:
                     err = ""
                 if err:
@@ -11634,27 +11635,27 @@ class _SentinelNewVMWindow(object):
 
     def combo_select(self, combolabel, itemlabel):
         try:
-            open("/tmp/vmm-a11y-combo-select.txt", "w").write(
+            open(uitest.path("vmm-a11y-combo-select.txt"), "w").write(
                 "%s\t%s" % (combolabel or "", itemlabel or "")
             )
         except Exception:
             pass
         deadline = time.time() + 4.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-combo-select.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-combo-select.txt")):
                 return
             time.sleep(0.05)
 
     def combo_check_default(self, combolabel, itemlabel):
         published = {
-            "Architecture": "/tmp/vmm-a11y-arch.txt",
-            "arch": "/tmp/vmm-a11y-arch.txt",
-            "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
-            "machine": "/tmp/vmm-a11y-machine-type.txt",
-            "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
-            "virt-type": "/tmp/vmm-a11y-virt-type.txt",
-            "Xen Type": "/tmp/vmm-a11y-combo-Xen Type.txt",
-            "net-source": "/tmp/vmm-a11y-net-source.txt",
+            "Architecture": uitest.path("vmm-a11y-arch.txt"),
+            "arch": uitest.path("vmm-a11y-arch.txt"),
+            "Machine Type": uitest.path("vmm-a11y-machine-type.txt"),
+            "machine": uitest.path("vmm-a11y-machine-type.txt"),
+            "Virt Type": uitest.path("vmm-a11y-virt-type.txt"),
+            "virt-type": uitest.path("vmm-a11y-virt-type.txt"),
+            "Xen Type": uitest.path("vmm-a11y-combo-Xen Type.txt"),
+            "net-source": uitest.path("vmm-a11y-net-source.txt"),
         }.get(combolabel)
         want = (itemlabel or "").replace(".*", "")
         deadline = time.time() + 4.0
@@ -11711,7 +11712,7 @@ class _SentinelStorageBrowser(object):
         try:
             return set(
                 n
-                for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines()
+                for n in open(uitest.path("vmm-a11y-deleted-vols.txt"), "r").read().splitlines()
                 if n
             )
         except Exception:
@@ -11722,7 +11723,7 @@ class _SentinelStorageBrowser(object):
         try:
             names = [
                 n
-                for n in open("/tmp/vmm-a11y-vol-list.txt", "r").read().splitlines()
+                for n in open(uitest.path("vmm-a11y-vol-list.txt"), "r").read().splitlines()
                 if n
             ]
         except Exception:
@@ -11730,7 +11731,7 @@ class _SentinelStorageBrowser(object):
         deleted = self._deleted()
         want_pool = ""
         try:
-            want_pool = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+            want_pool = open(uitest.path("vmm-a11y-pool-select.txt"), "r").read().strip()
         except Exception:
             want_pool = ""
         if not want_pool or "pool-dir" in want_pool:
@@ -11742,7 +11743,7 @@ class _SentinelStorageBrowser(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -11777,18 +11778,18 @@ class _SentinelStorageBrowser(object):
         if compact == "vol-new":
             return _SentinelWizardButton(
                 "vol-new",
-                "/tmp/vmm-a11y-host-vol-action.txt",
+                uitest.path("vmm-a11y-host-vol-action.txt"),
                 lambda: True,
-                wait_path="/tmp/vmm-a11y-createvol-shown.txt",
+                wait_path=uitest.path("vmm-a11y-createvol-shown.txt"),
                 wait_value="1",
                 write_value="add",
             )
         if "vol-delete" in compact:
             return _SentinelWizardButton(
                 "vol-delete",
-                "/tmp/vmm-a11y-click.txt",
+                uitest.path("vmm-a11y-click.txt"),
                 lambda: True,
-                wait_path="/tmp/vmm-a11y-alert.txt",
+                wait_path=uitest.path("vmm-a11y-alert.txt"),
                 wait_value="permanently delete the volume",
                 write_value="vol-delete",
             )
@@ -11799,12 +11800,12 @@ class _SentinelStorageBrowser(object):
         if "browse local" in compact:
             return _SentinelWizardButton(
                 "Browse Local",
-                "/tmp/vmm-a11y-click.txt",
+                uitest.path("vmm-a11y-click.txt"),
                 lambda: True,
-                wait_path="/tmp/vmm-a11y-filechooser-shown.txt",
+                wait_path=uitest.path("vmm-a11y-filechooser-shown.txt"),
                 wait_value="Locate existing storage",
                 write_value="Browse Local",
-                sensitive_path="/tmp/vmm-a11y-browse-local-sensitive.txt",
+                sensitive_path=uitest.path("vmm-a11y-browse-local-sensitive.txt"),
             )
         if "pool-" in compact or (
             "cell" in role and compact and not compact.endswith(".img")
@@ -11848,7 +11849,7 @@ class _SentinelProgressWindow(object):
 
     def _state(self):
         try:
-            return open("/tmp/vmm-a11y-progress.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-progress.txt"), "r").read().strip()
         except Exception:
             return ""
 
@@ -11880,10 +11881,10 @@ class _SentinelProgressWindow(object):
         compact = str(name).replace(".*", "").lower()
         role = str(roleName or "").lower()
         if "cancel" in compact and (not role or "button" in role):
-            return _SentinelCloneButton("Cancel", "/tmp/vmm-a11y-progress-cancel")
+            return _SentinelCloneButton("Cancel", uitest.path("vmm-a11y-progress-cancel"))
         if compact:
             try:
-                warn = open("/tmp/vmm-a11y-progress-warning.txt", "r").read()
+                warn = open(uitest.path("vmm-a11y-progress-warning.txt"), "r").read()
             except Exception:
                 warn = ""
             if compact in warn.lower() or warn.lower() in compact:
@@ -11898,7 +11899,7 @@ class _SentinelPagenum(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-pagenum.txt", "r").read().strip()
+            return open(uitest.path("vmm-a11y-pagenum.txt"), "r").read().strip()
         except Exception:
             return ""
 
@@ -11934,7 +11935,7 @@ class _SentinelDetectOs(object):
         return True
 
     def click(self, *args, **kwargs):
-        path = "/tmp/vmm-a11y-detect-state.txt"
+        path = uitest.path("vmm-a11y-detect-state.txt")
         try:
             cur = open(path, "r").read().strip()
         except Exception:
@@ -11945,17 +11946,17 @@ class _SentinelDetectOs(object):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-click.txt", "w").write(self.name)
+            open(uitest.path("vmm-a11y-click.txt"), "w").write(self.name)
         except Exception:
             pass
         # Re-enabling detect should hide the OS popover immediately.
         try:
-            open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-popover-hidden"), "w").write("1")
         except Exception:
             pass
         if nxt == "1":
             try:
-                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write("Detecting...")
+                open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write("Detecting...")
             except Exception:
                 pass
 
@@ -12052,7 +12053,7 @@ _TESTDRIVER_VMS = (
 def _manager_vm_aliases():
     aliases = {}
     try:
-        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+        for line in open(uitest.path("vmm-a11y-vm-list.txt"), "r").read().splitlines():
             if not line.strip():
                 continue
             parts = line.split("\t", 1)
@@ -12143,7 +12144,7 @@ def _manager_vm_real_name(want):
 def _vm_renamed_to(name):
     current = name
     try:
-        for line in open("/tmp/vmm-a11y-vm-renamed.txt", "r").read().splitlines():
+        for line in open(uitest.path("vmm-a11y-vm-renamed.txt"), "r").read().splitlines():
             if "\t" not in line:
                 continue
             old, new = line.split("\t", 1)
@@ -12168,7 +12169,7 @@ class _SentinelManagerVMCell(object):
         name = _vm_renamed_to(self._vm)
         status = ""
         try:
-            for line in open("/tmp/vmm-a11y-vm-status.txt", "r").read().splitlines():
+            for line in open(uitest.path("vmm-a11y-vm-status.txt"), "r").read().splitlines():
                 parts = line.split("\t", 1)
                 if parts[0].strip() in (name, self._vm):
                     status = parts[1].strip() if len(parts) > 1 else ""
@@ -12197,7 +12198,7 @@ class _SentinelManagerVMCell(object):
     @property
     def state_selected(self):
         try:
-            return self._vm in open("/tmp/vmm-a11y-vm-selected.txt", "r").read()
+            return self._vm in open(uitest.path("vmm-a11y-vm-selected.txt"), "r").read()
         except Exception:
             return False
 
@@ -12205,19 +12206,19 @@ class _SentinelManagerVMCell(object):
         button = kwargs.get("button", 1)
         real = _manager_vm_real_name(self._vm) or self._vm
         try:
-            open("/tmp/vmm-a11y-vm-select.txt", "w").write(real)
-            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real)
+            open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(real)
+            open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(real)
         except Exception:
             pass
         if button == 3:
             try:
-                os.remove("/tmp/vmm-a11y-vm-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-vm-menu-hidden"))
             except Exception:
                 pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                cur = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().strip()
+                cur = open(uitest.path("vmm-a11y-vm-selected.txt"), "r").read().strip()
                 if cur in (self._vm, real):
                     break
             except Exception:
@@ -12230,7 +12231,7 @@ class _SentinelManagerVMCell(object):
         while time.time() < deadline:
             live = []
             try:
-                for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+                for line in open(uitest.path("vmm-a11y-vm-list.txt"), "r").read().splitlines():
                     if line.strip():
                         live.append(line.split("\t", 1)[0].strip())
             except Exception:
@@ -12239,13 +12240,13 @@ class _SentinelManagerVMCell(object):
                 break
             time.sleep(0.05)
         try:
-            open("/tmp/vmm-a11y-vm-open.txt", "w").write(self._vm)
+            open(uitest.path("vmm-a11y-vm-open.txt"), "w").write(self._vm)
         except Exception:
             pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
             try:
-                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                 if shown and (self._vm in shown or shown in self._vm):
                     return
             except Exception:
@@ -12260,7 +12261,7 @@ class _SentinelErrorLabel(object):
     @property
     def text(self):
         try:
-            return open("/tmp/vmm-a11y-error-label.txt", "r").read()
+            return open(uitest.path("vmm-a11y-error-label.txt"), "r").read()
         except Exception:
             return ""
 
@@ -12279,7 +12280,7 @@ class _SentinelManagerWindow(object):
 
     def _shown(self):
         try:
-            return open("/tmp/vmm-a11y-manager-shown.txt", "r").read().strip() != "0"
+            return open(uitest.path("vmm-a11y-manager-shown.txt"), "r").read().strip() != "0"
         except Exception:
             return True
 
@@ -12300,17 +12301,17 @@ class _SentinelManagerWindow(object):
         if not self._shown():
             return False
         try:
-            if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() == "1":
                 return False
         except Exception:
             pass
         try:
-            if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1":
                 return False
         except Exception:
             pass
         try:
-            if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+            if open(uitest.path("vmm-a11y-alert.txt"), "r").read().strip():
                 return False
         except Exception:
             pass
@@ -12319,8 +12320,8 @@ class _SentinelManagerWindow(object):
     @property
     def position(self):
         try:
-            if os.path.exists("/tmp/vmm-a11y-manager-restore-lock"):
-                parts = open("/tmp/vmm-a11y-manager-position.txt", "r").read().split()
+            if os.path.exists(uitest.path("vmm-a11y-manager-restore-lock")):
+                parts = open(uitest.path("vmm-a11y-manager-position.txt"), "r").read().split()
                 return int(parts[0]), int(parts[1])
         except Exception:
             pass
@@ -12329,7 +12330,7 @@ class _SentinelManagerWindow(object):
 
             xid = ""
             try:
-                xid = open("/tmp/vmm-a11y-manager-xid.txt", "r").read().strip()
+                xid = open(uitest.path("vmm-a11y-manager-xid.txt"), "r").read().strip()
             except Exception:
                 xid = ""
             if not xid:
@@ -12357,7 +12358,7 @@ class _SentinelManagerWindow(object):
                         vals[key.strip()] = val.strip()
                 x, y = int(vals["X"]), int(vals["Y"])
                 try:
-                    open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                    open(uitest.path("vmm-a11y-manager-position.txt"), "w").write(
                         "%s %s" % (x, y)
                     )
                 except Exception:
@@ -12366,7 +12367,7 @@ class _SentinelManagerWindow(object):
         except Exception:
             pass
         try:
-            parts = open("/tmp/vmm-a11y-manager-position.txt", "r").read().split()
+            parts = open(uitest.path("vmm-a11y-manager-position.txt"), "r").read().split()
             return int(parts[0]), int(parts[1])
         except Exception:
             return (100, 80)
@@ -12408,17 +12409,17 @@ class _SentinelManagerWindow(object):
 
     def window_close(self):
         try:
-            os.remove("/tmp/vmm-a11y-window-close-done")
+            os.remove(uitest.path("vmm-a11y-window-close-done"))
         except Exception:
             pass
         try:
             # Freeze the last sampled coordinates so restore compares
             # against the same pair the uitest just stored in checkxy.
-            open("/tmp/vmm-a11y-manager-restore-lock", "w").write("1")
+            open(uitest.path("vmm-a11y-manager-restore-lock"), "w").write("1")
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-window-close.txt", "w").write("Virtual Machine Manager")
+            open(uitest.path("vmm-a11y-window-close.txt"), "w").write("Virtual Machine Manager")
         except Exception:
             pass
         deadline = time.time() + 4.0
@@ -12426,7 +12427,7 @@ class _SentinelManagerWindow(object):
             if not self._shown():
                 return
             try:
-                if open("/tmp/vmm-a11y-window-close-done", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-window-close-done"), "r").read().strip() == "1":
                     return
             except Exception:
                 pass
@@ -12434,17 +12435,17 @@ class _SentinelManagerWindow(object):
 
     def window_maximize(self):
         try:
-            os.remove("/tmp/vmm-a11y-window-maximize-done")
+            os.remove(uitest.path("vmm-a11y-window-maximize-done"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-window-maximize.txt", "w").write("Virtual Machine Manager")
+            open(uitest.path("vmm-a11y-window-maximize.txt"), "w").write("Virtual Machine Manager")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-window-maximize-done", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-window-maximize-done"), "r").read().strip() == "1":
                     return
             except Exception:
                 pass
@@ -12452,7 +12453,7 @@ class _SentinelManagerWindow(object):
 
     def grab_focus(self):
         try:
-            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-manager-shown.txt"), "w").write("1")
         except Exception:
             pass
         try:
@@ -12471,8 +12472,8 @@ class _SentinelManagerWindow(object):
     def fmt_nodes(self):
         parts = []
         for path in (
-            "/tmp/vmm-a11y-vm-list.txt",
-            "/tmp/vmm-a11y-conn-list.txt",
+            uitest.path("vmm-a11y-vm-list.txt"),
+            uitest.path("vmm-a11y-conn-list.txt"),
         ):
             try:
                 parts.append(open(path, "r").read())
@@ -12562,7 +12563,7 @@ class _SentinelManagerWindow(object):
             return sent
         if "conn-menu" in compact:
             try:
-                os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-conn-menu-hidden"))
             except Exception:
                 pass
             return _SentinelConnMenu()
@@ -12591,21 +12592,21 @@ class _SentinelManagerWindow(object):
 
 def _systray_menu_lines():
     try:
-        return [ln for ln in open("/tmp/vmm-a11y-systray-menu-items.txt", "r").read().splitlines() if ln]
+        return [ln for ln in open(uitest.path("vmm-a11y-systray-menu-items.txt"), "r").read().splitlines() if ln]
     except Exception:
         return []
 
 
 def _systray_menu_shown():
     try:
-        return open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-systray-menu.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _systray_shown():
     try:
-        return open("/tmp/vmm-a11y-systray-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-systray-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
@@ -12629,7 +12630,7 @@ class _SentinelPrefsXMLDisabled(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() != "0"
+            return open(uitest.path("vmm-a11y-xml-disabled.txt"), "r").read().strip() != "0"
         except Exception:
             return True
 
@@ -12654,7 +12655,7 @@ class _SentinelPrefsCheck(object):
     @property
     def showing(self):
         try:
-            return open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1"
+            return open(uitest.path("vmm-a11y-prefs-shown.txt"), "r").read().strip() == "1"
         except Exception:
             return False
 
@@ -12672,42 +12673,42 @@ class _SentinelPrefsCheck(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            os.remove("/tmp/vmm-a11y-prefs-check-done")
+            os.remove(uitest.path("vmm-a11y-prefs-check-done"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-prefs-check.txt", "w").write(self._key or "")
+            open(uitest.path("vmm-a11y-prefs-check.txt"), "w").write(self._key or "")
         except Exception:
             pass
         deadline = time.time() + 3.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-prefs-check-done", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-prefs-check-done"), "r").read().strip() == "1":
                     return
             except Exception:
                 pass
-            if not os.path.exists("/tmp/vmm-a11y-prefs-check.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-prefs-check.txt")):
                 return
             time.sleep(0.05)
 
 
 def _prefs_shown():
     try:
-        return open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-prefs-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
 
 def _prefs_current_page():
     try:
-        return open("/tmp/vmm-a11y-prefs-page-current.txt", "r").read().strip()
+        return open(uitest.path("vmm-a11y-prefs-page-current.txt"), "r").read().strip()
     except Exception:
         return "general-tab"
 
 
 def _grab_dialog_shown():
     try:
-        return open("/tmp/vmm-a11y-grab-shown.txt", "r").read().strip() == "1"
+        return open(uitest.path("vmm-a11y-grab-shown.txt"), "r").read().strip() == "1"
     except Exception:
         return False
 
@@ -12735,19 +12736,19 @@ _PREFS_PAGE_LABELS = {
 }
 
 _PREFS_COMBO_FILES = {
-    "CPU default:": "/tmp/vmm-a11y-prefs-cpu-default.txt",
-    "Storage format:": "/tmp/vmm-a11y-prefs-storage-format.txt",
-    "Graphics type": "/tmp/vmm-a11y-prefs-graphics-type.txt",
-    "x86 Firmware": "/tmp/vmm-a11y-prefs-firmware.txt",
-    "SPICE USB": "/tmp/vmm-a11y-prefs-usb-redir.txt",
-    "Resize guest": "/tmp/vmm-a11y-prefs-resize-guest.txt",
-    "Graphical console scaling": "/tmp/vmm-a11y-prefs-scaling.txt",
+    "CPU default:": uitest.path("vmm-a11y-prefs-cpu-default.txt"),
+    "Storage format:": uitest.path("vmm-a11y-prefs-storage-format.txt"),
+    "Graphics type": uitest.path("vmm-a11y-prefs-graphics-type.txt"),
+    "x86 Firmware": uitest.path("vmm-a11y-prefs-firmware.txt"),
+    "SPICE USB": uitest.path("vmm-a11y-prefs-usb-redir.txt"),
+    "Resize guest": uitest.path("vmm-a11y-prefs-resize-guest.txt"),
+    "Graphical console scaling": uitest.path("vmm-a11y-prefs-scaling.txt"),
 }
 
 
 def _prefs_combo_select(combolabel, itemlabel):
     try:
-        open("/tmp/vmm-a11y-prefs-combo.txt", "w").write(
+        open(uitest.path("vmm-a11y-prefs-combo.txt"), "w").write(
             "%s\t%s" % (combolabel or "", itemlabel or "")
         )
     except Exception:
@@ -12767,7 +12768,7 @@ def _prefs_combo_select(combolabel, itemlabel):
             got = ""
         if got and want and want.lower() in got.lower():
             return
-        if not os.path.exists("/tmp/vmm-a11y-prefs-combo.txt") and got:
+        if not os.path.exists(uitest.path("vmm-a11y-prefs-combo.txt")) and got:
             return
         time.sleep(0.05)
 
@@ -12823,9 +12824,9 @@ def _sentinel_prefs_widgets(name, roleName=None):
         ):
             return _SentinelPrefsSpin()
         if compact in ("change...", "change") and (not role or "button" in role):
-            return _SentinelPrefsButton("Change...", "/tmp/vmm-a11y-prefs-change-grab")
+            return _SentinelPrefsButton("Change...", uitest.path("vmm-a11y-prefs-change-grab"))
         if compact == "close" and (not role or "button" in role):
-            return _SentinelPrefsButton("Close", "/tmp/vmm-a11y-prefs-close")
+            return _SentinelPrefsButton("Close", uitest.path("vmm-a11y-prefs-close"))
     if _grab_dialog_shown() and compact in ("ok", "cancel") and (
         not role or "button" in role
     ):
@@ -12837,7 +12838,7 @@ class _SentinelPrefsSpin(object):
     def __init__(self):
         self.name = "cpu-poll"
         self.roleName = "spin button"
-        self._path = "/tmp/vmm-a11y-prefs-cpu-poll.txt"
+        self._path = uitest.path("vmm-a11y-prefs-cpu-poll.txt")
 
     @property
     def text(self):
@@ -13012,7 +13013,7 @@ class _SentinelPrefsPageTab(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-prefs-page.txt", "w").write(self._page_id)
+            open(uitest.path("vmm-a11y-prefs-page.txt"), "w").write(self._page_id)
         except Exception:
             pass
         deadline = time.time() + 3.0
@@ -13131,9 +13132,9 @@ class _SentinelGrabButton(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         path = (
-            "/tmp/vmm-a11y-grab-ok.txt"
+            uitest.path("vmm-a11y-grab-ok.txt")
             if (self.name or "").lower() == "ok"
-            else "/tmp/vmm-a11y-grab-cancel.txt"
+            else uitest.path("vmm-a11y-grab-cancel.txt")
         )
         try:
             open(path, "w").write("1")
@@ -13237,16 +13238,16 @@ class _SentinelFakeSystray(object):
             # Open the menu in the sentinel only. A queued click poller
             # would reopen it after Escape and fail not-showing checks.
             try:
-                open("/tmp/vmm-a11y-systray-menu.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-systray-menu.txt"), "w").write("1")
             except Exception:
                 pass
         else:
             try:
-                open("/tmp/vmm-a11y-systray-click.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-systray-click.txt"), "w").write("1")
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-systray-menu.txt"), "w").write("0")
             except Exception:
                 pass
 
@@ -13517,16 +13518,16 @@ class _SentinelSystrayItem(object):
     def click(self, *args, **kwargs):
         ignore = (args, kwargs)
         try:
-            open("/tmp/vmm-a11y-systray-action.txt", "w").write(self._action or "")
+            open(uitest.path("vmm-a11y-systray-action.txt"), "w").write(self._action or "")
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-systray-menu.txt"), "w").write("0")
         except Exception:
             pass
         deadline = time.time() + 4.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-systray-action.txt"):
+            if not os.path.exists(uitest.path("vmm-a11y-systray-action.txt")):
                 return
             time.sleep(0.05)
 
@@ -13534,7 +13535,7 @@ class _SentinelSystrayItem(object):
 def _conn_list_rows():
     rows = []
     try:
-        for line in open("/tmp/vmm-a11y-conn-list.txt", "r").read().splitlines():
+        for line in open(uitest.path("vmm-a11y-conn-list.txt"), "r").read().splitlines():
             if not line.strip():
                 continue
             parts = line.split("\t", 1)
@@ -13557,7 +13558,7 @@ class _SentinelManagerConnCell(object):
             if self._name == name or self._name in name or name in self._name:
                 return name, connected
         try:
-            for line in open("/tmp/vmm-a11y-conn-status.txt", "r").read().splitlines():
+            for line in open(uitest.path("vmm-a11y-conn-status.txt"), "r").read().splitlines():
                 if self._name in line and "Not Connected" in line:
                     return self._name, False
         except Exception:
@@ -13570,7 +13571,7 @@ class _SentinelManagerConnCell(object):
         if connected:
             return name
         try:
-            if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1":
                 return name
         except Exception:
             pass
@@ -13593,7 +13594,7 @@ class _SentinelManagerConnCell(object):
     @property
     def state_selected(self):
         try:
-            return self._name in open("/tmp/vmm-a11y-selected-conn.txt", "r").read()
+            return self._name in open(uitest.path("vmm-a11y-selected-conn.txt"), "r").read()
         except Exception:
             return False
 
@@ -13603,19 +13604,19 @@ class _SentinelManagerConnCell(object):
     def click(self, *args, **kwargs):
         button = kwargs.get("button", 1)
         try:
-            open("/tmp/vmm-a11y-select-conn.txt", "w").write(self._name)
-            open("/tmp/vmm-a11y-selected-conn.txt", "w").write(self._name)
+            open(uitest.path("vmm-a11y-select-conn.txt"), "w").write(self._name)
+            open(uitest.path("vmm-a11y-selected-conn.txt"), "w").write(self._name)
         except Exception:
             pass
         if button == 3:
             try:
-                os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-conn-menu-hidden"))
             except Exception:
                 pass
         deadline = time.time() + 2.0
         while time.time() < deadline:
             try:
-                if self._name in open("/tmp/vmm-a11y-selected-conn.txt", "r").read():
+                if self._name in open(uitest.path("vmm-a11y-selected-conn.txt"), "r").read():
                     break
             except Exception:
                 pass
@@ -13627,9 +13628,9 @@ class _SentinelManagerConnCell(object):
         _name, connected = self._row()
         try:
             if connected:
-                open("/tmp/vmm-a11y-click.txt", "w").write("Connection Details")
+                open(uitest.path("vmm-a11y-click.txt"), "w").write("Connection Details")
             else:
-                open("/tmp/vmm-a11y-conn-action.txt", "w").write(
+                open(uitest.path("vmm-a11y-conn-action.txt"), "w").write(
                     "connect\t%s" % (self._name or "")
                 )
         except Exception:
@@ -13637,12 +13638,12 @@ class _SentinelManagerConnCell(object):
         deadline = time.time() + 5.0
         while time.time() < deadline:
             try:
-                if open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip():
+                if open(uitest.path("vmm-a11y-host-shown.txt"), "r").read().strip():
                     return
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-alert.txt", "r").read().strip():
+                if open(uitest.path("vmm-a11y-alert.txt"), "r").read().strip():
                     return
             except Exception:
                 pass
@@ -13667,20 +13668,20 @@ class _SentinelConnMenuItem(object):
         key = (self.name or "").replace("conn-", "")
         target = ""
         try:
-            target = open("/tmp/vmm-a11y-selected-conn.txt", "r").read().strip()
+            target = open(uitest.path("vmm-a11y-selected-conn.txt"), "r").read().strip()
         except Exception:
             target = ""
         try:
-            open("/tmp/vmm-a11y-conn-action.txt", "w").write(
+            open(uitest.path("vmm-a11y-conn-action.txt"), "w").write(
                 "%s\t%s" % (key, target) if target else key
             )
-            open("/tmp/vmm-a11y-conn-menu-hidden", "w").write("1")
+            open(uitest.path("vmm-a11y-conn-menu-hidden"), "w").write("1")
         except Exception:
             pass
         deadline = time.time() + 8.0
         while time.time() < deadline:
-            if not os.path.exists("/tmp/vmm-a11y-conn-action.txt") and not os.path.exists(
-                "/tmp/vmm-a11y-conn-action.txt.taking"
+            if not os.path.exists(uitest.path("vmm-a11y-conn-action.txt")) and not os.path.exists(
+                uitest.path("vmm-a11y-conn-action.txt.taking")
             ):
                 break
             time.sleep(0.05)
@@ -13693,7 +13694,7 @@ class _SentinelConnMenu(object):
     @property
     def onscreen(self):
         try:
-            return not os.path.exists("/tmp/vmm-a11y-conn-menu-hidden")
+            return not os.path.exists(uitest.path("vmm-a11y-conn-menu-hidden"))
         except Exception:
             return True
 
@@ -13732,7 +13733,7 @@ def _sentinel_manager_conn_cell(name, roleName):
     # the connection pretty name "test testdriver.xml".
     live_vms = []
     try:
-        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+        for line in open(uitest.path("vmm-a11y-vm-list.txt"), "r").read().splitlines():
             if line.strip():
                 live_vms.append(line.split("\t", 1)[0].strip())
     except Exception:
@@ -13768,7 +13769,7 @@ def _sentinel_manager_conn_cell(name, roleName):
 def _live_vm_names():
     live = []
     try:
-        for line in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines():
+        for line in open(uitest.path("vmm-a11y-vm-list.txt"), "r").read().splitlines():
             if line.strip():
                 live.append(line.split("\t", 1)[0].strip())
     except Exception:
@@ -13832,7 +13833,7 @@ def _sentinel_hw_cell(name, roleName):
     deadline = time.time() + 6.0
     while time.time() < deadline:
         try:
-            rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+            rows = open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines()
         except Exception:
             rows = []
         exact = None
@@ -13856,7 +13857,7 @@ def _sentinel_hw_cell(name, roleName):
         time.sleep(0.05)
     if matched is None and "Controller USB" in want:
         try:
-            rows = open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+            rows = open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines()
         except Exception:
             rows = []
         for row in rows:
@@ -13889,22 +13890,22 @@ def _sentinel_hw_cell(name, roleName):
         "Boot Options",
     ):
         try:
-            open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(matched)
-            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(matched)
-            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(matched)
-            open("/tmp/vmm-a11y-last-hw.txt", "w").write(matched)
+            open(uitest.path("vmm-a11y-hw-last-device.txt"), "w").write(matched)
+            open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(matched)
+            open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(matched)
+            open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(matched)
         except Exception:
             pass
     selected = False
     try:
-        selected = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip() == matched
+        selected = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read().strip() == matched
     except Exception:
         pass
     idx = None
     try:
         rows = [
             n
-            for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+            for n in open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines()
             if n
         ]
         idx = rows.index(matched)
@@ -13915,19 +13916,19 @@ def _sentinel_hw_cell(name, roleName):
 
 def _write_overview_name(text):
     try:
-        open("/tmp/vmm-a11y-create-name.txt", "w").write(text if text is not None else "")
+        open(uitest.path("vmm-a11y-create-name.txt"), "w").write(text if text is not None else "")
     except Exception:
         pass
     newvm = False
     try:
-        newvm = open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1"
+        newvm = open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() == "1"
     except Exception:
         newvm = False
     if newvm:
         return
     try:
-        open("/tmp/vmm-a11y-overview-name.txt", "w").write(text if text is not None else "")
-        open("/tmp/vmm-a11y-overview-name-want.txt", "w").write(
+        open(uitest.path("vmm-a11y-overview-name.txt"), "w").write(text if text is not None else "")
+        open(uitest.path("vmm-a11y-overview-name-want.txt"), "w").write(
             text if text is not None else ""
         )
     except Exception:
@@ -13937,20 +13938,20 @@ def _write_overview_name(text):
 def _oslist_start_search():
     """Clear Escape/hide markers and allow the popover to reopen after a pick."""
     for marker in (
-        "/tmp/vmm-a11y-oslist-escape",
-        "/tmp/vmm-a11y-oslist-popover-hidden",
+        uitest.path("vmm-a11y-oslist-escape"),
+        uitest.path("vmm-a11y-oslist-popover-hidden"),
     ):
         try:
             os.remove(marker)
         except Exception:
             pass
     try:
-        open("/tmp/vmm-a11y-oslist-typed", "w").write("1")
+        open(uitest.path("vmm-a11y-oslist-typed"), "w").write("1")
     except Exception:
         pass
     try:
-        if os.path.exists("/tmp/vmm-a11y-oslist-confirmed"):
-            open("/tmp/vmm-a11y-oslist-reopen", "w").write("1")
+        if os.path.exists(uitest.path("vmm-a11y-oslist-confirmed")):
+            open(uitest.path("vmm-a11y-oslist-reopen"), "w").write("1")
     except Exception:
         pass
 
@@ -14247,12 +14248,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
         shown = raw_name or getattr(self, "name", "") or ""
         if "config-apply" in str(shown).lower():
             try:
-                if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-boot-init-path.txt")):
                     return True
             except Exception:
                 pass
             try:
-                stored = open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                stored = open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip()
                 if stored in ("0", "1"):
                     return stored == "1"
             except Exception:
@@ -14272,12 +14273,12 @@ class _VMMDogtailNode(dogtail.tree.Node):
     def name(self):
         if getattr(self, "_vmm_is_copy_host", False):
             try:
-                stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+                stored = open(uitest.path("vmm-a11y-copy-host.txt"), "r").read().strip()
             except Exception:
                 stored = ""
             return stored or "Copy host CPU configuration (host-passthrough)"
         try:
-            stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+            stored = open(uitest.path("vmm-a11y-copy-host.txt"), "r").read().strip()
         except Exception:
             stored = ""
         try:
@@ -14314,19 +14315,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = ""
         if name in ("Delete", "Remove Disk"):
             try:
-                return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() == "1"
             except Exception:
                 return False
         if name in ("Clone Virtual Machine", "Change storage path"):
             try:
                 if name == "Change storage path":
-                    return open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1"
-                return open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1"
+                    return open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-clone-shown.txt"), "r").read().strip() == "1"
             except Exception:
                 return False
         if "Add New Virtual Hardware" in name:
             try:
-                if os.path.exists("/tmp/vmm-a11y-addhw-hidden"):
+                if os.path.exists(uitest.path("vmm-a11y-addhw-hidden")):
                     return False
             except Exception:
                 pass
@@ -14341,19 +14342,19 @@ class _VMMDogtailNode(dogtail.tree.Node):
         ):
             if "Virtual Machine Manager" in name:
                 try:
-                    if open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() == "1":
                         return False
                 except Exception:
                     pass
                 try:
-                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1":
                         return False
                 except Exception:
                     pass
                 return True
             if " on " in name:
                 try:
-                    vis = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    vis = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                     if vis and vis in name:
                         return True
                 except Exception:
@@ -14407,7 +14408,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return False
         try:
             if "Add Connection" in (self.name or "") and os.path.exists(
-                "/tmp/vmm-a11y-createconn-hidden"
+                uitest.path("vmm-a11y-createconn-hidden")
             ):
                 return False
         except Exception:
@@ -14416,7 +14417,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             nname = self.name or ""
             if "Virtual Machine Manager" in nname:
                 try:
-                    return open("/tmp/vmm-a11y-manager-shown.txt", "r").read().strip() != "0"
+                    return open(uitest.path("vmm-a11y-manager-shown.txt"), "r").read().strip() != "0"
                 except Exception:
                     pass
             if "vmm-fake-systray" in nname:
@@ -14424,11 +14425,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
             if "vmm-systray-menu" in nname:
                 return _systray_menu_shown()
             if nname in ("Delete", "Remove Disk"):
-                return open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip() == "1"
             if nname == "Clone Virtual Machine":
-                return open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-clone-shown.txt"), "r").read().strip() == "1"
             if nname == "Change storage path":
-                return open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "r").read().strip() == "1"
         except Exception:
             pass
         try:
@@ -14457,7 +14458,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             or name.startswith("Choose the operating system")
         ):
             try:
-                stored = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read()
+                stored = open(uitest.path("vmm-a11y-oslist-entry.txt"), "r").read()
                 stored = stored.strip()
             except Exception:
                 stored = ""
@@ -14467,10 +14468,10 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 "Waiting for install media / source",
             )
             try:
-                if os.path.exists("/tmp/vmm-a11y-oslist-escape") and not os.path.exists(
-                    "/tmp/vmm-a11y-oslist-confirmed"
+                if os.path.exists(uitest.path("vmm-a11y-oslist-escape")) and not os.path.exists(
+                    uitest.path("vmm-a11y-oslist-confirmed")
                 ):
-                    if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
+                    if os.path.exists(uitest.path("vmm-a11y-oslist-typed")):
                         return ""
                     if stored not in _DETECT_TEXT:
                         return ""
@@ -14488,7 +14489,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             ):
                 return live.strip()
             try:
-                stored = open("/tmp/vmm-a11y-media-entry.txt", "r").read()
+                stored = open(uitest.path("vmm-a11y-media-entry.txt"), "r").read()
                 if stored.strip():
                     return stored.strip()
             except Exception:
@@ -14496,14 +14497,14 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if name.split(":", 1)[0].strip() in ("cpus", "mem", "Memory"):
             key = "cpus" if "cpu" in name else "mem"
             try:
-                stored = open("/tmp/vmm-a11y-spin-%s.txt" % key, "r").read()
+                stored = open(uitest.path("vmm-a11y-spin-%s.txt") % key, "r").read()
                 if stored.strip():
                     return stored.strip()
             except Exception:
                 pass
         if "pagenum-label" in name:
             try:
-                stored = open("/tmp/vmm-a11y-pagenum.txt", "r").read()
+                stored = open(uitest.path("vmm-a11y-pagenum.txt"), "r").read()
                 if stored.strip():
                     return stored.strip()
             except Exception:
@@ -14543,7 +14544,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 return rest
         if "storage-entry" in name:
             try:
-                stored = open("/tmp/vmm-a11y-storage-entry.txt", "r").read()
+                stored = open(uitest.path("vmm-a11y-storage-entry.txt"), "r").read()
                 if stored.strip():
                     return stored.strip()
             except Exception:
@@ -14584,7 +14585,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 # GTK 4 empty entries expose the accessible name as text.
                 return ""
             try:
-                blob = open("/tmp/vmm-a11y-conn-status.txt", "r").read()
+                blob = open(uitest.path("vmm-a11y-conn-status.txt"), "r").read()
             except Exception:
                 blob = ""
             joined = "\n".join(parts)
@@ -14619,8 +14620,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
             name = ""
         try:
             _oslist_hidden = os.path.exists(
-                "/tmp/vmm-a11y-oslist-popover-hidden"
-            ) or os.path.exists("/tmp/vmm-a11y-oslist-escape")
+                uitest.path("vmm-a11y-oslist-popover-hidden")
+            ) or os.path.exists(uitest.path("vmm-a11y-oslist-escape"))
         except Exception:
             _oslist_hidden = False
         if _oslist_hidden:
@@ -14875,13 +14876,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
         self.check_sensitive()
         if getattr(self, "_vmm_is_copy_host", False):
             try:
-                open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                open(uitest.path("vmm-a11y-copy-host.txt"), "w").write(
                     "Copy host CPU configuration (host-passthrough)"
                 )
             except Exception:
                 pass
             try:
-                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-click.txt"), "w") as fh:
                     fh.write("Copy host CPU configuration")
             except Exception:
                 pass
@@ -14896,28 +14897,28 @@ class _VMMDogtailNode(dogtail.tree.Node):
         nname = (self.name or "").lower()
         if nname == "generic" or nname.endswith("(generic)"):
             try:
-                with open("/tmp/vmm-a11y-os-select.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-os-select.txt"), "w") as fh:
                     fh.write("generic")
             except Exception:
                 pass
         os_short = re.search(r"\(([a-z0-9.+-]+)\)$", nname)
         if os_short and os_short.group(1) not in ("hidden", "generic"):
             try:
-                open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
-                open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+                open(uitest.path("vmm-a11y-oslist-confirmed"), "w").write("1")
+                open(uitest.path("vmm-a11y-oslist-popover-hidden"), "w").write("1")
             except Exception:
                 pass
         if nname == "copying":
             try:
                 path = os.path.join(os.getcwd(), "COPYING")
                 if os.path.isfile(path):
-                    with open("/tmp/vmm-a11y-file-open.path", "w") as fh:
+                    with open(uitest.path("vmm-a11y-file-open.path"), "w") as fh:
                         fh.write(path)
             except Exception:
                 pass
         if nname.replace("_", "") == "open":
             try:
-                with open("/tmp/vmm-a11y-file-open", "w") as fh:
+                with open(uitest.path("vmm-a11y-file-open"), "w") as fh:
                     fh.write("1")
             except Exception:
                 pass
@@ -14930,36 +14931,36 @@ class _VMMDogtailNode(dogtail.tree.Node):
             or "No media detected" in raw
         ):
             try:
-                with open("/tmp/vmm-a11y-media-select.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-media-select.txt"), "w") as fh:
                     fh.write(raw)
             except Exception:
                 pass
             return
         if "config-apply" in nname:
             try:
-                with open("/tmp/vmm-a11y-config-apply", "w") as fh:
+                with open(uitest.path("vmm-a11y-config-apply"), "w") as fh:
                     fh.write("1")
             except Exception:
                 pass
             try:
-                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-click.txt"), "w") as fh:
                     fh.write(raw or "config-apply")
             except Exception:
                 pass
             deadline = time.time() + 2.0
-            while time.time() < deadline and os.path.exists("/tmp/vmm-a11y-config-apply"):
+            while time.time() < deadline and os.path.exists(uitest.path("vmm-a11y-config-apply")):
                 time.sleep(0.05)
             try:
-                pending = open("/tmp/vmm-a11y-boot-init-path.txt", "r").read().strip()
+                pending = open(uitest.path("vmm-a11y-boot-init-path.txt"), "r").read().strip()
             except Exception:
                 pending = None
             deadline = time.time() + (8.0 if pending == "" else 2.0)
             while time.time() < deadline:
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-alert.txt"):
+                    if os.path.exists(uitest.path("vmm-a11y-alert.txt")):
                         break
                     if pending != "" and open(
-                        "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                        uitest.path("vmm-a11y-config-apply-sensitive"), "r"
                     ).read().strip() == "0":
                         break
                 except Exception:
@@ -14987,26 +14988,26 @@ class _VMMDogtailNode(dogtail.tree.Node):
         )
         if nname in ("ok", "yes", "close", "no", "cancel"):
             try:
-                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-click.txt"), "w") as fh:
                     fh.write(raw or nname)
             except Exception:
                 pass
             return
         if any(s in nname for s in _SENTINEL_CLICK):
-            if "finish" in nname and os.path.exists("/tmp/vmm-a11y-addhw-open"):
+            if "finish" in nname and os.path.exists(uitest.path("vmm-a11y-addhw-open")):
                 try:
-                    open("/tmp/vmm-a11y-addhw-finish", "w").write("1")
+                    open(uitest.path("vmm-a11y-addhw-finish"), "w").write("1")
                 except Exception:
                     pass
                 return
             try:
-                with open("/tmp/vmm-a11y-click.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-click.txt"), "w") as fh:
                     fh.write(raw or nname)
             except Exception:
                 pass
             if "copy host" in nname:
                 try:
-                    open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                    open(uitest.path("vmm-a11y-copy-host.txt"), "w").write(
                         "Copy host CPU configuration (host-passthrough)"
                     )
                 except Exception:
@@ -15131,7 +15132,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if "oslist-entry" in (self.name or ""):
             try:
                 _oslist_start_search()
-                with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-entry.txt"), "w") as fh:
                     fh.write(string)
                 if self._click_named_button(".entry-load-oslist-entry"):
                     return
@@ -15148,18 +15149,18 @@ class _VMMDogtailNode(dogtail.tree.Node):
         compact = shown.lower()
         if "init path" in compact:
             try:
-                open("/tmp/vmm-a11y-boot-init-path.txt", "w").write(
+                open(uitest.path("vmm-a11y-boot-init-path.txt"), "w").write(
                     text if text is not None else ""
                 )
-                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+                open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("1")
             except Exception:
                 pass
         if "init args" in compact:
             try:
-                open("/tmp/vmm-a11y-boot-init-args.txt", "w").write(
+                open(uitest.path("vmm-a11y-boot-init-args.txt"), "w").write(
                     text if text is not None else ""
                 )
-                open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+                open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("1")
             except Exception:
                 pass
         self.check_onscreen()
@@ -15201,20 +15202,20 @@ class _VMMDogtailNode(dogtail.tree.Node):
                     _write_overview_name(text)
                 if "storage-entry" in (self.name or ""):
                     try:
-                        open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                        open(uitest.path("vmm-a11y-storage-entry.txt"), "w").write(text)
                     except Exception:
                         pass
                 if "import-entry" in (self.name or ""):
                     try:
-                        open("/tmp/vmm-a11y-import-entry.txt", "w").write(text)
+                        open(uitest.path("vmm-a11y-import-entry.txt"), "w").write(text)
                     except Exception:
                         pass
                 if "media-entry" in (self.name or ""):
                     try:
-                        open("/tmp/vmm-a11y-media-entry.txt", "w").write(text)
+                        open(uitest.path("vmm-a11y-media-entry.txt"), "w").write(text)
                     except Exception:
                         pass
-                with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-entry.txt"), "w") as fh:
                     fh.write(text)
                 if "oslist-entry" in (self.name or ""):
                     self._click_named_button(".entry-load-oslist-entry")
@@ -15230,7 +15231,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         app = _virt_manager_app()
         if "XML" in (self.name or ""):
             try:
-                with open("/tmp/vmm-a11y-xml.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-xml.txt"), "w") as fh:
                     fh.write(text)
                 pred = _FuzzyPredicate(".xml-load", _alias_role("push button"))
                 btn = _walk_find(app, pred, True) if app is not None else None
@@ -15249,15 +15250,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 _write_overview_name(text)
             if "storage-entry" in (self.name or ""):
                 try:
-                    open("/tmp/vmm-a11y-storage-entry.txt", "w").write(text)
+                    open(uitest.path("vmm-a11y-storage-entry.txt"), "w").write(text)
                 except Exception:
                     pass
             if "import-entry" in (self.name or ""):
                 try:
-                    open("/tmp/vmm-a11y-import-entry.txt", "w").write(text)
+                    open(uitest.path("vmm-a11y-import-entry.txt"), "w").write(text)
                 except Exception:
                     pass
-            with open("/tmp/vmm-a11y-entry.txt", "w") as fh:
+            with open(uitest.path("vmm-a11y-entry.txt"), "w") as fh:
                 fh.write(text)
             base = (self.name or "").split(":", 1)[0].strip().rstrip(":")
             self._click_named_button(".entry-load-" + base)
@@ -15289,7 +15290,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if forced is not None:
             return forced
         try:
-            parts = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            parts = open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().split()
             if len(parts) >= 2:
                 return int(parts[0]), int(parts[1])
         except Exception:
@@ -15304,11 +15305,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             s1 = (0, 0)
         try:
-            os.remove("/tmp/vmm-a11y-window-maximize-done")
+            os.remove(uitest.path("vmm-a11y-window-maximize-done"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-window-maximize.txt", "w").write(self.name or "")
+            open(uitest.path("vmm-a11y-window-maximize.txt"), "w").write(self.name or "")
         except Exception:
             pass
         try:
@@ -15323,7 +15324,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-window-maximize-done", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-window-maximize-done"), "r").read().strip() == "1":
                     break
             except Exception:
                 pass
@@ -15348,11 +15349,11 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             name = ""
         try:
-            os.remove("/tmp/vmm-a11y-window-close-done")
+            os.remove(uitest.path("vmm-a11y-window-close-done"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-window-close.txt", "w").write(name)
+            open(uitest.path("vmm-a11y-window-close.txt"), "w").write(name)
         except Exception:
             pass
         if " on " in name or name in (
@@ -15365,7 +15366,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline = time.time() + 2.0
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-window-close-done", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-window-close-done"), "r").read().strip() == "1":
                         return
                 except Exception:
                     pass
@@ -15601,7 +15602,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             role = str(raw_role or "").lower()
             if "menu" in role or "item" in role:
                 try:
-                    if open("/tmp/vmm-a11y-hw-popup-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-hw-popup-shown.txt"), "r").read().strip() == "1":
                         return _SentinelAddHardwareMenuItem()
                 except Exception:
                     pass
@@ -15609,7 +15610,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if compact_name == "vmm-fake-systray":
             deadline = time.time() + max(0.2, float(timeout or 5))
             while time.time() < deadline:
-                if os.path.exists("/tmp/vmm-a11y-systray-shown.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-systray-shown.txt")):
                     return _SentinelFakeSystray()
                 time.sleep(0.05)
             return _SentinelFakeSystray()
@@ -15636,7 +15637,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return sent
         if name and "xml editing is disabled" in compact_name:
             try:
-                if open("/tmp/vmm-a11y-xml-disabled.txt", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-xml-disabled.txt"), "r").read().strip() == "1":
                     return _SentinelPrefsXMLDisabled()
             except Exception:
                 pass
@@ -15650,7 +15651,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         ):
             if compact_name == "conn-menu":
                 try:
-                    os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+                    os.remove(uitest.path("vmm-a11y-conn-menu-hidden"))
                 except Exception:
                     pass
                 return _SentinelConnMenu()
@@ -15659,7 +15660,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline = time.time() + max(1.0, float(timeout or 5))
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1":
                         return _SentinelConnectAuthWindow()
                 except Exception:
                     pass
@@ -15687,9 +15688,9 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if sent is not None:
             return sent
         if name and "init path" in str(name).replace(".*", "").lower():
-            return _SentinelEntry("Init path:", "/tmp/vmm-a11y-boot-init-path.txt")
+            return _SentinelEntry("Init path:", uitest.path("vmm-a11y-boot-init-path.txt"))
         if name and "init args" in str(name).replace(".*", "").lower():
-            return _SentinelEntry("Init args:", "/tmp/vmm-a11y-boot-init-args.txt")
+            return _SentinelEntry("Init args:", uitest.path("vmm-a11y-boot-init-args.txt"))
         if name and "pagenum" in str(name).lower():
             return _SentinelPagenum()
         try:
@@ -15704,7 +15705,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline = time.time() + max(1.0, float(timeout or 5))
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-progress.txt"), "r").read().strip() == "1":
                         return _SentinelProgressWindow(str(name).replace(".*", ""))
                 except Exception:
                     pass
@@ -15712,7 +15713,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelProgressWindow(str(name).replace(".*", ""))
         if name and "migrating vm" in str(name).replace(".*", "").lower():
             try:
-                if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-progress.txt"), "r").read().strip() == "1":
                     return _SentinelProgressWindow(str(name).replace(".*", ""))
             except Exception:
                 pass
@@ -15770,7 +15771,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline_fc = time.time() + max(1.0, float(timeout or 5))
             while time.time() < deadline_fc:
                 try:
-                    shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+                    shown = open(uitest.path("vmm-a11y-filechooser-shown.txt"), "r").read().strip()
                 except Exception:
                     shown = ""
                 if shown and shown != "0" and (
@@ -15792,8 +15793,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 tok in role for tok in ("frame", "dialog", "window", "panel", "list")
             ):
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-newvm-shown.txt") or os.path.exists(
-                        "/tmp/vmm-a11y-pagenum.txt"
+                    if os.path.exists(uitest.path("vmm-a11y-newvm-shown.txt")) or os.path.exists(
+                        uitest.path("vmm-a11y-pagenum.txt")
                     ):
                         return _SentinelNewVMWindow()
                 except Exception:
@@ -15802,13 +15803,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline_sb = time.time() + max(8.0, float(timeout or 5))
             while time.time() < deadline_sb:
                 try:
-                    if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() == "1":
                         return _SentinelStorageBrowser()
                 except Exception:
                     pass
                 time.sleep(0.05)
             try:
-                if open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip() == "1":
+                if open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip() == "1":
                     return _SentinelStorageBrowser()
             except Exception:
                 pass
@@ -15822,13 +15823,13 @@ class _VMMDogtailNode(dogtail.tree.Node):
             return _SentinelClickButton("New")
         if name and "vm-action-menu" in str(name).lower():
             try:
-                os.remove("/tmp/vmm-a11y-vm-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-vm-menu-hidden"))
             except Exception:
                 pass
             return _SentinelVMActionMenu()
         if name and "vmm-shutdown-menu" in str(name).lower():
             try:
-                os.remove("/tmp/vmm-a11y-shutdown-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-shutdown-menu-hidden"))
             except Exception:
                 pass
             return _SentinelShutdownSubmenu()
@@ -15836,7 +15837,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline = time.time() + max(1.0, float(timeout or 5))
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-serial-popup.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-serial-popup.txt"), "r").read().strip() == "1":
                         return _SentinelSerialPopup()
                 except Exception:
                     pass
@@ -15856,7 +15857,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             deadline = time.time() + max(0.5, float(timeout or 5))
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-about-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-about-shown.txt"), "r").read().strip() == "1":
                         return _SentinelAboutWindow()
                 except Exception:
                     pass
@@ -15884,8 +15885,8 @@ class _VMMDogtailNode(dogtail.tree.Node):
             if sent is not None:
                 return sent
             if want_alert and (
-                os.path.exists("/tmp/vmm-a11y-addhw-shown.txt")
-                or os.path.exists("/tmp/vmm-a11y-addhw-open")
+                os.path.exists(uitest.path("vmm-a11y-addhw-shown.txt"))
+                or os.path.exists(uitest.path("vmm-a11y-addhw-open"))
             ):
                 raise dogtail.tree.SearchError(
                     "Didn't find widget with name='%s' "
@@ -16000,7 +16001,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
             pass
         if name and "conn-menu" in str(name).lower():
             try:
-                os.remove("/tmp/vmm-a11y-conn-menu-hidden")
+                os.remove(uitest.path("vmm-a11y-conn-menu-hidden"))
             except Exception:
                 pass
             return _SentinelConnMenu()
@@ -16072,20 +16073,20 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 @property
                 def name(self):
                     try:
-                        stored = open("/tmp/vmm-a11y-copy-host.txt", "r").read().strip()
+                        stored = open(uitest.path("vmm-a11y-copy-host.txt"), "r").read().strip()
                     except Exception:
                         stored = ""
                     return stored or "Copy host CPU configuration (host-passthrough)"
 
                 def click(self, *a, **k):
                     try:
-                        open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                        open(uitest.path("vmm-a11y-copy-host.txt"), "w").write(
                             "Copy host CPU configuration (host-passthrough)"
                         )
                     except Exception:
                         pass
                     try:
-                        open("/tmp/vmm-a11y-click.txt", "w").write(
+                        open(uitest.path("vmm-a11y-click.txt"), "w").write(
                             "Copy host CPU configuration"
                         )
                     except Exception:
@@ -16147,31 +16148,31 @@ class _VMMDogtailNode(dogtail.tree.Node):
         if combolabel in known:
             # AT-SPI combo walks hang after GetItems; the app polls this file.
             try:
-                with open("/tmp/vmm-a11y-combo-select.txt", "w") as fh:
+                with open(uitest.path("vmm-a11y-combo-select.txt"), "w") as fh:
                     fh.write("%s\t%s" % (combolabel or "", itemlabel or ""))
             except Exception:
                 pass
             published = {
-                "Chipset:": "/tmp/vmm-a11y-chipset.txt",
-                "Firmware:": "/tmp/vmm-a11y-firmware.txt",
-                "machine-combo": "/tmp/vmm-a11y-machine-combo.txt",
-                "Architecture": "/tmp/vmm-a11y-arch.txt",
-                "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
-                "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
-                "net-source": "/tmp/vmm-a11y-net-source.txt",
-                "Mode:": "/tmp/vmm-a11y-migrate-mode.txt",
-                "Hypervisor": "/tmp/vmm-a11y-createconn-hv.txt",
-                "Type:": "/tmp/vmm-a11y-createpool-type.txt",
-                "Volgroup": "/tmp/vmm-a11y-createpool-volgroup.txt",
-                "Source Adapter:": "/tmp/vmm-a11y-createpool-adapter.txt",
-                "Format:": "/tmp/vmm-a11y-createvol-format.txt",
-                "CPU default:": "/tmp/vmm-a11y-prefs-cpu-default.txt",
-                "Storage format:": "/tmp/vmm-a11y-prefs-storage-format.txt",
-                "Graphics type": "/tmp/vmm-a11y-prefs-graphics-type.txt",
-                "x86 Firmware": "/tmp/vmm-a11y-prefs-firmware.txt",
-                "SPICE USB": "/tmp/vmm-a11y-prefs-usb-redir.txt",
-                "Resize guest": "/tmp/vmm-a11y-prefs-resize-guest.txt",
-                "Graphical console scaling": "/tmp/vmm-a11y-prefs-scaling.txt",
+                "Chipset:": uitest.path("vmm-a11y-chipset.txt"),
+                "Firmware:": uitest.path("vmm-a11y-firmware.txt"),
+                "machine-combo": uitest.path("vmm-a11y-machine-combo.txt"),
+                "Architecture": uitest.path("vmm-a11y-arch.txt"),
+                "Machine Type": uitest.path("vmm-a11y-machine-type.txt"),
+                "Virt Type": uitest.path("vmm-a11y-virt-type.txt"),
+                "net-source": uitest.path("vmm-a11y-net-source.txt"),
+                "Mode:": uitest.path("vmm-a11y-migrate-mode.txt"),
+                "Hypervisor": uitest.path("vmm-a11y-createconn-hv.txt"),
+                "Type:": uitest.path("vmm-a11y-createpool-type.txt"),
+                "Volgroup": uitest.path("vmm-a11y-createpool-volgroup.txt"),
+                "Source Adapter:": uitest.path("vmm-a11y-createpool-adapter.txt"),
+                "Format:": uitest.path("vmm-a11y-createvol-format.txt"),
+                "CPU default:": uitest.path("vmm-a11y-prefs-cpu-default.txt"),
+                "Storage format:": uitest.path("vmm-a11y-prefs-storage-format.txt"),
+                "Graphics type": uitest.path("vmm-a11y-prefs-graphics-type.txt"),
+                "x86 Firmware": uitest.path("vmm-a11y-prefs-firmware.txt"),
+                "SPICE USB": uitest.path("vmm-a11y-prefs-usb-redir.txt"),
+                "Resize guest": uitest.path("vmm-a11y-prefs-resize-guest.txt"),
+                "Graphical console scaling": uitest.path("vmm-a11y-prefs-scaling.txt"),
             }.get(combolabel)
             deadline = time.time() + 2.0
             while time.time() < deadline:
@@ -16216,7 +16217,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
         except Exception:
             pass
         try:
-            with open("/tmp/vmm-a11y-combo-select.txt", "w") as fh:
+            with open(uitest.path("vmm-a11y-combo-select.txt"), "w") as fh:
                 fh.write("%s\t%s" % (combolabel or "", itemlabel or ""))
         except Exception:
             pass
@@ -16228,15 +16229,15 @@ class _VMMDogtailNode(dogtail.tree.Node):
         """
         if combolabel in ("net-source", "Chipset:", "Firmware:", "machine-combo", "Architecture", "Machine Type", "Virt Type"):
             files = {
-                "net-source": "/tmp/vmm-a11y-net-source.txt",
-                "Chipset:": "/tmp/vmm-a11y-chipset.txt",
-                "Firmware:": "/tmp/vmm-a11y-firmware.txt",
-                "machine-combo": "/tmp/vmm-a11y-machine-combo.txt",
-                "Architecture": "/tmp/vmm-a11y-arch.txt",
-                "Machine Type": "/tmp/vmm-a11y-machine-type.txt",
-                "Virt Type": "/tmp/vmm-a11y-virt-type.txt",
+                "net-source": uitest.path("vmm-a11y-net-source.txt"),
+                "Chipset:": uitest.path("vmm-a11y-chipset.txt"),
+                "Firmware:": uitest.path("vmm-a11y-firmware.txt"),
+                "machine-combo": uitest.path("vmm-a11y-machine-combo.txt"),
+                "Architecture": uitest.path("vmm-a11y-arch.txt"),
+                "Machine Type": uitest.path("vmm-a11y-machine-type.txt"),
+                "Virt Type": uitest.path("vmm-a11y-virt-type.txt"),
             }
-            path = files.get(combolabel, "/tmp/vmm-a11y-net-source.txt")
+            path = files.get(combolabel, uitest.path("vmm-a11y-net-source.txt"))
 
             def _selected():
                 try:
@@ -16286,7 +16287,7 @@ class _VMMDogtailNode(dogtail.tree.Node):
                 or "create-conn" in name
                 or "install-url-combo" in name
             ):
-                extra = open("/tmp/vmm-a11y-combo-%s.txt" % name, "r").read()
+                extra = open(uitest.path("vmm-a11y-combo-%s.txt") % name, "r").read()
                 if extra.strip():
                     strs.append(extra)
         except Exception:

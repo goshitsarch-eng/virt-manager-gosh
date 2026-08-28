@@ -17,6 +17,7 @@ from .engine import vmmEngine
 from .lib.graphwidgets import Sparkline
 from .hostnets import vmmHostNets
 from .hoststorage import vmmHostStorage
+from .lib import uitest
 
 
 class vmmHost(vmmGObjectUI):
@@ -93,7 +94,7 @@ class vmmHost(vmmGObjectUI):
         vis = self.is_visible()
         self.topwin.present()
         try:
-            open("/tmp/vmm-a11y-host-shown.txt", "w").write(self.conn.get_pretty_desc())
+            open(uitest.path("vmm-a11y-host-shown.txt"), "w").write(self.conn.get_pretty_desc())
         except Exception:
             pass
         if vis:
@@ -117,7 +118,7 @@ class vmmHost(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-host-shown.txt", "w").write(self.conn.get_pretty_desc())
+            open(uitest.path("vmm-a11y-host-shown.txt"), "w").write(self.conn.get_pretty_desc())
         except Exception:
             pass
         try:
@@ -136,7 +137,7 @@ class vmmHost(vmmGObjectUI):
             self._vmm_close_poll = True
 
             def _close_tick():
-                path = "/tmp/vmm-a11y-window-close.txt"
+                path = uitest.path("vmm-a11y-window-close.txt")
                 try:
                     want = open(path, "r").read()
                 except Exception:
@@ -153,7 +154,7 @@ class vmmHost(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _close_tick)
+            uitest.poll_add(50, _close_tick)
 
     def close(self, src=None, event=None):
         dummy = src
@@ -165,7 +166,7 @@ class vmmHost(vmmGObjectUI):
         self.topwin.hide()
         vmmEngine.get_instance().decrement_window_counter()
         try:
-            open("/tmp/vmm-a11y-host-shown.txt", "w").write("")
+            open(uitest.path("vmm-a11y-host-shown.txt"), "w").write("")
         except Exception:
             pass
 
@@ -264,13 +265,13 @@ class vmmHost(vmmGObjectUI):
 
     def _publish_overview_state(self):
         try:
-            open("/tmp/vmm-a11y-host-overview-name.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-overview-name.txt"), "w").write(
                 self.widget("overview-name").get_text() or ""
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-host-autoconnect.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-autoconnect.txt"), "w").write(
                 "1" if self.widget("config-autoconnect").get_active() else "0"
             )
         except Exception:
@@ -280,7 +281,7 @@ class vmmHost(vmmGObjectUI):
             title = _("%(connection)s - Connection Details") % {"connection": desc}
             self.topwin.set_title(title)
             gtkcompat.set_accessible_name(self.topwin, title)
-            open("/tmp/vmm-a11y-host-shown.txt", "w").write(desc or "")
+            open(uitest.path("vmm-a11y-host-shown.txt"), "w").write(desc or "")
         except Exception:
             pass
 
@@ -314,12 +315,12 @@ class vmmHost(vmmGObjectUI):
 
         def _tick():
             try:
-                nav = "/tmp/vmm-a11y-host-nav.txt"
+                nav = uitest.path("vmm-a11y-host-nav.txt")
                 if os.path.exists(nav):
                     direction = open(nav, "r").read().strip().lower()
                     which = ""
                     try:
-                        which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                        which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
                     except Exception:
                         which = ""
                     if not which:
@@ -334,7 +335,7 @@ class vmmHost(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-overview-name.txt.set"
+                path = uitest.path("vmm-a11y-host-overview-name.txt.set")
                 if os.path.exists(path):
                     text = open(path, "r").read()
                     os.remove(path)
@@ -343,7 +344,7 @@ class vmmHost(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-autoconnect.txt.click"
+                path = uitest.path("vmm-a11y-host-autoconnect.txt.click")
                 if os.path.exists(path):
                     os.remove(path)
                     chk = self.widget("config-autoconnect")
@@ -356,7 +357,7 @@ class vmmHost(vmmGObjectUI):
                     ("net", lambda: self._hostnets._net_apply()),
                     ("pool", lambda: self._storagelist._pool_apply()),
                 ):
-                    path = "/tmp/vmm-a11y-host-%s-action.txt" % prefix
+                    path = uitest.path("vmm-a11y-host-%s-action.txt") % prefix
                     if not os.path.exists(path):
                         continue
                     action = open(path, "r").read().strip()
@@ -367,7 +368,7 @@ class vmmHost(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-file-action.txt"
+                path = uitest.path("vmm-a11y-host-file-action.txt")
                 if os.path.exists(path):
                     action = open(path, "r").read().strip()
                     os.remove(path)
@@ -379,7 +380,7 @@ class vmmHost(vmmGObjectUI):
                         self.close()
             except Exception:
                 pass
-            path = "/tmp/vmm-a11y-host-tab.txt"
+            path = uitest.path("vmm-a11y-host-tab.txt")
             try:
                 if not os.path.exists(path):
                     return True
@@ -402,12 +403,12 @@ class vmmHost(vmmGObjectUI):
             try:
                 self.widget("details-tabs").set_current_page(page)
                 if page == 1:
-                    open("/tmp/vmm-a11y-host-active-list.txt", "w").write("net")
+                    open(uitest.path("vmm-a11y-host-active-list.txt"), "w").write("net")
                     self.conn.schedule_priority_tick(pollnet=True)
                     self._hostnets.refresh_page()
                     self._hostnets._publish_a11y_state()
                 elif page == 2:
-                    open("/tmp/vmm-a11y-host-active-list.txt", "w").write("pool")
+                    open(uitest.path("vmm-a11y-host-active-list.txt"), "w").write("pool")
                     self.conn.schedule_priority_tick(pollpool=True)
                     self._storagelist.refresh_page()
                     self._storagelist._publish_a11y_state()
@@ -415,7 +416,7 @@ class vmmHost(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _tick)
 
     def _page_changed_cb(self, src, child, pagenum):
         if pagenum == 1:

@@ -210,7 +210,7 @@
                     <property name="tooltip-text" translatable="1">Create a new virtual machine</property>
                     <property name="label" translatable="1">New</property>
                     <property name="use-underline">1</property>
-                    <property name="icon-name">vm_new_large</property>
+                    <property name="icon-name">vm_new_wizard</property>
                     <signal name="clicked" handler="on_vm_new_clicked" swapped="no" />
                   </object>
                 </child>

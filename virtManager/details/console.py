@@ -20,6 +20,7 @@ from .viewers import SpiceViewer, VNCViewer, SPICE_GTK_IMPORT_ERROR
 from ..baseclass import vmmGObject, vmmGObjectUI
 from ..lib import gtkcompat
 from ..lib.keyring import vmmKeyring
+from ..lib import uitest
 
 
 # console-pages IDs
@@ -113,7 +114,7 @@ class _TimedRevealer(vmmGObject):
             self._revealer.set_reveal_child(False)
             self._timeout_id = None
             try:
-                open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-fullscreen-toolbar.txt"), "w").write("0")
             except Exception:
                 pass
 
@@ -128,11 +129,11 @@ class _TimedRevealer(vmmGObject):
         self._unregister_timeout()
         self._in_fullscreen = val
         try:
-            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write(
+            open(uitest.path("vmm-a11y-fullscreen-toolbar.txt"), "w").write(
                 "1" if val else "0"
             )
             if val:
-                open("/tmp/vmm-a11y-fullscreen-toolbar-at.txt", "w").write(str(time.time()))
+                open(uitest.path("vmm-a11y-fullscreen-toolbar-at.txt"), "w").write(str(time.time()))
         except Exception:
             pass
         self._revealer.set_reveal_child(val)
@@ -410,7 +411,7 @@ class _ConsoleMenu(vmmGObject):
                 self.select_item(item)
             try:
                 key = str(label or "").lower().replace(" ", "-")
-                open("/tmp/vmm-a11y-console-item-%s.txt" % key, "w").write(
+                open(uitest.path("vmm-a11y-console-item-%s.txt") % key, "w").write(
                     "1" if sensitive else "0"
                 )
             except Exception:
@@ -422,7 +423,7 @@ class _ConsoleMenu(vmmGObject):
     def _publish_selected(self):
         try:
             selected = self.get_selected()[0] or ""
-            open("/tmp/vmm-a11y-console-selected.txt", "w").write(selected)
+            open(uitest.path("vmm-a11y-console-selected.txt"), "w").write(selected)
         except Exception:
             pass
 
@@ -586,7 +587,7 @@ class vmmConsolePages(vmmGObjectUI):
                     SPICE_GTK_IMPORT_ERROR,
                     window=self.topwin,
                 )
-                open("/tmp/vmm-a11y-spice-import.txt", "w").write(SPICE_GTK_IMPORT_ERROR)
+                open(uitest.path("vmm-a11y-spice-import.txt"), "w").write(SPICE_GTK_IMPORT_ERROR)
             except Exception:
                 pass
         if not getattr(self, "_vmm_console_select_poll", False):
@@ -601,20 +602,20 @@ class vmmConsolePages(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-console-reinit.txt"):
-                        os.remove("/tmp/vmm-a11y-console-reinit.txt")
+                    if os.path.exists(uitest.path("vmm-a11y-console-reinit.txt")):
+                        os.remove(uitest.path("vmm-a11y-console-reinit.txt"))
                         try:
                             self._activate_default_console_page()
                         except Exception as exc:
                             try:
-                                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                                open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                                     "reinit-err %s\n" % exc
                                 )
                             except Exception:
                                 pass
                 except Exception:
                     pass
-                path = "/tmp/vmm-a11y-console-select.txt"
+                path = uitest.path("vmm-a11y-console-select.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -653,7 +654,7 @@ class vmmConsolePages(vmmGObjectUI):
             }
 
             def _poll_send_key():
-                path = "/tmp/vmm-a11y-send-key.txt"
+                path = uitest.path("vmm-a11y-send-key.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -696,12 +697,12 @@ class vmmConsolePages(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-console-click.txt") or os.path.exists(
-                        "/tmp/vmm-a11y-vmwindow-click"
+                    if os.path.exists(uitest.path("vmm-a11y-console-click.txt")) or os.path.exists(
+                        uitest.path("vmm-a11y-vmwindow-click")
                     ):
                         for p in (
-                            "/tmp/vmm-a11y-console-click.txt",
-                            "/tmp/vmm-a11y-vmwindow-click",
+                            uitest.path("vmm-a11y-console-click.txt"),
+                            uitest.path("vmm-a11y-vmwindow-click"),
                         ):
                             try:
                                 os.remove(p)
@@ -720,7 +721,7 @@ class vmmConsolePages(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-vmwindow-keycombo.txt"
+                    path = uitest.path("vmm-a11y-vmwindow-keycombo.txt")
                     if os.path.exists(path):
                         combo = open(path, "r").read().strip().lower()
                         os.remove(path)
@@ -741,49 +742,49 @@ class vmmConsolePages(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-serial-focus"):
-                        os.remove("/tmp/vmm-a11y-serial-focus")
+                    if os.path.exists(uitest.path("vmm-a11y-serial-focus")):
+                        os.remove(uitest.path("vmm-a11y-serial-focus"))
                         self._focus_serial_console()
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-vmwindow-click-title"):
-                        os.remove("/tmp/vmm-a11y-vmwindow-click-title")
+                    if os.path.exists(uitest.path("vmm-a11y-vmwindow-click-title")):
+                        os.remove(uitest.path("vmm-a11y-vmwindow-click-title"))
                         self._unfocus_serial_console()
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-vmwindow-grab-focus"):
-                        os.remove("/tmp/vmm-a11y-vmwindow-grab-focus")
+                    if os.path.exists(uitest.path("vmm-a11y-vmwindow-grab-focus")):
+                        os.remove(uitest.path("vmm-a11y-vmwindow-grab-focus"))
                         self._pointer_is_grabbed = False
                         self._enable_modifiers()
                         self.emit("change-title")
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-console-auth-password.txt.set"
+                    path = uitest.path("vmm-a11y-console-auth-password.txt.set")
                     if os.path.exists(path):
-                        text = open("/tmp/vmm-a11y-console-auth-password.txt", "r").read()
+                        text = open(uitest.path("vmm-a11y-console-auth-password.txt"), "r").read()
                         os.remove(path)
                         self.widget("console-auth-password").set_text(text)
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-console-auth-username.txt.set"
+                    path = uitest.path("vmm-a11y-console-auth-username.txt.set")
                     if os.path.exists(path):
-                        text = open("/tmp/vmm-a11y-console-auth-username.txt", "r").read()
+                        text = open(uitest.path("vmm-a11y-console-auth-username.txt"), "r").read()
                         os.remove(path)
                         self.widget("console-auth-username").set_text(text)
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-console-auth-remember.txt.click"
+                    path = uitest.path("vmm-a11y-console-auth-remember.txt.click")
                     if os.path.exists(path):
                         os.remove(path)
                         want = False
                         try:
                             want = (
-                                open("/tmp/vmm-a11y-console-auth-remember.txt", "r")
+                                open(uitest.path("vmm-a11y-console-auth-remember.txt"), "r")
                                 .read()
                                 .strip()
                                 == "1"
@@ -794,26 +795,26 @@ class vmmConsolePages(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-console-login"):
-                        os.remove("/tmp/vmm-a11y-console-login")
+                    if os.path.exists(uitest.path("vmm-a11y-console-login")):
+                        os.remove(uitest.path("vmm-a11y-console-login"))
                         self._auth_login_cb(None)
                 except Exception:
                     pass
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-console-connect-click"):
-                        os.remove("/tmp/vmm-a11y-console-connect-click")
+                    if os.path.exists(uitest.path("vmm-a11y-console-connect-click")):
+                        os.remove(uitest.path("vmm-a11y-console-connect-click"))
                         self._connect_button_clicked_cb(None)
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-fullscreen-exit"
+                    path = uitest.path("vmm-a11y-fullscreen-exit")
                     if os.path.exists(path):
                         os.remove(path)
                         self._leave_fullscreen()
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-fullscreen-send-key"
+                    path = uitest.path("vmm-a11y-fullscreen-send-key")
                     if os.path.exists(path):
                         os.remove(path)
                         try:
@@ -826,9 +827,9 @@ class vmmConsolePages(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_console_select)
-            GLib.timeout_add(50, _poll_send_key)
-            GLib.timeout_add(50, _poll_console_input)
+            uitest.poll_add(50, _poll_console_select)
+            uitest.poll_add(50, _poll_send_key)
+            uitest.poll_add(50, _poll_console_input)
 
     def _cleanup(self):
         self.vm = None
@@ -938,7 +939,7 @@ class vmmConsolePages(vmmGObjectUI):
     def _set_size_to_vm(self):
         if not self._viewer_is_visible():
             try:
-                prev = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+                prev = open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().split()
                 valw, valh = int(prev[0]) + 64, int(prev[1]) + 48
             except Exception:
                 valw, valh = 880, 648
@@ -947,7 +948,7 @@ class vmmConsolePages(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (valw, valh))
+                open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write("%s %s" % (valw, valh))
             except Exception:
                 pass
             return  # pragma: no cover
@@ -970,7 +971,7 @@ class vmmConsolePages(vmmGObjectUI):
 
         log.debug("_set_size_to_vm vm=(%s, %s) window=(%s, %s)", w, h, valw, valh)
         try:
-            prev = open("/tmp/vmm-a11y-vmwindow-size.txt", "r").read().split()
+            prev = open(uitest.path("vmm-a11y-vmwindow-size.txt"), "r").read().split()
             prevw, prevh = int(prev[0]), int(prev[1])
         except Exception:
             prevw, prevh = top_w, top_h
@@ -998,7 +999,7 @@ class vmmConsolePages(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (valw, valh))
+            open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write("%s %s" % (valw, valh))
         except Exception:
             pass
 
@@ -1033,7 +1034,7 @@ class vmmConsolePages(vmmGObjectUI):
             self._overlay_toolbar_fullscreen.timed_revealer.force_reveal(True)
             try:
                 w, h = self.topwin.get_size()
-                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write(
+                open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write(
                     "%s %s" % (max(w, 1024), max(h, 768))
                 )
             except Exception:
@@ -1044,7 +1045,7 @@ class vmmConsolePages(vmmGObjectUI):
             self.topwin.unfullscreen()
 
         try:
-            open("/tmp/vmm-a11y-fullscreen.txt", "w").write("1" if do_fullscreen else "0")
+            open(uitest.path("vmm-a11y-fullscreen.txt"), "w").write("1" if do_fullscreen else "0")
         except Exception:
             pass
         self._sync_scaling_with_display()
@@ -1100,9 +1101,9 @@ class vmmConsolePages(vmmGObjectUI):
                 # Window teardown uses this string; do not clobber a real
                 # connection error the uitest is waiting to read.
                 if msg != _("Viewer window closed."):
-                    open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
+                    open(uitest.path("vmm-a11y-console-error.txt"), "w").write(msg)
                 try:
-                    open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(msg + "\n")
+                    open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(msg + "\n")
                 except Exception:
                     pass
             except Exception:
@@ -1127,8 +1128,8 @@ class vmmConsolePages(vmmGObjectUI):
             )
             try:
                 if msg != _("Viewer window closed."):
-                    open("/tmp/vmm-a11y-console-error.txt", "w").write(msg)
-                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(msg + "\n")
+                    open(uitest.path("vmm-a11y-console-error.txt"), "w").write(msg)
+                open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(msg + "\n")
             except Exception:
                 pass
         self._activate_gfx_unavailable_page(msg)
@@ -1149,9 +1150,9 @@ class vmmConsolePages(vmmGObjectUI):
         remember = bool(withPassword and pw) or (withUsername and username)
         remember = has_keyring and remember
         try:
-            if os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-console-auth-remember.txt")):
                 remember = (
-                    open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip()
+                    open(uitest.path("vmm-a11y-console-auth-remember.txt"), "r").read().strip()
                     == "1"
                 )
         except Exception:
@@ -1167,7 +1168,7 @@ class vmmConsolePages(vmmGObjectUI):
         else:
             self.widget("console-auth-password").grab_focus()
         try:
-            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+            open(uitest.path("vmm-a11y-console-error.txt"), "w").write("")
         except Exception:
             pass
         self._publish_auth_state()
@@ -1175,7 +1176,7 @@ class vmmConsolePages(vmmGObjectUI):
 
     def _publish_gfx_viewport(self):
         try:
-            open("/tmp/vmm-a11y-console-gfx-viewport.txt", "w").write(
+            open(uitest.path("vmm-a11y-console-gfx-viewport.txt"), "w").write(
                 "1" if self._viewer_is_visible() else "0"
             )
         except Exception:
@@ -1188,20 +1189,20 @@ class vmmConsolePages(vmmGObjectUI):
             auth_on = pages == _CONSOLE_PAGE_GRAPHICS and gfx == _GFX_PAGE_AUTH
             connect_on = pages == _CONSOLE_PAGE_CONNECT
             serial_on = pages == _CONSOLE_PAGE_SERIAL
-            open("/tmp/vmm-a11y-console-auth.txt", "w").write("1" if auth_on else "0")
-            open("/tmp/vmm-a11y-console-connect.txt", "w").write("1" if connect_on else "0")
-            open("/tmp/vmm-a11y-console-serial.txt", "w").write("1" if serial_on else "0")
+            open(uitest.path("vmm-a11y-console-auth.txt"), "w").write("1" if auth_on else "0")
+            open(uitest.path("vmm-a11y-console-connect.txt"), "w").write("1" if connect_on else "0")
+            open(uitest.path("vmm-a11y-console-serial.txt"), "w").write("1" if serial_on else "0")
             if auth_on:
-                if not os.path.exists("/tmp/vmm-a11y-console-auth-password.txt.set"):
-                    open("/tmp/vmm-a11y-console-auth-password.txt", "w").write(
+                if not os.path.exists(uitest.path("vmm-a11y-console-auth-password.txt.set")):
+                    open(uitest.path("vmm-a11y-console-auth-password.txt"), "w").write(
                         self.widget("console-auth-password").get_text() or ""
                     )
-                if not os.path.exists("/tmp/vmm-a11y-console-auth-username.txt.set"):
-                    open("/tmp/vmm-a11y-console-auth-username.txt", "w").write(
+                if not os.path.exists(uitest.path("vmm-a11y-console-auth-username.txt.set")):
+                    open(uitest.path("vmm-a11y-console-auth-username.txt"), "w").write(
                         self.widget("console-auth-username").get_text() or ""
                     )
-                if not os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt.click"):
-                    open("/tmp/vmm-a11y-console-auth-remember.txt", "w").write(
+                if not os.path.exists(uitest.path("vmm-a11y-console-auth-remember.txt.click")):
+                    open(uitest.path("vmm-a11y-console-auth-remember.txt"), "w").write(
                         "1" if self.widget("console-auth-remember").get_active() else "0"
                     )
         except Exception:
@@ -1264,7 +1265,7 @@ class vmmConsolePages(vmmGObjectUI):
         except Exception:
             showing = False
         try:
-            open("/tmp/vmm-a11y-fullscreen-toolbar.txt", "w").write("1" if showing else "0")
+            open(uitest.path("vmm-a11y-fullscreen-toolbar.txt"), "w").write("1" if showing else "0")
         except Exception:
             pass
 
@@ -1274,7 +1275,7 @@ class vmmConsolePages(vmmGObjectUI):
         if self._viewer:
             self._viewer.console_grab_focus()
         try:
-            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+            open(uitest.path("vmm-a11y-console-error.txt"), "w").write("")
         except Exception:
             pass
         self._publish_auth_state()
@@ -1283,7 +1284,7 @@ class vmmConsolePages(vmmGObjectUI):
     def _activate_console_connect_page(self):
         self.widget("console-pages").set_current_page(_CONSOLE_PAGE_CONNECT)
         try:
-            open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+            open(uitest.path("vmm-a11y-console-error.txt"), "w").write("")
         except Exception:
             pass
         try:
@@ -1317,7 +1318,7 @@ class vmmConsolePages(vmmGObjectUI):
 
     def _init_viewer(self, ginfo, errmsg):
         try:
-            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+            open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                 "init-viewer visible=%s viewer=%s errmsg=%s gtype=%s\n"
                 % (
                     self.is_visible(),
@@ -1341,7 +1342,7 @@ class vmmConsolePages(vmmGObjectUI):
 
         if not self.vm.get_console_autoconnect() and not self._viewer_connect_clicked:
             try:
-                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                     "init-viewer connect-page auto=%s clicked=%s\n"
                     % (self.vm.get_console_autoconnect(), self._viewer_connect_clicked)
                 )
@@ -1369,7 +1370,7 @@ class vmmConsolePages(vmmGObjectUI):
 
             self._viewer.console_open()
             try:
-                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                     "viewer-open class=%s\n" % viewer_class.__name__
                 )
             except Exception:
@@ -1377,7 +1378,7 @@ class vmmConsolePages(vmmGObjectUI):
         except Exception as e:
             log.exception("Error connecting to graphical console")
             try:
-                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                     "viewer-open-err %s\n" % e
                 )
             except Exception:
@@ -1395,9 +1396,9 @@ class vmmConsolePages(vmmGObjectUI):
 
         remember = bool(self.widget("console-auth-remember").get_active())
         try:
-            if os.path.exists("/tmp/vmm-a11y-console-auth-remember.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-console-auth-remember.txt")):
                 remember = (
-                    open("/tmp/vmm-a11y-console-auth-remember.txt", "r").read().strip()
+                    open(uitest.path("vmm-a11y-console-auth-remember.txt"), "r").read().strip()
                     == "1"
                 )
         except Exception:
@@ -1580,7 +1581,7 @@ class vmmConsolePages(vmmGObjectUI):
         # stale graphics error after a successful serial attach.
         if opened:
             try:
-                open("/tmp/vmm-a11y-console-error.txt", "w").write("")
+                open(uitest.path("vmm-a11y-console-error.txt"), "w").write("")
             except Exception:
                 pass
         self._publish_auth_state()
@@ -1600,7 +1601,7 @@ class vmmConsolePages(vmmGObjectUI):
 
     def _activate_default_console_page(self):
         try:
-            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+            open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                 "activate-default runable=%s viewer=%s selected=%s\n"
                 % (
                     self.vm.is_runable(),

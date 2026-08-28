@@ -1,6 +1,6 @@
 # Virtual Machine Manager News
 
-## Release 5.2.0 (unreleased)
+## Release 5.2.0 (August 28, 2026)
 - virt-manager: Rewrite the graphical application on GTK 4 and libadwaita
   while keeping the existing feature set, windows, wizards, and actions
 - virt-manager: Grab the console on Wayland via shortcut inhibit and

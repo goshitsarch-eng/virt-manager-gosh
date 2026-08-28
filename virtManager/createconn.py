@@ -16,6 +16,7 @@ from virtinst import log
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .connmanager import vmmConnectionManager
+from .lib import uitest
 
 (HV_QEMU, HV_XEN, HV_LXC, HV_QEMU_SESSION, HV_BHYVE, HV_VZ, HV_CUSTOM) = range(7)
 
@@ -90,7 +91,7 @@ class vmmCreateConn(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createconn-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-createconn-shown.txt"), "w").write("0")
         except Exception:
             pass
         try:
@@ -117,12 +118,12 @@ class vmmCreateConn(vmmGObjectUI):
         self._vmm_cc_host_seen = None
 
         for path in (
-            "/tmp/vmm-a11y-createconn-connect",
-            "/tmp/vmm-a11y-createconn-cancel",
-            "/tmp/vmm-a11y-createconn-remote-click",
-            "/tmp/vmm-a11y-createconn-user.txt",
-            "/tmp/vmm-a11y-createconn-host.txt",
-            "/tmp/vmm-a11y-createconn-uri-label.txt",
+            uitest.path("vmm-a11y-createconn-connect"),
+            uitest.path("vmm-a11y-createconn-cancel"),
+            uitest.path("vmm-a11y-createconn-remote-click"),
+            uitest.path("vmm-a11y-createconn-user.txt"),
+            uitest.path("vmm-a11y-createconn-host.txt"),
+            uitest.path("vmm-a11y-createconn-uri-label.txt"),
         ):
             try:
                 os.remove(path)
@@ -149,19 +150,19 @@ class vmmCreateConn(vmmGObjectUI):
 
     def _publish_a11y_state(self):
         try:
-            open("/tmp/vmm-a11y-createconn-shown.txt", "w").write(
+            open(uitest.path("vmm-a11y-createconn-shown.txt"), "w").write(
                 "1" if self.topwin.get_visible() else "0"
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createconn-remote.txt", "w").write(
+            open(uitest.path("vmm-a11y-createconn-remote.txt"), "w").write(
                 "1" if self.widget("connect-remote").get_active() else "0"
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createconn-uri-label.txt", "w").write(
+            open(uitest.path("vmm-a11y-createconn-uri-label.txt"), "w").write(
                 self.widget("uri-label").get_text() or ""
             )
         except Exception:
@@ -169,7 +170,7 @@ class vmmCreateConn(vmmGObjectUI):
         try:
             hv = uiutil.get_list_selection(self.widget("hypervisor"))
             show_remote = hv not in (HV_QEMU_SESSION, HV_CUSTOM)
-            open("/tmp/vmm-a11y-createconn-fields.txt", "w").write(
+            open(uitest.path("vmm-a11y-createconn-fields.txt"), "w").write(
                 "%s\t%s\t%s" % (int(show_remote), int(show_remote), int(show_remote))
             )
         except Exception:
@@ -177,7 +178,7 @@ class vmmCreateConn(vmmGObjectUI):
         try:
             hv = self.widget("hypervisor")
             row = uiutil.get_list_selected_row(hv) if hv is not None else None
-            open("/tmp/vmm-a11y-createconn-hv.txt", "w").write(
+            open(uitest.path("vmm-a11y-createconn-hv.txt"), "w").write(
                 str(row[1] if row else "")
             )
         except Exception:
@@ -192,14 +193,14 @@ class vmmCreateConn(vmmGObjectUI):
         re-dispatch that same timeout until the modal returns.
         """
         changed = False
-        path = "/tmp/vmm-a11y-createconn-user.txt"
+        path = uitest.path("vmm-a11y-createconn-user.txt")
         if os.path.exists(path):
             text = open(path, "r").read()
             entry = self.widget("username-entry")
             if entry is not None and (entry.get_text() or "") != text:
                 entry.set_text(text)
                 changed = True
-        path = "/tmp/vmm-a11y-createconn-host.txt"
+        path = uitest.path("vmm-a11y-createconn-host.txt")
         if os.path.exists(path):
             text = open(path, "r").read()
             entry = self.widget("hostname")
@@ -241,8 +242,8 @@ class vmmCreateConn(vmmGObjectUI):
 
         def _tick():
             try:
-                if os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
-                    os.remove("/tmp/vmm-a11y-createconn-remote-click")
+                if os.path.exists(uitest.path("vmm-a11y-createconn-remote-click")):
+                    os.remove(uitest.path("vmm-a11y-createconn-remote-click"))
                     chk = self.widget("connect-remote")
                     chk.set_active(not chk.get_active())
                     self.connect_remote_toggled(chk)
@@ -256,10 +257,10 @@ class vmmCreateConn(vmmGObjectUI):
             try:
                 # Wait until a pending remote toggle is applied so Connect
                 # cannot open a local URI and hang.
-                if os.path.exists("/tmp/vmm-a11y-createconn-remote-click"):
+                if os.path.exists(uitest.path("vmm-a11y-createconn-remote-click")):
                     return True
-                if os.path.exists("/tmp/vmm-a11y-createconn-connect"):
-                    os.remove("/tmp/vmm-a11y-createconn-connect")
+                if os.path.exists(uitest.path("vmm-a11y-createconn-connect")):
+                    os.remove(uitest.path("vmm-a11y-createconn-connect"))
                     self._apply_createconn_fields()
                     # Do not call open_conn here: val_err is modal and would
                     # block this source so later host.txt writes never apply.
@@ -267,15 +268,15 @@ class vmmCreateConn(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-createconn-cancel"):
-                    os.remove("/tmp/vmm-a11y-createconn-cancel")
+                if os.path.exists(uitest.path("vmm-a11y-createconn-cancel")):
+                    os.remove(uitest.path("vmm-a11y-createconn-cancel"))
                     self.cancel()
             except Exception:
                 pass
             return True
 
-        GLib.timeout_add(50, _fields_tick)
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _fields_tick)
+        uitest.poll_add(50, _tick)
 
     def _cleanup(self):
         pass
@@ -422,7 +423,7 @@ class vmmCreateConn(vmmGObjectUI):
         if is_remote and not host:
             msg = _("A hostname is required for remote connections.")
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
             except Exception:
                 pass
             return self.err.val_err(msg)

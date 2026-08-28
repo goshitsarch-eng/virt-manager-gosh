@@ -7,6 +7,7 @@
 
 import os
 import socket
+from ..lib import uitest
 
 from gi.repository import Gdk
 from gi.repository import GLib
@@ -23,14 +24,16 @@ except (ValueError, ImportError) as _GTKVNC_IMPORT_ERROR:  # pragma: no cover
 else:
     GTKVNC_IMPORT_ERROR = None
 
+# Python 3 unbinds the `except ... as NAME` target when the clause exits,
+# so the error text must be stashed under a different name to survive.
 try:
     gi.require_version("SpiceClientGLib", "2.0")
     from gi.repository import SpiceClientGLib
-except (ValueError, ImportError) as _SPICE_GLIB_IMPORT_ERROR:  # pragma: no cover
+except (ValueError, ImportError) as _e:  # pragma: no cover
     SpiceClientGLib = None
-    _SPICE_GLIB_IMPORT_ERROR = str(_SPICE_GLIB_IMPORT_ERROR)
+    SPICE_GLIB_IMPORT_ERROR = str(_e)
 else:
-    _SPICE_GLIB_IMPORT_ERROR = None
+    SPICE_GLIB_IMPORT_ERROR = None
 
 try:
     SPICE_GTK_IMPORT_ERROR = None
@@ -39,13 +42,13 @@ try:
 
     gi.require_version("SpiceClientGtk", "3.0")
     from gi.repository import SpiceClientGtk
-except (ValueError, ImportError) as _SPICE_GTK_IMPORT_ERROR:
+except (ValueError, ImportError) as _e:
     SpiceClientGtk = None
     if "VIRTINST_TEST_SUITE_FAKE_NO_SPICE" in os.environ:
         # Keep the GTK 3 test-suite error text on the console page.
-        SPICE_GTK_IMPORT_ERROR = str(_SPICE_GTK_IMPORT_ERROR)
+        SPICE_GTK_IMPORT_ERROR = str(_e)
     elif SpiceClientGLib is None:
-        SPICE_GTK_IMPORT_ERROR = _SPICE_GLIB_IMPORT_ERROR or str(_SPICE_GTK_IMPORT_ERROR)
+        SPICE_GTK_IMPORT_ERROR = SPICE_GLIB_IMPORT_ERROR or str(_e)
     else:
         # GTK 4 uses SpiceClientGLib + gtk4display.SpiceDisplay
         SPICE_GTK_IMPORT_ERROR = None
@@ -67,7 +70,7 @@ if _GTK4_DISPLAY:
 
 if SPICE_GTK_IMPORT_ERROR:
     try:
-        open("/tmp/vmm-a11y-spice-import.txt", "w").write(SPICE_GTK_IMPORT_ERROR)
+        open(uitest.path("vmm-a11y-spice-import.txt"), "w").write(SPICE_GTK_IMPORT_ERROR)
     except Exception:
         pass
 

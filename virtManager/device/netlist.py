@@ -12,6 +12,7 @@ from virtinst import log
 
 from ..lib import uiutil
 from ..baseclass import vmmGObjectUI
+from ..lib import uitest
 
 
 NET_ROW_LABEL = 0
@@ -401,7 +402,7 @@ class vmmNetworkList(vmmGObjectUI):
                 label = uiutil.get_list_selection(combo, column=NET_ROW_LABEL) or ""
             except Exception:
                 label = ""
-            open("/tmp/vmm-a11y-net-source.txt", "w").write(str(label))
+            open(uitest.path("vmm-a11y-net-source.txt"), "w").write(str(label))
             lines = []
             try:
                 model = combo.get_model()
@@ -412,18 +413,18 @@ class vmmNetworkList(vmmGObjectUI):
                             lines.append(text)
             except Exception:
                 pass
-            open("/tmp/vmm-a11y-combo-net-source.txt", "w").write("\n".join(lines))
+            open(uitest.path("vmm-a11y-combo-net-source.txt"), "w").write("\n".join(lines))
             try:
                 dev = self.widget("net-manual-source").get_text() or ""
             except Exception:
                 dev = ""
-            if not os.path.exists("/tmp/vmm-a11y-net-device.txt.set"):
-                open("/tmp/vmm-a11y-net-device.txt", "w").write(dev)
+            if not os.path.exists(uitest.path("vmm-a11y-net-device.txt.set")):
+                open(uitest.path("vmm-a11y-net-device.txt"), "w").write(dev)
             try:
                 warn = bool(self.widget("net-default-warn-box").get_visible())
             except Exception:
                 warn = False
-            open("/tmp/vmm-a11y-net-warn.txt", "w").write("1" if warn else "0")
+            open(uitest.path("vmm-a11y-net-warn.txt"), "w").write("1" if warn else "0")
         except Exception:
             pass
 

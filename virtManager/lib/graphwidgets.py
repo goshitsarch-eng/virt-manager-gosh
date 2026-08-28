@@ -62,6 +62,34 @@ def _theme_base_rgb(widget=None):
     return _adw_base_rgb()
 
 
+def _theme_border_rgba(widget=None):
+    """A subtle graph outline that reads on light *and* dark backgrounds.
+
+    GTK 3 hardcoded a light grey here. Against the Adwaita dark window
+    background that is a near-white box drawn around every sparkline, so
+    derive the outline from the fill it sits on instead.
+    """
+    if widget is not None and hasattr(widget, "get_style_context"):
+        try:
+            found, color = widget.get_style_context().lookup_color("borders")
+        except Exception:
+            found, color = False, None
+        if found and color is not None:
+            try:
+                return (
+                    float(color.red),
+                    float(color.green),
+                    float(color.blue),
+                    float(color.alpha),
+                )
+            except Exception:
+                pass
+    red, green, blue = _theme_base_rgb(widget)
+    luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
+    shade = 0.0 if luminance > 0.5 else 1.0
+    return shade, shade, shade, 0.22
+
+
 BASECOLOR = _RGB()
 
 
@@ -222,8 +250,8 @@ class CellRendererSparkline(Gtk.CellRenderer):
         # 1 == LINE_CAP_ROUND
         cr.set_line_cap(1)
 
-        # Draw gray graph border
-        cr.set_source_rgb(0.8828125, 0.8671875, 0.8671875)
+        # Draw the graph border
+        cr.set_source_rgba(*_theme_border_rgba(widget))
         cr.rectangle(
             cell_area.x + BORDER_PADDING,
             cell_area.y + BORDER_PADDING,

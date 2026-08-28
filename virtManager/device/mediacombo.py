@@ -9,6 +9,7 @@ from gi.repository import Gtk
 
 from ..lib import uiutil
 from ..baseclass import vmmGObject, vmmGObjectUI
+from ..lib import uitest
 
 
 class vmmMediaCombo(vmmGObjectUI):
@@ -169,7 +170,7 @@ class vmmMediaCombo(vmmGObjectUI):
         self._entry.set_text("")
         if getattr(self, "_vmm_media_owner", None) != "details":
             try:
-                open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
+                open(uitest.path("vmm-a11y-media-entry.txt"), "w").write("")
             except Exception:
                 pass
         model = self._combo.get_model()
@@ -200,7 +201,7 @@ class vmmMediaCombo(vmmGObjectUI):
                 label = row[self.MEDIA_FIELD_LABEL] or ""
                 if label:
                     labels.append(str(label))
-            open("/tmp/vmm-a11y-details-media-combo.txt", "w").write("\n".join(labels))
+            open(uitest.path("vmm-a11y-details-media-combo.txt"), "w").write("\n".join(labels))
         except Exception:
             pass
 
@@ -241,7 +242,7 @@ class vmmMediaCombo(vmmGObjectUI):
         owner = getattr(self, "_vmm_media_owner", None)
         if owner != "details":
             try:
-                browse = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+                browse = open(uitest.path("vmm-a11y-media-browse.txt"), "r").read().strip()
                 if browse:
                     if store_media and not browse.startswith("/dev"):
                         self.config.add_iso_path(browse)
@@ -249,7 +250,7 @@ class vmmMediaCombo(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                set_path = "/tmp/vmm-a11y-media-entry.txt.set"
+                set_path = uitest.path("vmm-a11y-media-entry.txt.set")
                 if os.path.exists(set_path):
                     sent = self._path_from_display(open(set_path, "r").read())
                     if sent and store_media and not sent.startswith("/dev"):
@@ -258,9 +259,9 @@ class vmmMediaCombo(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-media-entry.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-media-entry.txt")):
                     sent = self._path_from_display(
-                        open("/tmp/vmm-a11y-media-entry.txt", "r").read()
+                        open(uitest.path("vmm-a11y-media-entry.txt"), "r").read()
                     )
                     if sent:
                         if store_media and not sent.startswith("/dev"):
@@ -270,7 +271,7 @@ class vmmMediaCombo(vmmGObjectUI):
                 pass
         else:
             try:
-                set_path = "/tmp/vmm-a11y-details-media-entry.txt.set"
+                set_path = uitest.path("vmm-a11y-details-media-entry.txt.set")
                 if os.path.exists(set_path):
                     sent = self._path_from_display(open(set_path, "r").read())
                     if sent:
@@ -280,7 +281,7 @@ class vmmMediaCombo(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                browse = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+                browse = open(uitest.path("vmm-a11y-media-browse.txt"), "r").read().strip()
                 if browse:
                     if store_media and not browse.startswith("/dev"):
                         self.config.add_iso_path(browse)
@@ -294,7 +295,7 @@ class vmmMediaCombo(vmmGObjectUI):
                 return stored
             try:
                 sent = self._path_from_display(
-                    open("/tmp/vmm-a11y-details-media-path.txt", "r").read()
+                    open(uitest.path("vmm-a11y-details-media-path.txt"), "r").read()
                 )
                 if sent:
                     if store_media and not sent.startswith("/dev"):
@@ -304,7 +305,7 @@ class vmmMediaCombo(vmmGObjectUI):
                 pass
             try:
                 sent = self._path_from_display(
-                    open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
+                    open(uitest.path("vmm-a11y-details-media-entry.txt"), "r").read()
                 )
                 if sent:
                     if store_media and not sent.startswith("/dev"):
@@ -322,11 +323,11 @@ class vmmMediaCombo(vmmGObjectUI):
         path = self._path_from_display(path)
         self._a11y_path = path or ""
         try:
-            os.remove("/tmp/vmm-a11y-media-entry.txt.set")
+            os.remove(uitest.path("vmm-a11y-media-entry.txt.set"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-media-select.txt")
+            os.remove(uitest.path("vmm-a11y-media-select.txt"))
         except Exception:
             pass
         if path:
@@ -365,27 +366,27 @@ class vmmMediaCombo(vmmGObjectUI):
         owner = getattr(self, "_vmm_media_owner", None)
         customize = False
         try:
-            customize = open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+            customize = open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip() == "1"
         except Exception:
             customize = False
         pretty = displayed or path or ""
         try:
-            open("/tmp/vmm-a11y-details-media-path.txt", "w").write(path or "")
+            open(uitest.path("vmm-a11y-details-media-path.txt"), "w").write(path or "")
         except Exception:
             pass
         if owner == "details" or (customize and path and not str(path).startswith("/dev/")):
             try:
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(pretty)
+                open(uitest.path("vmm-a11y-details-media-entry.txt"), "w").write(pretty)
             except Exception:
                 pass
         elif owner != "details" and not customize:
             try:
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(pretty)
+                open(uitest.path("vmm-a11y-details-media-entry.txt"), "w").write(pretty)
             except Exception:
                 pass
         if owner != "details":
             try:
-                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path or "")
+                open(uitest.path("vmm-a11y-media-entry.txt"), "w").write(path or "")
             except Exception:
                 pass
 

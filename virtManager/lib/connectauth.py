@@ -19,6 +19,7 @@ from virtinst import log
 
 from ..baseclass import vmmGObjectUI
 from . import uiutil
+from . import uitest
 
 
 def do_we_have_session():
@@ -117,7 +118,7 @@ class _vmmConnectAuth(vmmGObjectUI):
         self._closed = True
         self.topwin.hide()
         try:
-            open("/tmp/vmm-a11y-connectauth-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-connectauth-shown.txt"), "w").write("0")
         except Exception:
             pass
 
@@ -150,7 +151,7 @@ class _vmmConnectAuth(vmmGObjectUI):
         return fallback
 
     def _a11y_text(self, key):
-        path = "/tmp/vmm-a11y-connectauth-%s.txt" % key
+        path = uitest.path("vmm-a11y-connectauth-%s.txt") % key
         try:
             return open(path, "r").read()
         except Exception:
@@ -158,21 +159,21 @@ class _vmmConnectAuth(vmmGObjectUI):
 
     def _apply_pending_a11y_text(self):
         try:
-            path = "/tmp/vmm-a11y-connectauth-user.txt.set"
+            path = uitest.path("vmm-a11y-connectauth-user.txt.set")
             if os.path.exists(path):
                 text = open(path, "r").read()
                 os.remove(path)
                 self.entry1.set_text(text)
-                open("/tmp/vmm-a11y-connectauth-user.txt", "w").write(text)
+                open(uitest.path("vmm-a11y-connectauth-user.txt"), "w").write(text)
         except Exception:
             pass
         try:
-            path = "/tmp/vmm-a11y-connectauth-pass.txt.set"
+            path = uitest.path("vmm-a11y-connectauth-pass.txt.set")
             if os.path.exists(path):
                 text = open(path, "r").read()
                 os.remove(path)
                 self.entry2.set_text(text)
-                open("/tmp/vmm-a11y-connectauth-pass.txt", "w").write(text)
+                open(uitest.path("vmm-a11y-connectauth-pass.txt"), "w").write(text)
         except Exception:
             pass
         user = self.entry1.get_text() or self._a11y_text("user")
@@ -184,10 +185,10 @@ class _vmmConnectAuth(vmmGObjectUI):
 
     def _clear_a11y_inputs(self):
         for path in (
-            "/tmp/vmm-a11y-connectauth-action.txt",
-            "/tmp/vmm-a11y-connectauth-activate",
-            "/tmp/vmm-a11y-connectauth-user.txt.set",
-            "/tmp/vmm-a11y-connectauth-pass.txt.set",
+            uitest.path("vmm-a11y-connectauth-action.txt"),
+            uitest.path("vmm-a11y-connectauth-activate"),
+            uitest.path("vmm-a11y-connectauth-user.txt.set"),
+            uitest.path("vmm-a11y-connectauth-pass.txt.set"),
         ):
             try:
                 os.remove(path)
@@ -206,10 +207,10 @@ class _vmmConnectAuth(vmmGObjectUI):
                 self.entry2, self._entry_a11y_name(self.entry2, "Password: entry")
             )
             self._clear_a11y_inputs()
-            open("/tmp/vmm-a11y-connectauth-user.txt", "w").write("")
-            open("/tmp/vmm-a11y-connectauth-pass.txt", "w").write("")
-            open("/tmp/vmm-a11y-connectauth-shown.txt", "w").write("1")
-            open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("user")
+            open(uitest.path("vmm-a11y-connectauth-user.txt"), "w").write("")
+            open(uitest.path("vmm-a11y-connectauth-pass.txt"), "w").write("")
+            open(uitest.path("vmm-a11y-connectauth-shown.txt"), "w").write("1")
+            open(uitest.path("vmm-a11y-connectauth-focus.txt"), "w").write("user")
         except Exception:
             pass
 
@@ -222,28 +223,28 @@ class _vmmConnectAuth(vmmGObjectUI):
             if getattr(self, "_closed", False):
                 return False
             try:
-                if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() != "1":
+                if open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() != "1":
                     return not getattr(self, "_closed", False)
             except Exception:
                 return not getattr(self, "_closed", False)
             self._apply_pending_a11y_text()
             try:
-                if os.path.exists("/tmp/vmm-a11y-connectauth-activate"):
-                    os.remove("/tmp/vmm-a11y-connectauth-activate")
+                if os.path.exists(uitest.path("vmm-a11y-connectauth-activate")):
+                    os.remove(uitest.path("vmm-a11y-connectauth-activate"))
                     focus = "user"
                     try:
-                        focus = open("/tmp/vmm-a11y-connectauth-focus.txt", "r").read().strip()
+                        focus = open(uitest.path("vmm-a11y-connectauth-focus.txt"), "r").read().strip()
                     except Exception:
                         focus = "user"
                     src = self.entry2 if focus == "pass" else self.entry1
                     self._entry_cb(src)
                     if src == self.entry1 and self._passphrase_row_active():
-                        open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("pass")
+                        open(uitest.path("vmm-a11y-connectauth-focus.txt"), "w").write("pass")
             except Exception:
                 pass
             try:
-                action = open("/tmp/vmm-a11y-connectauth-action.txt", "r").read().strip()
-                os.remove("/tmp/vmm-a11y-connectauth-action.txt")
+                action = open(uitest.path("vmm-a11y-connectauth-action.txt"), "r").read().strip()
+                os.remove(uitest.path("vmm-a11y-connectauth-action.txt"))
             except Exception:
                 action = ""
             try:
@@ -256,7 +257,7 @@ class _vmmConnectAuth(vmmGObjectUI):
             return not getattr(self, "_closed", False)
 
         self._vmm_auth_tick = _tick
-        GLib.timeout_add(50, self._vmm_auth_tick)
+        uitest.poll_add(50, self._vmm_auth_tick)
 
     def _ok_cb(self, src):
         self._apply_pending_a11y_text()
@@ -273,7 +274,7 @@ class _vmmConnectAuth(vmmGObjectUI):
         if src == self.entry1 and self._passphrase_row_active():
             self.entry2.grab_focus()
             try:
-                open("/tmp/vmm-a11y-connectauth-focus.txt", "w").write("pass")
+                open(uitest.path("vmm-a11y-connectauth-focus.txt"), "w").write("pass")
             except Exception:
                 pass
             return

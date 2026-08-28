@@ -34,6 +34,7 @@ except (ValueError, ImportError):  # pragma: no cover
     GdkPixbuf = None
 
 from virtinst import log
+from ..lib import uitest
 
 # RFB / SPICE button bits: 1=left, 2=middle, 3=right, 4/5=wheel, 6/7=horiz
 _BUTTON_BITS = {1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32, 7: 64}
@@ -2031,7 +2032,7 @@ class VNCDisplay(_DisplayBase):
         ntypes = self._recv_n(sock, 1)[0]
         types = self._recv_n(sock, ntypes)
         try:
-            open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+            open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                 "vnc-sec-types %s\n" % list(types)
             )
         except Exception:
@@ -2204,7 +2205,7 @@ class VNCDisplay(_DisplayBase):
             values = [0, 1]
         if (username and not self._username) or not self._password:
             try:
-                open("/tmp/vmm-a11y-console-error-hist.txt", "a").write(
+                open(uitest.path("vmm-a11y-console-error-hist.txt"), "a").write(
                     "vnc-need-creds username=%s\n" % username
                 )
             except Exception:
@@ -2595,7 +2596,7 @@ class VNCDisplay(_DisplayBase):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-clipboard.txt", "w").write(text)
+            open(uitest.path("vmm-a11y-clipboard.txt"), "w").write(text)
         except Exception:
             pass
         GLib.timeout_add(250, self._clear_vnc_clip_from_guest)

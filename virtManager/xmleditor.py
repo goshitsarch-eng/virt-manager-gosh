@@ -34,6 +34,7 @@ if have_gtksourceview:
 from .lib import gtkcompat
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
+from .lib import uitest
 
 _PAGE_DETAILS = 0
 _PAGE_XML = 1
@@ -82,7 +83,7 @@ class vmmXMLEditor(vmmGObjectUI):
         self._srcview.set_editable(enabled)
         uiutil.set_grid_row_visible(self.widget("xml-warning-box"), not enabled)
         try:
-            open("/tmp/vmm-a11y-xml-disabled.txt", "w").write("1" if not enabled else "0")
+            open(uitest.path("vmm-a11y-xml-disabled.txt"), "w").write("1" if not enabled else "0")
         except Exception:
             pass
         key = "xml-editor-%s" % id(self)
@@ -144,13 +145,13 @@ class vmmXMLEditor(vmmGObjectUI):
 
             def _poll_xml_tab():
                 try:
-                    resp = "/tmp/vmm-a11y-alert-response.txt"
+                    resp = uitest.path("vmm-a11y-alert-response.txt")
                     if getattr(self, "_vmm_details_leave_pending", False) and os.path.exists(resp):
                         answer = open(resp, "r").read().strip().lower()
                         os.remove(resp)
                         self._vmm_details_leave_pending = False
                         try:
-                            os.remove("/tmp/vmm-a11y-alert.txt")
+                            os.remove(uitest.path("vmm-a11y-alert.txt"))
                         except Exception:
                             pass
                         if answer == "yes":
@@ -166,7 +167,7 @@ class vmmXMLEditor(vmmGObjectUI):
                         os.remove(resp)
                         self._vmm_xml_leave_pending = False
                         try:
-                            os.remove("/tmp/vmm-a11y-alert.txt")
+                            os.remove(uitest.path("vmm-a11y-alert.txt"))
                         except Exception:
                             pass
                         if answer == "yes":
@@ -177,7 +178,7 @@ class vmmXMLEditor(vmmGObjectUI):
                         self._publish_xml_a11y()
                 except Exception:
                     pass
-                path = "/tmp/vmm-a11y-xml-tab.txt"
+                path = uitest.path("vmm-a11y-xml-tab.txt")
                 try:
                     if not os.path.exists(path):
                         # Only clear a leftover addhw XML page. A general
@@ -190,13 +191,13 @@ class vmmXMLEditor(vmmGObjectUI):
                         ):
                             try:
                                 addhw = open(
-                                    "/tmp/vmm-a11y-addhw-shown.txt", "r"
+                                    uitest.path("vmm-a11y-addhw-shown.txt"), "r"
                                 ).read().strip()
                             except Exception:
                                 addhw = "0"
                             try:
                                 got = open(
-                                    "/tmp/vmm-a11y-xml-page.txt", "r"
+                                    uitest.path("vmm-a11y-xml-page.txt"), "r"
                                 ).read().strip()
                             except Exception:
                                 got = ""
@@ -214,12 +215,12 @@ class vmmXMLEditor(vmmGObjectUI):
                         # Apply pending editor text before leaving XML so
                         # unapplied-change confirmation sees the edit.
                         try:
-                            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+                            pending = open(uitest.path("vmm-a11y-xml.txt"), "r").read()
                         except Exception:
                             pending = ""
                         if pending:
                             try:
-                                os.remove("/tmp/vmm-a11y-xml.txt")
+                                os.remove(uitest.path("vmm-a11y-xml.txt"))
                             except Exception:
                                 pass
                             if (self.get_xml() or "") != pending:
@@ -227,14 +228,14 @@ class vmmXMLEditor(vmmGObjectUI):
                         if (self._srcxml or "") != (self.get_xml() or ""):
                             self._vmm_xml_leave_pending = True
                             try:
-                                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                                open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                                     "There are unapplied changes. "
                                     "Your XML changes will be lost if you leave this tab."
                                 )
                             except Exception:
                                 pass
                             try:
-                                open("/tmp/vmm-a11y-xml.txt", "w").write(
+                                open(uitest.path("vmm-a11y-xml.txt"), "w").write(
                                     self.get_xml() or pending
                                 )
                             except Exception:
@@ -245,7 +246,7 @@ class vmmXMLEditor(vmmGObjectUI):
                         if self.details_changed:
                             self._vmm_details_leave_pending = True
                             try:
-                                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                                open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                                     "There are unapplied changes. "
                                     "Your changes will be lost if you leave this tab."
                                 )
@@ -269,7 +270,7 @@ class vmmXMLEditor(vmmGObjectUI):
                 return True
 
             self._vmm_xml_tab_poll_cb = _poll_xml_tab
-            GLib.timeout_add(50, self._vmm_xml_tab_poll_cb)
+            uitest.poll_add(50, self._vmm_xml_tab_poll_cb)
 
     ####################
     # Internal helpers #
@@ -352,7 +353,7 @@ class vmmXMLEditor(vmmGObjectUI):
         xml = self.get_xml() or ""
         if "<FOO" in xml:
             return xml
-        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+        for path in (uitest.path("vmm-a11y-xml.txt"), uitest.path("vmm-a11y-xml-contents.txt")):
             try:
                 pending = open(path, "r").read()
             except Exception:
@@ -416,10 +417,10 @@ class vmmXMLEditor(vmmGObjectUI):
         owner = getattr(self, "_vmm_a11y_owner", None)
         wizard = None
         for name, path in (
-            ("createpool", "/tmp/vmm-a11y-createpool-shown.txt"),
-            ("createvol", "/tmp/vmm-a11y-createvol-shown.txt"),
-            ("createnet", "/tmp/vmm-a11y-createnet-shown.txt"),
-            ("addhw", "/tmp/vmm-a11y-addhw-shown.txt"),
+            ("createpool", uitest.path("vmm-a11y-createpool-shown.txt")),
+            ("createvol", uitest.path("vmm-a11y-createvol-shown.txt")),
+            ("createnet", uitest.path("vmm-a11y-createnet-shown.txt")),
+            ("addhw", uitest.path("vmm-a11y-addhw-shown.txt")),
         ):
             try:
                 if open(path, "r").read().strip() == "1":
@@ -430,11 +431,11 @@ class vmmXMLEditor(vmmGObjectUI):
         if wizard:
             return owner == wizard
         try:
-            shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-host-shown.txt"), "r").read().strip()
         except Exception:
             shown = ""
         try:
-            which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+            which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
         except Exception:
             which = ""
         if owner:
@@ -447,7 +448,7 @@ class vmmXMLEditor(vmmGObjectUI):
         if not self._xml_a11y_owns_sentinels():
             return
         try:
-            open("/tmp/vmm-a11y-xml-page.txt", "w").write(
+            open(uitest.path("vmm-a11y-xml-page.txt"), "w").write(
                 "1" if self._curpage == _PAGE_XML else "0"
             )
         except Exception:
@@ -456,12 +457,12 @@ class vmmXMLEditor(vmmGObjectUI):
             xml = self.get_xml() or self._srcxml or ""
             if not (xml or "").strip():
                 try:
-                    existing = open("/tmp/vmm-a11y-xml-contents.txt", "r").read()
+                    existing = open(uitest.path("vmm-a11y-xml-contents.txt"), "r").read()
                 except Exception:
                     existing = ""
                 if existing.strip():
                     return
-            open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml)
+            open(uitest.path("vmm-a11y-xml-contents.txt"), "w").write(xml)
         except Exception:
             pass
 

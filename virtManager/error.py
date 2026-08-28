@@ -16,6 +16,7 @@ from virtinst import log
 
 from .baseclass import vmmGObject
 from .lib import gtkcompat
+from .lib import uitest
 
 
 def _launch_dialog(
@@ -51,14 +52,14 @@ def _launch_dialog(
     # "Are you sure..." before chkbox_helper, and the test may answer first).
     incoming = incoming_full
     try:
-        existing = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        existing = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
         if "name must be specified" in existing.lower():
             incoming = existing
     except Exception:
         pass
     try:
-        resp = "/tmp/vmm-a11y-alert-response.txt"
-        alert = "/tmp/vmm-a11y-alert.txt"
+        resp = uitest.path("vmm-a11y-alert-response.txt")
+        alert = uitest.path("vmm-a11y-alert.txt")
         keep = False
         if os.path.exists(resp) and os.path.exists(alert):
             existing = open(alert, "r").read()
@@ -71,7 +72,7 @@ def _launch_dialog(
     except Exception:
         pass
     try:
-        open("/tmp/vmm-a11y-alert.txt", "w").write(incoming)
+        open(uitest.path("vmm-a11y-alert.txt"), "w").write(incoming)
     except Exception:
         pass
 
@@ -322,15 +323,15 @@ class vmmErrorDialog(vmmGObject):
         # the CheckButton is realized. Honor that so the next leave
         # (testDetailsMiscEdits line 731) abandons without a prompt.
         try:
-            if os.path.exists("/tmp/vmm-a11y-dont-warn-unapplied.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-dont-warn-unapplied.txt")):
                 self.config.set_confirm_unapplied(False)
         except Exception:
             pass
         try:
-            alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+            alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
             if "unapplied" in alert and (
-                os.path.exists("/tmp/vmm-a11y-alert-checked.txt")
-                or os.path.exists("/tmp/vmm-a11y-alert-check.txt")
+                os.path.exists(uitest.path("vmm-a11y-alert-checked.txt"))
+                or os.path.exists(uitest.path("vmm-a11y-alert-check.txt"))
             ):
                 self.config.set_confirm_unapplied(False)
         except Exception:
@@ -338,7 +339,7 @@ class vmmErrorDialog(vmmGObject):
         if not self.config.get_confirm_unapplied():
             return False
         try:
-            open("/tmp/vmm-a11y-unapplied-prompt.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-unapplied-prompt.txt"), "w").write("1")
         except Exception:
             pass
         try:
@@ -351,7 +352,7 @@ class vmmErrorDialog(vmmGObject):
             )
         finally:
             try:
-                os.remove("/tmp/vmm-a11y-unapplied-prompt.txt")
+                os.remove(uitest.path("vmm-a11y-unapplied-prompt.txt"))
             except Exception:
                 pass
 
@@ -671,11 +672,11 @@ class _errorDialog(Gtk.Window):
             self.chk_vbox.set_visible(True)
             chkbox.show()
             try:
-                os.remove("/tmp/vmm-a11y-alert-checked.txt")
+                os.remove(uitest.path("vmm-a11y-alert-checked.txt"))
             except Exception:
                 pass
             try:
-                os.remove("/tmp/vmm-a11y-alert-check.txt")
+                os.remove(uitest.path("vmm-a11y-alert-check.txt"))
             except Exception:
                 pass
 
@@ -692,19 +693,19 @@ class _errorDialog(Gtk.Window):
         if chktext:
             checked = bool(chkbox.get_active())
             try:
-                if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-alert-checked.txt")):
                     checked = True
-                    os.remove("/tmp/vmm-a11y-alert-checked.txt")
+                    os.remove(uitest.path("vmm-a11y-alert-checked.txt"))
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-dont-warn-unapplied.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-dont-warn-unapplied.txt")):
                     checked = True
             except Exception:
                 pass
             if checked and chktext and "warn" in (chktext or "").lower():
                 try:
-                    open("/tmp/vmm-a11y-dont-warn-unapplied.txt", "w").write("1")
+                    open(uitest.path("vmm-a11y-dont-warn-unapplied.txt"), "w").write("1")
                 except Exception:
                     pass
             res = [res, checked]

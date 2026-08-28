@@ -11,11 +11,13 @@ from gi.repository import Gio
 from gi.repository import GLib
 from gi.repository import Gtk
 
-_A11Y_SHOWN = "/tmp/vmm-a11y-systray-shown.txt"
-_A11Y_MENU = "/tmp/vmm-a11y-systray-menu.txt"
-_A11Y_ITEMS = "/tmp/vmm-a11y-systray-menu-items.txt"
-_A11Y_CLICK = "/tmp/vmm-a11y-systray-click.txt"
-_A11Y_ACTION = "/tmp/vmm-a11y-systray-action.txt"
+from .lib import uitest
+
+_A11Y_SHOWN = uitest.path("vmm-a11y-systray-shown.txt")
+_A11Y_MENU = uitest.path("vmm-a11y-systray-menu.txt")
+_A11Y_ITEMS = uitest.path("vmm-a11y-systray-menu-items.txt")
+_A11Y_CLICK = uitest.path("vmm-a11y-systray-click.txt")
+_A11Y_ACTION = uitest.path("vmm-a11y-systray-action.txt")
 
 from virtinst import log
 from virtinst import xmlutil
@@ -55,12 +57,12 @@ def _toggle_manager(*args, **kwargs):
 
     manager = vmmManager.get_instance(None)
     shown = manager.is_visible()
-    file_shown = _a11y_read("/tmp/vmm-a11y-manager-shown.txt")
+    file_shown = _a11y_read(uitest.path("vmm-a11y-manager-shown.txt"))
     if file_shown in ("0", "1"):
         shown = file_shown != "0"
     if shown:
         manager.close()
-        _a11y_write("/tmp/vmm-a11y-manager-shown.txt", "0")
+        _a11y_write(uitest.path("vmm-a11y-manager-shown.txt"), "0")
         try:
             if manager.topwin is not None:
                 manager.topwin.set_visible(False)
@@ -886,16 +888,16 @@ class _SystrayWindow(_Systray):
         def _escape_tick():
             if _a11y_read(_A11Y_MENU) != "1":
                 return True
-            if _a11y_read("/tmp/vmm-a11y-systray-escape"):
+            if _a11y_read(uitest.path("vmm-a11y-systray-escape")):
                 try:
-                    os.remove("/tmp/vmm-a11y-systray-escape")
+                    os.remove(uitest.path("vmm-a11y-systray-escape"))
                 except Exception:
                     pass
                 self._hide_menu()
             return True
 
-        GLib.timeout_add(50, _click_tick)
-        GLib.timeout_add(50, _escape_tick)
+        uitest.poll_add(50, _click_tick)
+        uitest.poll_add(50, _escape_tick)
 
 
 class _TrayMainMenu(vmmGObject):
@@ -1357,5 +1359,5 @@ class vmmSystray(vmmGObject):
                 self._publish_a11y_menu()
             return True
 
-        GLib.timeout_add(50, _action_tick)
-        GLib.timeout_add(200, _items_tick)
+        uitest.poll_add(50, _action_tick)
+        uitest.poll_add(200, _items_tick)

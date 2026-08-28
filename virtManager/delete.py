@@ -20,6 +20,7 @@ from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .lib import gtkcompat
 from .lib import uiutil
+from .lib import uitest
 
 STORAGE_ROW_CONFIRM = 0
 STORAGE_ROW_CANT_DELETE = 1
@@ -111,8 +112,8 @@ class _vmmDeleteBase(vmmGObjectUI):
             gtkcompat.ensure_button_accessible_name(
                 self.widget("delete-ok"), "Delete"
             )
-            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
-            open("/tmp/vmm-a11y-delete-title.txt", "w").write(title)
+            open(uitest.path("vmm-a11y-delete-shown.txt"), "w").write("1")
+            open(uitest.path("vmm-a11y-delete-title.txt"), "w").write(title)
         except Exception:
             pass
         self.topwin.present()
@@ -136,7 +137,7 @@ class _vmmDeleteBase(vmmGObjectUI):
             pass
         try:
             if _vmmDeleteBase._active_dialog() is None:
-                open("/tmp/vmm-a11y-delete-shown.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-delete-shown.txt"), "w").write("0")
         except Exception:
             pass
         return 1
@@ -199,7 +200,7 @@ class _vmmDeleteBase(vmmGObjectUI):
         except Exception:
             widget_val = False
         try:
-            val = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip().lower()
+            val = open(uitest.path("vmm-a11y-delete-associated.txt"), "r").read().strip().lower()
         except Exception:
             val = ""
         if val in ("0", "false", "off", "no", "1", "true", "on", "yes"):
@@ -238,7 +239,7 @@ class _vmmDeleteBase(vmmGObjectUI):
             active = bool(chk.get_active())
             try:
                 pending = open(
-                    "/tmp/vmm-a11y-delete-associated.txt", "r"
+                    uitest.path("vmm-a11y-delete-associated.txt"), "r"
                 ).read().strip().lower()
             except Exception:
                 pending = ""
@@ -246,11 +247,11 @@ class _vmmDeleteBase(vmmGObjectUI):
                 chk.set_active(pending == "1")
                 active = pending == "1"
             else:
-                open("/tmp/vmm-a11y-delete-associated.txt", "w").write(
+                open(uitest.path("vmm-a11y-delete-associated.txt"), "w").write(
                     "1" if active else "0"
                 )
-            open("/tmp/vmm-a11y-delete-shown.txt", "w").write("1")
-            open("/tmp/vmm-a11y-delete-title.txt", "w").write(self._a11y_window_title())
+            open(uitest.path("vmm-a11y-delete-shown.txt"), "w").write("1")
+            open(uitest.path("vmm-a11y-delete-title.txt"), "w").write(self._a11y_window_title())
             gtkcompat.sync_accessible_checked(chk)
         except Exception:
             pass
@@ -267,7 +268,7 @@ class _vmmDeleteBase(vmmGObjectUI):
                         "1" if row[STORAGE_ROW_CANT_DELETE] else "0",
                     )
                 )
-            open("/tmp/vmm-a11y-delete-storage.txt", "w").write("\n".join(lines))
+            open(uitest.path("vmm-a11y-delete-storage.txt"), "w").write("\n".join(lines))
         except Exception:
             pass
 
@@ -288,7 +289,7 @@ class _vmmDeleteBase(vmmGObjectUI):
             if not getattr(self, "_vmm_delete_a11y_poll", False):
                 return False
             try:
-                path = "/tmp/vmm-a11y-delete-finish"
+                path = uitest.path("vmm-a11y-delete-finish")
                 if os.path.exists(path):
                     if self.vm is None:
                         return True
@@ -297,14 +298,14 @@ class _vmmDeleteBase(vmmGObjectUI):
                     return True
             except Exception as exc:
                 try:
-                    open("/tmp/vmm-a11y-delete-debug.txt", "a").write(
+                    open(uitest.path("vmm-a11y-delete-debug.txt"), "a").write(
                         "finish exc=%s\n" % exc
                     )
                 except Exception:
                     pass
                 return True
             try:
-                path = "/tmp/vmm-a11y-delete-close"
+                path = uitest.path("vmm-a11y-delete-close")
                 if os.path.exists(path):
                     os.remove(path)
                     self.close()
@@ -319,7 +320,7 @@ class _vmmDeleteBase(vmmGObjectUI):
             except Exception:
                 return True
             try:
-                want = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip()
+                want = open(uitest.path("vmm-a11y-delete-associated.txt"), "r").read().strip()
                 chk = self.widget("delete-remove-storage")
                 if want in ("0", "1") and bool(chk.get_active()) != (want == "1"):
                     chk.set_active(want == "1")
@@ -327,7 +328,7 @@ class _vmmDeleteBase(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-delete-row-toggle.txt"
+                path = uitest.path("vmm-a11y-delete-row-toggle.txt")
                 if os.path.exists(path):
                     target = open(path, "r").read().strip()
                     os.remove(path)
@@ -341,7 +342,7 @@ class _vmmDeleteBase(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-delete-close"
+                path = uitest.path("vmm-a11y-delete-close")
                 if os.path.exists(path):
                     os.remove(path)
                     self.close()
@@ -350,7 +351,7 @@ class _vmmDeleteBase(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _tick)
 
     ################
     # UI listeners #
@@ -367,7 +368,7 @@ class _vmmDeleteBase(vmmGObjectUI):
         dodel = src.get_active()
         uiutil.set_grid_row_visible(self.widget("delete-storage-scroll"), dodel)
         try:
-            open("/tmp/vmm-a11y-delete-associated.txt", "w").write("1" if dodel else "0")
+            open(uitest.path("vmm-a11y-delete-associated.txt"), "w").write("1" if dodel else "0")
             gtkcompat.sync_accessible_checked(src)
         except Exception:
             pass
@@ -382,7 +383,7 @@ class _vmmDeleteBase(vmmGObjectUI):
 
         file_rows = {}
         try:
-            for line in open("/tmp/vmm-a11y-delete-storage.txt", "r").read().splitlines():
+            for line in open(uitest.path("vmm-a11y-delete-storage.txt"), "r").read().splitlines():
                 parts = line.split("\t")
                 if len(parts) >= 3:
                     file_rows[parts[0]] = parts[2] in ("1", "true", "yes")
@@ -408,14 +409,14 @@ class _vmmDeleteBase(vmmGObjectUI):
         else:
             try:
                 deleted = set()
-                for line in open("/tmp/vmm-a11y-delete-storage.txt", "r").read().splitlines():
+                for line in open(uitest.path("vmm-a11y-delete-storage.txt"), "r").read().splitlines():
                     parts = line.split("\t")
                     if len(parts) >= 3 and parts[2] in ("1", "true", "yes"):
                         deleted.add(os.path.basename(parts[0]))
                 if deleted and self._associated_active():
                     for path in (
-                        "/tmp/vmm-a11y-extra-vols.txt",
-                        "/tmp/vmm-a11y-vol-list.txt",
+                        uitest.path("vmm-a11y-extra-vols.txt"),
+                        uitest.path("vmm-a11y-vol-list.txt"),
                     ):
                         try:
                             names = [
@@ -535,13 +536,13 @@ class _vmmDeleteBase(vmmGObjectUI):
         try:
             names = []
             try:
-                names = open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines()
+                names = open(uitest.path("vmm-a11y-deleted-vols.txt"), "r").read().splitlines()
             except Exception:
                 names = []
             base = os.path.basename(path)
             if base and base not in names:
                 names.append(base)
-            open("/tmp/vmm-a11y-deleted-vols.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-deleted-vols.txt"), "w").write("\n".join(names))
         except Exception:
             pass
 
@@ -635,24 +636,24 @@ class vmmDeleteDialog(_vmmDeleteBase):
                 vm.delete()
         finally:
             try:
-                created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+                created = open(uitest.path("vmm-a11y-created-vm.txt"), "r").read().strip()
                 if created and (not name or created == name):
-                    os.remove("/tmp/vmm-a11y-created-vm.txt")
+                    os.remove(uitest.path("vmm-a11y-created-vm.txt"))
             except Exception:
                 pass
             try:
-                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                 if shown and (not name or shown == name):
-                    os.remove("/tmp/vmm-a11y-vmwindow.txt")
+                    os.remove(uitest.path("vmm-a11y-vmwindow.txt"))
             except Exception:
                 pass
             try:
                 names = [
                     n
-                    for n in open("/tmp/vmm-a11y-vm-list.txt", "r").read().splitlines()
+                    for n in open(uitest.path("vmm-a11y-vm-list.txt"), "r").read().splitlines()
                     if n and n != name
                 ]
-                open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+                open(uitest.path("vmm-a11y-vm-list.txt"), "w").write("\n".join(names))
             except Exception:
                 pass
 
@@ -671,7 +672,7 @@ class vmmDeleteStorage(_vmmDeleteBase):
     @staticmethod
     def remove_devobj_internal(vm, err, devobj, deleting_storage=False):
         try:
-            open("/tmp/vmm-a11y-delete-debug.txt", "w").write(
+            open(uitest.path("vmm-a11y-delete-debug.txt"), "w").write(
                 "remove start active=%s uri=%s\n"
                 % (
                     getattr(vm, "is_active", lambda: None)(),
@@ -710,7 +711,7 @@ class vmmDeleteStorage(_vmmDeleteBase):
             if not running:
                 try:
                     running = (
-                        open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip()
+                        open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "r").read().strip()
                         == "0"
                     )
                 except Exception:
@@ -727,7 +728,7 @@ class vmmDeleteStorage(_vmmDeleteBase):
         associated = deleting_storage
         if not associated:
             try:
-                associated = open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+                associated = open(uitest.path("vmm-a11y-delete-associated.txt"), "r").read().strip() in (
                     "1",
                     "true",
                     "yes",
@@ -740,7 +741,7 @@ class vmmDeleteStorage(_vmmDeleteBase):
             msg += _("Storage will not be deleted.")
 
         try:
-            open("/tmp/vmm-a11y-alert.txt", "w").write(
+            open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                 "%s\n%s" % (_("Device could not be removed from the running machine"), msg)
             )
         except Exception:
@@ -787,7 +788,7 @@ class vmmDeleteStorage(_vmmDeleteBase):
         except Exception:
             pass
         try:
-            return open("/tmp/vmm-a11y-vm-run-sensitive.txt", "r").read().strip() == "0"
+            return open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "r").read().strip() == "0"
         except Exception:
             return False
 

@@ -13,6 +13,7 @@ from virtinst import log
 
 from ..lib import uiutil
 from ..baseclass import vmmGObjectUI
+from ..lib import uitest
 
 (
     _EDIT_CACHE,
@@ -26,8 +27,8 @@ from ..baseclass import vmmGObjectUI
 
 def _a11y_alert_checked():
     try:
-        if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
-            os.remove("/tmp/vmm-a11y-alert-checked.txt")
+        if os.path.exists(uitest.path("vmm-a11y-alert-checked.txt")):
+            os.remove(uitest.path("vmm-a11y-alert-checked.txt"))
             return True
     except Exception:
         pass
@@ -320,7 +321,7 @@ class vmmAddStorage(vmmGObjectUI):
                 "names": names,
             }
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
             except Exception:
                 pass
             # Official uitests answer via sentinels so modal dialog.run()
@@ -328,25 +329,25 @@ class vmmAddStorage(vmmGObjectUI):
             # env) must always show the GTK 3 yes/no prompt. Do not use
             # pagenum.txt as the gate: the wizard writes that for every
             # user after the first page change.
-            allow = os.path.exists("/tmp/vmm-a11y-disk-inuse-allow")
+            allow = os.path.exists(uitest.path("vmm-a11y-disk-inuse-allow"))
             resp = ""
             try:
-                if os.path.exists("/tmp/vmm-a11y-alert-response.txt"):
-                    resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip()
-                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+                if os.path.exists(uitest.path("vmm-a11y-alert-response.txt")):
+                    resp = open(uitest.path("vmm-a11y-alert-response.txt"), "r").read().strip()
+                    os.remove(uitest.path("vmm-a11y-alert-response.txt"))
             except Exception:
                 resp = ""
             if resp.lower() in ("yes", "ok"):
                 allow = True
                 try:
-                    open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                    open(uitest.path("vmm-a11y-disk-inuse-allow"), "w").write("1")
                 except Exception:
                     pass
             elif resp.lower() in ("no", "cancel"):
                 return False
             if allow:
                 try:
-                    os.remove("/tmp/vmm-a11y-alert.txt")
+                    os.remove(uitest.path("vmm-a11y-alert.txt"))
                 except Exception:
                     pass
             elif os.environ.get("VIRTINST_TEST_SUITE"):
@@ -355,18 +356,18 @@ class vmmAddStorage(vmmGObjectUI):
                 # the later Yes never attached the volume.
                 deadline = time.time() + 8
                 while time.time() < deadline and not allow:
-                    if os.path.exists("/tmp/vmm-a11y-disk-inuse-allow"):
+                    if os.path.exists(uitest.path("vmm-a11y-disk-inuse-allow")):
                         allow = True
                         break
                     try:
-                        if os.path.exists("/tmp/vmm-a11y-alert-response.txt"):
+                        if os.path.exists(uitest.path("vmm-a11y-alert-response.txt")):
                             resp = open(
-                                "/tmp/vmm-a11y-alert-response.txt", "r"
+                                uitest.path("vmm-a11y-alert-response.txt"), "r"
                             ).read().strip()
-                            os.remove("/tmp/vmm-a11y-alert-response.txt")
+                            os.remove(uitest.path("vmm-a11y-alert-response.txt"))
                             if resp.lower() in ("yes", "ok"):
                                 allow = True
-                                open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                                open(uitest.path("vmm-a11y-disk-inuse-allow"), "w").write("1")
                                 break
                             if resp.lower() in ("no", "cancel"):
                                 return False
@@ -375,7 +376,7 @@ class vmmAddStorage(vmmGObjectUI):
                     time.sleep(0.05)
                 if allow:
                     try:
-                        os.remove("/tmp/vmm-a11y-alert.txt")
+                        os.remove(uitest.path("vmm-a11y-alert.txt"))
                     except Exception:
                         pass
                 else:
@@ -407,7 +408,7 @@ class vmmAddStorage(vmmGObjectUI):
         pending_cache = bool(getattr(self, "_a11y_cache_override", None))
         try:
             pending_cache = pending_cache and (
-                open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip()
                 == "1"
             )
         except Exception:
@@ -435,7 +436,7 @@ class vmmAddStorage(vmmGObjectUI):
         # user abandoned the edit (testDetailsMiscEdits start-VM).
         pending_share = _EDIT_SHARE in (self._active_edits or [])
         try:
-            if os.path.exists("/tmp/vmm-a11y-disk-shareable.txt.click"):
+            if os.path.exists(uitest.path("vmm-a11y-disk-shareable.txt.click")):
                 pending_share = True
         except Exception:
             pass
@@ -444,10 +445,10 @@ class vmmAddStorage(vmmGObjectUI):
         self.widget("disk-removable").set_active(removable)
         try:
             if not pending_share:
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
+                open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write(
                     "1" if share else "0"
                 )
-            open("/tmp/vmm-a11y-disk-readonly.txt", "w").write("1" if ro else "0")
+            open(uitest.path("vmm-a11y-disk-readonly.txt"), "w").write("1" if ro else "0")
         except Exception:
             pass
 
