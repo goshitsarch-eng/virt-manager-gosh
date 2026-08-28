@@ -11,6 +11,7 @@ Run from the repo root:
 import glob
 import os
 import sys
+import tempfile
 import time
 import traceback
 
@@ -20,12 +21,18 @@ os.chdir(TOPDIR)
 
 os.environ.setdefault("GSETTINGS_BACKEND", "memory")
 os.environ.setdefault("VIRTINST_TEST_SUITE", "1")
+# Turn the ui-test sentinel machinery on, in a private directory.
+os.environ.setdefault(
+    "VMM_UITEST_DIR", tempfile.mkdtemp(prefix="virt-manager-construct-")
+)
 # Force-disable AT-SPI for this process. The login/uitest env often
 # already has GTK_A11Y=atspi; setdefault would leave it and GetItems
 # wedges Gtk.Button() after a few dozen mapped windows (details_refresh
 # on test-many-devices). Official uitests launch a separate process
 # with GTK_A11Y=atspi.
 os.environ["GTK_A11Y"] = "none"
+
+from virtManager.lib import uitest
 
 
 def _init_gtk():
@@ -63,7 +70,7 @@ _PUMP_DEADLINE = None
 
 def _clear_a11y_sentinels():
     """Pollers treat leftover /tmp/vmm-a11y-* as live UI events."""
-    for path in glob.glob("/tmp/vmm-a11y-*"):
+    for path in glob.glob(uitest.path("vmm-a11y-*")):
         try:
             os.remove(path)
         except Exception:
@@ -1168,15 +1175,15 @@ def main():
         engine._launch_cli_window(uri, vmmEngine.CLI_SHOW_DOMAIN_DELETE, name)
         _pump(GLib, 0.3)
         try:
-            title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+            title = open(uitest.path("vmm-a11y-vmwindow-title.txt"), "r").read().strip()
         except Exception:
             title = ""
         try:
-            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
         except Exception:
             shown = ""
         try:
-            delete_shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip()
+            delete_shown = open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip()
         except Exception:
             delete_shown = ""
         assert shown == name or name in title, (
@@ -1401,10 +1408,10 @@ def main():
             _pump(GLib, 0.01)
         dlg.show(None)
         assert getattr(dlg, "_vmm_choose_poll_cb", None) is not None
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "1", shown
         dlg.storagelist.emit("volume-chosen", None)
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "1", "None volume must not close the browser"
         finished = []
 
@@ -1414,17 +1421,17 @@ def main():
         dlg.set_finish_cb(_cb)
         dlg._finish("/pool-dir/iso-vol")
         assert finished == ["/pool-dir/iso-vol"]
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "0", shown
         _pump(GLib, 0.9)
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "0", "storage browser remounted after choose: %s" % shown
-        open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+        open(uitest.path("vmm-a11y-choose-volume"), "w").write("1")
         _pump(GLib, 0.2)
-        assert os.path.exists("/tmp/vmm-a11y-choose-volume"), (
+        assert os.path.exists(uitest.path("vmm-a11y-choose-volume")), (
             "hidden storage browser consumed Choose Volume"
         )
-        os.remove("/tmp/vmm-a11y-choose-volume")
+        os.remove(uitest.path("vmm-a11y-choose-volume"))
 
     def clone_storage_dialog():
         from virtManager.clone import vmmCloneVM
@@ -1623,7 +1630,7 @@ def main():
         win._sync_toolbar_page_buttons(2)
         win._snapshots.vmwindow_refresh_vm_state()
         _pump(GLib, 0.2)
-        names = open("/tmp/vmm-a11y-snapshot-list.txt", "r").read().splitlines()
+        names = open(uitest.path("vmm-a11y-snapshot-list.txt"), "r").read().splitlines()
         assert "internal-root" in names, names
         dlg = vmmSnapshotNew(snapvm)
         dlg.show(None)
@@ -1659,7 +1666,7 @@ def main():
 
         def _accept():
             try:
-                open("/tmp/vmm-a11y-filechooser-open", "w").write("1")
+                open(uitest.path("vmm-a11y-filechooser-open"), "w").write("1")
             except Exception:
                 pass
             return False
@@ -1677,7 +1684,7 @@ def main():
         )
         assert path and os.path.basename(path) == "Screenshot_test.png", path
         try:
-            listing = open("/tmp/vmm-a11y-filechooser-list.txt", "r").read().splitlines()
+            listing = open(uitest.path("vmm-a11y-filechooser-list.txt"), "r").read().splitlines()
         except Exception:
             listing = []
         assert ".." in listing, "file chooser must offer parent-directory navigation"
@@ -1822,7 +1829,7 @@ def main():
         assert disp._tls_client_key == "/tmp/vnc-client.key"
         assert disp._tls_ca_file() == "/tmp/vnc-ca.pem"
         disp._apply_server_cut_text(b"guest-clip")
-        assert os.path.exists("/tmp/vmm-a11y-clipboard.txt")
+        assert os.path.exists(uitest.path("vmm-a11y-clipboard.txt"))
         disp._bind_host_clipboard()
         from gi.repository import Gdk
 
@@ -1867,16 +1874,24 @@ def main():
         provide = st.pack("!I", gtk4display._CLIP_PROVIDE | gtk4display._CLIP_TEXT)
         provide += _zlib.compress(inner)
         disp._apply_extended_cut_text(provide)
-        assert open("/tmp/vmm-a11y-clipboard.txt").read() == "café"
+        assert open(uitest.path("vmm-a11y-clipboard.txt")).read() == "café"
         disp._ext_clip = True
         disp._clip_from_guest = False
         disp._send_client_cut_text("naïve")
         assert any(st.unpack("!Bxxxi", chunk[:8])[1] < 0 for chunk in sent if len(chunk) >= 8)
-        assert disp._choose_vencrypt_subtype([258, 256]) == 256
+        # Strongest subtype offered wins. 256 is bare Plain (no TLS at
+        # all), 258 TLSVNC, 263 TLSSASL (anonymous DH), 264 X509SASL
+        # (TLS with a server certificate).
+        assert disp._choose_vencrypt_subtype([258, 256]) == 258
+        assert disp._choose_vencrypt_subtype([256]) == 256
         assert disp._choose_vencrypt_subtype([258]) == 258
         assert disp._choose_vencrypt_subtype([263]) == 263
-        assert disp._choose_vencrypt_subtype([264, 263]) == 263
-        assert disp._sasl_choose_mech("GSSAPI,PLAIN") == "PLAIN"
+        assert disp._choose_vencrypt_subtype([264, 263]) == 264
+        # Strongest mechanism the server offers. GSSAPI sends no password,
+        # DIGEST-MD5 does not send one in the clear, PLAIN sends both.
+        assert disp._sasl_choose_mech("GSSAPI,PLAIN") == "GSSAPI"
+        assert disp._sasl_choose_mech("PLAIN,DIGEST-MD5") == "DIGEST-MD5"
+        assert disp._sasl_choose_mech("PLAIN") == "PLAIN"
         assert disp._sasl_choose_mech("DIGEST-MD5") == "DIGEST-MD5"
         assert disp._sasl_choose_mech("GSSAPI") == "GSSAPI"
         disp._username = "alice"
@@ -3065,7 +3080,7 @@ def main():
             # Construct has no user to dismiss it; a leftover mapped
             # dialog also nests loop.run() in a later test.
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(str(text1 or ""))
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(str(text1 or ""))
             except Exception:
                 pass
             return False
@@ -3074,7 +3089,7 @@ def main():
 
         def _show_info(text1=None, *a, **k):
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(str(text1 or ""))
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(str(text1 or ""))
             except Exception:
                 pass
             return False
@@ -3183,7 +3198,7 @@ def main():
         details._addstorage._active_edits = [_EDIT_SHARE]
         details.widget("config-apply").set_sensitive(True)
         try:
-            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+            open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("1")
         except Exception:
             pass
         try:
@@ -3205,11 +3220,11 @@ def main():
         details._active_edits = [EDIT_DISK]
         details.widget("config-apply").set_sensitive(False)
         try:
-            os.remove("/tmp/vmm-a11y-config-apply-sensitive")
+            os.remove(uitest.path("vmm-a11y-config-apply-sensitive"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("0")
         except Exception:
             pass
         try:
@@ -3244,7 +3259,7 @@ def main():
         details._vmm_last_disk_kwargs = {"shareable": True}
         details._vmm_last_disk_target = getattr(disk, "target", None)
         try:
-            open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-disk-shareable-applied.txt"), "w").write("1")
         except Exception:
             pass
         details._addstorage.widget("disk-shareable").set_active(False)
@@ -3256,7 +3271,7 @@ def main():
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("0")
         except Exception:
             pass
         try:
@@ -3268,7 +3283,7 @@ def main():
             assert details._addstorage.widget("disk-shareable").get_active(), (
                 "Don't-warn leave must restore applied Shareable"
             )
-            assert open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip() == "1", (
+            assert open(uitest.path("vmm-a11y-disk-shareable.txt"), "r").read().strip() == "1", (
                 "Don't-warn leave must republish Shareable checked"
             )
         finally:
@@ -3289,7 +3304,7 @@ def main():
         details._vmm_last_disk_kwargs = {"shareable": True}
         details._vmm_last_disk_target = getattr(disk, "target", None)
         try:
-            open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-disk-shareable-applied.txt"), "w").write("1")
         except Exception:
             pass
         details._addstorage.widget("disk-shareable").set_active(False)
@@ -3305,9 +3320,9 @@ def main():
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
-            open("/tmp/vmm-a11y-hw-select.txt", "w").write("CPUs")
+            open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("0")
+            open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("1")
+            open(uitest.path("vmm-a11y-hw-select.txt"), "w").write("CPUs")
         except Exception:
             pass
         try:
@@ -3315,12 +3330,12 @@ def main():
             assert details._addstorage.widget("disk-shareable").get_active(), (
                 "poller Don't-warn leave must restore Shareable with stale CPUs"
             )
-            assert open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip() == "1", (
+            assert open(uitest.path("vmm-a11y-disk-shareable.txt"), "r").read().strip() == "1", (
                 "poller Don't-warn leave must republish Shareable checked"
             )
             try:
                 apply_left = (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip()
                 )
             except Exception:
                 apply_left = "0"
@@ -3350,8 +3365,8 @@ def main():
         assert nics, "test-many-devices has no NICs"
         details.netlist.widget("net-manual-source").set_text("")
         try:
-            open("/tmp/vmm-a11y-net-device.txt", "w").write("fakedev12")
-            open("/tmp/vmm-a11y-net-source.txt", "w").write("Bridge device...")
+            open(uitest.path("vmm-a11y-net-device.txt"), "w").write("fakedev12")
+            open(uitest.path("vmm-a11y-net-source.txt"), "w").write("Bridge device...")
         except Exception:
             pass
         details.netlist.get_network_selection = lambda: ("bridge", "fakedev12", None, None)
@@ -3361,7 +3376,7 @@ def main():
         ok = details._apply_network(nics[0])
         assert ok is False, "empty bridge source must fail apply"
         try:
-            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+            alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
         except Exception:
             alert = ""
         assert "Error changing VM configuration" in alert, alert
@@ -3451,16 +3466,16 @@ def main():
         _select(pci_row)
         pci_label = str(pci_row[HW_LIST_COL_LABEL] or "Controller PCI 0")
         try:
-            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(pci_label)
-            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(pci_label)
-            open("/tmp/vmm-a11y-last-hw.txt", "w").write(pci_label)
-            open("/tmp/vmm-a11y-details-tab.txt", "w").write("controller-tab")
-            open("/tmp/vmm-a11y-combo-controller-model.txt", "w").write("piix3-uhci")
+            open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(pci_label)
+            open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(pci_label)
+            open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(pci_label)
+            open(uitest.path("vmm-a11y-details-tab.txt"), "w").write("controller-tab")
+            open(uitest.path("vmm-a11y-combo-controller-model.txt"), "w").write("piix3-uhci")
         except Exception:
             pass
         details._enable_apply(EDIT_CONTROLLER_MODEL)
         try:
-            open("/tmp/vmm-a11y-combo-controller-model.txt.set", "w").write(
+            open(uitest.path("vmm-a11y-combo-controller-model.txt.set"), "w").write(
                 "piix3-uhci"
             )
         except Exception:
@@ -3546,7 +3561,7 @@ def main():
         dlg.show(None, src)
 
         def _ok_cancel(text1, text2=None, title=None):
-            open("/tmp/vmm-a11y-alert.txt", "w").write(
+            open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                 "%s\n%s" % (text1 or "", text2 or "")
             )
             return False
@@ -3554,13 +3569,13 @@ def main():
         dlg.err.ok_cancel = _ok_cancel
         dlg.err.yes_no = lambda *a, **k: True
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         dlg._finish()
         _pump(GLib, 0.4)
         try:
-            alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+            alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
         except Exception:
             alert = ""
         assert "relative.sock" in alert, alert
@@ -3620,9 +3635,12 @@ def main():
         sni._status = "Active"
         sni._registered = False
         assert not sni.is_embedded()
-        assert sni._retry_register() is True
+        # Registration waits on a StatusNotifierWatcher bus-name watch now,
+        # rather than re-probing the bus every two seconds forever.
+        sni._watch_for_watcher()
+        sni._unwatch_for_watcher()
+        assert sni._watch_ids == []
         sni._registered = True
-        assert sni._retry_register() is False
         assert sni.is_embedded()
         sni.hide()
         assert not sni.is_embedded()
@@ -3702,8 +3720,8 @@ def main():
             "local=%s manual=%s"
             % (
                 dlg._get_config_install_page(),
-                open("/tmp/vmm-a11y-method-active.txt").read()
-                if os.path.exists("/tmp/vmm-a11y-method-active.txt")
+                open(uitest.path("vmm-a11y-method-active.txt")).read()
+                if os.path.exists(uitest.path("vmm-a11y-method-active.txt"))
                 else "",
                 dlg.widget("method-local").get_active(),
                 dlg.widget("method-manual").get_active(),
@@ -3777,8 +3795,8 @@ def main():
         dlg._forward_clicked_impl()
         dlg.widget("install-import-entry").set_text("/pool-dir/default-vol")
         try:
-            open("/tmp/vmm-a11y-import-entry.txt", "w").write("/pool-dir/default-vol")
-            open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+            open(uitest.path("vmm-a11y-import-entry.txt"), "w").write("/pool-dir/default-vol")
+            open(uitest.path("vmm-a11y-disk-inuse-allow"), "w").write("1")
         except Exception:
             pass
         osobj = virtinst.OSDB.lookup_os("generic")
@@ -3793,7 +3811,7 @@ def main():
         # Official testNewVMArmKernel Finish lands here; empty Name
         # leftovers must not abort validation.
         try:
-            open("/tmp/vmm-a11y-create-name.txt", "w").write("")
+            open(uitest.path("vmm-a11y-create-name.txt"), "w").write("")
         except Exception:
             pass
         dlg.widget("create-vm-name").set_text("")
@@ -3802,11 +3820,11 @@ def main():
         debug = ""
         alert = ""
         try:
-            debug = open("/tmp/vmm-a11y-create-finish-debug.txt").read()
+            debug = open(uitest.path("vmm-a11y-create-finish-debug.txt")).read()
         except Exception:
             pass
         try:
-            alert = open("/tmp/vmm-a11y-alert.txt").read()
+            alert = open(uitest.path("vmm-a11y-alert.txt")).read()
         except Exception:
             pass
         assert found is not None, (
@@ -3871,8 +3889,8 @@ def main():
                 details._hw_changed_cb(hwlist)
                 break
         try:
-            open("/tmp/vmm-a11y-last-hw.txt", "w").write("Memory")
-            open("/tmp/vmm-a11y-details-tab.txt", "w").write("memory-tab")
+            open(uitest.path("vmm-a11y-last-hw.txt"), "w").write("Memory")
+            open(uitest.path("vmm-a11y-details-tab.txt"), "w").write("memory-tab")
         except Exception:
             pass
         box = details.widget("shared-memory")
@@ -3987,29 +4005,29 @@ def main():
         uiutil.set_list_selection_by_number(hwlist, floppy2[0])
         details._hw_changed_cb(hwlist)
         details._disk_source_browse_clicked_cb(None)
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "1", "details Browse must show the storage browser: %s" % shown
         browser = details.storage_browser
         assert browser is not None
         assert getattr(browser, "_vmm_choose_poll_cb", None) is not None
-        open("/tmp/vmm-a11y-vol-select.txt", "w").write("iso-vol")
-        open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+        open(uitest.path("vmm-a11y-vol-select.txt"), "w").write("iso-vol")
+        open(uitest.path("vmm-a11y-choose-volume"), "w").write("1")
         _pump(GLib, 0.25)
-        assert not os.path.exists("/tmp/vmm-a11y-choose-volume"), (
+        assert not os.path.exists(uitest.path("vmm-a11y-choose-volume")), (
             "details Browse choose poller did not consume Choose Volume"
         )
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "0", "storage browser stayed open after Choose Volume: %s" % shown
         details._disk_source_browse_clicked_cb(None)
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "1", "second details Browse must remount the storage browser: %s" % shown
-        open("/tmp/vmm-a11y-vol-select.txt", "w").write("backingl1.img")
-        open("/tmp/vmm-a11y-choose-volume", "w").write("1")
+        open(uitest.path("vmm-a11y-vol-select.txt"), "w").write("backingl1.img")
+        open(uitest.path("vmm-a11y-choose-volume"), "w").write("1")
         _pump(GLib, 0.25)
-        assert not os.path.exists("/tmp/vmm-a11y-choose-volume"), (
+        assert not os.path.exists(uitest.path("vmm-a11y-choose-volume")), (
             "second details Browse choose poller did not consume Choose Volume"
         )
-        shown = open("/tmp/vmm-a11y-storage-browser.txt", "r").read().strip()
+        shown = open(uitest.path("vmm-a11y-storage-browser.txt"), "r").read().strip()
         assert shown == "0", "storage browser stayed open after second Choose Volume: %s" % shown
         details._vmm_pending_media_path = None
         details._disable_apply()
@@ -4051,7 +4069,7 @@ def main():
             labels = []
         published = ""
         try:
-            published = open("/tmp/vmm-a11y-details-media-combo.txt", "r").read()
+            published = open(uitest.path("vmm-a11y-details-media-combo.txt"), "r").read()
         except Exception:
             published = ""
         assert any("Fedora12_media" in lab and "/dev/sr0" in lab for lab in labels) or (
@@ -4115,7 +4133,7 @@ def main():
             live_path = live.get_source_path() if live is not None else None
             published = ""
             try:
-                published = open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
+                published = open(uitest.path("vmm-a11y-details-media-entry.txt"), "r").read()
             except Exception:
                 published = ""
             assert not live_path, "live CDROM should stay empty after deferred hotplug"
@@ -4132,11 +4150,11 @@ def main():
             details.vmwindow_refresh_vm_state(True)
             _pump(GLib, 0.2)
             try:
-                published = open("/tmp/vmm-a11y-details-media-entry.txt", "r").read()
+                published = open(uitest.path("vmm-a11y-details-media-entry.txt"), "r").read()
             except Exception:
                 published = ""
             try:
-                src = open("/tmp/vmm-a11y-disk-source-path.txt", "r").read()
+                src = open(uitest.path("vmm-a11y-disk-source-path.txt"), "r").read()
             except Exception:
                 src = ""
             assert "virt-install" in (published + src), (
@@ -4177,17 +4195,17 @@ def main():
         uiutil.set_list_selection_by_number(hwlist, 0)
         details._hw_changed_cb(hwlist)
         for path, text in (
-            ("/tmp/vmm-a11y-hw-selected.txt", "Overview"),
-            ("/tmp/vmm-a11y-last-hw.txt", "Overview"),
-            ("/tmp/vmm-a11y-hw-clicked.txt", label),
-            ("/tmp/vmm-a11y-hw-last-device.txt", label),
-            ("/tmp/vmm-a11y-config-remove-target.txt", label),
+            (uitest.path("vmm-a11y-hw-selected.txt"), "Overview"),
+            (uitest.path("vmm-a11y-last-hw.txt"), "Overview"),
+            (uitest.path("vmm-a11y-hw-clicked.txt"), label),
+            (uitest.path("vmm-a11y-hw-last-device.txt"), label),
+            (uitest.path("vmm-a11y-config-remove-target.txt"), label),
         ):
             open(path, "w").write(text)
         for stale in (
-            "/tmp/vmm-a11y-delete-shown.txt",
-            "/tmp/vmm-a11y-delete-title.txt",
-            "/tmp/vmm-a11y-config-remove-err.txt",
+            uitest.path("vmm-a11y-delete-shown.txt"),
+            uitest.path("vmm-a11y-delete-title.txt"),
+            uitest.path("vmm-a11y-config-remove-err.txt"),
         ):
             try:
                 os.remove(stale)
@@ -4199,11 +4217,11 @@ def main():
         title = ""
         err = ""
         try:
-            shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip()
         except Exception:
             shown = ""
         try:
-            title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+            title = open(uitest.path("vmm-a11y-delete-title.txt"), "r").read()
         except Exception:
             title = ""
         if "Remove" not in (title or ""):
@@ -4225,7 +4243,7 @@ def main():
             except Exception:
                 pass
         try:
-            err = open("/tmp/vmm-a11y-config-remove-err.txt", "r").read()
+            err = open(uitest.path("vmm-a11y-config-remove-err.txt"), "r").read()
         except Exception:
             err = ""
         assert not err, "config-remove used the Overview row: %s" % err
@@ -4234,7 +4252,7 @@ def main():
             title,
         )
         assert "Remove" in title, title
-        open("/tmp/vmm-a11y-delete-close", "w").write("1")
+        open(uitest.path("vmm-a11y-delete-close"), "w").write("1")
         _pump(GLib, 0.3)
 
     def details_vsock_cid_apply():
@@ -4275,12 +4293,12 @@ def main():
         details._vmm_applied_vsock_cid = None
         details._vmm_pending_vsock_cid = None
         details._refresh_vsock_page(vsock)
-        open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write("7")
-        open("/tmp/vmm-a11y-vsock-cid.txt.set", "w").write("7")
-        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write("VirtIO VSOCK")
-        open("/tmp/vmm-a11y-hw-selected.txt", "w").write("VirtIO VSOCK")
-        open("/tmp/vmm-a11y-last-hw.txt", "w").write("VirtIO VSOCK")
-        open("/tmp/vmm-a11y-details-tab.txt", "w").write("vsock-tab")
+        open(uitest.path("vmm-a11y-vsock-cid-want.txt"), "w").write("7")
+        open(uitest.path("vmm-a11y-vsock-cid.txt.set"), "w").write("7")
+        open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write("VirtIO VSOCK")
+        open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write("VirtIO VSOCK")
+        open(uitest.path("vmm-a11y-last-hw.txt"), "w").write("VirtIO VSOCK")
+        open(uitest.path("vmm-a11y-details-tab.txt"), "w").write("vsock-tab")
         details._poll_vsock_cid_tick()
         _pump(GLib, 0.2)
         details._active_edits = []
@@ -4295,7 +4313,7 @@ def main():
         _pump(GLib, 0.3)
         published = ""
         try:
-            published = open("/tmp/vmm-a11y-vsock-cid.txt", "r").read().strip()
+            published = open(uitest.path("vmm-a11y-vsock-cid.txt"), "r").read().strip()
         except Exception:
             published = ""
         assert str(int(getattr(vsock, "cid", 0) or 0)) == "7" or published == "7", (

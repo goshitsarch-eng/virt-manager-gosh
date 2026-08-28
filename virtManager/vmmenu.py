@@ -9,6 +9,7 @@ from gi.repository import Gtk
 from virtinst import log
 
 from .asyncjob import vmmAsyncJob
+from .lib import uitest
 
 
 ####################################################################
@@ -324,7 +325,7 @@ class VMActionUI:
         if vm is None:
             raise ValueError("Cannot open details: no VM selected")
         try:
-            open("/tmp/vmm-a11y-vm-opening.txt", "w").write(vm.get_name())
+            open(uitest.path("vmm-a11y-vm-opening.txt"), "w").write(vm.get_name())
         except Exception:
             pass
         inst = vmmVMWindow.get_instance(src, vm)

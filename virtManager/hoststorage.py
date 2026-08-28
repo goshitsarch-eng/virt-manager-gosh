@@ -21,6 +21,7 @@ from .createpool import vmmCreatePool
 from .createvol import vmmCreateVolume
 from .object.storagepool import vmmStoragePool
 from .xmleditor import vmmXMLEditor
+from .lib import uitest
 
 
 EDIT_POOL_IDS = (
@@ -281,8 +282,8 @@ class vmmHostStorage(vmmGObjectUI):
         if not selected:
             selected = getattr(self, "_last_pool_name", "") or ""
         try:
-            open("/tmp/vmm-a11y-host-pool-list.txt", "w").write("\n".join(pools))
-            open("/tmp/vmm-a11y-host-pool-selected.txt", "w").write(selected)
+            open(uitest.path("vmm-a11y-host-pool-list.txt"), "w").write("\n".join(pools))
+            open(uitest.path("vmm-a11y-host-pool-selected.txt"), "w").write(selected)
         except Exception:
             pass
         vols = []
@@ -303,55 +304,55 @@ class vmmHostStorage(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-host-vol-list.txt", "w").write("\n".join(vols))
-            open("/tmp/vmm-a11y-host-vol-selected.txt", "w").write(volsel or "")
+            open(uitest.path("vmm-a11y-host-vol-list.txt"), "w").write("\n".join(vols))
+            open(uitest.path("vmm-a11y-host-vol-selected.txt"), "w").write(volsel or "")
         except Exception:
             pass
         try:
-            if os.path.exists("/tmp/vmm-a11y-storage-browser.txt"):
-                open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
-                open("/tmp/vmm-a11y-vol-selected.txt", "w").write(volsel or "")
+            if os.path.exists(uitest.path("vmm-a11y-storage-browser.txt")):
+                open(uitest.path("vmm-a11y-vol-list.txt"), "w").write("\n".join(vols))
+                open(uitest.path("vmm-a11y-vol-selected.txt"), "w").write(volsel or "")
         except Exception:
             pass
         try:
             errpage = self.widget("storage-pages").get_current_page() == 1
-            open("/tmp/vmm-a11y-host-pool-error.txt", "w").write("1" if errpage else "0")
-            open("/tmp/vmm-a11y-host-pool-error-text.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-pool-error.txt"), "w").write("1" if errpage else "0")
+            open(uitest.path("vmm-a11y-host-pool-error-text.txt"), "w").write(
                 self.widget("storage-error-label").get_text() or ""
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-host-pool-name.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-pool-name.txt"), "w").write(
                 self.widget("pool-name-entry").get_text() or ""
             )
-            open("/tmp/vmm-a11y-host-pool-location.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-pool-location.txt"), "w").write(
                 self.widget("pool-location").get_text() or ""
             )
-            open("/tmp/vmm-a11y-host-pool-autostart.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-pool-autostart.txt"), "w").write(
                 "1" if self.widget("pool-autostart").get_active() else "0"
             )
         except Exception:
             pass
         self._publish_visible_vols()
         try:
-            open("/tmp/vmm-a11y-host-pool-start.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-pool-start.txt"), "w").write(
                 "1" if self.widget("pool-start").get_sensitive() else "0"
             )
-            open("/tmp/vmm-a11y-host-pool-stop.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-pool-stop.txt"), "w").write(
                 "1" if self.widget("pool-stop").get_sensitive() else "0"
             )
-            open("/tmp/vmm-a11y-host-pool-delete.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-pool-delete.txt"), "w").write(
                 "1" if self.widget("pool-delete").get_sensitive() else "0"
             )
-            open("/tmp/vmm-a11y-host-vol-delete.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-vol-delete.txt"), "w").write(
                 "1" if self.widget("vol-delete").get_sensitive() else "0"
             )
         except Exception:
             pass
         try:
             choose = self.widget("choose-volume")
-            open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "w").write(
+            open(uitest.path("vmm-a11y-choose-volume-sensitive.txt"), "w").write(
                 "1" if choose.get_visible() and choose.get_sensitive() else "0"
             )
         except Exception:
@@ -391,7 +392,7 @@ class vmmHostStorage(vmmGObjectUI):
                             names.append(n)
                     idx += 1
                     it = model.iter_next(it)
-            open("/tmp/vmm-a11y-host-vol-visible.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-host-vol-visible.txt"), "w").write("\n".join(names))
         except Exception:
             pass
 
@@ -410,14 +411,14 @@ class vmmHostStorage(vmmGObjectUI):
             try:
                 names = [
                     n
-                    for n in open("/tmp/vmm-a11y-host-pool-list.txt", "r").read().splitlines()
+                    for n in open(uitest.path("vmm-a11y-host-pool-list.txt"), "r").read().splitlines()
                     if n
                 ]
             except Exception:
                 names = []
         cur = ""
         try:
-            cur = open("/tmp/vmm-a11y-host-pool-selected.txt", "r").read().strip()
+            cur = open(uitest.path("vmm-a11y-host-pool-selected.txt"), "r").read().strip()
         except Exception:
             cur = ""
         if not names:
@@ -460,7 +461,7 @@ class vmmHostStorage(vmmGObjectUI):
                         pool_list.grab_focus()
                         self._last_pool_name = name
                         try:
-                            open("/tmp/vmm-a11y-host-pool-selected.txt", "w").write(name)
+                            open(uitest.path("vmm-a11y-host-pool-selected.txt"), "w").write(name)
                         except Exception:
                             pass
                         self._publish_a11y_state()
@@ -486,34 +487,51 @@ class vmmHostStorage(vmmGObjectUI):
         sel = vol_list.get_selection()
         if model is None or sel is None:
             return False
-        it = model.get_iter_first()
-        while it is not None:
+        def _names(it):
+            have = str(model[it][VOL_COLUMN_NAME] or "")
+            handle = model[it][VOL_COLUMN_HANDLE]
             try:
-                have = str(model[it][VOL_COLUMN_NAME] or "")
-                handle = model[it][VOL_COLUMN_HANDLE]
-                hname = ""
-                try:
-                    hname = handle.get_name() if handle is not None else ""
-                except Exception:
-                    hname = ""
-                if have == name or hname == name or name in have or have in name or (
-                    hname and (name in hname or hname in name)
-                ):
-                    sel.select_iter(it)
-                    vol_list.grab_focus()
-                    self._publish_a11y_state()
-                    return True
+                hname = handle.get_name() if handle is not None else ""
             except Exception:
-                pass
-            it = model.iter_next(it)
+                hname = ""
+            return have, hname
+
+        def _pick(it):
+            sel.select_iter(it)
+            vol_list.grab_focus()
+            self._publish_a11y_state()
+            return True
+
+        # Exact name first. This runs on every pool refresh to restore the
+        # user's selection (_populate_vols), and matching on substrings
+        # alone moved it to whichever volume merely contained the name --
+        # "backup-vm1.qcow2" sorts before "vm1.qcow2" and would win. The
+        # toolbar's delete acts on whatever is selected.
+        for match_exactly in (True, False):
+            it = model.get_iter_first()
+            while it is not None:
+                try:
+                    have, hname = _names(it)
+                    if match_exactly:
+                        if have == name or hname == name:
+                            return _pick(it)
+                    elif (
+                        name in have
+                        or have in name
+                        or (hname and (name in hname or hname in name))
+                    ):
+                        return _pick(it)
+                except Exception:
+                    pass
+                it = model.iter_next(it)
         return False
 
     def _a11y_wanted_vol_name(self):
         for path in (
-            "/tmp/vmm-a11y-vol-selected.txt",
-            "/tmp/vmm-a11y-host-vol-selected.txt",
-            "/tmp/vmm-a11y-vol-select.txt",
-            "/tmp/vmm-a11y-host-vol-select.txt",
+            uitest.path("vmm-a11y-vol-selected.txt"),
+            uitest.path("vmm-a11y-host-vol-selected.txt"),
+            uitest.path("vmm-a11y-vol-select.txt"),
+            uitest.path("vmm-a11y-host-vol-select.txt"),
         ):
             try:
                 name = open(path, "r").read().strip()
@@ -530,7 +548,7 @@ class vmmHostStorage(vmmGObjectUI):
 
         def _tick():
             try:
-                path = "/tmp/vmm-a11y-host-pool-select.txt"
+                path = uitest.path("vmm-a11y-host-pool-select.txt")
                 if os.path.exists(path):
                     name = open(path, "r").read().strip()
                     os.remove(path)
@@ -538,10 +556,10 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                nav = "/tmp/vmm-a11y-host-nav.txt"
+                nav = uitest.path("vmm-a11y-host-nav.txt")
                 which = ""
                 try:
-                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                    which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
                 except Exception:
                     which = ""
                 if os.path.exists(nav) and which == "pool":
@@ -551,7 +569,7 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-vol-select.txt"
+                path = uitest.path("vmm-a11y-host-vol-select.txt")
                 if os.path.exists(path):
                     name = open(path, "r").read().strip()
                     os.remove(path)
@@ -559,7 +577,7 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-pool-name.txt.set"
+                path = uitest.path("vmm-a11y-host-pool-name.txt.set")
                 if os.path.exists(path):
                     text = open(path, "r").read()
                     os.remove(path)
@@ -568,7 +586,7 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-pool-autostart.txt.click"
+                path = uitest.path("vmm-a11y-host-pool-autostart.txt.click")
                 if os.path.exists(path):
                     os.remove(path)
                     chk = self.widget("pool-autostart")
@@ -577,7 +595,7 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-vol-sort.txt"
+                path = uitest.path("vmm-a11y-host-vol-sort.txt")
                 if os.path.exists(path):
                     title = open(path, "r").read().strip()
                     os.remove(path)
@@ -594,7 +612,7 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-vol-action.txt"
+                path = uitest.path("vmm-a11y-host-vol-action.txt")
                 if os.path.exists(path):
                     action = open(path, "r").read().strip()
                     os.remove(path)
@@ -611,7 +629,7 @@ class vmmHostStorage(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-pool-action.txt"
+                path = uitest.path("vmm-a11y-host-pool-action.txt")
                 if os.path.exists(path):
                     action = open(path, "r").read().strip()
                     os.remove(path)
@@ -630,7 +648,7 @@ class vmmHostStorage(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _tick)
 
     def set_name_hint(self, val):
         self._name_hint = val
@@ -665,7 +683,7 @@ class vmmHostStorage(vmmGObjectUI):
         name = getattr(self, "_last_pool_name", "") or ""
         if not name:
             try:
-                name = open("/tmp/vmm-a11y-host-pool-selected.txt", "r").read().strip()
+                name = open(uitest.path("vmm-a11y-host-pool-selected.txt"), "r").read().strip()
             except Exception:
                 name = ""
         if not name:
@@ -1026,14 +1044,14 @@ class vmmHostStorage(vmmGObjectUI):
             volname = ""
         try:
             names = [
-                n for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r").read().splitlines() if n
+                n for n in open(uitest.path("vmm-a11y-deleted-vols.txt"), "r").read().splitlines() if n
             ]
         except Exception:
             names = []
         if volname and volname not in names:
             names.append(volname)
         try:
-            open("/tmp/vmm-a11y-deleted-vols.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-deleted-vols.txt"), "w").write("\n".join(names))
         except Exception:
             pass
 
@@ -1057,7 +1075,7 @@ class vmmHostStorage(vmmGObjectUI):
 
     def _apply_pending_xml_edit(self):
         pending = ""
-        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+        for path in (uitest.path("vmm-a11y-xml.txt"), uitest.path("vmm-a11y-xml-contents.txt")):
             try:
                 pending = open(path, "r").read()
             except Exception:
@@ -1175,7 +1193,7 @@ class vmmHostStorage(vmmGObjectUI):
         can_choose = bool(treeiter and model[treeiter][VOL_COLUMN_SENSITIVE])
         self.widget("choose-volume").set_sensitive(can_choose)
         try:
-            open("/tmp/vmm-a11y-choose-volume-sensitive.txt", "w").write(
+            open(uitest.path("vmm-a11y-choose-volume-sensitive.txt"), "w").write(
                 "1" if can_choose else "0"
             )
         except Exception:
@@ -1189,7 +1207,7 @@ class vmmHostStorage(vmmGObjectUI):
         # GTK 3 TreeView selected the row under a right-click before
         # the Copy Volume Path menu opened.
         try:
-            tup = src.get_path_at_pos(int(event.x), int(event.y))
+            tup = gtkcompat.treeview_path_at_event(src, event)
         except Exception:
             tup = None
         if tup is not None:

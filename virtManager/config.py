@@ -15,25 +15,40 @@ from .lib.inspection import vmmInspection
 
 
 CSSDATA = """
+/* GTK 3 grouped sections with <property name="shadow_type">none</property>:
+   a bold header over an invisible container. GTK 4 dropped the property and
+   GtkFrame always paints a border, which turned every section in Details,
+   Host Details and Preferences into a hard-edged box. The .ui files mark
+   those frames "flat"; Adwaita only defines .flat for buttons and header
+   bars, so give it a meaning for frames here. */
+frame.flat {
+    border: none;
+    background: none;
+}
+
 /* Lighter colored text in some wizard summary fields.
    GTK 3 used @insensitive_fg_color; Adwaita GTK 4 does not define that token. */
 .vmm-lighter {
     color: alpha(@window_fg_color, 0.55);
 }
 
-/* Text on the blue header in our wizards */
-.vmm-header-text {
-    color: white;
-}
-
-/* Subtext on the blue header in our wizards */
-.vmm-header-subtext {
-    color: #59B0E2;
-}
-
-/* The blue header */
+/* The wizard header. GTK 3 hardcoded #0072A8 with white text, which
+   ignores both the Adwaita palette and the user's accent colour and
+   stays the same bright blue in dark mode. Follow the accent instead. */
 .vmm-header {
-    background-color: #0072A8;
+    background-color: @accent_bg_color;
+    /* GTK 4 dropped border-width and the port removed it without putting
+       margins back, so the icon and title sat flush against the window
+       edge in all nine wizards. */
+    padding: 8px 12px;
+}
+
+.vmm-header-text {
+    color: @accent_fg_color;
+}
+
+.vmm-header-subtext {
+    color: alpha(@accent_fg_color, 0.75);
 }
 
 /* Parked menubar submenus stay in the AT-SPI tree but are not shown */

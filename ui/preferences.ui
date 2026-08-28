@@ -24,6 +24,7 @@
               <object class="GtkNotebookPage">
                 <property name="child">
                   <object class="GtkFrame" id="frame5">
+                    <property name="css-classes">flat</property>
                     <property name="child">
                       <object class="GtkGrid" id="table5">
                         <property name="margin-start">12</property>
@@ -141,6 +142,7 @@
                 <property name="position">1</property>
                 <property name="child">
                   <object class="GtkFrame" id="frame1">
+                    <property name="css-classes">flat</property>
                     <property name="halign">start</property>
                     <property name="valign">start</property>
                     <property name="vexpand">0</property>
@@ -300,6 +302,7 @@
                     <property name="spacing">12</property>
                     <child>
                       <object class="GtkFrame" id="frame4">
+                        <property name="css-classes">flat</property>
                         <property name="child">
                           <object class="GtkGrid" id="table4">
                             <property name="margin-start">12</property>
@@ -420,6 +423,7 @@ identical CPUs in order to migrate the VM.</property>
                 <property name="position">3</property>
                 <property name="child">
                   <object class="GtkFrame" id="frame3">
+                    <property name="css-classes">flat</property>
                     <property name="child">
                       <object class="GtkGrid" id="table3">
                         <property name="margin-start">12</property>
@@ -573,6 +577,7 @@ identical CPUs in order to migrate the VM.</property>
                 <property name="position">4</property>
                 <property name="child">
                   <object class="GtkFrame" id="frame6">
+                    <property name="css-classes">flat</property>
                     <property name="child">
                       <object class="GtkGrid" id="table6">
                         <property name="margin-start">12</property>

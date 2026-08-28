@@ -19,6 +19,7 @@ from .engine import vmmEngine
 from .details.console import vmmConsolePages
 from .details.details import vmmDetails
 from .details.snapshots import vmmSnapshotPage
+from .lib import uitest
 
 
 # Main tab pages
@@ -45,7 +46,7 @@ class vmmVMWindow(vmmGObjectUI):
             try:
                 import traceback
 
-                open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                open(uitest.path("vmm-a11y-vm-action-err.txt"), "w").write(
                     "get_instance %s\n%s\n%s"
                     % (vm.get_name() if vm is not None else "?", e, traceback.format_exc())
                 )
@@ -202,9 +203,9 @@ class vmmVMWindow(vmmGObjectUI):
         self._refresh_vm_state()
         self.activate_default_page()
         try:
-            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
-            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self.vm.get_name())
-            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self.vm.get_name())
+            open(uitest.path("vmm-a11y-vmwindow.txt"), "w").write(self.vm.get_name())
+            open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(self.vm.get_name())
+            open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(self.vm.get_name())
         except Exception:
             pass
 
@@ -234,32 +235,32 @@ class vmmVMWindow(vmmGObjectUI):
         log.debug("Showing VM details: %s", self.vm)
         vis = self.is_visible()
         try:
-            open("/tmp/vmm-a11y-customize-shown.txt", "w").write(
+            open(uitest.path("vmm-a11y-customize-shown.txt"), "w").write(
                 "1" if self.is_customize_dialog else "0"
             )
         except Exception:
             pass
         if self.is_customize_dialog:
             for path in (
-                "/tmp/vmm-a11y-details-media-entry.txt.set",
-                "/tmp/vmm-a11y-details-media-path.txt",
-                "/tmp/vmm-a11y-alert.txt",
+                uitest.path("vmm-a11y-details-media-entry.txt.set"),
+                uitest.path("vmm-a11y-details-media-path.txt"),
+                uitest.path("vmm-a11y-alert.txt"),
             ):
                 try:
                     os.remove(path)
                 except Exception:
                     pass
         try:
-            open("/tmp/vmm-a11y-vmwindow.txt", "w").write(self.vm.get_name())
-            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(self.vm.get_name())
-            open("/tmp/vmm-a11y-vm-select.txt", "w").write(self.vm.get_name())
+            open(uitest.path("vmm-a11y-vmwindow.txt"), "w").write(self.vm.get_name())
+            open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(self.vm.get_name())
+            open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(self.vm.get_name())
             self._refresh_title()
         except Exception:
             pass
         try:
             w, h = self.topwin.get_size()
             if w > 1 and h > 1:
-                open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
+                open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write("%s %s" % (w, h))
         except Exception:
             pass
         try:
@@ -268,14 +269,14 @@ class vmmVMWindow(vmmGObjectUI):
             pass
         if not vis:
             try:
-                os.remove("/tmp/vmm-a11y-console-error.txt")
+                os.remove(uitest.path("vmm-a11y-console-error.txt"))
             except Exception:
                 pass
         if not getattr(self, "_vmm_window_close_poll", False):
             self._vmm_window_close_poll = True
 
             def _poll_window_close():
-                path = "/tmp/vmm-a11y-window-close.txt"
+                path = uitest.path("vmm-a11y-window-close.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -296,12 +297,12 @@ class vmmVMWindow(vmmGObjectUI):
                     return True
                 try:
                     self.close()
-                    open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                    open(uitest.path("vmm-a11y-window-close-done"), "w").write("1")
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_window_close)
+            uitest.poll_add(50, _poll_window_close)
         if not getattr(self, "_vmm_vm_page_poll", False):
             self._vmm_vm_page_poll = True
 
@@ -310,7 +311,7 @@ class vmmVMWindow(vmmGObjectUI):
                     return True
                 if not self.is_visible():
                     return True
-                showp = "/tmp/vmm-a11y-addhw-show.txt"
+                showp = uitest.path("vmm-a11y-addhw-show.txt")
                 try:
                     if os.path.exists(showp):
                         want = open(showp, "r").read().strip()
@@ -324,7 +325,7 @@ class vmmVMWindow(vmmGObjectUI):
                             self._details._show_addhw()
                 except Exception:
                     pass
-                path = "/tmp/vmm-a11y-vm-page.txt"
+                path = uitest.path("vmm-a11y-vm-page.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -379,7 +380,7 @@ class vmmVMWindow(vmmGObjectUI):
                         return True
                     shown = ""
                     try:
-                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                        shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                     except Exception:
                         shown = ""
                     if shown and shown != vm.get_name():
@@ -389,10 +390,10 @@ class vmmVMWindow(vmmGObjectUI):
                     label = "Restore" if (
                         vm.managedsave_supported and vm.has_managed_save()
                     ) else "Run"
-                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
-                    open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
-                    open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
-                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write(
+                    open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "w").write("1" if run else "0")
+                    open(uitest.path("vmm-a11y-vm-run-label.txt"), "w").write(label)
+                    open(uitest.path("vmm-a11y-vm-pause-checked.txt"), "w").write("1" if paused else "0")
+                    open(uitest.path("vmm-a11y-vm-shutdown-sensitive.txt"), "w").write(
                         "0" if run else "1"
                     )
                 except Exception:
@@ -400,7 +401,7 @@ class vmmVMWindow(vmmGObjectUI):
                 return True
 
             def _poll_vm_toolbar_action():
-                path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
+                path = uitest.path("vmm-a11y-vm-toolbar-action.txt")
                 try:
                     if getattr(self, "builder", None) is None:
                         return True
@@ -410,7 +411,7 @@ class vmmVMWindow(vmmGObjectUI):
                         return True
                     shown = ""
                     try:
-                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                        shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                     except Exception:
                         shown = ""
                     if shown and self.vm is not None and shown != self.vm.get_name():
@@ -444,7 +445,7 @@ class vmmVMWindow(vmmGObjectUI):
                 return True
 
             def _poll_vm_file_action():
-                path = "/tmp/vmm-a11y-vm-file-action.txt"
+                path = uitest.path("vmm-a11y-vm-file-action.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -467,7 +468,7 @@ class vmmVMWindow(vmmGObjectUI):
                 if getattr(self, "builder", None) is None or self.vm is None:
                     return False
                 try:
-                    shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                 except Exception:
                     shown = ""
                 name = self.vm.get_name()
@@ -479,12 +480,12 @@ class vmmVMWindow(vmmGObjectUI):
                         w, h = int(force[0]), int(force[1])
                     else:
                         w, h = self.topwin.get_size()
-                    open("/tmp/vmm-a11y-vmwindow-size.txt", "w").write("%s %s" % (w, h))
+                    open(uitest.path("vmm-a11y-vmwindow-size.txt"), "w").write("%s %s" % (w, h))
                 except Exception:
                     pass
 
             def _poll_screenshot():
-                path = "/tmp/vmm-a11y-screenshot-open"
+                path = uitest.path("vmm-a11y-screenshot-open")
                 try:
                     if not os.path.exists(path) or not _this_vm_window():
                         return True
@@ -498,7 +499,7 @@ class vmmVMWindow(vmmGObjectUI):
                 return True
 
             def _poll_usb_redirect():
-                path = "/tmp/vmm-a11y-usb-redirect-open"
+                path = uitest.path("vmm-a11y-usb-redirect-open")
                 try:
                     if not os.path.exists(path) or not _this_vm_window():
                         return True
@@ -512,13 +513,13 @@ class vmmVMWindow(vmmGObjectUI):
                 return True
 
             def _poll_view_action():
-                path = "/tmp/vmm-a11y-view-action.txt"
+                path = uitest.path("vmm-a11y-view-action.txt")
                 try:
                     if not os.path.exists(path):
                         return True
                     if not _this_vm_window():
                         try:
-                            open("/tmp/vmm-a11y-view-action-skip.txt", "a").write(
+                            open(uitest.path("vmm-a11y-view-action-skip.txt"), "a").write(
                                 "skip vis=%s\n" % getattr(self, "is_visible", lambda: None)()
                             )
                         except Exception:
@@ -551,7 +552,7 @@ class vmmVMWindow(vmmGObjectUI):
                 return True
 
             def _poll_window_geom():
-                path = "/tmp/vmm-a11y-window-maximize.txt"
+                path = uitest.path("vmm-a11y-window-maximize.txt")
                 try:
                     if os.path.exists(path) and _this_vm_window():
                         want = open(path, "r").read().strip()
@@ -569,21 +570,21 @@ class vmmVMWindow(vmmGObjectUI):
                             except Exception:
                                 _publish_window_size((1024, 768))
                             try:
-                                open("/tmp/vmm-a11y-window-maximize-done", "w").write("1")
+                                open(uitest.path("vmm-a11y-window-maximize-done"), "w").write("1")
                             except Exception:
                                 pass
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_vm_page)
-            GLib.timeout_add(50, _poll_vm_toolbar_action)
-            GLib.timeout_add(50, _publish_vm_toolbar)
-            GLib.timeout_add(50, _poll_vm_file_action)
-            GLib.timeout_add(50, _poll_screenshot)
-            GLib.timeout_add(50, _poll_usb_redirect)
-            GLib.timeout_add(50, _poll_view_action)
-            GLib.timeout_add(80, _poll_window_geom)
+            uitest.poll_add(50, _poll_vm_page)
+            uitest.poll_add(50, _poll_vm_toolbar_action)
+            uitest.poll_add(50, _publish_vm_toolbar)
+            uitest.poll_add(50, _poll_vm_file_action)
+            uitest.poll_add(50, _poll_screenshot)
+            uitest.poll_add(50, _poll_usb_redirect)
+            uitest.poll_add(50, _poll_view_action)
+            uitest.poll_add(80, _poll_window_geom)
         if vis:
             return
 
@@ -604,7 +605,7 @@ class vmmVMWindow(vmmGObjectUI):
             apply_on = bool(self._details.widget("config-apply").get_sensitive())
         except Exception:
             apply_on = False
-        name_pending = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        name_pending = os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
         if name_pending:
             try:
                 self._details._restore_overview_sentinels()
@@ -622,7 +623,7 @@ class vmmVMWindow(vmmGObjectUI):
         # without a user edit. A real Overview name edit must still confirm.
         if (apply_on and edits) or name_pending:
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                     "There are unapplied changes. Would you like to apply them now?"
                 )
             except Exception:
@@ -664,7 +665,7 @@ class vmmVMWindow(vmmGObjectUI):
         log.debug("Asking to cancel customization")
 
         try:
-            open("/tmp/vmm-a11y-alert.txt", "w").write(
+            open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                 "This will abort the installation. Are you sure?"
             )
         except Exception:
@@ -700,20 +701,20 @@ class vmmVMWindow(vmmGObjectUI):
         except Exception:
             name = ""
         try:
-            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
             if shown and (not name or shown == name):
-                os.remove("/tmp/vmm-a11y-vmwindow.txt")
+                os.remove(uitest.path("vmm-a11y-vmwindow.txt"))
         except Exception:
             pass
         try:
-            created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+            created = open(uitest.path("vmm-a11y-created-vm.txt"), "r").read().strip()
             if created and (not name or created == name):
-                os.remove("/tmp/vmm-a11y-created-vm.txt")
+                os.remove(uitest.path("vmm-a11y-created-vm.txt"))
         except Exception:
             pass
         try:
             if self.is_customize_dialog:
-                open("/tmp/vmm-a11y-customize-shown.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-customize-shown.txt"), "w").write("0")
         except Exception:
             pass
 
@@ -874,9 +875,9 @@ class vmmVMWindow(vmmGObjectUI):
             self.ignoreDetails = False
         page_name = "details" if is_details else ("snapshots" if is_snapshot else "console")
         try:
-            open("/tmp/vmm-a11y-vm-page-current.txt", "w").write(page_name)
-            open("/tmp/vmm-a11y-snapshot-page.txt", "w").write("1" if is_snapshot else "0")
-            open("/tmp/vmm-a11y-snapshot-start-showing.txt", "w").write(
+            open(uitest.path("vmm-a11y-vm-page-current.txt"), "w").write(page_name)
+            open(uitest.path("vmm-a11y-snapshot-page.txt"), "w").write("1" if is_snapshot else "0")
+            open(uitest.path("vmm-a11y-snapshot-start-showing.txt"), "w").write(
                 "1" if is_snapshot else "0"
             )
         except Exception:
@@ -925,7 +926,7 @@ class vmmVMWindow(vmmGObjectUI):
 
         self.topwin.set_title(title)
         try:
-            open("/tmp/vmm-a11y-vmwindow-title.txt", "w").write(title)
+            open(uitest.path("vmm-a11y-vmwindow-title.txt"), "w").write(title)
         except Exception:
             pass
 
@@ -946,10 +947,10 @@ class vmmVMWindow(vmmGObjectUI):
         self.widget("control-run").set_sensitive(run)
         try:
             label = "Restore" if (vm.managedsave_supported and vm.has_managed_save()) else "Run"
-            open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
-            open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
-            open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write("1" if paused else "0")
-            open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write("1" if stop else "0")
+            open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "w").write("1" if run else "0")
+            open(uitest.path("vmm-a11y-vm-run-label.txt"), "w").write(label)
+            open(uitest.path("vmm-a11y-vm-pause-checked.txt"), "w").write("1" if paused else "0")
+            open(uitest.path("vmm-a11y-vm-shutdown-sensitive.txt"), "w").write("1" if stop else "0")
         except Exception:
             pass
         self.widget("control-shutdown").set_sensitive(stop)
@@ -1086,7 +1087,7 @@ class vmmVMWindow(vmmGObjectUI):
         if not apply_on:
             try:
                 apply_on = (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip()
                     == "1"
                 )
             except Exception:
@@ -1094,10 +1095,10 @@ class vmmVMWindow(vmmGObjectUI):
         # Only a pending Overview name edit should block Run. Disk/shareable
         # Apply-sensitive is left unapplied so VM state change does not
         # refresh the hardware UI (testDetailsMiscEdits).
-        name_pending = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+        name_pending = os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
         pending = name_pending
         try:
-            open("/tmp/vmm-a11y-run-debug.txt", "a").write(
+            open(uitest.path("vmm-a11y-run-debug.txt"), "a").write(
                 "enter apply_on=%s name_pending=%s\n" % (apply_on, name_pending)
             )
         except Exception:
@@ -1106,28 +1107,28 @@ class vmmVMWindow(vmmGObjectUI):
             try:
                 self._details._enable_apply(2)  # EDIT_NAME
                 try:
-                    want = open("/tmp/vmm-a11y-overview-name-want.txt", "r").read()
+                    want = open(uitest.path("vmm-a11y-overview-name-want.txt"), "r").read()
                     self._details.widget("overview-name").set_text(want)
                 except Exception:
                     pass
             except Exception:
                 pass
         try:
-            existing = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+            existing = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
         except Exception:
             existing = ""
         if pending and "name must be specified" not in existing:
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                     "There are unapplied changes. Would you like to apply them now?"
                 )
             except Exception:
                 pass
         if "name must be specified" in existing:
             return
-        if os.path.exists("/tmp/vmm-a11y-force-overview-apply"):
+        if os.path.exists(uitest.path("vmm-a11y-force-overview-apply")):
             try:
-                os.remove("/tmp/vmm-a11y-force-overview-apply")
+                os.remove(uitest.path("vmm-a11y-force-overview-apply"))
             except Exception:
                 pass
             try:
@@ -1135,19 +1136,19 @@ class vmmVMWindow(vmmGObjectUI):
                     return
             except Exception:
                 return
-            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt")):
                 return
         if pending:
             if self._details.vmwindow_has_unapplied_changes():
                 return
             try:
-                if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt")):
                     self._details._enable_apply(2)
                     if not self._details._config_apply():
                         return
             except Exception:
                 return
-            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt")):
                 return
             try:
                 if self._details.widget("config-apply").get_sensitive():

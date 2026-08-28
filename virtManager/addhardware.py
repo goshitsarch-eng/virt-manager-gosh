@@ -43,39 +43,40 @@ from .device.tpmdetails import vmmTPMDetails
 from .device.vsockdetails import vmmVsockDetails
 from .storagebrowse import vmmStorageBrowser
 from .xmleditor import vmmXMLEditor
+from .lib import uitest
 
-_ADDHW_SHOWN = "/tmp/vmm-a11y-addhw-shown.txt"
-_ADDHW_OPEN = "/tmp/vmm-a11y-addhw-open"
-_ADDHW_HIDDEN = "/tmp/vmm-a11y-addhw-hidden"
-_ADDHW_LIST = "/tmp/vmm-a11y-addhw-list.txt"
-_ADDHW_SELECT = "/tmp/vmm-a11y-addhw-select.txt"
-_ADDHW_SELECTED = "/tmp/vmm-a11y-addhw-selected.txt"
-_ADDHW_TAB = "/tmp/vmm-a11y-addhw-tab.txt"
-_ADDHW_FINISH = "/tmp/vmm-a11y-addhw-finish"
-_ADDHW_CANCEL = "/tmp/vmm-a11y-addhw-cancel"
-_ADDHW_FINISH_SENS = "/tmp/vmm-a11y-addhw-finish-sensitive.txt"
-_ADDHW_ACTION = "/tmp/vmm-a11y-addhw-action.txt"
-_ADDHW_COMBO = "/tmp/vmm-a11y-combo-select.txt"
-_ADDHW_COMBO_VALUE = "/tmp/vmm-a11y-addhw-combo-current.txt"
-_ADDHW_COMBO_ENTRY = "/tmp/vmm-a11y-addhw-combo-entry.txt"
-_ADDHW_HOSTDEV_LIST = "/tmp/vmm-a11y-addhw-hostdev-list.txt"
-_ADDHW_HOSTDEV_SELECT = "/tmp/vmm-a11y-addhw-hostdev-select.txt"
-_ADDHW_HOSTDEV_SELECTED = "/tmp/vmm-a11y-addhw-hostdev-selected.txt"
-_ADDHW_CREATE_DISK_SENS = "/tmp/vmm-a11y-addhw-create-disk-sensitive.txt"
-_ADDHW_STORAGE_ENTRY = "/tmp/vmm-a11y-storage-entry.txt"
-_ADDHW_STORAGE_SIZE = "/tmp/vmm-a11y-addhw-storage-size.txt"
-_ADDHW_SERIAL = "/tmp/vmm-a11y-addhw-serial.txt"
-_ADDHW_MAC = "/tmp/vmm-a11y-addhw-mac.txt"
-_ADDHW_NET_DEVICE = "/tmp/vmm-a11y-addhw-net-device.txt"
-_ADDHW_GFX_PORT = "/tmp/vmm-a11y-addhw-gfx-port.txt"
-_ADDHW_GFX_PASS = "/tmp/vmm-a11y-addhw-gfx-password.txt"
-_ADDHW_CHAR_PATH = "/tmp/vmm-a11y-addhw-char-path.txt"
-_ADDHW_FS_SOURCE = "/tmp/vmm-a11y-addhw-fs-source.txt"
-_ADDHW_FS_TARGET = "/tmp/vmm-a11y-addhw-fs-target.txt"
-_ADDHW_FS_USAGE = "/tmp/vmm-a11y-addhw-fs-usage.txt"
-_ADDHW_TPM_PATH = "/tmp/vmm-a11y-addhw-tpm-path.txt"
-_ADDHW_RNG = "/tmp/vmm-a11y-addhw-rng.txt"
-_ADDHW_VSOCK_CID = "/tmp/vmm-a11y-addhw-vsock-cid.txt"
+_ADDHW_SHOWN = uitest.path("vmm-a11y-addhw-shown.txt")
+_ADDHW_OPEN = uitest.path("vmm-a11y-addhw-open")
+_ADDHW_HIDDEN = uitest.path("vmm-a11y-addhw-hidden")
+_ADDHW_LIST = uitest.path("vmm-a11y-addhw-list.txt")
+_ADDHW_SELECT = uitest.path("vmm-a11y-addhw-select.txt")
+_ADDHW_SELECTED = uitest.path("vmm-a11y-addhw-selected.txt")
+_ADDHW_TAB = uitest.path("vmm-a11y-addhw-tab.txt")
+_ADDHW_FINISH = uitest.path("vmm-a11y-addhw-finish")
+_ADDHW_CANCEL = uitest.path("vmm-a11y-addhw-cancel")
+_ADDHW_FINISH_SENS = uitest.path("vmm-a11y-addhw-finish-sensitive.txt")
+_ADDHW_ACTION = uitest.path("vmm-a11y-addhw-action.txt")
+_ADDHW_COMBO = uitest.path("vmm-a11y-combo-select.txt")
+_ADDHW_COMBO_VALUE = uitest.path("vmm-a11y-addhw-combo-current.txt")
+_ADDHW_COMBO_ENTRY = uitest.path("vmm-a11y-addhw-combo-entry.txt")
+_ADDHW_HOSTDEV_LIST = uitest.path("vmm-a11y-addhw-hostdev-list.txt")
+_ADDHW_HOSTDEV_SELECT = uitest.path("vmm-a11y-addhw-hostdev-select.txt")
+_ADDHW_HOSTDEV_SELECTED = uitest.path("vmm-a11y-addhw-hostdev-selected.txt")
+_ADDHW_CREATE_DISK_SENS = uitest.path("vmm-a11y-addhw-create-disk-sensitive.txt")
+_ADDHW_STORAGE_ENTRY = uitest.path("vmm-a11y-storage-entry.txt")
+_ADDHW_STORAGE_SIZE = uitest.path("vmm-a11y-addhw-storage-size.txt")
+_ADDHW_SERIAL = uitest.path("vmm-a11y-addhw-serial.txt")
+_ADDHW_MAC = uitest.path("vmm-a11y-addhw-mac.txt")
+_ADDHW_NET_DEVICE = uitest.path("vmm-a11y-addhw-net-device.txt")
+_ADDHW_GFX_PORT = uitest.path("vmm-a11y-addhw-gfx-port.txt")
+_ADDHW_GFX_PASS = uitest.path("vmm-a11y-addhw-gfx-password.txt")
+_ADDHW_CHAR_PATH = uitest.path("vmm-a11y-addhw-char-path.txt")
+_ADDHW_FS_SOURCE = uitest.path("vmm-a11y-addhw-fs-source.txt")
+_ADDHW_FS_TARGET = uitest.path("vmm-a11y-addhw-fs-target.txt")
+_ADDHW_FS_USAGE = uitest.path("vmm-a11y-addhw-fs-usage.txt")
+_ADDHW_TPM_PATH = uitest.path("vmm-a11y-addhw-tpm-path.txt")
+_ADDHW_RNG = uitest.path("vmm-a11y-addhw-rng.txt")
+_ADDHW_VSOCK_CID = uitest.path("vmm-a11y-addhw-vsock-cid.txt")
 
 
 (
@@ -174,8 +175,8 @@ class vmmAddHardware(vmmGObjectUI):
             _ADDHW_ACTION,
             _ADDHW_SELECT,
             _ADDHW_HOSTDEV_SELECT,
-            "/tmp/vmm-a11y-disk-inuse-allow",
-            "/tmp/vmm-a11y-alert-response.txt",
+            uitest.path("vmm-a11y-disk-inuse-allow"),
+            uitest.path("vmm-a11y-alert-response.txt"),
             _ADDHW_COMBO_ENTRY + ".set",
             _ADDHW_STORAGE_ENTRY + ".set",
             _ADDHW_STORAGE_SIZE + ".set",
@@ -254,7 +255,7 @@ class vmmAddHardware(vmmGObjectUI):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-xml-page.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-xml-page.txt"), "w").write("0")
         except Exception:
             pass
         try:
@@ -269,7 +270,7 @@ class vmmAddHardware(vmmGObjectUI):
             try:
                 name = self.vm.get_name() if self.vm is not None else ""
                 if name:
-                    open("/tmp/vmm-a11y-vmwindow.txt", "w").write(name)
+                    open(uitest.path("vmm-a11y-vmwindow.txt"), "w").write(name)
             except Exception:
                 pass
         if self._storagebrowser:
@@ -1004,8 +1005,8 @@ class vmmAddHardware(vmmGObjectUI):
                     names.append(label)
             if names:
                 selected = names[0]
-            open("/tmp/vmm-a11y-hostdev-list.txt", "w").write("\n".join(names))
-            open("/tmp/vmm-a11y-hostdev-selected.txt", "w").write(selected)
+            open(uitest.path("vmm-a11y-hostdev-list.txt"), "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-hostdev-selected.txt"), "w").write(selected)
         except Exception:
             pass
 
@@ -1136,7 +1137,7 @@ class vmmAddHardware(vmmGObjectUI):
         text = msg or "Hardware selection error."
         self.widget("error-label").set_text(text)
         try:
-            open("/tmp/vmm-a11y-addhw-error.txt", "w").write(text)
+            open(uitest.path("vmm-a11y-addhw-error.txt"), "w").write(text)
         except Exception:
             pass
         try:
@@ -1608,7 +1609,7 @@ class vmmAddHardware(vmmGObjectUI):
                 if not xml_sel:
                     try:
                         xml_sel = (
-                            open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip()
+                            open(uitest.path("vmm-a11y-xml-page.txt"), "r").read().strip()
                             == "1"
                         )
                     except Exception:
@@ -2135,7 +2136,7 @@ class vmmAddHardware(vmmGObjectUI):
 
     def _a11y_load_pending_xml(self):
         try:
-            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+            pending = open(uitest.path("vmm-a11y-xml.txt"), "r").read()
         except Exception:
             pending = ""
         if not pending:
@@ -2145,7 +2146,7 @@ class vmmAddHardware(vmmGObjectUI):
         if pending.lstrip().startswith("<domain"):
             return
         try:
-            os.remove("/tmp/vmm-a11y-xml.txt")
+            os.remove(uitest.path("vmm-a11y-xml.txt"))
         except Exception:
             pass
         if (self._xmleditor.get_xml() or "") != pending:
@@ -2330,18 +2331,18 @@ class vmmAddHardware(vmmGObjectUI):
         except Exception:
             pass
         checks = {
-            "/tmp/vmm-a11y-addhw-mac-enable.txt": ("mac-address", False),
-            "/tmp/vmm-a11y-addhw-shareable.txt": ("disk-shareable", False),
-            "/tmp/vmm-a11y-addhw-readonly.txt": ("disk-readonly", False),
-            "/tmp/vmm-a11y-addhw-removable.txt": ("disk-removable", False),
-            "/tmp/vmm-a11y-addhw-storage-create.txt": ("storage-create", False),
-            "/tmp/vmm-a11y-addhw-storage-select.txt": ("storage-select", False),
-            "/tmp/vmm-a11y-addhw-gfx-port-auto.txt": ("graphics-port-auto", False),
-            "/tmp/vmm-a11y-addhw-gfx-pass-chk.txt": ("graphics-password-chk", False),
-            "/tmp/vmm-a11y-addhw-gfx-show-pass.txt": ("graphics-visibility-chk", False),
-            "/tmp/vmm-a11y-addhw-gfx-opengl.txt": ("graphics-opengl", False),
-            "/tmp/vmm-a11y-addhw-fs-export.txt": ("fs-readonly", False),
-            "/tmp/vmm-a11y-addhw-vsock-auto.txt": ("vsock-auto", False),
+            uitest.path("vmm-a11y-addhw-mac-enable.txt"): ("mac-address", False),
+            uitest.path("vmm-a11y-addhw-shareable.txt"): ("disk-shareable", False),
+            uitest.path("vmm-a11y-addhw-readonly.txt"): ("disk-readonly", False),
+            uitest.path("vmm-a11y-addhw-removable.txt"): ("disk-removable", False),
+            uitest.path("vmm-a11y-addhw-storage-create.txt"): ("storage-create", False),
+            uitest.path("vmm-a11y-addhw-storage-select.txt"): ("storage-select", False),
+            uitest.path("vmm-a11y-addhw-gfx-port-auto.txt"): ("graphics-port-auto", False),
+            uitest.path("vmm-a11y-addhw-gfx-pass-chk.txt"): ("graphics-password-chk", False),
+            uitest.path("vmm-a11y-addhw-gfx-show-pass.txt"): ("graphics-visibility-chk", False),
+            uitest.path("vmm-a11y-addhw-gfx-opengl.txt"): ("graphics-opengl", False),
+            uitest.path("vmm-a11y-addhw-fs-export.txt"): ("fs-readonly", False),
+            uitest.path("vmm-a11y-addhw-vsock-auto.txt"): ("vsock-auto", False),
         }
         for path, (wid, _ign) in checks.items():
             try:
@@ -2469,7 +2470,7 @@ class vmmAddHardware(vmmGObjectUI):
                             self._publish_a11y_state()
                         else:
                             try:
-                                open("/tmp/vmm-a11y-addhw-combo-debug.txt", "w").write(
+                                open(uitest.path("vmm-a11y-addhw-combo-debug.txt"), "w").write(
                                     "key=%s item=%s wid=%s page=%s err=%s"
                                     % (key, item, wid, self._a11y_current_page(), err)
                                 )
@@ -2540,16 +2541,16 @@ class vmmAddHardware(vmmGObjectUI):
             except Exception:
                 pass
             for path, wid in (
-                ("/tmp/vmm-a11y-addhw-mac-enable.txt.click", "mac-address"),
-                ("/tmp/vmm-a11y-addhw-shareable.txt.click", "disk-shareable"),
-                ("/tmp/vmm-a11y-addhw-readonly.txt.click", "disk-readonly"),
-                ("/tmp/vmm-a11y-addhw-removable.txt.click", "disk-removable"),
-                ("/tmp/vmm-a11y-addhw-gfx-port-auto.txt.click", "graphics-port-auto"),
-                ("/tmp/vmm-a11y-addhw-gfx-pass-chk.txt.click", "graphics-password-chk"),
-                ("/tmp/vmm-a11y-addhw-gfx-show-pass.txt.click", "graphics-visibility-chk"),
-                ("/tmp/vmm-a11y-addhw-gfx-opengl.txt.click", "graphics-opengl"),
-                ("/tmp/vmm-a11y-addhw-fs-export.txt.click", "fs-readonly"),
-                ("/tmp/vmm-a11y-addhw-vsock-auto.txt.click", "vsock-auto"),
+                (uitest.path("vmm-a11y-addhw-mac-enable.txt.click"), "mac-address"),
+                (uitest.path("vmm-a11y-addhw-shareable.txt.click"), "disk-shareable"),
+                (uitest.path("vmm-a11y-addhw-readonly.txt.click"), "disk-readonly"),
+                (uitest.path("vmm-a11y-addhw-removable.txt.click"), "disk-removable"),
+                (uitest.path("vmm-a11y-addhw-gfx-port-auto.txt.click"), "graphics-port-auto"),
+                (uitest.path("vmm-a11y-addhw-gfx-pass-chk.txt.click"), "graphics-password-chk"),
+                (uitest.path("vmm-a11y-addhw-gfx-show-pass.txt.click"), "graphics-visibility-chk"),
+                (uitest.path("vmm-a11y-addhw-gfx-opengl.txt.click"), "graphics-opengl"),
+                (uitest.path("vmm-a11y-addhw-fs-export.txt.click"), "fs-readonly"),
+                (uitest.path("vmm-a11y-addhw-vsock-auto.txt.click"), "vsock-auto"),
             ):
                 try:
                     if os.path.exists(path):
@@ -2565,7 +2566,7 @@ class vmmAddHardware(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                xmltab = "/tmp/vmm-a11y-xml-tab.txt"
+                xmltab = uitest.path("vmm-a11y-xml-tab.txt")
                 if os.path.exists(xmltab):
                     want = open(xmltab, "r").read().strip()
                     if want == "XML":
@@ -2585,5 +2586,5 @@ class vmmAddHardware(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _fields_tick)
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _fields_tick)
+        uitest.poll_add(50, _tick)

@@ -3,7 +3,9 @@
 # This work is licensed under the GNU GPLv2 or later.
 # See the COPYING file in the top-level directory.
 
+import os
 import glob
+import re
 import subprocess
 import xml.etree.ElementTree as ET
 
@@ -58,11 +60,11 @@ def test_ui_minimum_version():
     Ensure all glade XML files don't _require_ UI bits later than
     our minimum supported version
     """
-    # Minimum dep is 3.22 to fix popups on some wayland window managers.
-    # 3.22 is from Sep 2016, so coupled with python3 deps this seems fine
-    # to enforce
-    minimum_version_major = 3
-    minimum_version_minor = 22
+    # The UI is GTK 4 now, so the <requires> tag names "gtk", not "gtk+".
+    # This checked for gtk+ 3.22 and so failed on every one of the ported
+    # files, taking `meson test` (and Copr CI) down with it.
+    minimum_version_major = 4
+    minimum_version_minor = 0
     minimum_version_str = "%s.%s" % (minimum_version_major, minimum_version_minor)
 
     failures = []
@@ -74,12 +76,12 @@ def test_ui_minimum_version():
                 continue
 
             req = ET.fromstring(line)
-            if req.tag != "requires" or req.attrib.get("lib") != "gtk+":
+            if req.tag != "requires" or req.attrib.get("lib") != "gtk":
                 continue
             required_version = req.attrib["version"]
 
         if required_version is None:
-            raise AssertionError("ui file=%s doesn't have a <requires> tag for gtk+")
+            raise AssertionError("ui file=%s doesn't have a <requires> tag for gtk" % filename)
 
         if (
             int(required_version.split(".")[0]) != minimum_version_major
@@ -93,6 +95,27 @@ def test_ui_minimum_version():
     err = "The following files should require version of gtk-%s:\n" % minimum_version_str
     err += "\n".join([("%s version=%s" % tup) for tup in failures])
     raise AssertionError(err)
+
+
+def test_meson_lists_every_python_file():
+    """
+    Every .py file under virtManager/ and virtinst/ must be in its
+    directory's meson.build, or an installed build is missing it. The RPM
+    %files uses a directory glob, so a gap is silent until the app fails
+    to import at runtime.
+    """
+    failures = []
+    for mesonfile in glob.glob("virtManager/**/meson.build", recursive=True) + glob.glob(
+        "virtinst/**/meson.build", recursive=True
+    ):
+        dirname = os.path.dirname(mesonfile)
+        listed = set(re.findall(r"'([A-Za-z0-9_]+\.py)'", open(mesonfile).read()))
+        ondisk = {os.path.basename(f) for f in glob.glob(os.path.join(dirname, "*.py"))}
+        for missing in sorted(ondisk - listed):
+            failures.append("%s is not installed by %s" % (missing, mesonfile))
+
+    if failures:
+        raise AssertionError("\n".join(failures))
 
 
 def test_ui_translatable_atknames():

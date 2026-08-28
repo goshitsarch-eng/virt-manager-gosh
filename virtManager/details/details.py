@@ -57,6 +57,7 @@ from ..oslist import vmmOSList
 from ..storagebrowse import vmmStorageBrowser
 from ..xmleditor import vmmXMLEditor
 from ..delete import vmmDeleteStorage
+from ..lib import uitest
 
 
 # Parameters that can be edited in the details window
@@ -529,7 +530,7 @@ class vmmDetails(vmmGObjectUI):
         gtkcompat.bind_button_sensitivity(
             self.widget("config-apply"),
             apply_btn,
-            "/tmp/vmm-a11y-config-apply-sensitive",
+            uitest.path("vmm-a11y-config-apply-sensitive"),
         )
         gtkcompat._start_config_apply_poll(self)
         gtkcompat.set_accessible_name(self.widget("config-cancel"), "config-cancel")
@@ -542,7 +543,7 @@ class vmmDetails(vmmGObjectUI):
         gtkcompat.bind_button_sensitivity(
             self.widget("config-cancel"),
             cancel_btn,
-            "/tmp/vmm-a11y-config-cancel-sensitive",
+            uitest.path("vmm-a11y-config-cancel-sensitive"),
         )
         title = self.widget("overview-title")
         gtkcompat.expose_a11y_entry("details-overview-title", "Title:", title, window=self.topwin)
@@ -568,7 +569,7 @@ class vmmDetails(vmmGObjectUI):
             self._vmm_name_poll = True
 
             def _poll_overview_name():
-                path = "/tmp/vmm-a11y-overview-name.txt"
+                path = uitest.path("vmm-a11y-overview-name.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -583,10 +584,10 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_overview_name)
+            uitest.poll_add(50, _poll_overview_name)
 
             def _poll_overview_title():
-                path = "/tmp/vmm-a11y-overview-title.txt"
+                path = uitest.path("vmm-a11y-overview-title.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -601,10 +602,10 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_overview_title)
+            uitest.poll_add(50, _poll_overview_title)
 
             def _poll_overview_desc():
-                path = "/tmp/vmm-a11y-overview-desc.txt"
+                path = uitest.path("vmm-a11y-overview-desc.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -619,10 +620,10 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_overview_desc)
+            uitest.poll_add(50, _poll_overview_desc)
 
             def _poll_force_overview_apply():
-                path = "/tmp/vmm-a11y-force-overview-apply"
+                path = uitest.path("vmm-a11y-force-overview-apply")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -636,26 +637,26 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_force_overview_apply)
+            uitest.poll_add(50, _poll_force_overview_apply)
 
             def _poll_details_model():
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-details-model.txt.set"):
+                    if os.path.exists(uitest.path("vmm-a11y-details-model.txt.set")):
                         self._a11y_consume_model_text()
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_details_model)
-            GLib.timeout_add(50, self._poll_vsock_cid_tick)
-            GLib.timeout_add(50, self._poll_vsock_auto_tick)
+            uitest.poll_add(50, _poll_details_model)
+            uitest.poll_add(50, self._poll_vsock_cid_tick)
+            uitest.poll_add(50, self._poll_vsock_auto_tick)
 
             def _poll_mem_fields():
                 changed = False
                 for fpath, wid, edit in (
-                    ("/tmp/vmm-a11y-mem-current.txt.set", "mem-memory", EDIT_MEM),
-                    ("/tmp/vmm-a11y-mem-max.txt.set", "mem-maxmem", EDIT_MEM),
-                    ("/tmp/vmm-a11y-cpu-vcpus.txt.set", "cpu-vcpus", EDIT_VCPUS),
+                    (uitest.path("vmm-a11y-mem-current.txt.set"), "mem-memory", EDIT_MEM),
+                    (uitest.path("vmm-a11y-mem-max.txt.set"), "mem-maxmem", EDIT_MEM),
+                    (uitest.path("vmm-a11y-cpu-vcpus.txt.set"), "cpu-vcpus", EDIT_VCPUS),
                 ):
                     if not os.path.exists(fpath):
                         continue
@@ -679,7 +680,7 @@ class vmmDetails(vmmGObjectUI):
                         changed = True
                     except Exception:
                         pass
-                cpath = "/tmp/vmm-a11y-mem-shared.txt.click"
+                cpath = uitest.path("vmm-a11y-mem-shared.txt.click")
                 if os.path.exists(cpath):
                     try:
                         os.remove(cpath)
@@ -694,7 +695,7 @@ class vmmDetails(vmmGObjectUI):
                         self._publish_mem_spins()
                     except Exception:
                         pass
-                cpath = "/tmp/vmm-a11y-cpu-copy-host.txt.click"
+                cpath = uitest.path("vmm-a11y-cpu-copy-host.txt.click")
                 if os.path.exists(cpath):
                     try:
                         os.remove(cpath)
@@ -704,7 +705,7 @@ class vmmDetails(vmmGObjectUI):
                         self._publish_cpu_fields()
                         try:
                             if w.get_active():
-                                open("/tmp/vmm-a11y-copy-host.txt", "w").write(
+                                open(uitest.path("vmm-a11y-copy-host.txt"), "w").write(
                                     "Copy host CPU configuration (host-passthrough)"
                                 )
                         except Exception:
@@ -712,7 +713,7 @@ class vmmDetails(vmmGObjectUI):
                         changed = True
                     except Exception:
                         pass
-                cpath = "/tmp/vmm-a11y-cpu-secure.txt.click"
+                cpath = uitest.path("vmm-a11y-cpu-secure.txt.click")
                 if os.path.exists(cpath):
                     try:
                         os.remove(cpath)
@@ -722,7 +723,7 @@ class vmmDetails(vmmGObjectUI):
                         changed = True
                     except Exception:
                         pass
-                cpath = "/tmp/vmm-a11y-cpu-topology-enable.txt.click"
+                cpath = uitest.path("vmm-a11y-cpu-topology-enable.txt.click")
                 if os.path.exists(cpath):
                     try:
                         os.remove(cpath)
@@ -732,7 +733,7 @@ class vmmDetails(vmmGObjectUI):
                         changed = True
                     except Exception:
                         pass
-                epath = "/tmp/vmm-a11y-cpu-topology-expand"
+                epath = uitest.path("vmm-a11y-cpu-topology-expand")
                 if os.path.exists(epath):
                     try:
                         os.remove(epath)
@@ -740,9 +741,9 @@ class vmmDetails(vmmGObjectUI):
                     except Exception:
                         pass
                 for fpath, wid, edit in (
-                    ("/tmp/vmm-a11y-cpu-sockets.txt.set", "cpu-sockets", EDIT_TOPOLOGY),
-                    ("/tmp/vmm-a11y-cpu-cores.txt.set", "cpu-cores", EDIT_TOPOLOGY),
-                    ("/tmp/vmm-a11y-cpu-threads.txt.set", "cpu-threads", EDIT_TOPOLOGY),
+                    (uitest.path("vmm-a11y-cpu-sockets.txt.set"), "cpu-sockets", EDIT_TOPOLOGY),
+                    (uitest.path("vmm-a11y-cpu-cores.txt.set"), "cpu-cores", EDIT_TOPOLOGY),
+                    (uitest.path("vmm-a11y-cpu-threads.txt.set"), "cpu-threads", EDIT_TOPOLOGY),
                 ):
                     if not os.path.exists(fpath):
                         continue
@@ -762,9 +763,9 @@ class vmmDetails(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_mem_fields)
+            uitest.poll_add(50, _poll_mem_fields)
 
-            GLib.timeout_add(50, self._poll_media_entry_tick)
+            uitest.poll_add(50, self._poll_media_entry_tick)
         try:
             gtkcompat.expose_a11y_spin(
                 "mem-memory",
@@ -1006,19 +1007,19 @@ class vmmDetails(vmmGObjectUI):
                 def _poll_network_ip():
                     try:
                         refresh_for = open(
-                            "/tmp/vmm-a11y-network-ip-refresh", "r"
+                            uitest.path("vmm-a11y-network-ip-refresh"), "r"
                         ).read().strip()
                     except Exception:
                         refresh_for = ""
                     if refresh_for:
                         try:
-                            os.remove("/tmp/vmm-a11y-network-ip-refresh")
+                            os.remove(uitest.path("vmm-a11y-network-ip-refresh"))
                         except Exception:
                             pass
                         want = ""
                         for path in (
-                            "/tmp/vmm-a11y-hw-clicked.txt",
-                            "/tmp/vmm-a11y-hw-selected.txt",
+                            uitest.path("vmm-a11y-hw-clicked.txt"),
+                            uitest.path("vmm-a11y-hw-selected.txt"),
                         ):
                             try:
                                 want = open(path, "r").read().strip()
@@ -1035,8 +1036,8 @@ class vmmDetails(vmmGObjectUI):
                         return True
                     want = ""
                     for path in (
-                        "/tmp/vmm-a11y-hw-clicked.txt",
-                        "/tmp/vmm-a11y-hw-selected.txt",
+                        uitest.path("vmm-a11y-hw-clicked.txt"),
+                        uitest.path("vmm-a11y-hw-selected.txt"),
                     ):
                         try:
                             want = open(path, "r").read().strip()
@@ -1050,7 +1051,7 @@ class vmmDetails(vmmGObjectUI):
                         return True
                     try:
                         current_for = open(
-                            "/tmp/vmm-a11y-network-ip-for.txt", "r"
+                            uitest.path("vmm-a11y-network-ip-for.txt"), "r"
                         ).read().strip()
                     except Exception:
                         current_for = ""
@@ -1068,18 +1069,18 @@ class vmmDetails(vmmGObjectUI):
                         pass
                     return True
 
-                GLib.timeout_add(50, _poll_network_ip)
+                uitest.poll_add(50, _poll_network_ip)
             try:
-                open("/tmp/vmm-a11y-boot-menu.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-boot-menu.txt"), "w").write("0")
             except Exception:
                 pass
             try:
-                os.remove("/tmp/vmm-a11y-xml-contents.txt")
+                os.remove(uitest.path("vmm-a11y-xml-contents.txt"))
             except Exception:
                 pass
             for path in (
-                "/tmp/vmm-a11y-details-media-entry.txt.set",
-                "/tmp/vmm-a11y-details-media-path.txt",
+                uitest.path("vmm-a11y-details-media-entry.txt.set"),
+                uitest.path("vmm-a11y-details-media-path.txt"),
             ):
                 try:
                     os.remove(path)
@@ -1092,8 +1093,8 @@ class vmmDetails(vmmGObjectUI):
 
             def _poll_boot_init():
                 for path, wid in (
-                    ("/tmp/vmm-a11y-boot-init-path.txt", "boot-init-path"),
-                    ("/tmp/vmm-a11y-boot-init-args.txt", "boot-init-args"),
+                    (uitest.path("vmm-a11y-boot-init-path.txt"), "boot-init-path"),
+                    (uitest.path("vmm-a11y-boot-init-args.txt"), "boot-init-args"),
                 ):
                     try:
                         if not os.path.exists(path):
@@ -1113,20 +1114,20 @@ class vmmDetails(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_boot_init)
+            uitest.poll_add(50, _poll_boot_init)
         gtkcompat.start_config_remove_poll(self)
         if not getattr(self, "_vmm_hw_popup_poll", False):
             self._vmm_hw_popup_poll = True
 
             def _poll_hw_popup():
-                path = "/tmp/vmm-a11y-hw-popup-add"
+                path = uitest.path("vmm-a11y-hw-popup-add")
                 try:
                     if os.path.exists(path):
                         os.remove(path)
                         self._show_addhw()
                 except Exception:
                     pass
-                showp = "/tmp/vmm-a11y-addhw-show.txt"
+                showp = uitest.path("vmm-a11y-addhw-show.txt")
                 try:
                     if os.path.exists(showp):
                         want = open(showp, "r").read().strip()
@@ -1142,12 +1143,12 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_hw_popup)
+            uitest.poll_add(50, _poll_hw_popup)
         if not getattr(self, "_vmm_hw_select_poll", False):
             self._vmm_hw_select_poll = True
 
             def _poll_hw_select():
-                path = "/tmp/vmm-a11y-hw-select.txt"
+                path = uitest.path("vmm-a11y-hw-select.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -1159,7 +1160,7 @@ class vmmDetails(vmmGObjectUI):
                 try:
                     shown = ""
                     try:
-                        shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                        shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                     except Exception:
                         shown = ""
                     if shown and shown != self.vm.get_name():
@@ -1190,7 +1191,7 @@ class vmmDetails(vmmGObjectUI):
                         try:
                             apply_on = (
                                 open(
-                                    "/tmp/vmm-a11y-config-apply-sensitive", "r"
+                                    uitest.path("vmm-a11y-config-apply-sensitive"), "r"
                                 ).read().strip()
                                 == "1"
                             )
@@ -1220,10 +1221,10 @@ class vmmDetails(vmmGObjectUI):
                         failed = self._has_unapplied_changes(dirty_row)
                         if failed:
                             try:
-                                open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(
+                                open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(
                                     dirty
                                 )
-                                open("/tmp/vmm-a11y-hw-selected.txt", "w").write(
+                                open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(
                                     dirty
                                 )
                             except Exception:
@@ -1237,66 +1238,66 @@ class vmmDetails(vmmGObjectUI):
                         # or Don't-warn-abandon (testDetailsMiscEdits).
                         self._set_hw_selection(idx, _disable_apply=False)
                     try:
-                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(
+                        open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(
                             dest_label
                         )
                         if any(k in want for k in ("Disk", "CDROM", "Floppy")):
-                            open("/tmp/vmm-a11y-details-tab.txt", "w").write("disk-tab")
+                            open(uitest.path("vmm-a11y-details-tab.txt"), "w").write("disk-tab")
                     except Exception:
                         pass
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_hw_select)
+            uitest.poll_add(50, _poll_hw_select)
         if not getattr(self, "_vmm_os_publish_poll", False):
             self._vmm_os_publish_poll = True
 
             def _poll_os_publish():
                 try:
-                    sel = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+                    sel = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read().strip()
                 except Exception:
                     sel = ""
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-inspection-refresh.txt"):
+                    if os.path.exists(uitest.path("vmm-a11y-inspection-refresh.txt")):
                         shown = ""
                         try:
-                            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                            shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                         except Exception:
                             shown = ""
                         if not shown or shown == self.vm.get_name():
-                            os.remove("/tmp/vmm-a11y-inspection-refresh.txt")
+                            os.remove(uitest.path("vmm-a11y-inspection-refresh.txt"))
                             self._inspection_refresh_clicked_cb(None)
                 except Exception as exc:
                     try:
-                        open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                        open(uitest.path("vmm-a11y-inspection-debug.txt"), "a").write(
                             "os-publish-refresh-err: %s\n" % exc
                         )
                     except Exception:
                         pass
                 if "OS information" not in sel:
                     return True
-                if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
+                if os.path.exists(uitest.path("vmm-a11y-oslist-typed")):
                     return True
                 try:
                     label = self.vm.xmlobj.osinfo.label
                     if label:
-                        open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
+                        open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(label)
                 except Exception:
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_os_publish)
+            uitest.poll_add(50, _poll_os_publish)
         if not getattr(self, "_vmm_inspection_refresh_poll", False):
             self._vmm_inspection_refresh_poll = True
 
             def _poll_inspection_refresh():
-                path = "/tmp/vmm-a11y-inspection-refresh.txt"
+                path = uitest.path("vmm-a11y-inspection-refresh.txt")
                 try:
                     if os.path.exists(path):
                         shown = ""
                         try:
-                            shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                            shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                         except Exception:
                             shown = ""
                         if not shown or shown == self.vm.get_name():
@@ -1304,34 +1305,34 @@ class vmmDetails(vmmGObjectUI):
                             self._inspection_refresh_clicked_cb(None)
                 except Exception as exc:
                     try:
-                        open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                        open(uitest.path("vmm-a11y-inspection-debug.txt"), "a").write(
                             "poll-refresh-err: %s\n" % exc
                         )
                     except Exception:
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_inspection_refresh)
+            uitest.poll_add(50, _poll_inspection_refresh)
         if not getattr(self, "_vmm_boot_fields_poll", False):
             self._vmm_boot_fields_poll = True
 
             def _poll_boot_fields():
                 changed = False
-                apath = "/tmp/vmm-a11y-config-apply"
+                apath = uitest.path("vmm-a11y-config-apply")
                 if os.path.exists(apath):
                     tab = ""
                     hw = ""
                     try:
-                        tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+                        tab = open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
                     except Exception:
                         tab = ""
                     try:
-                        hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+                        hw = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read()
                     except Exception:
                         hw = ""
                     last = ""
                     try:
-                        last = open("/tmp/vmm-a11y-last-hw.txt", "r").read()
+                        last = open(uitest.path("vmm-a11y-last-hw.txt"), "r").read()
                     except Exception:
                         last = ""
                     on_boot = (
@@ -1345,7 +1346,7 @@ class vmmDetails(vmmGObjectUI):
                         except Exception:
                             pass
                         try:
-                            open("/tmp/vmm-a11y-apply-debug.txt", "w").write(
+                            open(uitest.path("vmm-a11y-apply-debug.txt"), "w").write(
                                 "boot-poll\n"
                             )
                         except Exception:
@@ -1358,15 +1359,15 @@ class vmmDetails(vmmGObjectUI):
                             self._config_apply()
                         except Exception as exc:
                             try:
-                                open("/tmp/vmm-a11y-apply-debug.txt", "w").write(
+                                open(uitest.path("vmm-a11y-apply-debug.txt"), "w").write(
                                     "boot-poll-err: %s\n" % exc
                                 )
                             except Exception:
                                 pass
                 for trig, opener in (
-                    ("/tmp/vmm-a11y-initrd-browse", self._browse_initrd_clicked_cb),
-                    ("/tmp/vmm-a11y-kernel-browse", self._browse_kernel_clicked_cb),
-                    ("/tmp/vmm-a11y-dtb-browse", self._browse_dtb_clicked_cb),
+                    (uitest.path("vmm-a11y-initrd-browse"), self._browse_initrd_clicked_cb),
+                    (uitest.path("vmm-a11y-kernel-browse"), self._browse_kernel_clicked_cb),
+                    (uitest.path("vmm-a11y-dtb-browse"), self._browse_dtb_clicked_cb),
                 ):
                     if os.path.exists(trig):
                         try:
@@ -1377,12 +1378,12 @@ class vmmDetails(vmmGObjectUI):
                             opener(None)
                         except Exception as exc:
                             try:
-                                open("/tmp/vmm-a11y-browse-err.txt", "w").write(
+                                open(uitest.path("vmm-a11y-browse-err.txt"), "w").write(
                                     "%s: %s\n" % (trig, exc)
                                 )
                             except Exception:
                                 pass
-                cpath = "/tmp/vmm-a11y-boot-autostart.txt.click"
+                cpath = uitest.path("vmm-a11y-boot-autostart.txt.click")
                 if os.path.exists(cpath):
                     try:
                         os.remove(cpath)
@@ -1392,9 +1393,9 @@ class vmmDetails(vmmGObjectUI):
                         changed = True
                     except Exception:
                         pass
-                if os.path.exists("/tmp/vmm-a11y-boot-menu.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-boot-menu.txt")):
                     try:
-                        want = open("/tmp/vmm-a11y-boot-menu.txt", "r").read().strip()
+                        want = open(uitest.path("vmm-a11y-boot-menu.txt"), "r").read().strip()
                         w = self.widget("boot-menu")
                         if w.get_active() != (want == "1"):
                             w.set_active(want == "1")
@@ -1402,13 +1403,13 @@ class vmmDetails(vmmGObjectUI):
                             changed = True
                     except Exception:
                         pass
-                if os.path.exists("/tmp/vmm-a11y-boot-kernel-expand"):
+                if os.path.exists(uitest.path("vmm-a11y-boot-kernel-expand")):
                     try:
-                        os.remove("/tmp/vmm-a11y-boot-kernel-expand")
+                        os.remove(uitest.path("vmm-a11y-boot-kernel-expand"))
                         self.widget("boot-kernel-expander").set_expanded(True)
                     except Exception:
                         pass
-                cpath = "/tmp/vmm-a11y-boot-kernel-enable.txt.click"
+                cpath = uitest.path("vmm-a11y-boot-kernel-enable.txt.click")
                 if os.path.exists(cpath):
                     try:
                         os.remove(cpath)
@@ -1419,10 +1420,10 @@ class vmmDetails(vmmGObjectUI):
                     except Exception:
                         pass
                 for fpath, wid in (
-                    ("/tmp/vmm-a11y-boot-kernel-args.txt", "boot-kernel-args"),
-                    ("/tmp/vmm-a11y-boot-initrd.txt", "boot-initrd"),
-                    ("/tmp/vmm-a11y-boot-kernel.txt", "boot-kernel"),
-                    ("/tmp/vmm-a11y-boot-dtb.txt", "boot-dtb"),
+                    (uitest.path("vmm-a11y-boot-kernel-args.txt"), "boot-kernel-args"),
+                    (uitest.path("vmm-a11y-boot-initrd.txt"), "boot-initrd"),
+                    (uitest.path("vmm-a11y-boot-kernel.txt"), "boot-kernel"),
+                    (uitest.path("vmm-a11y-boot-dtb.txt"), "boot-dtb"),
                 ):
                     try:
                         if not os.path.exists(fpath):
@@ -1443,8 +1444,8 @@ class vmmDetails(vmmGObjectUI):
                     except Exception:
                         pass
                 try:
-                    sel = open("/tmp/vmm-a11y-boot-select.txt", "r").read().strip()
-                    os.remove("/tmp/vmm-a11y-boot-select.txt")
+                    sel = open(uitest.path("vmm-a11y-boot-select.txt"), "r").read().strip()
+                    os.remove(uitest.path("vmm-a11y-boot-select.txt"))
                 except Exception:
                     sel = ""
                 if sel:
@@ -1459,9 +1460,9 @@ class vmmDetails(vmmGObjectUI):
                                 break
                     except Exception:
                         pass
-                if os.path.exists("/tmp/vmm-a11y-boot-toggle.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-boot-toggle.txt")):
                     try:
-                        os.remove("/tmp/vmm-a11y-boot-toggle.txt")
+                        os.remove(uitest.path("vmm-a11y-boot-toggle.txt"))
                         row = self._get_config_boot_selection()
                         if row is not None:
                             self._config_boot_toggled_cb(None, row.path[0])
@@ -1475,21 +1476,21 @@ class vmmDetails(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_boot_fields)
+            uitest.poll_add(50, _poll_boot_fields)
         if not getattr(self, "_vmm_disk_fields_poll", False):
             self._vmm_disk_fields_poll = True
 
             def _poll_disk_fields():
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-disk-advanced-expand"):
-                        os.remove("/tmp/vmm-a11y-disk-advanced-expand")
+                    if os.path.exists(uitest.path("vmm-a11y-disk-advanced-expand")):
+                        os.remove(uitest.path("vmm-a11y-disk-advanced-expand"))
                         self._addstorage.widget("storage-advanced").set_expanded(True)
                 except Exception:
                     pass
                 for cpath, wid, edit in (
-                    ("/tmp/vmm-a11y-disk-shareable.txt.click", "disk-shareable", EDIT_DISK),
-                    ("/tmp/vmm-a11y-disk-readonly.txt.click", "disk-readonly", EDIT_DISK),
-                    ("/tmp/vmm-a11y-disk-removable.txt.click", "disk-removable", EDIT_DISK),
+                    (uitest.path("vmm-a11y-disk-shareable.txt.click"), "disk-shareable", EDIT_DISK),
+                    (uitest.path("vmm-a11y-disk-readonly.txt.click"), "disk-readonly", EDIT_DISK),
+                    (uitest.path("vmm-a11y-disk-removable.txt.click"), "disk-removable", EDIT_DISK),
                 ):
                     if not os.path.exists(cpath):
                         continue
@@ -1529,19 +1530,19 @@ class vmmDetails(vmmGObjectUI):
                         self._enable_apply(edit)
                     except Exception:
                         pass
-                cpath = "/tmp/vmm-a11y-net-link.txt.click"
+                cpath = uitest.path("vmm-a11y-net-link.txt.click")
                 if os.path.exists(cpath):
                     try:
                         os.remove(cpath)
                         w = self.widget("network-link-state-checkbox")
                         w.set_active(not w.get_active())
-                        open("/tmp/vmm-a11y-net-link.txt", "w").write(
+                        open(uitest.path("vmm-a11y-net-link.txt"), "w").write(
                             "1" if w.get_active() else "0"
                         )
                         self._enable_apply(EDIT_NET_LINKSTATE)
                     except Exception:
                         pass
-                cset = "/tmp/vmm-a11y-combo-Cache mode:.txt.set"
+                cset = uitest.path("vmm-a11y-combo-Cache mode:.txt.set")
                 try:
                     if os.path.exists(cset):
                         text = open(cset, "r").read().strip()
@@ -1564,7 +1565,7 @@ class vmmDetails(vmmGObjectUI):
                         self._enable_apply(EDIT_DISK)
                 except Exception:
                     pass
-                nset = "/tmp/vmm-a11y-net-device.txt.set"
+                nset = uitest.path("vmm-a11y-net-device.txt.set")
                 try:
                     # Only .set is a details edit. The wizard also writes
                     # net-device.txt for New VM Device name.
@@ -1583,7 +1584,7 @@ class vmmDetails(vmmGObjectUI):
                             self._enable_apply(EDIT_NET_SOURCE)
                 except Exception:
                     pass
-                bset = "/tmp/vmm-a11y-disk-bus.txt.set"
+                bset = uitest.path("vmm-a11y-disk-bus.txt.set")
                 try:
                     if os.path.exists(bset):
                         text = open(bset, "r").read().strip()
@@ -1600,11 +1601,11 @@ class vmmDetails(vmmGObjectUI):
                                 uiutil.set_list_selection(combo, text.lower())
                             except Exception:
                                 pass
-                            open("/tmp/vmm-a11y-disk-bus.txt", "w").write(text)
+                            open(uitest.path("vmm-a11y-disk-bus.txt"), "w").write(text)
                             self._enable_apply(EDIT_DISK_BUS)
                 except Exception:
                     pass
-                mset = "/tmp/vmm-a11y-details-mac-entry.txt.set"
+                mset = uitest.path("vmm-a11y-details-mac-entry.txt.set")
                 try:
                     if os.path.exists(mset):
                         text = open(mset, "r").read().strip()
@@ -1612,11 +1613,11 @@ class vmmDetails(vmmGObjectUI):
                         w = self.widget("network-mac-entry")
                         if w is not None:
                             w.set_text(text)
-                        open("/tmp/vmm-a11y-details-mac-entry.txt", "w").write(text)
+                        open(uitest.path("vmm-a11y-details-mac-entry.txt"), "w").write(text)
                         self._enable_apply(EDIT_NET_MAC)
                 except Exception:
                     pass
-                spath = "/tmp/vmm-a11y-disk-serial.txt"
+                spath = uitest.path("vmm-a11y-disk-serial.txt")
                 try:
                     if os.path.exists(spath):
                         stamp = os.path.getmtime(spath)
@@ -1631,18 +1632,18 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_disk_fields)
+            uitest.poll_add(50, _poll_disk_fields)
         if not getattr(self, "_vmm_overview_combo_poll", False):
             self._vmm_overview_combo_poll = True
 
             def _poll_overview_combo():
                 try:
-                    if open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip() == "1":
                         # Add Hardware owns Type:/Model:/net-source while it is open.
                         return True
                 except Exception:
                     pass
-                sel = "/tmp/vmm-a11y-combo-select.txt"
+                sel = uitest.path("vmm-a11y-combo-select.txt")
                 try:
                     if not os.path.exists(sel):
                         self._publish_overview_combos()
@@ -1942,10 +1943,10 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_overview_combo)
+            uitest.poll_add(50, _poll_overview_combo)
 
             def _poll_cpu_model_text():
-                path = "/tmp/vmm-a11y-combo-cpu-model.txt"
+                path = uitest.path("vmm-a11y-combo-cpu-model.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -1967,7 +1968,7 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_cpu_model_text)
+            uitest.poll_add(50, _poll_cpu_model_text)
         if not getattr(self, "_vmm_device_fields_poll", False):
             self._vmm_device_fields_poll = True
 
@@ -1983,7 +1984,7 @@ class vmmDetails(vmmGObjectUI):
                             # clobber a later user uncheck while Apply is
                             # pending (testDetailsMiscEdits start-VM).
                             skip = os.path.exists(
-                                "/tmp/vmm-a11y-disk-shareable.txt.click"
+                                uitest.path("vmm-a11y-disk-shareable.txt.click")
                             )
                             live = ""
                             if not skip:
@@ -1994,7 +1995,7 @@ class vmmDetails(vmmGObjectUI):
                                 apply_on = False
                                 try:
                                     live = open(
-                                        "/tmp/vmm-a11y-disk-shareable.txt",
+                                        uitest.path("vmm-a11y-disk-shareable.txt"),
                                         "r",
                                     ).read().strip()
                                 except Exception:
@@ -2009,7 +2010,7 @@ class vmmDetails(vmmGObjectUI):
                                     try:
                                         apply_on = (
                                             open(
-                                                "/tmp/vmm-a11y-config-apply-sensitive",
+                                                uitest.path("vmm-a11y-config-apply-sensitive"),
                                                 "r",
                                             ).read().strip()
                                             == "1"
@@ -2021,7 +2022,7 @@ class vmmDetails(vmmGObjectUI):
                                 )
                             if not skip and live != "1":
                                 open(
-                                    "/tmp/vmm-a11y-disk-shareable.txt", "w"
+                                    uitest.path("vmm-a11y-disk-shareable.txt"), "w"
                                 ).write("1")
                     except Exception:
                         pass
@@ -2065,15 +2066,15 @@ class vmmDetails(vmmGObjectUI):
                                         if failed:
                                             try:
                                                 open(
-                                                    "/tmp/vmm-a11y-hw-clicked.txt",
+                                                    uitest.path("vmm-a11y-hw-clicked.txt"),
                                                     "w",
                                                 ).write(dirty)
                                                 open(
-                                                    "/tmp/vmm-a11y-hw-selected.txt",
+                                                    uitest.path("vmm-a11y-hw-selected.txt"),
                                                     "w",
                                                 ).write(dirty)
                                                 open(
-                                                    "/tmp/vmm-a11y-last-hw.txt",
+                                                    uitest.path("vmm-a11y-last-hw.txt"),
                                                     "w",
                                                 ).write(dirty)
                                             except Exception:
@@ -2090,7 +2091,7 @@ class vmmDetails(vmmGObjectUI):
                                     clicked = ""
                                     try:
                                         clicked = open(
-                                            "/tmp/vmm-a11y-hw-clicked.txt", "r"
+                                            uitest.path("vmm-a11y-hw-clicked.txt"), "r"
                                         ).read().strip()
                                     except Exception:
                                         clicked = ""
@@ -2103,8 +2104,8 @@ class vmmDetails(vmmGObjectUI):
                                         return True
                                     try:
                                         if last:
-                                            open("/tmp/vmm-a11y-last-hw.txt", "w").write(last)
-                                            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(last)
+                                            open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(last)
+                                            open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(last)
                                     except Exception:
                                         pass
                                     self._vmm_pending_hw_nav = None
@@ -2130,31 +2131,31 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 checks = (
                     (
-                        "/tmp/vmm-a11y-gfx-opengl.txt.click",
+                        uitest.path("vmm-a11y-gfx-opengl.txt.click"),
                         lambda: self.gfxdetails.widget("graphics-opengl"),
                         _EDIT_GFX_OPENGL,
                         True,
                     ),
                     (
-                        "/tmp/vmm-a11y-gfx-port-auto.txt.click",
+                        uitest.path("vmm-a11y-gfx-port-auto.txt.click"),
                         lambda: self.gfxdetails.widget("graphics-port-auto"),
                         _EDIT_GFX_PORT,
                         True,
                     ),
                     (
-                        "/tmp/vmm-a11y-gfx-pass-chk.txt.click",
+                        uitest.path("vmm-a11y-gfx-pass-chk.txt.click"),
                         lambda: self.gfxdetails.widget("graphics-password-chk"),
                         _EDIT_GFX_PASSWD,
                         True,
                     ),
                     (
-                        "/tmp/vmm-a11y-hostdev-rombar.txt.click",
+                        uitest.path("vmm-a11y-hostdev-rombar.txt.click"),
                         lambda: self.widget("hostdev-rombar"),
                         EDIT_HOSTDEV_ROMBAR,
                         False,
                     ),
                     (
-                        "/tmp/vmm-a11y-video-3d.txt.click",
+                        uitest.path("vmm-a11y-video-3d.txt.click"),
                         lambda: self.widget("video-3d"),
                         EDIT_VIDEO_3D,
                         False,
@@ -2181,13 +2182,13 @@ class vmmDetails(vmmGObjectUI):
                         pass
                 for path, getter, edit, is_gfx in (
                     (
-                        "/tmp/vmm-a11y-gfx-port.txt",
+                        uitest.path("vmm-a11y-gfx-port.txt"),
                         lambda: self.gfxdetails.widget("graphics-port"),
                         _EDIT_GFX_PORT,
                         True,
                     ),
                     (
-                        "/tmp/vmm-a11y-gfx-password.txt",
+                        uitest.path("vmm-a11y-gfx-password.txt"),
                         lambda: self.gfxdetails.widget("graphics-password"),
                         _EDIT_GFX_PASSWD,
                         True,
@@ -2218,7 +2219,7 @@ class vmmDetails(vmmGObjectUI):
                         self._publish_details_device_fields()
                     except Exception:
                         pass
-                mset = "/tmp/vmm-a11y-details-model.txt.set"
+                mset = uitest.path("vmm-a11y-details-model.txt.set")
                 try:
                     if os.path.exists(mset):
                         text = open(mset, "r").read().strip()
@@ -2244,7 +2245,7 @@ class vmmDetails(vmmGObjectUI):
                                 self._publish_details_device_fields()
                 except Exception:
                     pass
-                cset = "/tmp/vmm-a11y-combo-controller-model.txt.set"
+                cset = uitest.path("vmm-a11y-combo-controller-model.txt.set")
                 try:
                     if os.path.exists(cset):
                         text = open(cset, "r").read().strip()
@@ -2267,19 +2268,19 @@ class vmmDetails(vmmGObjectUI):
                     pass
                 for path, getter, edit, change in (
                     (
-                        "/tmp/vmm-a11y-fs-source.txt",
+                        uitest.path("vmm-a11y-fs-source.txt"),
                         lambda: self.fsDetails.widget("fs-source"),
                         EDIT_FS,
                         lambda: self.fsDetails._change_cb(_EDIT_FS_SOURCE),
                     ),
                     (
-                        "/tmp/vmm-a11y-fs-target.txt",
+                        uitest.path("vmm-a11y-fs-target.txt"),
                         lambda: self.fsDetails.widget("fs-target"),
                         EDIT_FS,
                         lambda: self.fsDetails._change_cb(_EDIT_FS_TARGET),
                     ),
                     (
-                        "/tmp/vmm-a11y-vsock-cid.txt",
+                        uitest.path("vmm-a11y-vsock-cid.txt"),
                         lambda: self.vsockdetails.widget("vsock-cid"),
                         EDIT_VSOCK_CID,
                         None,
@@ -2317,13 +2318,13 @@ class vmmDetails(vmmGObjectUI):
                         pass
                 for cpath, getter, edit, change in (
                     (
-                        "/tmp/vmm-a11y-fs-export.txt.click",
+                        uitest.path("vmm-a11y-fs-export.txt.click"),
                         lambda: self.fsDetails.widget("fs-readonly"),
                         EDIT_FS,
                         lambda: self.fsDetails._change_cb(_EDIT_FS_READONLY),
                     ),
                     (
-                        "/tmp/vmm-a11y-vsock-auto.txt.click",
+                        uitest.path("vmm-a11y-vsock-auto.txt.click"),
                         lambda: self.vsockdetails.widget("vsock-auto"),
                         EDIT_VSOCK_AUTO,
                         None,
@@ -2344,17 +2345,17 @@ class vmmDetails(vmmGObjectUI):
                         self._publish_details_device_fields()
                     except Exception:
                         pass
-                if os.path.exists("/tmp/vmm-a11y-tpm-advanced-expand"):
+                if os.path.exists(uitest.path("vmm-a11y-tpm-advanced-expand")):
                     try:
-                        os.remove("/tmp/vmm-a11y-tpm-advanced-expand")
+                        os.remove(uitest.path("vmm-a11y-tpm-advanced-expand"))
                         exp = self.tpmdetails.widget("tpm-advanced-expander")
                         if exp is not None:
                             exp.set_expanded(True)
                     except Exception:
                         pass
-                if os.path.exists("/tmp/vmm-a11y-watchdog-action-down"):
+                if os.path.exists(uitest.path("vmm-a11y-watchdog-action-down")):
                     try:
-                        os.remove("/tmp/vmm-a11y-watchdog-action-down")
+                        os.remove(uitest.path("vmm-a11y-watchdog-action-down"))
                         combo = self.widget("watchdog-action")
                         idx = combo.get_active()
                         model = combo.get_model()
@@ -2366,12 +2367,12 @@ class vmmDetails(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_device_fields)
+            uitest.poll_add(50, _poll_device_fields)
 
     def _a11y_consume_model_text(self):
         for path in (
-            "/tmp/vmm-a11y-details-model.txt.set",
-            "/tmp/vmm-a11y-details-model.txt",
+            uitest.path("vmm-a11y-details-model.txt.set"),
+            uitest.path("vmm-a11y-details-model.txt"),
         ):
             try:
                 text = open(path, "r").read().strip()
@@ -2430,20 +2431,20 @@ class vmmDetails(vmmGObjectUI):
         tab = ""
         hw = ""
         try:
-            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+            tab = open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
         except Exception:
             tab = ""
         if tab == "host-tab":
             try:
-                host = open("/tmp/vmm-a11y-hostdev-clicked.txt", "r").read().strip()
+                host = open(uitest.path("vmm-a11y-hostdev-clicked.txt"), "r").read().strip()
             except Exception:
                 host = ""
             if host:
                 return tab, host
         for path in (
-            "/tmp/vmm-a11y-hw-clicked.txt",
-            "/tmp/vmm-a11y-hw-selected.txt",
-            "/tmp/vmm-a11y-last-hw.txt",
+            uitest.path("vmm-a11y-hw-clicked.txt"),
+            uitest.path("vmm-a11y-hw-selected.txt"),
+            uitest.path("vmm-a11y-last-hw.txt"),
         ):
             try:
                 hw = open(path, "r").read().strip()
@@ -2477,10 +2478,10 @@ class vmmDetails(vmmGObjectUI):
     def _a11y_model_combo(self):
         want = ""
         for path in (
-            "/tmp/vmm-a11y-details-tab.txt",
-            "/tmp/vmm-a11y-last-hw.txt",
-            "/tmp/vmm-a11y-hw-clicked.txt",
-            "/tmp/vmm-a11y-hw-selected.txt",
+            uitest.path("vmm-a11y-details-tab.txt"),
+            uitest.path("vmm-a11y-last-hw.txt"),
+            uitest.path("vmm-a11y-hw-clicked.txt"),
+            uitest.path("vmm-a11y-hw-selected.txt"),
         ):
             try:
                 want = open(path, "r").read().strip()
@@ -2500,7 +2501,7 @@ class vmmDetails(vmmGObjectUI):
                         lambda: self.tpmdetails._change_cb(_EDIT_TPM_MODEL),
                     )
         try:
-            text = open("/tmp/vmm-a11y-details-model.txt.set", "r").read().strip()
+            text = open(uitest.path("vmm-a11y-details-model.txt.set"), "r").read().strip()
         except Exception:
             text = ""
         if text:
@@ -2558,72 +2559,72 @@ class vmmDetails(vmmGObjectUI):
                 except Exception:
                     extra = ""
                 shown = extra or label
-                open("/tmp/vmm-a11y-combo-%s.txt" % key, "w").write(shown)
+                open(uitest.path("vmm-a11y-combo-%s.txt") % key, "w").write(shown)
                 if shown:
                     current.append(shown)
             combo, _edit, _cb = self._a11y_model_combo()
             if combo is not None:
                 label = _combo_label(combo)
-                open("/tmp/vmm-a11y-combo-Model:.txt", "w").write(label)
+                open(uitest.path("vmm-a11y-combo-Model:.txt"), "w").write(label)
                 if label:
                     current.append(label)
-            open("/tmp/vmm-a11y-combo-current.txt", "w").write("\n".join(current))
-            open("/tmp/vmm-a11y-addhw-combo-current.txt", "w").write("\n".join(current))
+            open(uitest.path("vmm-a11y-combo-current.txt"), "w").write("\n".join(current))
+            open(uitest.path("vmm-a11y-addhw-combo-current.txt"), "w").write("\n".join(current))
         except Exception:
             pass
         try:
             gl = self.gfxdetails.widget("graphics-opengl")
-            open("/tmp/vmm-a11y-gfx-opengl.txt", "w").write(
+            open(uitest.path("vmm-a11y-gfx-opengl.txt"), "w").write(
                 "1" if gl.get_active() else "0"
             )
             portauto = self.gfxdetails.widget("graphics-port-auto")
-            open("/tmp/vmm-a11y-gfx-port-auto.txt", "w").write(
+            open(uitest.path("vmm-a11y-gfx-port-auto.txt"), "w").write(
                 "1" if portauto.get_active() else "0"
             )
             vis = "1" if portauto.get_visible() else "0"
-            open("/tmp/vmm-a11y-gfx-port-auto.txt.visible", "w").write(vis)
+            open(uitest.path("vmm-a11y-gfx-port-auto.txt.visible"), "w").write(vis)
             port = self.gfxdetails.widget("graphics-port")
-            open("/tmp/vmm-a11y-gfx-port.txt", "w").write(
+            open(uitest.path("vmm-a11y-gfx-port.txt"), "w").write(
                 str(int(port.get_value()))
             )
             pchk = self.gfxdetails.widget("graphics-password-chk")
-            open("/tmp/vmm-a11y-gfx-pass-chk.txt", "w").write(
+            open(uitest.path("vmm-a11y-gfx-pass-chk.txt"), "w").write(
                 "1" if pchk.get_active() else "0"
             )
-            open("/tmp/vmm-a11y-gfx-password.txt", "w").write(
+            open(uitest.path("vmm-a11y-gfx-password.txt"), "w").write(
                 self.gfxdetails.widget("graphics-password").get_text() or ""
             )
-            open("/tmp/vmm-a11y-hostdev-rombar.txt", "w").write(
+            open(uitest.path("vmm-a11y-hostdev-rombar.txt"), "w").write(
                 "1" if self.widget("hostdev-rombar").get_active() else "0"
             )
-            open("/tmp/vmm-a11y-video-3d.txt", "w").write(
+            open(uitest.path("vmm-a11y-video-3d.txt"), "w").write(
                 "1" if self.widget("video-3d").get_active() else "0"
             )
-            open("/tmp/vmm-a11y-fs-source.txt", "w").write(
+            open(uitest.path("vmm-a11y-fs-source.txt"), "w").write(
                 self.fsDetails.widget("fs-source").get_text() or ""
             )
-            open("/tmp/vmm-a11y-fs-target.txt", "w").write(
+            open(uitest.path("vmm-a11y-fs-target.txt"), "w").write(
                 self.fsDetails.widget("fs-target").get_text() or ""
             )
-            open("/tmp/vmm-a11y-fs-export.txt", "w").write(
+            open(uitest.path("vmm-a11y-fs-export.txt"), "w").write(
                 "1" if self.fsDetails.widget("fs-readonly").get_active() else "0"
             )
             warn = self.fsDetails.widget("fs-driver-warn-box")
-            open("/tmp/vmm-a11y-fs-shared-mem-warn.txt", "w").write(
+            open(uitest.path("vmm-a11y-fs-shared-mem-warn.txt"), "w").write(
                 "1" if warn is not None and warn.get_visible() else "0"
             )
             auto = self.vsockdetails.widget("vsock-auto")
             cid = self.vsockdetails.widget("vsock-cid")
             # The shared combo poller republishes these every 50ms and
             # would eat a pending .set / .click sentinel.
-            if not os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.set") and not os.path.exists(
-                "/tmp/vmm-a11y-vsock-auto.txt.click"
+            if not os.path.exists(uitest.path("vmm-a11y-vsock-auto.txt.set")) and not os.path.exists(
+                uitest.path("vmm-a11y-vsock-auto.txt.click")
             ):
-                open("/tmp/vmm-a11y-vsock-auto.txt", "w").write(
+                open(uitest.path("vmm-a11y-vsock-auto.txt"), "w").write(
                     "1" if auto.get_active() else "0"
                 )
-            if not os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set") and not os.path.exists(
-                "/tmp/vmm-a11y-vsock-cid-want.txt"
+            if not os.path.exists(uitest.path("vmm-a11y-vsock-cid.txt.set")) and not os.path.exists(
+                uitest.path("vmm-a11y-vsock-cid-want.txt")
             ):
                 applied = getattr(self, "_vmm_applied_vsock_cid", None)
                 value = (
@@ -2631,8 +2632,8 @@ class vmmDetails(vmmGObjectUI):
                     if applied is not None
                     else str(int(uiutil.spin_get_helper(cid) or 0))
                 )
-                open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(value)
-            open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write(
+                open(uitest.path("vmm-a11y-vsock-cid.txt"), "w").write(value)
+            open(uitest.path("vmm-a11y-vsock-cid.txt.visible"), "w").write(
                 "1" if cid.get_visible() else "0"
             )
             self._publish_controller_devices()
@@ -2651,15 +2652,15 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             names = []
         try:
-            open("/tmp/vmm-a11y-controller-devices.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-controller-devices.txt"), "w").write("\n".join(names))
         except Exception:
             pass
 
     def _publish_overview_combos(self):
         mapping = (
-            ("overview-chipset", "/tmp/vmm-a11y-chipset.txt", 0),
-            ("overview-firmware", "/tmp/vmm-a11y-firmware.txt", 0),
-            ("machine-type", "/tmp/vmm-a11y-machine-combo.txt", 0),
+            ("overview-chipset", uitest.path("vmm-a11y-chipset.txt"), 0),
+            ("overview-firmware", uitest.path("vmm-a11y-firmware.txt"), 0),
+            ("machine-type", uitest.path("vmm-a11y-machine-combo.txt"), 0),
         )
         for wid, path, col in mapping:
             try:
@@ -3049,7 +3050,7 @@ class vmmDetails(vmmGObjectUI):
             return
 
         # force select the list entry before showing popup_menu
-        path_tuple = widget.get_path_at_pos(int(event.x), int(event.y))
+        path_tuple = gtkcompat.treeview_path_at_event(widget, event)
         if path_tuple is None:
             return False  # pragma: no cover
         path = path_tuple[0]
@@ -3090,11 +3091,11 @@ class vmmDetails(vmmGObjectUI):
             "Boot Options",
         )
         try:
-            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(label)
-            open("/tmp/vmm-a11y-last-hw.txt", "w").write(label)
+            open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(label)
+            open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(label)
             if label not in _NON_DEVICE:
-                open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(label)
-                open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(label)
+                open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(label)
+                open(uitest.path("vmm-a11y-hw-last-device.txt"), "w").write(label)
             tabmap = {
                 "Overview": "overview-tab",
                 "OS information": "os-tab",
@@ -3105,7 +3106,7 @@ class vmmDetails(vmmGObjectUI):
             }
             tab = tabmap.get(label)
             if tab:
-                open("/tmp/vmm-a11y-details-tab.txt", "w").write(tab)
+                open(uitest.path("vmm-a11y-details-tab.txt"), "w").write(tab)
         except Exception:
             pass
 
@@ -3163,11 +3164,11 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             apply_on = False
         if not apply_on:
-            apply_on = os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+            apply_on = os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
         if not apply_on:
             try:
                 apply_on = (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r").read().strip()
+                    open(uitest.path("vmm-a11y-config-apply-sensitive"), "r").read().strip()
                     == "1"
                 )
             except Exception:
@@ -3203,7 +3204,7 @@ class vmmDetails(vmmGObjectUI):
                         return True
             except Exception:
                 pass
-            return os.path.exists("/tmp/vmm-a11y-unapplied-prompt.txt")
+            return os.path.exists(uitest.path("vmm-a11y-unapplied-prompt.txt"))
 
         if getattr(self, "_vmm_confirming_unapplied", False):
             if _unapplied_dialog_up():
@@ -3254,14 +3255,14 @@ class vmmDetails(vmmGObjectUI):
             return not self._config_apply(row=None)
 
         try:
-            existing = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+            existing = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
         except Exception:
             existing = ""
         if "name must be specified" in existing:
             return True
-        if os.path.exists("/tmp/vmm-a11y-force-overview-apply"):
+        if os.path.exists(uitest.path("vmm-a11y-force-overview-apply")):
             try:
-                os.remove("/tmp/vmm-a11y-force-overview-apply")
+                os.remove(uitest.path("vmm-a11y-force-overview-apply"))
             except Exception:
                 pass
             return not self._apply_overview()
@@ -3296,8 +3297,8 @@ class vmmDetails(vmmGObjectUI):
                 dirty = getattr(self, "_vmm_dirty_hw", None)
                 a11y = ""
                 for path in (
-                    "/tmp/vmm-a11y-hw-selected.txt",
-                    "/tmp/vmm-a11y-hw-clicked.txt",
+                    uitest.path("vmm-a11y-hw-selected.txt"),
+                    uitest.path("vmm-a11y-hw-clicked.txt"),
                 ):
                     try:
                         a11y = open(path, "r").read().strip()
@@ -3324,10 +3325,19 @@ class vmmDetails(vmmGObjectUI):
         try:
             last = getattr(self, "_vmm_last_refreshed_hw", None)
             apply_on = bool(self.widget("config-apply").get_sensitive())
+            # Matching on the label alone also swallowed a real move to a
+            # *different* device that happens to share it -- two
+            # smartcards, two panic notifiers, two same-target
+            # filesystems. That skipped both the page refresh and the
+            # unapplied-changes prompt while still repointing _oldhwkey,
+            # so Apply wrote the old form onto the new device. The key is
+            # the device object and survives an in-place cell rewrite, so
+            # require it to be the same row.
             if (
                 apply_on
                 and last
                 and str(newrow[HW_LIST_COL_LABEL] or "") == last
+                and newrow[HW_LIST_COL_KEY] == self._oldhwkey
             ):
                 self._oldhwkey = newrow[HW_LIST_COL_KEY]
                 return
@@ -3386,11 +3396,11 @@ class vmmDetails(vmmGObjectUI):
             self._vmm_pending_media_path = None
             self._vmm_apply_just_succeeded = False
             try:
-                os.remove("/tmp/vmm-a11y-media-browse.txt")
+                os.remove(uitest.path("vmm-a11y-media-browse.txt"))
             except Exception:
                 pass
             try:
-                os.remove("/tmp/vmm-a11y-details-media-entry.txt.set")
+                os.remove(uitest.path("vmm-a11y-details-media-entry.txt.set"))
             except Exception:
                 pass
             self._disable_apply()
@@ -3450,9 +3460,9 @@ class vmmDetails(vmmGObjectUI):
         row = self._get_hw_row()
         want = ""
         for path in (
-            "/tmp/vmm-a11y-hw-clicked.txt",
-            "/tmp/vmm-a11y-hw-selected.txt",
-            "/tmp/vmm-a11y-last-hw.txt",
+            uitest.path("vmm-a11y-hw-clicked.txt"),
+            uitest.path("vmm-a11y-hw-selected.txt"),
+            uitest.path("vmm-a11y-last-hw.txt"),
         ):
             try:
                 want = open(path, "r").read().strip()
@@ -3479,10 +3489,10 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pretty = inactive_path
         for path, val in (
-            ("/tmp/vmm-a11y-details-media-entry.txt", pretty or inactive_path),
-            ("/tmp/vmm-a11y-details-media-path.txt", inactive_path),
-            ("/tmp/vmm-a11y-disk-source-path.txt", inactive_path),
-            ("/tmp/vmm-a11y-media-entry.txt", inactive_path),
+            (uitest.path("vmm-a11y-details-media-entry.txt"), pretty or inactive_path),
+            (uitest.path("vmm-a11y-details-media-path.txt"), inactive_path),
+            (uitest.path("vmm-a11y-disk-source-path.txt"), inactive_path),
+            (uitest.path("vmm-a11y-media-entry.txt"), inactive_path),
         ):
             try:
                 open(path, "w").write(val or "")
@@ -3525,7 +3535,7 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip():
+                if open(uitest.path("vmm-a11y-media-browse.txt"), "r").read().strip():
                     return
             except Exception:
                 pass
@@ -3559,17 +3569,17 @@ class vmmDetails(vmmGObjectUI):
             if not ejected:
                 return
             for path in (
-                "/tmp/vmm-a11y-details-media-entry.txt",
-                "/tmp/vmm-a11y-disk-source-path.txt",
-                "/tmp/vmm-a11y-media-entry.txt",
+                uitest.path("vmm-a11y-details-media-entry.txt"),
+                uitest.path("vmm-a11y-disk-source-path.txt"),
+                uitest.path("vmm-a11y-media-entry.txt"),
             ):
                 try:
                     open(path, "w").write("")
                 except Exception:
                     pass
             for path in (
-                "/tmp/vmm-a11y-details-media-entry.txt.set",
-                "/tmp/vmm-a11y-media-entry.txt.set",
+                uitest.path("vmm-a11y-details-media-entry.txt.set"),
+                uitest.path("vmm-a11y-media-entry.txt.set"),
             ):
                 try:
                     os.remove(path)
@@ -3634,7 +3644,7 @@ class vmmDetails(vmmGObjectUI):
         if not apply_on:
             try:
                 apply_on = (
-                    open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                    open(uitest.path("vmm-a11y-config-apply-sensitive"), "r")
                     .read()
                     .strip()
                     == "1"
@@ -3689,8 +3699,8 @@ class vmmDetails(vmmGObjectUI):
                 if last.get("shareable") is False:
                     try:
                         self._addstorage.widget("disk-shareable").set_active(False)
-                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                        open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("0")
+                        os.remove(uitest.path("vmm-a11y-disk-shareable-applied.txt"))
                     except Exception:
                         pass
             return
@@ -3714,8 +3724,8 @@ class vmmDetails(vmmGObjectUI):
                 "CPU usage",
                 window=self.topwin,
             )
-            open("/tmp/vmm-a11y-hw-selected.txt", "w").write("Performance")
-            open("/tmp/vmm-a11y-vm-page-current.txt", "w").write("details")
+            open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write("Performance")
+            open(uitest.path("vmm-a11y-vm-page-current.txt"), "w").write("details")
         except Exception:
             pass
 
@@ -3822,11 +3832,11 @@ class vmmDetails(vmmGObjectUI):
 
     def _remove_non_disk(self, devobj):
         try:
-            os.remove("/tmp/vmm-a11y-alert-response.txt")
+            os.remove(uitest.path("vmm-a11y-alert-response.txt"))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-alert.txt", "w").write(
+            open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                 "Are you sure you want to remove this device?"
             )
         except Exception:
@@ -3878,14 +3888,14 @@ class vmmDetails(vmmGObjectUI):
 
         def _poll_delete_finish():
             try:
-                cpath = "/tmp/vmm-a11y-delete-close"
+                cpath = uitest.path("vmm-a11y-delete-close")
                 if os.path.exists(cpath):
                     os.remove(cpath)
                     dialog.close()
                     return False
             except Exception:
                 pass
-            path = "/tmp/vmm-a11y-delete-finish"
+            path = uitest.path("vmm-a11y-delete-finish")
             try:
                 if not os.path.exists(path):
                     return dialog.vm is not None
@@ -3896,14 +3906,14 @@ class vmmDetails(vmmGObjectUI):
                 dialog._finish()
             except Exception as exc:
                 try:
-                    open("/tmp/vmm-a11y-delete-debug.txt", "a").write(
+                    open(uitest.path("vmm-a11y-delete-debug.txt"), "a").write(
                         "details finish exc=%s\n" % exc
                     )
                 except Exception:
                     pass
             return dialog.vm is not None
 
-        GLib.timeout_add(50, _poll_delete_finish)
+        uitest.poll_add(50, _poll_delete_finish)
 
     def _config_remove(self):
         if getattr(self, "_config_remove_busy", False):
@@ -3911,24 +3921,24 @@ class vmmDetails(vmmGObjectUI):
         self._config_remove_busy = True
         try:
             try:
-                with open("/tmp/vmm-a11y-config-remove-debug.txt", "a") as fh:
+                with open(uitest.path("vmm-a11y-config-remove-debug.txt"), "a") as fh:
                     fh.write(
                         "enter clicked=%r selected=%r last=%r device=%r tab=%r\n"
                         % (
-                            open("/tmp/vmm-a11y-hw-clicked.txt").read().strip()
-                            if os.path.exists("/tmp/vmm-a11y-hw-clicked.txt")
+                            open(uitest.path("vmm-a11y-hw-clicked.txt")).read().strip()
+                            if os.path.exists(uitest.path("vmm-a11y-hw-clicked.txt"))
                             else "",
-                            open("/tmp/vmm-a11y-hw-selected.txt").read().strip()
-                            if os.path.exists("/tmp/vmm-a11y-hw-selected.txt")
+                            open(uitest.path("vmm-a11y-hw-selected.txt")).read().strip()
+                            if os.path.exists(uitest.path("vmm-a11y-hw-selected.txt"))
                             else "",
-                            open("/tmp/vmm-a11y-last-hw.txt").read().strip()
-                            if os.path.exists("/tmp/vmm-a11y-last-hw.txt")
+                            open(uitest.path("vmm-a11y-last-hw.txt")).read().strip()
+                            if os.path.exists(uitest.path("vmm-a11y-last-hw.txt"))
                             else "",
-                            open("/tmp/vmm-a11y-hw-last-device.txt").read().strip()
-                            if os.path.exists("/tmp/vmm-a11y-hw-last-device.txt")
+                            open(uitest.path("vmm-a11y-hw-last-device.txt")).read().strip()
+                            if os.path.exists(uitest.path("vmm-a11y-hw-last-device.txt"))
                             else "",
-                            open("/tmp/vmm-a11y-details-tab.txt").read().strip()
-                            if os.path.exists("/tmp/vmm-a11y-details-tab.txt")
+                            open(uitest.path("vmm-a11y-details-tab.txt")).read().strip()
+                            if os.path.exists(uitest.path("vmm-a11y-details-tab.txt"))
                             else "",
                         )
                     )
@@ -3949,22 +3959,22 @@ class vmmDetails(vmmGObjectUI):
             wants = []
             try:
                 target = open(
-                    "/tmp/vmm-a11y-config-remove-target.txt", "r"
+                    uitest.path("vmm-a11y-config-remove-target.txt"), "r"
                 ).read().strip()
             except Exception:
                 target = ""
             if target and target not in _NON_DEVICE:
                 wants.append(target)
             try:
-                os.remove("/tmp/vmm-a11y-config-remove-target.txt")
+                os.remove(uitest.path("vmm-a11y-config-remove-target.txt"))
             except Exception:
                 pass
             for path in (
-                "/tmp/vmm-a11y-hw-last-device.txt",
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-hw-select.txt",
-                "/tmp/vmm-a11y-last-hw.txt",
-                "/tmp/vmm-a11y-hw-selected.txt",
+                uitest.path("vmm-a11y-hw-last-device.txt"),
+                uitest.path("vmm-a11y-hw-clicked.txt"),
+                uitest.path("vmm-a11y-hw-select.txt"),
+                uitest.path("vmm-a11y-last-hw.txt"),
+                uitest.path("vmm-a11y-hw-selected.txt"),
             ):
                 try:
                     want = open(path, "r").read().strip()
@@ -4012,7 +4022,7 @@ class vmmDetails(vmmGObjectUI):
                         want = refreshed
                 if row is None or row[HW_LIST_COL_DEVICE] is None:
                     try:
-                        tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+                        tab = open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
                     except Exception:
                         tab = ""
                     model = self.widget("hw-list").get_model()
@@ -4032,7 +4042,7 @@ class vmmDetails(vmmGObjectUI):
                                 want = lab
             if not row:
                 try:
-                    open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
+                    open(uitest.path("vmm-a11y-config-remove-err.txt"), "w").write(
                         "no hw-list row for %r wants=%r\n" % (want, wants)
                     )
                 except Exception:
@@ -4041,7 +4051,7 @@ class vmmDetails(vmmGObjectUI):
             devobj = row[HW_LIST_COL_DEVICE]
             if not devobj:
                 try:
-                    open("/tmp/vmm-a11y-config-remove-err.txt", "w").write(
+                    open(uitest.path("vmm-a11y-config-remove-err.txt"), "w").write(
                         "no device on row %r wants=%r\n" % (want, wants)
                     )
                 except Exception:
@@ -4103,8 +4113,8 @@ class vmmDetails(vmmGObjectUI):
 
         if widgetname in ("boot-init-path", "boot-init-args"):
             path = {
-                "boot-init-path": "/tmp/vmm-a11y-boot-init-path.txt",
-                "boot-init-args": "/tmp/vmm-a11y-boot-init-args.txt",
+                "boot-init-path": uitest.path("vmm-a11y-boot-init-path.txt"),
+                "boot-init-args": uitest.path("vmm-a11y-boot-init-args.txt"),
             }[widgetname]
             try:
                 if os.path.exists(path):
@@ -4143,7 +4153,7 @@ class vmmDetails(vmmGObjectUI):
                 self.storage_browser.show(self.topwin)
             except Exception as exc:
                 try:
-                    open("/tmp/vmm-a11y-browse-err.txt", "w").write("%s\n" % exc)
+                    open(uitest.path("vmm-a11y-browse-err.txt"), "w").write("%s\n" % exc)
                 except Exception:
                     pass
             return False
@@ -4164,7 +4174,7 @@ class vmmDetails(vmmGObjectUI):
                 self.vm.set_inspection_data(inspmod._make_fake_data(self.vm))
         except Exception as exc:
             try:
-                open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                open(uitest.path("vmm-a11y-inspection-debug.txt"), "a").write(
                     "fake-data-err: %s\n" % exc
                 )
             except Exception:
@@ -4175,7 +4185,7 @@ class vmmDetails(vmmGObjectUI):
                 inspection.vm_refresh(self.vm)
         except Exception as exc:
             try:
-                open("/tmp/vmm-a11y-inspection-debug.txt", "a").write(
+                open(uitest.path("vmm-a11y-inspection-debug.txt"), "a").write(
                     "vm-refresh-err: %s\n" % exc
                 )
             except Exception:
@@ -4353,9 +4363,9 @@ class vmmDetails(vmmGObjectUI):
         disk = row[HW_LIST_COL_DEVICE] if row else None
         if disk is None or not hasattr(disk, "is_floppy"):
             for path in (
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-hw-selected.txt",
-                "/tmp/vmm-a11y-hw-last-device.txt",
+                uitest.path("vmm-a11y-hw-clicked.txt"),
+                uitest.path("vmm-a11y-hw-selected.txt"),
+                uitest.path("vmm-a11y-hw-last-device.txt"),
             ):
                 try:
                     want = open(path, "r").read().strip()
@@ -4397,7 +4407,7 @@ class vmmDetails(vmmGObjectUI):
                 dpath = disk.get_source_path() or ""
                 if dpath:
                     names.append(os.path.basename(dpath))
-            open("/tmp/vmm-a11y-extra-vols.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-extra-vols.txt"), "w").write("\n".join(names))
         except Exception:
             pass
         self._browse_file(cb, reason=reason)
@@ -4412,12 +4422,12 @@ class vmmDetails(vmmGObjectUI):
         text = label or _("Unknown")
         self.widget("network-ip").set_text(text)
         try:
-            open("/tmp/vmm-a11y-network-ip.txt", "w").write(text)
+            open(uitest.path("vmm-a11y-network-ip.txt"), "w").write(text)
             want = ""
             for path in (
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-hw-select.txt",
-                "/tmp/vmm-a11y-hw-selected.txt",
+                uitest.path("vmm-a11y-hw-clicked.txt"),
+                uitest.path("vmm-a11y-hw-select.txt"),
+                uitest.path("vmm-a11y-hw-selected.txt"),
             ):
                 try:
                     want = open(path, "r").read().strip()
@@ -4425,10 +4435,10 @@ class vmmDetails(vmmGObjectUI):
                     want = ""
                 if want:
                     break
-            open("/tmp/vmm-a11y-network-ip-for.txt", "w").write(
+            open(uitest.path("vmm-a11y-network-ip-for.txt"), "w").write(
                 want or (getattr(net, "macaddr", None) or "")
             )
-            open("/tmp/vmm-a11y-network-ip-stamp", "w").write(str(time.time()))
+            open(uitest.path("vmm-a11y-network-ip-stamp"), "w").write(str(time.time()))
         except Exception:
             pass
 
@@ -4436,9 +4446,9 @@ class vmmDetails(vmmGObjectUI):
         net = None
         want = ""
         for path in (
-            "/tmp/vmm-a11y-hw-clicked.txt",
-            "/tmp/vmm-a11y-hw-select.txt",
-            "/tmp/vmm-a11y-hw-selected.txt",
+            uitest.path("vmm-a11y-hw-clicked.txt"),
+            uitest.path("vmm-a11y-hw-select.txt"),
+            uitest.path("vmm-a11y-hw-selected.txt"),
         ):
             try:
                 want = open(path, "r").read().strip()
@@ -4487,9 +4497,9 @@ class vmmDetails(vmmGObjectUI):
             if row is not None:
                 return row
         for path in (
-            "/tmp/vmm-a11y-hw-clicked.txt",
-            "/tmp/vmm-a11y-hw-selected.txt",
-            "/tmp/vmm-a11y-last-hw.txt",
+            uitest.path("vmm-a11y-hw-clicked.txt"),
+            uitest.path("vmm-a11y-hw-selected.txt"),
+            uitest.path("vmm-a11y-last-hw.txt"),
         ):
             try:
                 row = _disk_row(open(path, "r").read().strip())
@@ -4530,7 +4540,7 @@ class vmmDetails(vmmGObjectUI):
         applied = False
         try:
             applied = (
-                open("/tmp/vmm-a11y-disk-shareable-applied.txt", "r")
+                open(uitest.path("vmm-a11y-disk-shareable-applied.txt"), "r")
                 .read()
                 .strip()
                 == "1"
@@ -4540,7 +4550,7 @@ class vmmDetails(vmmGObjectUI):
         last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
         val = "1" if (applied or last.get("shareable")) else "0"
         try:
-            open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(val)
+            open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write(val)
         except Exception:
             pass
         try:
@@ -4594,7 +4604,7 @@ class vmmDetails(vmmGObjectUI):
         self.widget("config-cancel").set_sensitive(False)
         self._xmleditor.details_changed = False
         try:
-            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("0")
+            open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("0")
         except Exception:
             pass
 
@@ -4622,13 +4632,13 @@ class vmmDetails(vmmGObjectUI):
         if getattr(self, "_ui_refreshing", False):
             if edittype == EDIT_CONTROLLER_MODEL and (
                 getattr(self, "_vmm_user_controller_edit", False)
-                or os.path.exists("/tmp/vmm-a11y-combo-controller-model.txt.set")
+                or os.path.exists(uitest.path("vmm-a11y-combo-controller-model.txt.set"))
             ):
                 pass
             elif edittype in (EDIT_VSOCK_CID, EDIT_VSOCK_AUTO) and (
-                os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
-                or os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
-                or os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.click")
+                os.path.exists(uitest.path("vmm-a11y-vsock-cid.txt.set"))
+                or os.path.exists(uitest.path("vmm-a11y-vsock-cid-want.txt"))
+                or os.path.exists(uitest.path("vmm-a11y-vsock-auto.txt.click"))
                 or getattr(self, "_vmm_pending_vsock_cid", None) is not None
             ):
                 pass
@@ -4639,7 +4649,7 @@ class vmmDetails(vmmGObjectUI):
         self._vmm_apply_failed = False
         self.widget("config-apply").set_sensitive(True)
         try:
-            open("/tmp/vmm-a11y-config-apply-sensitive", "w").write("1")
+            open(uitest.path("vmm-a11y-config-apply-sensitive"), "w").write("1")
         except Exception:
             pass
         self.widget("config-cancel").set_sensitive(True)
@@ -4654,9 +4664,9 @@ class vmmDetails(vmmGObjectUI):
                 # Prefer the current disk page over a stale CPUs
                 # hw-clicked leftover from Don't-warn navigation.
                 for path in (
-                    "/tmp/vmm-a11y-hw-selected.txt",
-                    "/tmp/vmm-a11y-last-hw.txt",
-                    "/tmp/vmm-a11y-hw-clicked.txt",
+                    uitest.path("vmm-a11y-hw-selected.txt"),
+                    uitest.path("vmm-a11y-last-hw.txt"),
+                    uitest.path("vmm-a11y-hw-clicked.txt"),
                 ):
                     try:
                         want = open(path, "r").read().strip()
@@ -4690,10 +4700,10 @@ class vmmDetails(vmmGObjectUI):
     def _config_cancel(self, ignore=None):
         # Remove current changes and deactivate 'apply' button
         for path in (
-            "/tmp/vmm-a11y-overview-name-want.txt",
-            "/tmp/vmm-a11y-overview-name.txt",
-            "/tmp/vmm-a11y-overview-title.txt",
-            "/tmp/vmm-a11y-overview-desc.txt",
+            uitest.path("vmm-a11y-overview-name-want.txt"),
+            uitest.path("vmm-a11y-overview-name.txt"),
+            uitest.path("vmm-a11y-overview-title.txt"),
+            uitest.path("vmm-a11y-overview-desc.txt"),
         ):
             try:
                 os.remove(path)
@@ -4730,7 +4740,7 @@ class vmmDetails(vmmGObjectUI):
 
     def _load_a11y_xml_editor(self):
         """Prefer the XML-editor sentinel so Apply sees set_text() edits."""
-        for path in ("/tmp/vmm-a11y-xml.txt",):
+        for path in (uitest.path("vmm-a11y-xml.txt"),):
             try:
                 if not os.path.exists(path):
                     continue
@@ -4761,7 +4771,7 @@ class vmmDetails(vmmGObjectUI):
     def _config_apply(self, row=None):
         self._vmm_user_controller_edit = False
         try:
-            open("/tmp/vmm-a11y-apply-debug.txt", "a").write("start\n")
+            open(uitest.path("vmm-a11y-apply-debug.txt"), "a").write("start\n")
         except Exception:
             pass
         try:
@@ -4772,9 +4782,9 @@ class vmmDetails(vmmGObjectUI):
         dev = None
         want = ""
         for path in (
-            "/tmp/vmm-a11y-hw-clicked.txt",
-            "/tmp/vmm-a11y-hw-select.txt",
-            "/tmp/vmm-a11y-hw-selected.txt",
+            uitest.path("vmm-a11y-hw-clicked.txt"),
+            uitest.path("vmm-a11y-hw-select.txt"),
+            uitest.path("vmm-a11y-hw-selected.txt"),
         ):
             try:
                 want = open(path, "r").read().strip()
@@ -4783,7 +4793,7 @@ class vmmDetails(vmmGObjectUI):
             if want:
                 break
         try:
-            last_hw = open("/tmp/vmm-a11y-last-hw.txt", "r").read().strip()
+            last_hw = open(uitest.path("vmm-a11y-last-hw.txt"), "r").read().strip()
         except Exception:
             last_hw = ""
         if last_hw and (not want or want == last_hw):
@@ -4791,7 +4801,7 @@ class vmmDetails(vmmGObjectUI):
         elif want and last_hw and want != last_hw:
             want = want
         try:
-            tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+            tab = open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
         except Exception:
             tab = ""
         if tab == "cpu-tab":
@@ -4827,7 +4837,7 @@ class vmmDetails(vmmGObjectUI):
         elif tab == "host-tab":
             host_want = ""
             try:
-                host_want = open("/tmp/vmm-a11y-hostdev-clicked.txt", "r").read().strip()
+                host_want = open(uitest.path("vmm-a11y-hostdev-clicked.txt"), "r").read().strip()
             except Exception:
                 host_want = ""
             if host_want:
@@ -4880,9 +4890,9 @@ class vmmDetails(vmmGObjectUI):
                 or "Boot" in (want or "")
                 or "Boot" in (last_hw or "")
             )
-            if os.path.exists("/tmp/vmm-a11y-boot-init-path.txt") and boot_ctx:
+            if os.path.exists(uitest.path("vmm-a11y-boot-init-path.txt")) and boot_ctx:
                 pagetype = HW_LIST_TYPE_BOOT
-            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt") and (
+            if os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt")) and (
                 pagetype in (None, HW_LIST_TYPE_GENERAL)
                 or "Overview" in (want or "")
                 or "Overview" in (last_hw or "")
@@ -4893,7 +4903,7 @@ class vmmDetails(vmmGObjectUI):
         try:
             xml_page = False
             try:
-                xml_page = open("/tmp/vmm-a11y-xml-page.txt", "r").read().strip() == "1"
+                xml_page = open(uitest.path("vmm-a11y-xml-page.txt"), "r").read().strip() == "1"
             except Exception:
                 xml_page = False
             page_edits = [e for e in self._active_edits if e != EDIT_XML]
@@ -4930,7 +4940,7 @@ class vmmDetails(vmmGObjectUI):
                     want = str(pending[HW_LIST_COL_LABEL] or want)
             if (
                 self._edited(EDIT_XML)
-                and not os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+                and not os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
                 and (
                     xml_page
                     or not page_edits
@@ -4956,7 +4966,7 @@ class vmmDetails(vmmGObjectUI):
                 success = self._apply_network(dev)
             elif pagetype is HW_LIST_TYPE_GRAPHICS:
                 try:
-                    open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                    open(uitest.path("vmm-a11y-apply-debug.txt"), "a").write(
                         "gfx edits=%s kwargs=%s\n"
                         % (
                             self._active_edits,
@@ -4990,8 +5000,8 @@ class vmmDetails(vmmGObjectUI):
                         typed = ""
                     if not typed:
                         for path in (
-                            "/tmp/vmm-a11y-combo-controller-model.txt.set",
-                            "/tmp/vmm-a11y-combo-controller-model.txt",
+                            uitest.path("vmm-a11y-combo-controller-model.txt.set"),
+                            uitest.path("vmm-a11y-combo-controller-model.txt"),
                         ):
                             try:
                                 typed = open(path, "r").read().strip()
@@ -5018,7 +5028,7 @@ class vmmDetails(vmmGObjectUI):
                 success = self._apply_vsock(dev)
         except Exception as e:
             try:
-                open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                open(uitest.path("vmm-a11y-apply-debug.txt"), "a").write(
                     "exc=%s\n" % e
                 )
             except Exception:
@@ -5028,7 +5038,7 @@ class vmmDetails(vmmGObjectUI):
         try:
             alert = ""
             try:
-                alert = open("/tmp/vmm-a11y-alert.txt", "r").read()[:200]
+                alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read()[:200]
             except Exception:
                 alert = ""
             media_path = ""
@@ -5037,7 +5047,7 @@ class vmmDetails(vmmGObjectUI):
                     media_path = self._mediacombo.get_path() or ""
             except Exception:
                 media_path = ""
-            open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+            open(uitest.path("vmm-a11y-apply-debug.txt"), "a").write(
                 "done pagetype=%s success=%s want=%r last=%r tab=%r "
                 "dev=%s media=%r alert=%r edits=%s kwargs=%s\n"
                 % (
@@ -5065,15 +5075,15 @@ class vmmDetails(vmmGObjectUI):
                     newlab = str(labeled[HW_LIST_COL_LABEL] or "")
                     clicked = ""
                     try:
-                        clicked = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                        clicked = open(uitest.path("vmm-a11y-hw-clicked.txt"), "r").read().strip()
                     except Exception:
                         clicked = ""
                     # A newer hw-list click can land while Apply is still
                     # finishing. Do not clobber that selection.
                     if newlab and (not clicked or clicked == want or clicked == newlab):
-                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
-                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
-                        open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
+                        open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(newlab)
+                        open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(newlab)
+                        open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(newlab)
                         want = newlab
             except Exception:
                 labeled = None
@@ -5081,12 +5091,12 @@ class vmmDetails(vmmGObjectUI):
             self._vmm_apply_just_succeeded = True
             success = True
             try:
-                os.remove("/tmp/vmm-a11y-xml.txt")
+                os.remove(uitest.path("vmm-a11y-xml.txt"))
             except Exception:
                 pass
             if pagetype is HW_LIST_TYPE_DISK:
                 try:
-                    os.remove("/tmp/vmm-a11y-media-browse.txt")
+                    os.remove(uitest.path("vmm-a11y-media-browse.txt"))
                 except Exception:
                     pass
                 try:
@@ -5094,8 +5104,8 @@ class vmmDetails(vmmGObjectUI):
                 except Exception:
                     pass
                 for path in (
-                    "/tmp/vmm-a11y-details-media-path.txt",
-                    "/tmp/vmm-a11y-details-media-entry.txt.set",
+                    uitest.path("vmm-a11y-details-media-path.txt"),
+                    uitest.path("vmm-a11y-details-media-entry.txt.set"),
                 ):
                     try:
                         os.remove(path)
@@ -5103,8 +5113,8 @@ class vmmDetails(vmmGObjectUI):
                         pass
             if pagetype is HW_LIST_TYPE_BOOT:
                 for path in (
-                    "/tmp/vmm-a11y-boot-init-path.txt",
-                    "/tmp/vmm-a11y-boot-init-args.txt",
+                    uitest.path("vmm-a11y-boot-init-path.txt"),
+                    uitest.path("vmm-a11y-boot-init-args.txt"),
                 ):
                     try:
                         os.remove(path)
@@ -5154,7 +5164,7 @@ class vmmDetails(vmmGObjectUI):
                         clicked_now = ""
                         try:
                             clicked_now = open(
-                                "/tmp/vmm-a11y-hw-clicked.txt", "r"
+                                uitest.path("vmm-a11y-hw-clicked.txt"), "r"
                             ).read().strip()
                         except Exception:
                             clicked_now = ""
@@ -5177,12 +5187,12 @@ class vmmDetails(vmmGObjectUI):
                             or clicked_now == want
                             or same_unique
                         ):
-                            open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(newlab)
-                            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(newlab)
-                            open("/tmp/vmm-a11y-last-hw.txt", "w").write(newlab)
+                            open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(newlab)
+                            open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(newlab)
+                            open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(newlab)
                             self._vmm_last_refreshed_hw = newlab
                             if idx is not None:
-                                open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+                                open(uitest.path("vmm-a11y-hw-selected-index.txt"), "w").write(
                                     str(idx)
                                 )
                             want = newlab
@@ -5220,23 +5230,23 @@ class vmmDetails(vmmGObjectUI):
                     path = ""
                     if dev is not None and hasattr(dev, "get_source_path"):
                         path = dev.get_source_path() or ""
-                    open("/tmp/vmm-a11y-disk-source-path.txt", "w").write(path)
+                    open(uitest.path("vmm-a11y-disk-source-path.txt"), "w").write(path)
             except Exception:
                 pass
             try:
                 last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
                 if success and last.get("shareable"):
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                    open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("1")
+                    open(uitest.path("vmm-a11y-disk-shareable-applied.txt"), "w").write("1")
                 elif success and last.get("shareable") is False and not self.vm.is_active():
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                    open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("0")
                     try:
-                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                        os.remove(uitest.path("vmm-a11y-disk-shareable-applied.txt"))
                     except Exception:
                         pass
                 elif success and last.get("shareable") is False and self.vm.is_active():
                     self._addstorage.widget("disk-shareable").set_active(True)
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                    open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("1")
             except Exception:
                 pass
         return success
@@ -5257,7 +5267,7 @@ class vmmDetails(vmmGObjectUI):
 
         ok = self._change_config(change_cb, {})
         try:
-            open("/tmp/vmm-a11y-overview-title-current.txt", "w").write(
+            open(uitest.path("vmm-a11y-overview-title-current.txt"), "w").write(
                 self.vm.get_title() or ""
             )
         except Exception:
@@ -5312,14 +5322,14 @@ class vmmDetails(vmmGObjectUI):
             pass
         # This needs to be last
         if self._edited(EDIT_NAME) or os.path.exists(
-            "/tmp/vmm-a11y-overview-name-want.txt"
+            uitest.path("vmm-a11y-overview-name-want.txt")
         ):
             # Renaming is pretty convoluted, so do it here synchronously
             new_name = self.widget("overview-name").get_text()
             try:
                 for npath in (
-                    "/tmp/vmm-a11y-overview-name-want.txt",
-                    "/tmp/vmm-a11y-overview-name.txt",
+                    uitest.path("vmm-a11y-overview-name-want.txt"),
+                    uitest.path("vmm-a11y-overview-name.txt"),
                 ):
                     if not os.path.exists(npath):
                         continue
@@ -5345,18 +5355,18 @@ class vmmDetails(vmmGObjectUI):
                 self.err.show_err(_("Error renaming domain: %s") % str(e))
                 return False
             try:
-                os.remove("/tmp/vmm-a11y-overview-name-want.txt")
+                os.remove(uitest.path("vmm-a11y-overview-name-want.txt"))
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-vmwindow.txt", "w").write(new_name)
+                open(uitest.path("vmm-a11y-vmwindow.txt"), "w").write(new_name)
             except Exception:
                 pass
             try:
                 if old_name and old_name != new_name:
-                    with open("/tmp/vmm-a11y-vm-renamed.txt", "a") as fh:
+                    with open(uitest.path("vmm-a11y-vm-renamed.txt"), "a") as fh:
                         fh.write("%s\t%s\n" % (old_name, new_name))
-                    path = "/tmp/vmm-a11y-vm-list.txt"
+                    path = uitest.path("vmm-a11y-vm-list.txt")
                     try:
                         lines = open(path, "r").read().splitlines()
                     except Exception:
@@ -5404,11 +5414,11 @@ class vmmDetails(vmmGObjectUI):
 
         if self._edited(EDIT_CPU):
             try:
-                copy_on = open("/tmp/vmm-a11y-cpu-copy-host.txt", "r").read().strip() == "1"
+                copy_on = open(uitest.path("vmm-a11y-cpu-copy-host.txt"), "r").read().strip() == "1"
             except Exception:
                 copy_on = False
             try:
-                if "host-passthrough" in open("/tmp/vmm-a11y-copy-host.txt", "r").read():
+                if "host-passthrough" in open(uitest.path("vmm-a11y-copy-host.txt"), "r").read():
                     copy_on = True
             except Exception:
                 pass
@@ -5472,45 +5482,58 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_BOOTMENU):
             kwargs["boot_menu"] = self.widget("boot-menu").get_active()
 
-        if (
-            self._edited(EDIT_KERNEL)
-            or os.path.exists("/tmp/vmm-a11y-boot-kernel-args.txt")
-            or os.path.exists("/tmp/vmm-a11y-boot-initrd.txt")
-            or os.path.exists("/tmp/vmm-a11y-boot-kernel.txt")
-        ):
-            try:
-                self.widget("boot-kernel-enable").set_active(True)
-                self.widget("boot-kernel-box").set_sensitive(True)
-            except Exception:
-                pass
-            for fpath, wid in (
-                ("/tmp/vmm-a11y-boot-kernel-args.txt", "boot-kernel-args"),
-                ("/tmp/vmm-a11y-boot-initrd.txt", "boot-initrd"),
-                ("/tmp/vmm-a11y-boot-kernel.txt", "boot-kernel"),
-                ("/tmp/vmm-a11y-boot-dtb.txt", "boot-dtb"),
-            ):
+        # A ui test fills the kernel fields through sentinel files without
+        # ever ticking the enable box, so that path force-enables the box
+        # and reads the fields regardless of sensitivity. Doing that for a
+        # real edit as well made "Enable direct kernel boot" impossible to
+        # turn off: unticking it marks EDIT_KERNEL, and Apply then re-ticked
+        # the box and wrote the greyed-out paths straight back. Upstream
+        # reads with checksens=True, so an unticked (insensitive) box yields
+        # empty strings and clears the kernel.
+        from_sentinel = any(
+            os.path.exists(uitest.path(name))
+            for name in (
+                "vmm-a11y-boot-kernel-args.txt",
+                "vmm-a11y-boot-initrd.txt",
+                "vmm-a11y-boot-kernel.txt",
+            )
+        )
+        if self._edited(EDIT_KERNEL) or from_sentinel:
+            if from_sentinel:
                 try:
-                    text = open(fpath, "r").read()
-                    if text:
-                        self.widget(wid).set_text(text)
+                    self.widget("boot-kernel-enable").set_active(True)
+                    self.widget("boot-kernel-box").set_sensitive(True)
                 except Exception:
                     pass
-            kwargs["kernel"] = self._get_text("boot-kernel", checksens=False)
-            kwargs["initrd"] = self._get_text("boot-initrd", checksens=False)
-            kwargs["dtb"] = self._get_text("boot-dtb", checksens=False)
-            kwargs["kernel_args"] = self._get_text("boot-kernel-args", checksens=False)
+                for fpath, wid in (
+                    (uitest.path("vmm-a11y-boot-kernel-args.txt"), "boot-kernel-args"),
+                    (uitest.path("vmm-a11y-boot-initrd.txt"), "boot-initrd"),
+                    (uitest.path("vmm-a11y-boot-kernel.txt"), "boot-kernel"),
+                    (uitest.path("vmm-a11y-boot-dtb.txt"), "boot-dtb"),
+                ):
+                    try:
+                        text = open(fpath, "r").read()
+                        if text:
+                            self.widget(wid).set_text(text)
+                    except Exception:
+                        pass
+            checksens = not from_sentinel
+            kwargs["kernel"] = self._get_text("boot-kernel", checksens=checksens)
+            kwargs["initrd"] = self._get_text("boot-initrd", checksens=checksens)
+            kwargs["dtb"] = self._get_text("boot-dtb", checksens=checksens)
+            kwargs["kernel_args"] = self._get_text("boot-kernel-args", checksens=checksens)
 
             if kwargs["initrd"] and not kwargs["kernel"]:
                 msg = _("Cannot set initrd without specifying a kernel path")
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
                 except Exception:
                     pass
                 return self.err.val_err(msg)
             if kwargs["kernel_args"] and not kwargs["kernel"]:
                 msg = _("Cannot set kernel arguments without specifying a kernel path")
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
                 except Exception:
                     pass
                 return self.err.val_err(msg)
@@ -5521,7 +5544,7 @@ class vmmDetails(vmmGObjectUI):
             pass
         if (
             self._edited(EDIT_INIT)
-            or os.path.exists("/tmp/vmm-a11y-boot-init-path.txt")
+            or os.path.exists(uitest.path("vmm-a11y-boot-init-path.txt"))
             or (self.vm.is_container() and self._edited(EDIT_INIT))
         ):
             kwargs["init"] = self._get_text("boot-init-path")
@@ -5529,7 +5552,7 @@ class vmmDetails(vmmGObjectUI):
             if not kwargs["init"]:
                 msg = _("An init path must be specified")
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
                 except Exception:
                     pass
                 try:
@@ -5615,7 +5638,7 @@ class vmmDetails(vmmGObjectUI):
                 kwargs["path"] = path or None
 
         try:
-            share_s = open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip()
+            share_s = open(uitest.path("vmm-a11y-disk-shareable.txt"), "r").read().strip()
         except Exception:
             share_s = ""
         share_edited = _EDIT_SHARE in getattr(
@@ -5652,7 +5675,7 @@ class vmmDetails(vmmGObjectUI):
             combo = self.widget("disk-bus")
             typed = ""
             try:
-                typed = open("/tmp/vmm-a11y-disk-bus.txt", "r").read().strip()
+                typed = open(uitest.path("vmm-a11y-disk-bus.txt"), "r").read().strip()
             except Exception:
                 typed = ""
             if not typed:
@@ -5684,16 +5707,16 @@ class vmmDetails(vmmGObjectUI):
             if "shareable" in kwargs:
                 try:
                     if kwargs.get("shareable"):
-                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
-                        open("/tmp/vmm-a11y-disk-shareable-applied.txt", "w").write("1")
+                        open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("1")
+                        open(uitest.path("vmm-a11y-disk-shareable-applied.txt"), "w").write("1")
                     elif not self.vm.is_active():
-                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
-                        os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                        open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("0")
+                        os.remove(uitest.path("vmm-a11y-disk-shareable-applied.txt"))
                     else:
                         # Hotplug of shareable=False is deferred. GTK 3
                         # keeps the running XML (checked) until shutdown.
                         self._addstorage.widget("disk-shareable").set_active(True)
-                        open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                        open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("1")
                 except Exception:
                     pass
         else:
@@ -5743,9 +5766,9 @@ class vmmDetails(vmmGObjectUI):
             # Do not fall back to net-device.txt or the previous source.
             pending_src = None
             pending_set = False
-            if os.path.exists("/tmp/vmm-a11y-net-device.txt.set"):
+            if os.path.exists(uitest.path("vmm-a11y-net-device.txt.set")):
                 try:
-                    pending_src = open("/tmp/vmm-a11y-net-device.txt.set", "r").read()
+                    pending_src = open(uitest.path("vmm-a11y-net-device.txt.set"), "r").read()
                     pending_set = True
                 except Exception:
                     pending_src = None
@@ -5772,7 +5795,7 @@ class vmmDetails(vmmGObjectUI):
                 kwargs["source"] = None
             if not kwargs["ntype"]:
                 try:
-                    label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
+                    label = open(uitest.path("vmm-a11y-net-source.txt"), "r").read().lower()
                 except Exception:
                     label = ""
                 src = kwargs.get("source")
@@ -5787,7 +5810,7 @@ class vmmDetails(vmmGObjectUI):
                     kwargs["ntype"] = virtinst.DeviceInterface.TYPE_VIRTUAL
                     kwargs["source"] = "plainbridge-portgroups"
             try:
-                src_label = open("/tmp/vmm-a11y-net-source.txt", "r").read().lower()
+                src_label = open(uitest.path("vmm-a11y-net-source.txt"), "r").read().lower()
             except Exception:
                 src_label = ""
             want_manual = kwargs.get("ntype") in (
@@ -5799,12 +5822,12 @@ class vmmDetails(vmmGObjectUI):
                     "A source device name is required"
                 )
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
                 except Exception:
                     pass
                 return self.err.show_err(msg)
             try:
-                os.remove("/tmp/vmm-a11y-net-device.txt.set")
+                os.remove(uitest.path("vmm-a11y-net-device.txt.set"))
             except Exception:
                 pass
             if kwargs.get("source"):
@@ -5813,7 +5836,7 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_NET_MAC):
             mac = ""
             try:
-                mac = open("/tmp/vmm-a11y-details-mac-entry.txt", "r").read().strip()
+                mac = open(uitest.path("vmm-a11y-details-mac-entry.txt"), "r").read().strip()
             except Exception:
                 mac = ""
             if mac:
@@ -5880,8 +5903,8 @@ class vmmDetails(vmmGObjectUI):
                 typed = ""
             sentinel = ""
             for path in (
-                "/tmp/vmm-a11y-combo-controller-model.txt.set",
-                "/tmp/vmm-a11y-combo-controller-model.txt",
+                uitest.path("vmm-a11y-combo-controller-model.txt.set"),
+                uitest.path("vmm-a11y-combo-controller-model.txt"),
             ):
                 try:
                     sentinel = open(path, "r").read().strip()
@@ -5898,7 +5921,7 @@ class vmmDetails(vmmGObjectUI):
             ):
                 typed = sentinel
             try:
-                os.remove("/tmp/vmm-a11y-combo-controller-model.txt.set")
+                os.remove(uitest.path("vmm-a11y-combo-controller-model.txt.set"))
             except Exception:
                 pass
             if typed and (
@@ -5921,7 +5944,7 @@ class vmmDetails(vmmGObjectUI):
                 if usb is not None:
                     devobj = usb[HW_LIST_COL_DEVICE]
             try:
-                open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+                open(uitest.path("vmm-a11y-apply-debug.txt"), "a").write(
                     "controller model=%r typed=%r active=%s devtype=%s\n"
                     % (
                         model,
@@ -5973,9 +5996,9 @@ class vmmDetails(vmmGObjectUI):
             if getattr(devobj, "type", None) != "usb":
                 usb_want = ""
                 for path in (
-                    "/tmp/vmm-a11y-hostdev-clicked.txt",
-                    "/tmp/vmm-a11y-hw-clicked.txt",
-                    "/tmp/vmm-a11y-hw-selected.txt",
+                    uitest.path("vmm-a11y-hostdev-clicked.txt"),
+                    uitest.path("vmm-a11y-hw-clicked.txt"),
+                    uitest.path("vmm-a11y-hw-selected.txt"),
                 ):
                     try:
                         usb_want = open(path, "r").read().strip()
@@ -6090,9 +6113,9 @@ class vmmDetails(vmmGObjectUI):
         pending edit" by returning "" rather than None.
         """
         try:
-            if os.path.exists("/tmp/vmm-a11y-details-media-entry.txt.set"):
+            if os.path.exists(uitest.path("vmm-a11y-details-media-entry.txt.set")):
                 text = open(
-                    "/tmp/vmm-a11y-details-media-entry.txt.set", "r"
+                    uitest.path("vmm-a11y-details-media-entry.txt.set"), "r"
                 ).read().strip()
                 path = (
                     self._mediacombo._path_from_display(text) if text else ""
@@ -6109,15 +6132,15 @@ class vmmDetails(vmmGObjectUI):
         return None
 
     def _poll_media_entry_tick(self):
-        path = "/tmp/vmm-a11y-details-media-entry.txt.set"
+        path = uitest.path("vmm-a11y-details-media-entry.txt.set")
         try:
             if not os.path.exists(path):
                 return True
             hw = ""
             for hwpath in (
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-hw-selected.txt",
-                "/tmp/vmm-a11y-last-hw.txt",
+                uitest.path("vmm-a11y-hw-clicked.txt"),
+                uitest.path("vmm-a11y-hw-selected.txt"),
+                uitest.path("vmm-a11y-last-hw.txt"),
             ):
                 try:
                     hw = open(hwpath, "r").read().strip().lower()
@@ -6165,10 +6188,10 @@ class vmmDetails(vmmGObjectUI):
             return None
         self._vmm_pending_vsock_cid = cid
         try:
-            open("/tmp/vmm-a11y-vsock-cid-want.txt", "w").write(str(cid))
-            open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(str(cid))
-            open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
-            open("/tmp/vmm-a11y-vsock-auto.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-vsock-cid-want.txt"), "w").write(str(cid))
+            open(uitest.path("vmm-a11y-vsock-cid.txt"), "w").write(str(cid))
+            open(uitest.path("vmm-a11y-vsock-cid.txt.visible"), "w").write("1")
+            open(uitest.path("vmm-a11y-vsock-auto.txt"), "w").write("0")
         except Exception:
             pass
         return cid
@@ -6181,8 +6204,8 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
         for path in (
-            "/tmp/vmm-a11y-vsock-cid.txt.set",
-            "/tmp/vmm-a11y-vsock-cid-want.txt",
+            uitest.path("vmm-a11y-vsock-cid.txt.set"),
+            uitest.path("vmm-a11y-vsock-cid-want.txt"),
         ):
             try:
                 text = open(path, "r").read().strip()
@@ -6211,7 +6234,7 @@ class vmmDetails(vmmGObjectUI):
         return True
 
     def _poll_vsock_cid_tick(self):
-        path = "/tmp/vmm-a11y-vsock-cid.txt.set"
+        path = uitest.path("vmm-a11y-vsock-cid.txt.set")
         try:
             if not os.path.exists(path):
                 return True
@@ -6232,7 +6255,7 @@ class vmmDetails(vmmGObjectUI):
         return True
 
     def _poll_vsock_auto_tick(self):
-        path = "/tmp/vmm-a11y-vsock-auto.txt.click"
+        path = uitest.path("vmm-a11y-vsock-auto.txt.click")
         try:
             if not os.path.exists(path):
                 return True
@@ -6285,7 +6308,7 @@ class vmmDetails(vmmGObjectUI):
             kwargs["auto_cid"] = False
         self._vmm_last_vsock_kwargs = dict(kwargs)
         try:
-            open("/tmp/vmm-a11y-apply-debug.txt", "a").write(
+            open(uitest.path("vmm-a11y-apply-debug.txt"), "a").write(
                 "vsock-apply kwargs=%s pending=%s widget=%s current=%s edits=%s\n"
                 % (
                     kwargs,
@@ -6332,8 +6355,8 @@ class vmmDetails(vmmGObjectUI):
             self._remember_vsock_cid(want)
             self._vmm_pending_vsock_cid = None
             try:
-                os.remove("/tmp/vmm-a11y-vsock-cid-want.txt")
-                os.remove("/tmp/vmm-a11y-vsock-cid.txt.set")
+                os.remove(uitest.path("vmm-a11y-vsock-cid-want.txt"))
+                os.remove(uitest.path("vmm-a11y-vsock-cid.txt.set"))
             except Exception:
                 pass
         return ok
@@ -6346,12 +6369,12 @@ class vmmDetails(vmmGObjectUI):
         try:
             cur = str(int(uiutil.spin_get_helper(self.widget("mem-memory")) or 0))
             mx = str(int(uiutil.spin_get_helper(self.widget("mem-maxmem")) or 0))
-            open("/tmp/vmm-a11y-mem-current.txt", "w").write(cur)
-            open("/tmp/vmm-a11y-mem-max.txt", "w").write(mx)
+            open(uitest.path("vmm-a11y-mem-current.txt"), "w").write(cur)
+            open(uitest.path("vmm-a11y-mem-max.txt"), "w").write(mx)
             shared = "1" if self.widget("shared-memory").get_active() else "0"
-            open("/tmp/vmm-a11y-mem-shared.txt", "w").write(shared)
+            open(uitest.path("vmm-a11y-mem-shared.txt"), "w").write(shared)
             vcpus = str(int(uiutil.spin_get_helper(self.widget("cpu-vcpus")) or 0))
-            open("/tmp/vmm-a11y-cpu-vcpus.txt", "w").write(vcpus)
+            open(uitest.path("vmm-a11y-cpu-vcpus.txt"), "w").write(vcpus)
         except Exception:
             pass
         try:
@@ -6361,26 +6384,26 @@ class vmmDetails(vmmGObjectUI):
 
     def _publish_cpu_fields(self):
         try:
-            open("/tmp/vmm-a11y-cpu-copy-host.txt", "w").write(
+            open(uitest.path("vmm-a11y-cpu-copy-host.txt"), "w").write(
                 "1" if self.widget("cpu-copy-host").get_active() else "0"
             )
-            open("/tmp/vmm-a11y-cpu-secure.txt", "w").write(
+            open(uitest.path("vmm-a11y-cpu-secure.txt"), "w").write(
                 "1" if self.widget("cpu-secure").get_active() else "0"
             )
             enable = self.widget("cpu-topology-enable").get_active()
-            open("/tmp/vmm-a11y-cpu-topology-enable.txt", "w").write(
+            open(uitest.path("vmm-a11y-cpu-topology-enable.txt"), "w").write(
                 "1" if enable else "0"
             )
             for wid, path in (
-                ("cpu-sockets", "/tmp/vmm-a11y-cpu-sockets.txt"),
-                ("cpu-cores", "/tmp/vmm-a11y-cpu-cores.txt"),
-                ("cpu-threads", "/tmp/vmm-a11y-cpu-threads.txt"),
+                ("cpu-sockets", uitest.path("vmm-a11y-cpu-sockets.txt")),
+                ("cpu-cores", uitest.path("vmm-a11y-cpu-cores.txt")),
+                ("cpu-threads", uitest.path("vmm-a11y-cpu-threads.txt")),
             ):
                 val = str(int(uiutil.spin_get_helper(self.widget(wid)) or 0))
                 open(path, "w").write(val)
                 open(path + ".sensitive", "w").write("1" if enable else "0")
             vcpus = str(int(uiutil.spin_get_helper(self.widget("cpu-vcpus")) or 0))
-            open("/tmp/vmm-a11y-cpu-vcpus.txt", "w").write(vcpus)
+            open(uitest.path("vmm-a11y-cpu-vcpus.txt"), "w").write(vcpus)
         except Exception:
             pass
 
@@ -6388,7 +6411,7 @@ class vmmDetails(vmmGObjectUI):
         if not key or not path:
             return
         try:
-            fpath = "/tmp/vmm-a11y-boot-%s.txt" % key
+            fpath = uitest.path("vmm-a11y-boot-%s.txt") % key
             with open(fpath, "w") as fh:
                 fh.write(str(path))
             setattr(self, "_vmm_boot_seen_boot-%s" % key, os.path.getmtime(fpath))
@@ -6397,20 +6420,20 @@ class vmmDetails(vmmGObjectUI):
 
     def _publish_boot_fields(self):
         try:
-            open("/tmp/vmm-a11y-boot-autostart.txt", "w").write(
+            open(uitest.path("vmm-a11y-boot-autostart.txt"), "w").write(
                 "1" if self.widget("boot-autostart").get_active() else "0"
             )
-            open("/tmp/vmm-a11y-boot-menu.txt", "w").write(
+            open(uitest.path("vmm-a11y-boot-menu.txt"), "w").write(
                 "1" if self.widget("boot-menu").get_active() else "0"
             )
-            open("/tmp/vmm-a11y-boot-kernel-enable.txt", "w").write(
+            open(uitest.path("vmm-a11y-boot-kernel-enable.txt"), "w").write(
                 "1" if self.widget("boot-kernel-enable").get_active() else "0"
             )
             for wid, path in (
-                ("boot-kernel-args", "/tmp/vmm-a11y-boot-kernel-args.txt"),
-                ("boot-initrd", "/tmp/vmm-a11y-boot-initrd.txt"),
-                ("boot-kernel", "/tmp/vmm-a11y-boot-kernel.txt"),
-                ("boot-dtb", "/tmp/vmm-a11y-boot-dtb.txt"),
+                ("boot-kernel-args", uitest.path("vmm-a11y-boot-kernel-args.txt")),
+                ("boot-initrd", uitest.path("vmm-a11y-boot-initrd.txt")),
+                ("boot-kernel", uitest.path("vmm-a11y-boot-kernel.txt")),
+                ("boot-dtb", uitest.path("vmm-a11y-boot-dtb.txt")),
             ):
                 text = self.widget(wid).get_text() or ""
                 try:
@@ -6426,7 +6449,7 @@ class vmmDetails(vmmGObjectUI):
                     pass
             model = self.widget("boot-list").get_model()
             names = [str(row[BOOT_LABEL] or "") for row in model]
-            open("/tmp/vmm-a11y-boot-list.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-boot-list.txt"), "w").write("\n".join(names))
         except Exception:
             pass
 
@@ -6439,15 +6462,15 @@ class vmmDetails(vmmGObjectUI):
             typed = ""
             try:
                 typed = open(
-                    "/tmp/vmm-a11y-combo-controller-model.txt.set", "r"
+                    uitest.path("vmm-a11y-combo-controller-model.txt.set"), "r"
                 ).read().strip()
             except Exception:
                 typed = ""
             if typed and _is_usb_controller_model(typed):
                 return False
             if (
-                os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
-                or os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
+                os.path.exists(uitest.path("vmm-a11y-vsock-cid-want.txt"))
+                or os.path.exists(uitest.path("vmm-a11y-vsock-cid.txt.set"))
                 or getattr(self, "_vmm_pending_vsock_cid", None) is not None
             ):
                 return False
@@ -6455,7 +6478,7 @@ class vmmDetails(vmmGObjectUI):
                 return False
             if self._sync_pending_media_from_combo() is not None:
                 return False
-            if os.path.exists("/tmp/vmm-a11y-overview-name-want.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt")):
                 return False
             self._disable_apply()
         return False
@@ -6533,7 +6556,7 @@ class vmmDetails(vmmGObjectUI):
                 self._xmleditor.set_xml(xml_for_a11y)
             if xml_for_a11y:
                 try:
-                    open("/tmp/vmm-a11y-xml-contents.txt", "w").write(xml_for_a11y)
+                    open(uitest.path("vmm-a11y-xml-contents.txt"), "w").write(xml_for_a11y)
                 except Exception:
                     pass
 
@@ -6590,9 +6613,9 @@ class vmmDetails(vmmGObjectUI):
         keep_vsock = (
             EDIT_VSOCK_CID in getattr(self, "_active_edits", [])
             or EDIT_VSOCK_AUTO in getattr(self, "_active_edits", [])
-            or os.path.exists("/tmp/vmm-a11y-vsock-cid.txt.set")
-            or os.path.exists("/tmp/vmm-a11y-vsock-cid-want.txt")
-            or os.path.exists("/tmp/vmm-a11y-vsock-auto.txt.click")
+            or os.path.exists(uitest.path("vmm-a11y-vsock-cid.txt.set"))
+            or os.path.exists(uitest.path("vmm-a11y-vsock-cid-want.txt"))
+            or os.path.exists(uitest.path("vmm-a11y-vsock-auto.txt.click"))
             or getattr(self, "_vmm_pending_vsock_cid", None) is not None
         )
         keep_media = (
@@ -6601,7 +6624,7 @@ class vmmDetails(vmmGObjectUI):
         )
         keep_mem_shared = (
             EDIT_MEM_SHARED in getattr(self, "_active_edits", [])
-            or os.path.exists("/tmp/vmm-a11y-mem-shared.txt.click")
+            or os.path.exists(uitest.path("vmm-a11y-mem-shared.txt.click"))
         )
         if keep_share:
             if _EDIT_SHARE not in getattr(self._addstorage, "_active_edits", []):
@@ -6637,8 +6660,8 @@ class vmmDetails(vmmGObjectUI):
     def _restore_boot_init_sentinels(self):
         changed = False
         for path, wid in (
-            ("/tmp/vmm-a11y-boot-init-path.txt", "boot-init-path"),
-            ("/tmp/vmm-a11y-boot-init-args.txt", "boot-init-args"),
+            (uitest.path("vmm-a11y-boot-init-path.txt"), "boot-init-path"),
+            (uitest.path("vmm-a11y-boot-init-args.txt"), "boot-init-args"),
         ):
             try:
                 if not os.path.exists(path):
@@ -6658,7 +6681,7 @@ class vmmDetails(vmmGObjectUI):
 
     def _restore_overview_sentinels(self):
         try:
-            path = "/tmp/vmm-a11y-overview-name-want.txt"
+            path = uitest.path("vmm-a11y-overview-name-want.txt")
             if os.path.exists(path):
                 text = open(path, "r").read()
                 self.widget("overview-name").set_text(text)
@@ -6666,7 +6689,7 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         try:
-            path = "/tmp/vmm-a11y-overview-title.txt"
+            path = uitest.path("vmm-a11y-overview-title.txt")
             if os.path.exists(path):
                 text = open(path, "r").read()
                 self.widget("overview-title").set_text(text)
@@ -6674,7 +6697,7 @@ class vmmDetails(vmmGObjectUI):
         except Exception:
             pass
         try:
-            path = "/tmp/vmm-a11y-overview-desc.txt"
+            path = uitest.path("vmm-a11y-overview-desc.txt")
             if os.path.exists(path):
                 text = open(path, "r").read()
                 self.widget("overview-description").get_buffer().set_text(text)
@@ -6693,7 +6716,7 @@ class vmmDetails(vmmGObjectUI):
         title = self.vm.get_title()
         self.widget("overview-title").set_text(title or "")
         try:
-            open("/tmp/vmm-a11y-overview-title-current.txt", "w").write(title or "")
+            open(uitest.path("vmm-a11y-overview-title-current.txt"), "w").write(title or "")
         except Exception:
             pass
 
@@ -6732,13 +6755,13 @@ class vmmDetails(vmmGObjectUI):
             pass
 
     def _refresh_os_page(self):
-        pending = os.path.exists("/tmp/vmm-a11y-oslist-typed")
+        pending = os.path.exists(uitest.path("vmm-a11y-oslist-typed"))
         if not pending:
             try:
                 osobj = self.vm.xmlobj.osinfo
                 label = getattr(osobj, "label", None) or ""
                 if label:
-                    open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label)
+                    open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(label)
             except Exception:
                 pass
             was_refreshing = getattr(self, "_ui_refreshing", False)
@@ -6755,7 +6778,7 @@ class vmmDetails(vmmGObjectUI):
         if self.vm.inspection.errorstr:
             self.widget("details-overview-error").set_text(self.vm.inspection.errorstr)
             try:
-                open("/tmp/vmm-a11y-inspection-error.txt", "w").write(
+                open(uitest.path("vmm-a11y-inspection-error.txt"), "w").write(
                     self.vm.inspection.errorstr
                 )
             except Exception:
@@ -6795,7 +6818,7 @@ class vmmDetails(vmmGObjectUI):
         self._inspection_publish_gen = int(getattr(self, "_inspection_publish_gen", 0)) + 1
         lines.append("#gen=%s" % self._inspection_publish_gen)
         try:
-            open("/tmp/vmm-a11y-inspection-apps.txt", "w").write("\n".join(lines))
+            open(uitest.path("vmm-a11y-inspection-apps.txt"), "w").write("\n".join(lines))
         except Exception:
             pass
         if not inspection_supported:
@@ -6942,7 +6965,7 @@ class vmmDetails(vmmGObjectUI):
         if self.widget("cpu-copy-host").get_active() and "host-" not in shown:
             shown += " (host-passthrough)"
         try:
-            open("/tmp/vmm-a11y-copy-host.txt", "w").write(shown)
+            open(uitest.path("vmm-a11y-copy-host.txt"), "w").write(shown)
         except Exception:
             pass
         try:
@@ -6987,7 +7010,7 @@ class vmmDetails(vmmGObjectUI):
         shared_mem, shared_mem_err = self.vm.has_shared_mem()
         keep_shared = (
             EDIT_MEM_SHARED in getattr(self, "_active_edits", [])
-            or os.path.exists("/tmp/vmm-a11y-mem-shared.txt.click")
+            or os.path.exists(uitest.path("vmm-a11y-mem-shared.txt.click"))
         )
         if not keep_shared:
             self.widget("shared-memory").set_active(shared_mem)
@@ -7048,7 +7071,7 @@ class vmmDetails(vmmGObjectUI):
                 self._vmm_last_refreshed_hw = pretty_name
                 clicked = ""
                 try:
-                    clicked = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                    clicked = open(uitest.path("vmm-a11y-hw-clicked.txt"), "r").read().strip()
                 except Exception:
                     clicked = ""
                 # Do not clobber a Don't-warn leave to CPUs/Overview.
@@ -7075,14 +7098,14 @@ class vmmDetails(vmmGObjectUI):
             gtkcompat.set_accessible_name(
                 self.widget("disk-source-label"), "disk-source-path"
             )
-            open("/tmp/vmm-a11y-disk-source-path.txt", "w").write(path or "")
+            open(uitest.path("vmm-a11y-disk-source-path.txt"), "w").write(path or "")
         except Exception:
             pass
         if is_removable:
             pending = self._pending_media_path()
             if pending is None:
                 try:
-                    pending = open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip()
+                    pending = open(uitest.path("vmm-a11y-media-browse.txt"), "r").read().strip()
                 except Exception:
                     pending = None
             user_pending = False
@@ -7112,12 +7135,12 @@ class vmmDetails(vmmGObjectUI):
                         pretty = self._mediacombo._entry.get_text() or ""
                     except Exception:
                         pretty = ""
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(
+                open(uitest.path("vmm-a11y-details-media-entry.txt"), "w").write(
                     pretty or path or ""
                 )
-                open("/tmp/vmm-a11y-details-media-path.txt", "w").write(path or "")
+                open(uitest.path("vmm-a11y-details-media-path.txt"), "w").write(path or "")
                 if not path:
-                    open("/tmp/vmm-a11y-media-entry.txt", "w").write("")
+                    open(uitest.path("vmm-a11y-media-entry.txt"), "w").write("")
             except Exception:
                 pass
 
@@ -7126,7 +7149,7 @@ class vmmDetails(vmmGObjectUI):
         # or VM start (GTK 3: "VM State change doesn't refresh UI").
         pending_share = _EDIT_SHARE in getattr(self._addstorage, "_active_edits", [])
         try:
-            if os.path.exists("/tmp/vmm-a11y-disk-shareable.txt.click"):
+            if os.path.exists(uitest.path("vmm-a11y-disk-shareable.txt.click")):
                 pending_share = True
         except Exception:
             pass
@@ -7142,7 +7165,7 @@ class vmmDetails(vmmGObjectUI):
             if not apply_on:
                 try:
                     apply_on = (
-                        open("/tmp/vmm-a11y-config-apply-sensitive", "r")
+                        open(uitest.path("vmm-a11y-config-apply-sensitive"), "r")
                         .read()
                         .strip()
                         == "1"
@@ -7151,7 +7174,7 @@ class vmmDetails(vmmGObjectUI):
                     apply_on = False
             live = ""
             try:
-                live = open("/tmp/vmm-a11y-disk-shareable.txt", "r").read().strip()
+                live = open(uitest.path("vmm-a11y-disk-shareable.txt"), "r").read().strip()
             except Exception:
                 live = ""
             last = getattr(self, "_vmm_last_disk_kwargs", None) or {}
@@ -7160,7 +7183,7 @@ class vmmDetails(vmmGObjectUI):
             applied = False
             try:
                 applied = (
-                    open("/tmp/vmm-a11y-disk-shareable-applied.txt", "r")
+                    open(uitest.path("vmm-a11y-disk-shareable-applied.txt"), "r")
                     .read()
                     .strip()
                     == "1"
@@ -7178,20 +7201,20 @@ class vmmDetails(vmmGObjectUI):
                 # until the guest actually stops. Do not let a leftover
                 # Apply-sensitive flag skip this live value.
                 self._addstorage.widget("disk-shareable").set_active(True)
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("1")
             elif deferred_false and not self.vm.is_active():
                 # After shutdown the deferred apply is visible. A
                 # set_active(True) on the live path can leave
                 # _EDIT_SHARE armed; do not keep the live checkbox.
                 self._addstorage.widget("disk-shareable").set_active(False)
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("0")
                 try:
-                    os.remove("/tmp/vmm-a11y-disk-shareable-applied.txt")
+                    os.remove(uitest.path("vmm-a11y-disk-shareable-applied.txt"))
                 except Exception:
                     pass
             elif pending_share or apply_on:
                 live_w = bool(self._addstorage.widget("disk-shareable").get_active())
-                open("/tmp/vmm-a11y-disk-shareable.txt", "w").write(
+                open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write(
                     "1" if live_w else "0"
                 )
             elif (last.get("shareable") or applied) and (
@@ -7199,7 +7222,7 @@ class vmmDetails(vmmGObjectUI):
             ):
                 if not (apply_on and live == "0"):
                     self._addstorage.widget("disk-shareable").set_active(True)
-                    open("/tmp/vmm-a11y-disk-shareable.txt", "w").write("1")
+                    open(uitest.path("vmm-a11y-disk-shareable.txt"), "w").write("1")
         except Exception:
             pass
 
@@ -7221,7 +7244,7 @@ class vmmDetails(vmmGObjectUI):
         try:
             src = net.source or getattr(net, "bridge", None) or ""
             if src:
-                open("/tmp/vmm-a11y-net-device.txt", "w").write(src)
+                open(uitest.path("vmm-a11y-net-device.txt"), "w").write(src)
                 self.netlist.widget("net-manual-source").set_text(src)
         except Exception:
             pass
@@ -7306,9 +7329,9 @@ class vmmDetails(vmmGObjectUI):
                     self.vsockdetails.widget("vsock-auto").set_active(False)
                     self.vsockdetails.widget("vsock-cid").set_value(float(applied))
                     self.vsockdetails.widget("vsock-cid").set_visible(True)
-                    open("/tmp/vmm-a11y-vsock-cid.txt", "w").write(str(int(applied)))
-                    open("/tmp/vmm-a11y-vsock-cid.txt.visible", "w").write("1")
-                    open("/tmp/vmm-a11y-vsock-auto.txt", "w").write("0")
+                    open(uitest.path("vmm-a11y-vsock-cid.txt"), "w").write(str(int(applied)))
+                    open(uitest.path("vmm-a11y-vsock-cid.txt.visible"), "w").write("1")
+                    open(uitest.path("vmm-a11y-vsock-auto.txt"), "w").write("0")
                 except Exception:
                     pass
         try:
@@ -7548,10 +7571,10 @@ class vmmDetails(vmmGObjectUI):
         kernel, initrd, dtb, args = self.vm.get_boot_kernel_info()
         expand = bool(kernel or dtb or initrd or args)
         try:
-            if os.path.exists("/tmp/vmm-a11y-boot-kernel-enable.txt.click"):
+            if os.path.exists(uitest.path("vmm-a11y-boot-kernel-enable.txt.click")):
                 expand = True
-            elif os.path.exists("/tmp/vmm-a11y-boot-kernel-args.txt"):
-                if open("/tmp/vmm-a11y-boot-kernel-args.txt", "r").read().strip():
+            elif os.path.exists(uitest.path("vmm-a11y-boot-kernel-args.txt")):
+                if open(uitest.path("vmm-a11y-boot-kernel-args.txt"), "r").read().strip():
                     expand = True
         except Exception:
             pass
@@ -7601,7 +7624,7 @@ class vmmDetails(vmmGObjectUI):
         menu = self.vm.get_boot_menu() or False
         self.widget("boot-menu").set_active(menu)
         try:
-            open("/tmp/vmm-a11y-boot-menu.txt", "w").write("1" if menu else "0")
+            open(uitest.path("vmm-a11y-boot-menu.txt"), "w").write("1" if menu else "0")
         except Exception:
             pass
         self._refresh_boot_order()
@@ -7713,10 +7736,10 @@ class vmmDetails(vmmGObjectUI):
                 keep_usb = True
             if not keep_usb:
                 for path in (
-                    "/tmp/vmm-a11y-hw-clicked.txt",
-                    "/tmp/vmm-a11y-hw-selected.txt",
-                    "/tmp/vmm-a11y-hw-select.txt",
-                    "/tmp/vmm-a11y-last-hw.txt",
+                    uitest.path("vmm-a11y-hw-clicked.txt"),
+                    uitest.path("vmm-a11y-hw-selected.txt"),
+                    uitest.path("vmm-a11y-hw-select.txt"),
+                    uitest.path("vmm-a11y-last-hw.txt"),
                 ):
                     try:
                         lab = open(path, "r").read().strip().lower()
@@ -7887,7 +7910,7 @@ class vmmDetails(vmmGObjectUI):
             self._config_remove()
             return
         try:
-            device = open("/tmp/vmm-a11y-hw-last-device.txt", "r").read().strip()
+            device = open(uitest.path("vmm-a11y-hw-last-device.txt"), "r").read().strip()
         except Exception:
             device = ""
         if device:

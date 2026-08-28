@@ -23,27 +23,28 @@ from ..lib import gtkcompat
 from ..lib import uiutil
 from ..asyncjob import vmmAsyncJob
 from ..baseclass import vmmGObjectUI
+from ..lib import uitest
 
-_SNAP_PAGE = "/tmp/vmm-a11y-snapshot-page.txt"
-_SNAP_LIST = "/tmp/vmm-a11y-snapshot-list.txt"
-_SNAP_SELECTED = "/tmp/vmm-a11y-snapshot-selected.txt"
-_SNAP_SELECT = "/tmp/vmm-a11y-snapshot-select.txt"
-_SNAP_SELECT_ADD = "/tmp/vmm-a11y-snapshot-select-add.txt"
-_SNAP_NAV = "/tmp/vmm-a11y-snapshot-nav.txt"
-_SNAP_ERROR = "/tmp/vmm-a11y-snapshot-error.txt"
-_SNAP_ERROR_SHOWING = "/tmp/vmm-a11y-snapshot-error-showing.txt"
-_SNAP_DESC = "/tmp/vmm-a11y-snapshot-desc.txt"
-_SNAP_ACTION = "/tmp/vmm-a11y-snapshot-action.txt"
-_SNAP_START_SHOWING = "/tmp/vmm-a11y-snapshot-start-showing.txt"
-_SNAP_MENU = "/tmp/vmm-a11y-snapshot-menu.txt"
-_SNAP_MENU_ACTION = "/tmp/vmm-a11y-snapshot-menu-action.txt"
-_SNAP_NEW_SHOWN = "/tmp/vmm-a11y-snapshot-new-shown.txt"
-_SNAP_NEW_NAME = "/tmp/vmm-a11y-snapshot-new-name.txt"
-_SNAP_NEW_DESC = "/tmp/vmm-a11y-snapshot-new-desc.txt"
-_SNAP_NEW_MODE = "/tmp/vmm-a11y-snapshot-new-mode.txt"
-_SNAP_NEW_AUTO = "/tmp/vmm-a11y-snapshot-new-auto.txt"
-_SNAP_NEW_FINISH = "/tmp/vmm-a11y-snapshot-new-finish"
-_SNAP_NEW_CANCEL = "/tmp/vmm-a11y-snapshot-new-cancel"
+_SNAP_PAGE = uitest.path("vmm-a11y-snapshot-page.txt")
+_SNAP_LIST = uitest.path("vmm-a11y-snapshot-list.txt")
+_SNAP_SELECTED = uitest.path("vmm-a11y-snapshot-selected.txt")
+_SNAP_SELECT = uitest.path("vmm-a11y-snapshot-select.txt")
+_SNAP_SELECT_ADD = uitest.path("vmm-a11y-snapshot-select-add.txt")
+_SNAP_NAV = uitest.path("vmm-a11y-snapshot-nav.txt")
+_SNAP_ERROR = uitest.path("vmm-a11y-snapshot-error.txt")
+_SNAP_ERROR_SHOWING = uitest.path("vmm-a11y-snapshot-error-showing.txt")
+_SNAP_DESC = uitest.path("vmm-a11y-snapshot-desc.txt")
+_SNAP_ACTION = uitest.path("vmm-a11y-snapshot-action.txt")
+_SNAP_START_SHOWING = uitest.path("vmm-a11y-snapshot-start-showing.txt")
+_SNAP_MENU = uitest.path("vmm-a11y-snapshot-menu.txt")
+_SNAP_MENU_ACTION = uitest.path("vmm-a11y-snapshot-menu-action.txt")
+_SNAP_NEW_SHOWN = uitest.path("vmm-a11y-snapshot-new-shown.txt")
+_SNAP_NEW_NAME = uitest.path("vmm-a11y-snapshot-new-name.txt")
+_SNAP_NEW_DESC = uitest.path("vmm-a11y-snapshot-new-desc.txt")
+_SNAP_NEW_MODE = uitest.path("vmm-a11y-snapshot-new-mode.txt")
+_SNAP_NEW_AUTO = uitest.path("vmm-a11y-snapshot-new-auto.txt")
+_SNAP_NEW_FINISH = uitest.path("vmm-a11y-snapshot-new-finish")
+_SNAP_NEW_CANCEL = uitest.path("vmm-a11y-snapshot-new-cancel")
 
 
 mimemap = {
@@ -576,8 +577,8 @@ class vmmSnapshotNew(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _fields_tick)
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _fields_tick)
+        uitest.poll_add(50, _tick)
 
 
 class vmmSnapshotPage(vmmGObjectUI):
@@ -931,7 +932,7 @@ class vmmSnapshotPage(vmmGObjectUI):
         if event.button != 3:
             return
         try:
-            tup = src.get_path_at_pos(int(event.x), int(event.y))
+            tup = gtkcompat.treeview_path_at_event(src, event)
         except Exception:
             tup = None
         if tup is not None:
@@ -1144,21 +1145,21 @@ class vmmSnapshotPage(vmmGObjectUI):
             # confirm before changing the GTK selection.
             if switching and self._snapshot_desc_dirty():
                 try:
-                    open("/tmp/vmm-a11y-alert.txt", "w").write(
+                    open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                         "There are unapplied changes. Would you like to apply them now?"
                     )
                 except Exception:
                     pass
                 resp = ""
                 try:
-                    resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip().lower()
+                    resp = open(uitest.path("vmm-a11y-alert-response.txt"), "r").read().strip().lower()
                 except Exception:
                     resp = ""
                 if not resp:
                     # Leave _SNAP_SELECT in place for the next poll.
                     return False
                 try:
-                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    os.remove(uitest.path("vmm-a11y-alert-response.txt"))
                 except Exception:
                     pass
                 if resp == "yes":
@@ -1337,4 +1338,4 @@ class vmmSnapshotPage(vmmGObjectUI):
         if getattr(self, "_vmm_snapshot_poll_src", None):
             return
         self._vmm_snapshot_poll = True
-        self._vmm_snapshot_poll_src = GLib.timeout_add(50, self._a11y_poll_once)
+        self._vmm_snapshot_poll_src = uitest.poll_add(50, self._a11y_poll_once)

@@ -22,6 +22,7 @@ from .baseclass import vmmGObjectUI
 from .asyncjob import vmmAsyncJob
 from .engine import vmmEngine
 from .storagebrowse import vmmStorageBrowser
+from .lib import uitest
 
 
 def _get_cloneable_msg(diskinfo):
@@ -238,7 +239,7 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-clone-shown.txt"), "w").write("1")
             except Exception:
                 pass
             return
@@ -246,21 +247,21 @@ class vmmCloneVM(vmmGObjectUI):
         try:
             # Do not publish shown=1 until _reset_state finishes. An early
             # Clone click is deleted with clone-finish below.
-            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-clone-shown.txt"), "w").write("0")
         except Exception:
             pass
         for path in (
-            "/tmp/vmm-a11y-clone-cancel",
-            "/tmp/vmm-a11y-clone-finish",
-            "/tmp/vmm-a11y-clone-details",
-            "/tmp/vmm-a11y-window-close.txt",
-            "/tmp/vmm-a11y-clone-stg-cancel",
-            "/tmp/vmm-a11y-clone-stg-ok",
-            "/tmp/vmm-a11y-clone-stg-browse",
-            "/tmp/vmm-a11y-clone-flags.txt",
-            "/tmp/vmm-a11y-alert.txt",
-            "/tmp/vmm-a11y-alert-response.txt",
-            "/tmp/vmm-a11y-clone-name.txt",
+            uitest.path("vmm-a11y-clone-cancel"),
+            uitest.path("vmm-a11y-clone-finish"),
+            uitest.path("vmm-a11y-clone-details"),
+            uitest.path("vmm-a11y-window-close.txt"),
+            uitest.path("vmm-a11y-clone-stg-cancel"),
+            uitest.path("vmm-a11y-clone-stg-ok"),
+            uitest.path("vmm-a11y-clone-stg-browse"),
+            uitest.path("vmm-a11y-clone-flags.txt"),
+            uitest.path("vmm-a11y-alert.txt"),
+            uitest.path("vmm-a11y-alert-response.txt"),
+            uitest.path("vmm-a11y-clone-name.txt"),
         ):
             try:
                 os.remove(path)
@@ -272,7 +273,7 @@ class vmmCloneVM(vmmGObjectUI):
         self.topwin.set_transient_for(parent)
         self.topwin.resize(1, 1)
         try:
-            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-clone-shown.txt"), "w").write("1")
         except Exception:
             pass
         self._vmm_clone_name_seen = None
@@ -324,11 +325,11 @@ class vmmCloneVM(vmmGObjectUI):
     def _storage_dialog_close(self):
         self._storage_dialog.hide()
         try:
-            open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "w").write("0")
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-clone-stg-doclone-user")
+            os.remove(uitest.path("vmm-a11y-clone-stg-doclone-user"))
         except Exception:
             pass
         return 1
@@ -346,8 +347,8 @@ class vmmCloneVM(vmmGObjectUI):
         self._set_vm(None)
         self._storage_list = None
         try:
-            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("0")
-            open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-clone-shown.txt"), "w").write("0")
+            open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "w").write("0")
         except Exception:
             pass
         if was_visible:
@@ -565,17 +566,17 @@ class vmmCloneVM(vmmGObjectUI):
                 )
             except Exception:
                 pass
-            open("/tmp/vmm-a11y-clone-stg-shown.txt", "w").write("1")
-            open("/tmp/vmm-a11y-clone-stg-path.txt", "w").write(new or "")
+            open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "w").write("1")
+            open(uitest.path("vmm-a11y-clone-stg-path.txt"), "w").write(new or "")
             user_doclone = None
             try:
                 user_doclone = open(
-                    "/tmp/vmm-a11y-clone-stg-doclone-user", "r"
+                    uitest.path("vmm-a11y-clone-stg-doclone-user"), "r"
                 ).read().strip()
             except Exception:
                 user_doclone = None
             if user_doclone not in ("0", "1"):
-                open("/tmp/vmm-a11y-clone-stg-doclone.txt", "w").write(
+                open(uitest.path("vmm-a11y-clone-stg-doclone.txt"), "w").write(
                     "1" if do_clone else "0"
                 )
         except Exception:
@@ -588,8 +589,8 @@ class vmmCloneVM(vmmGObjectUI):
         # Sync 'do clone' checkbox, and main dialog combo
         do_clone = self.widget("change-storage-doclone").get_active()
         for path in (
-            "/tmp/vmm-a11y-clone-stg-doclone-user",
-            "/tmp/vmm-a11y-clone-stg-doclone.txt",
+            uitest.path("vmm-a11y-clone-stg-doclone-user"),
+            uitest.path("vmm-a11y-clone-stg-doclone.txt"),
         ):
             try:
                 want = open(path, "r").read().strip()
@@ -612,7 +613,7 @@ class vmmCloneVM(vmmGObjectUI):
 
         new_path = self.widget("change-storage-new").get_text()
         try:
-            text = open("/tmp/vmm-a11y-clone-stg-path.txt", "r").read()
+            text = open(uitest.path("vmm-a11y-clone-stg-path.txt"), "r").read()
             if text:
                 new_path = text
                 if self.widget("change-storage-new").get_text() != text:
@@ -672,7 +673,7 @@ class vmmCloneVM(vmmGObjectUI):
         self.reset_finish_cursor()
         self._vmm_clone_finishing = False
         try:
-            os.remove("/tmp/vmm-a11y-clone-finish")
+            os.remove(uitest.path("vmm-a11y-clone-finish"))
         except Exception:
             pass
 
@@ -682,7 +683,7 @@ class vmmCloneVM(vmmGObjectUI):
                 "error": error,
             }
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(error)
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(error)
             except Exception:
                 pass
             self._vmm_file_alert = True
@@ -754,7 +755,7 @@ class vmmCloneVM(vmmGObjectUI):
         except Exception as e:
             msg = _("Error with clone settings: %s") % str(e)
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(msg)
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg)
             except Exception:
                 pass
             self._vmm_file_alert = True
@@ -814,8 +815,8 @@ class vmmCloneVM(vmmGObjectUI):
                 name = self.widget("clone-new-name").get_text() or ""
             except Exception:
                 name = ""
-            open("/tmp/vmm-a11y-clone-shown.txt", "w").write("1")
-            name_path = "/tmp/vmm-a11y-clone-name.txt"
+            open(uitest.path("vmm-a11y-clone-shown.txt"), "w").write("1")
+            name_path = uitest.path("vmm-a11y-clone-name.txt")
             try:
                 existing = open(name_path, "r").read()
                 stamp = os.path.getmtime(name_path)
@@ -849,7 +850,7 @@ class vmmCloneVM(vmmGObjectUI):
                         .replace("\n", " | "),
                     )
                 )
-            open("/tmp/vmm-a11y-clone-storage.txt", "w").write("\n".join(lines))
+            open(uitest.path("vmm-a11y-clone-storage.txt"), "w").write("\n".join(lines))
         except Exception:
             pass
 
@@ -860,7 +861,7 @@ class vmmCloneVM(vmmGObjectUI):
 
         def _tick():
             try:
-                path = "/tmp/vmm-a11y-clone-open.txt"
+                path = uitest.path("vmm-a11y-clone-open.txt")
                 name = gtkcompat.claim_a11y_request(path)
                 if name is not None:
                     vm = None
@@ -899,11 +900,11 @@ class vmmCloneVM(vmmGObjectUI):
                 pass
             try:
                 if getattr(self, "_vmm_file_alert", False):
-                    resp = open("/tmp/vmm-a11y-alert-response.txt", "r").read().strip().lower()
-                    os.remove("/tmp/vmm-a11y-alert-response.txt")
+                    resp = open(uitest.path("vmm-a11y-alert-response.txt"), "r").read().strip().lower()
+                    os.remove(uitest.path("vmm-a11y-alert-response.txt"))
                     if resp in ("close", "ok", "cancel"):
                         try:
-                            os.remove("/tmp/vmm-a11y-alert.txt")
+                            os.remove(uitest.path("vmm-a11y-alert.txt"))
                         except Exception:
                             pass
                         self._vmm_file_alert = False
@@ -916,20 +917,20 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-clone-shown.txt", "r").read().strip() != "1":
+                if open(uitest.path("vmm-a11y-clone-shown.txt"), "r").read().strip() != "1":
                     return True
             except Exception:
                 return True
             try:
                 changed = False
-                flag_path = "/tmp/vmm-a11y-clone-flags.txt"
+                flag_path = uitest.path("vmm-a11y-clone-flags.txt")
                 flag_map = {}
                 if os.path.exists(flag_path):
                     for row in open(flag_path, "r").read().splitlines():
                         parts = row.split("\t")
                         if len(parts) >= 2:
                             flag_map[parts[0]] = parts[1] in ("1", "true", "yes")
-                for row in open("/tmp/vmm-a11y-clone-storage.txt", "r").read().splitlines():
+                for row in open(uitest.path("vmm-a11y-clone-storage.txt"), "r").read().splitlines():
                     parts = row.split("\t")
                     if len(parts) < 5:
                         continue
@@ -962,7 +963,7 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-clone-name.txt"
+                path = uitest.path("vmm-a11y-clone-name.txt")
                 if os.path.exists(path):
                     text = open(path, "r").read()
                     stamp = os.path.getmtime(path)
@@ -975,7 +976,7 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-clone-row-select.txt"
+                path = uitest.path("vmm-a11y-clone-row-select.txt")
                 if os.path.exists(path):
                     target = open(path, "r").read().strip()
                     os.remove(path)
@@ -986,21 +987,21 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-clone-cancel"):
-                    os.remove("/tmp/vmm-a11y-clone-cancel")
+                if os.path.exists(uitest.path("vmm-a11y-clone-cancel")):
+                    os.remove(uitest.path("vmm-a11y-clone-cancel"))
                     self.close()
                     return True
-                if os.path.exists("/tmp/vmm-a11y-clone-stg-cancel"):
-                    os.remove("/tmp/vmm-a11y-clone-stg-cancel")
+                if os.path.exists(uitest.path("vmm-a11y-clone-stg-cancel")):
+                    os.remove(uitest.path("vmm-a11y-clone-stg-cancel"))
                     self._storage_dialog_close()
-                if os.path.exists("/tmp/vmm-a11y-clone-details"):
-                    os.remove("/tmp/vmm-a11y-clone-details")
+                if os.path.exists(uitest.path("vmm-a11y-clone-details")):
+                    os.remove(uitest.path("vmm-a11y-clone-details"))
                     self._show_storage_window()
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() == "1":
-                    path = "/tmp/vmm-a11y-clone-stg-path.txt"
+                if open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "r").read().strip() == "1":
+                    path = uitest.path("vmm-a11y-clone-stg-path.txt")
                     if os.path.exists(path):
                         text = open(path, "r").read()
                         stamp = os.path.getmtime(path)
@@ -1008,39 +1009,39 @@ class vmmCloneVM(vmmGObjectUI):
                             self._vmm_clone_stg_path_seen = stamp
                             if self.widget("change-storage-new").get_text() != text:
                                 self.widget("change-storage-new").set_text(text)
-                    if os.path.exists("/tmp/vmm-a11y-clone-stg-ok"):
-                        os.remove("/tmp/vmm-a11y-clone-stg-ok")
+                    if os.path.exists(uitest.path("vmm-a11y-clone-stg-ok")):
+                        os.remove(uitest.path("vmm-a11y-clone-stg-ok"))
                         self._storage_dialog_finish()
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-clone-finish"):
+                if os.path.exists(uitest.path("vmm-a11y-clone-finish")):
                     if getattr(self, "_vmm_clone_finishing", False):
-                        os.remove("/tmp/vmm-a11y-clone-finish")
+                        os.remove(uitest.path("vmm-a11y-clone-finish"))
                         return True
-                    os.remove("/tmp/vmm-a11y-clone-finish")
+                    os.remove(uitest.path("vmm-a11y-clone-finish"))
                     self._finish()
                     return True
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-window-close.txt"
+                path = uitest.path("vmm-a11y-window-close.txt")
                 if os.path.exists(path):
                     want = open(path, "r").read().strip()
                     if "Clone Virtual Machine" in want:
                         os.remove(path)
                         self.close()
-                        open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                        open(uitest.path("vmm-a11y-window-close-done"), "w").write("1")
                         return True
             except Exception:
                 pass
             try:
-                if open("/tmp/vmm-a11y-clone-stg-shown.txt", "r").read().strip() != "1":
+                if open(uitest.path("vmm-a11y-clone-stg-shown.txt"), "r").read().strip() != "1":
                     return True
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-clone-stg-path.txt"
+                path = uitest.path("vmm-a11y-clone-stg-path.txt")
                 if os.path.exists(path):
                     text = open(path, "r").read()
                     stamp = os.path.getmtime(path)
@@ -1051,23 +1052,23 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                want = open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+                want = open(uitest.path("vmm-a11y-clone-stg-doclone.txt"), "r").read().strip()
                 chk = self.widget("change-storage-doclone")
                 if want in ("0", "1") and bool(chk.get_active()) != (want == "1"):
                     chk.set_active(want == "1")
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-clone-stg-browse"):
-                    os.remove("/tmp/vmm-a11y-clone-stg-browse")
+                if os.path.exists(uitest.path("vmm-a11y-clone-stg-browse")):
+                    os.remove(uitest.path("vmm-a11y-clone-stg-browse"))
                     self._storage_dialog_browse_cb(None)
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-clone-stg-ok"):
-                    os.remove("/tmp/vmm-a11y-clone-stg-ok")
+                if os.path.exists(uitest.path("vmm-a11y-clone-stg-ok")):
+                    os.remove(uitest.path("vmm-a11y-clone-stg-ok"))
                     try:
-                        want = open("/tmp/vmm-a11y-clone-stg-doclone.txt", "r").read().strip()
+                        want = open(uitest.path("vmm-a11y-clone-stg-doclone.txt"), "r").read().strip()
                         if want in ("0", "1"):
                             self.widget("change-storage-doclone").set_active(want == "1")
                     except Exception:
@@ -1076,14 +1077,14 @@ class vmmCloneVM(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-clone-stg-cancel"):
-                    os.remove("/tmp/vmm-a11y-clone-stg-cancel")
+                if os.path.exists(uitest.path("vmm-a11y-clone-stg-cancel")):
+                    os.remove(uitest.path("vmm-a11y-clone-stg-cancel"))
                     self._storage_dialog_close()
             except Exception:
                 pass
             return True
 
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _tick)
 
     ################
     # UI listeners #
@@ -1117,7 +1118,7 @@ class vmmCloneVM(vmmGObjectUI):
         def callback(src_ignore, txt):
             self.widget("change-storage-new").set_text(txt)
             try:
-                open("/tmp/vmm-a11y-clone-stg-path.txt", "w").write(txt or "")
+                open(uitest.path("vmm-a11y-clone-stg-path.txt"), "w").write(txt or "")
             except Exception:
                 pass
 

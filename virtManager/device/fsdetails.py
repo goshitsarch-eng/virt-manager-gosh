@@ -13,6 +13,7 @@ from virtinst import xmlutil
 from ..lib import uiutil
 from ..baseclass import vmmGObjectUI
 from ..storagebrowse import vmmStorageBrowser
+from ..lib import uitest
 
 
 _EDIT_FS_ENUM = range(1, 8)
@@ -252,7 +253,7 @@ class vmmFSDetails(vmmGObjectUI):
             if path:
                 textent.set_text(path)
                 try:
-                    open("/tmp/vmm-a11y-addhw-fs-source.txt", "w").write(path)
+                    open(uitest.path("vmm-a11y-addhw-fs-source.txt"), "w").write(path)
                 except Exception:
                     pass
 

@@ -17,6 +17,7 @@ import virtinst.progress
 
 from .baseclass import vmmGObjectUI
 from .lib import gtkcompat
+from .lib import uitest
 
 
 class _vmmMeter(virtinst.progress.Meter):
@@ -213,17 +214,17 @@ class vmmAsyncJob(vmmGObjectUI):
         gtkcompat.ensure_button_accessible_name(self.widget("cancel-async-job"), "Cancel")
         self.widget("cancel-async-job").set_visible(bool(self.cancel_cb))
         try:
-            open("/tmp/vmm-a11y-progress-title.txt", "w").write(title or "")
-            open("/tmp/vmm-a11y-progress-warning.txt", "w").write("")
+            open(uitest.path("vmm-a11y-progress-title.txt"), "w").write(title or "")
+            open(uitest.path("vmm-a11y-progress-warning.txt"), "w").write("")
         except Exception:
             pass
         if not getattr(self, "_vmm_progress_poll", False):
             self._vmm_progress_poll = True
 
             def _poll_cancel():
-                if os.path.exists("/tmp/vmm-a11y-progress-cancel"):
+                if os.path.exists(uitest.path("vmm-a11y-progress-cancel")):
                     try:
-                        os.remove("/tmp/vmm-a11y-progress-cancel")
+                        os.remove(uitest.path("vmm-a11y-progress-cancel"))
                     except Exception:
                         pass
                     try:
@@ -233,7 +234,7 @@ class vmmAsyncJob(vmmGObjectUI):
                 return True
 
             self._vmm_progress_cancel_tick = _poll_cancel
-            GLib.timeout_add(50, self._vmm_progress_cancel_tick)
+            uitest.poll_add(50, self._vmm_progress_cancel_tick)
 
     ####################
     # Internal helpers #
@@ -291,14 +292,14 @@ class vmmAsyncJob(vmmGObjectUI):
         self.widget("warning-text").set_markup(markup)
         gtkcompat.set_accessible_name(self.widget("warning-text"), summary)
         try:
-            open("/tmp/vmm-a11y-progress-warning.txt", "w").write(summary or "")
+            open(uitest.path("vmm-a11y-progress-warning.txt"), "w").write(summary or "")
         except Exception:
             pass
 
     def _thread_finished(self):
         GLib.source_remove(self._timer)
         try:
-            open("/tmp/vmm-a11y-progress.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-progress.txt"), "w").write("0")
         except Exception:
             pass
         self.topwin.destroy()
@@ -312,11 +313,11 @@ class vmmAsyncJob(vmmGObjectUI):
         self._finish_cb(error, details, *self._finish_args)
 
     def run(self):
-        self._timer = GLib.timeout_add(100, self._exit_if_necessary)
+        self._timer = uitest.poll_add(100, self._exit_if_necessary)
 
         if self.show_progress:
             try:
-                open("/tmp/vmm-a11y-progress.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-progress.txt"), "w").write("1")
             except Exception:
                 pass
             # Do not app.add_window(): that forces a Wayland taskbar entry

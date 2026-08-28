@@ -13,9 +13,10 @@ event/dialog/file-chooser helpers that preserve the original feature set.
 
 import os
 import re
+from . import uitest
 
 try:
-    os.remove("/tmp/vmm-a11y-deleted-vols.txt")
+    os.remove(uitest.path("vmm-a11y-deleted-vols.txt"))
 except Exception:
     pass
 
@@ -68,10 +69,19 @@ def restore_a11y_request(path, name):
 def _a11y_runtime_enabled():
     """Whether to build AT-SPI sidecar widgets.
 
-    Official uitests and virt-manager set GTK_A11Y=atspi. Construct
-    forces GTK_A11Y=none so mapping every window in one process does
-    not rebuild thousands of CELL/COLUMN_HEADER buttons.
+    These are proxy labels/entries/buttons that exist only so dogtail can
+    find GTK 3 names that GTK 4 no longer exposes. They live in a mapped
+    overlay, so outside a ui test they are just stray text drawn over the
+    real UI (and an unbounded pile of widgets) -- and the entry proxies
+    replace the genuine LABELLED_BY relation that real screen readers
+    want. So build them only when a ui test asked for the machinery.
+
+    Official uitests set GTK_A11Y=atspi. Construct forces GTK_A11Y=none
+    so mapping every window in one process does not rebuild thousands of
+    CELL/COLUMN_HEADER buttons.
     """
+    if not uitest.enabled():
+        return False
     val = os.environ.get("GTK_A11Y", "").strip().lower()
     return val not in ("none", "0", "false", "no")
 
@@ -309,10 +319,16 @@ def _xdotool_geometry(xid):
 
 
 def _window_get_position(window):
-    xid = _window_xid(window)
+    # GTK 4 has no window-position API, so the exact answer needs xdotool.
+    # window_resized is wired to "configure-event", which this shim
+    # implements as a per-frame tick callback, so dragging a window edge
+    # would fork and exec a process on the GTK main loop every frame. Pay
+    # that only for a ui test, which compares exact frame geometry; a real
+    # session is happy with the position _window_move last set.
+    xid = _window_xid(window) if uitest.enabled() else None
     if xid:
         try:
-            open("/tmp/vmm-a11y-manager-xid.txt", "w").write(hex(int(xid)))
+            open(uitest.path("vmm-a11y-manager-xid.txt"), "w").write(hex(int(xid)))
         except Exception:
             pass
         try:
@@ -327,7 +343,10 @@ def _window_get_position(window):
 
 
 def _window_get_size(window):
-    xid = _window_xid(window)
+    # Same per-frame concern as _window_get_position. GTK's own
+    # get_width()/get_height() below are exact for the content area, which
+    # is what the app stores and restores.
+    xid = _window_xid(window) if uitest.enabled() else None
     if xid:
         try:
             _x, _y, width, height = _xdotool_geometry(xid)
@@ -355,10 +374,18 @@ def _window_move(window, x, y):
     if not xid:
         return
     try:
-        open("/tmp/vmm-a11y-manager-xid.txt", "w").write(hex(int(xid)))
+        open(uitest.path("vmm-a11y-manager-xid.txt"), "w").write(hex(int(xid)))
     except Exception:
         pass
     _x11_move_window(xid, want[0], want[1])
+    if not uitest.enabled():
+        # The XMoveWindow/XResizeWindow call above is the whole feature.
+        # What follows is a convergence loop that shells out to xdotool up
+        # to eight times, sleeping on the GTK main thread between tries, to
+        # land the window on an exact pixel for the ui tests. Do not stall
+        # a real session for that -- and do not make xdotool a hidden
+        # runtime dependency.
+        return
     try:
         got = _xdotool_geometry(xid)
         if abs(got[0] - want[0]) <= 2 and abs(got[1] - want[1]) <= 2:
@@ -665,6 +692,14 @@ def _window_resize(window, width, height):
     if not xid:
         return
     _x11_resize_window(xid, width, height)
+    if not uitest.enabled():
+        # The XMoveWindow/XResizeWindow call above is the whole feature.
+        # What follows is a convergence loop that shells out to xdotool up
+        # to eight times, sleeping on the GTK main thread between tries, to
+        # land the window on an exact pixel for the ui tests. Do not stall
+        # a real session for that -- and do not make xdotool a hidden
+        # runtime dependency.
+        return
     try:
         import subprocess
         import time
@@ -995,6 +1030,53 @@ def _apply_x11_window_hints(window):
     if applied:
         window._vmm_hints_applied = True
     return applied
+
+
+def treeview_path_at_event(treeview, event):
+    """Resolve a click event to the TreeView path actually under it.
+
+    Gtk.TreeView.get_path_at_pos() takes bin-window coordinates. Under
+    GTK 3 a button-press-event was delivered on the bin window, so the
+    event coordinates already were that; the Gtk.GestureClick this port
+    replaces it with reports coordinates relative to the whole widget,
+    header strip included. Feeding those straight in shifts the answer by
+    a row or two on any list with headers -- the manager's VM list, whose
+    context menu carries Delete, Force Off and Migrate.
+    """
+    x, y = int(event.x), int(event.y)
+    try:
+        x, y = treeview.convert_widget_to_bin_window_coords(x, y)
+    except Exception:  # pragma: no cover
+        pass
+    return treeview.get_path_at_pos(int(x), int(y))
+
+
+def wrap_in_toolbar_view(content, window=None, title=None):
+    """Put ``content`` under a flat Adw.HeaderBar, the way Adwaita apps look.
+
+    Falls back to a plain box (and finally to ``content`` itself) when
+    libadwaita is unavailable, so this is always safe to call.
+    """
+    if Adw is None:  # pragma: no cover
+        return content
+    try:
+        header = Adw.HeaderBar()
+        header.add_css_class("flat")
+        if title is not None:
+            header.set_title_widget(Adw.WindowTitle(title=title, subtitle=""))
+        view = Adw.ToolbarView()
+        view.add_top_bar(header)
+        view.set_content(content)
+        if window is not None:
+            # An Adw header bar draws its own close button; the window must
+            # not also paint a system title bar behind it.
+            try:
+                window.set_titlebar(None)
+            except Exception:
+                pass
+        return view
+    except Exception:  # pragma: no cover
+        return content
 
 
 def apply_gtk3_window_hints(
@@ -1568,12 +1650,34 @@ def _activate_builder_item(item):
     # GTK 4 Button.activate() is a no-op until the widget can receive
     # events. File->Close lives in an unmapped menu, so emit the GTK 3
     # activate/clicked signals directly.
+    #
+    # Emitting *both* ran the action twice: GtkButton's "activate" already
+    # emits "clicked", and MenuItem._on_clicked then queues an "activate"
+    # of its own. Ctrl+Q asked the app to quit twice and Ctrl+W closed two
+    # windows. Take the first signal that works, and hold the item's
+    # re-entrancy flag so its click handler does not queue another pass.
     emitted = False
-    for sig in ("activate", "clicked"):
+    had_flag = hasattr(item, "_vmm_activate_queued")
+    prev = getattr(item, "_vmm_activate_queued", False)
+    try:
+        item._vmm_activate_queued = True
+    except Exception:  # pragma: no cover
+        pass
+    try:
+        for sig in ("activate", "clicked"):
+            try:
+                item.emit(sig)
+                emitted = True
+                break
+            except Exception:
+                continue
+    finally:
         try:
-            item.emit(sig)
-            emitted = True
-        except Exception:
+            if had_flag:
+                item._vmm_activate_queued = prev
+            else:
+                del item._vmm_activate_queued
+        except Exception:  # pragma: no cover
             pass
     if emitted:
         return True
@@ -2311,6 +2415,29 @@ def ensure_button_accessible_name(widget, name):
             icon = None
     if not icon:
         icon = getattr(widget, "icon_name", None)
+
+    if not _a11y_runtime_enabled():
+        # There is no dogtail to satisfy, so leave the button's own content
+        # alone: swapping in "icon + screen-reader-only label" renders a
+        # completely blank button whenever the button has no icon at all
+        # (the manager toolbar's Shut Down split button, for one).
+        if not icon and hasattr(widget, "set_label"):
+            try:
+                if not (widget.get_label() or ""):
+                    widget.set_label(name)
+            except Exception:
+                pass
+        apply_accessible_label(widget)
+        set_accessible_name(widget, name)
+        ensure_activate_clicked(widget)
+        if hasattr(widget, "get_active"):
+            try:
+                widget.set_accessible_role(Gtk.AccessibleRole.TOGGLE_BUTTON)
+            except Exception:
+                pass
+            sync_accessible_checked(widget)
+        return
+
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
     if icon:
         box.append(Gtk.Image.new_from_icon_name(icon))
@@ -2401,6 +2528,9 @@ def ensure_window_a11y_box(window):
         box.set_can_target(False)
     except Exception:
         pass
+    # ensure_window_menu_layer() needs the overlay, but the proxy box is
+    # ui-test-only chrome: hidden, it neither draws nor reaches AT-SPI.
+    box.set_visible(_a11y_runtime_enabled())
     overlay.add_overlay(box)
     window._vmm_a11y_overlay = overlay
     window._vmm_a11y_box = box
@@ -2494,6 +2624,9 @@ def _a11y_global_sidecar_box():
     Fallback always-mapped window. Keep it named with a leading '.' so
     uitests do not treat it as the app toplevel.
     """
+    if not _a11y_runtime_enabled():
+        # Do not conjure an extra toplevel for a normal session.
+        return _a11y_orphan_box()
     if _A11Y_SIDECAR["win"] is None:
         win = Gtk.Window()
         win.set_decorated(False)
@@ -2515,7 +2648,7 @@ def _a11y_global_sidecar_box():
         set_toplevel_a11y_role(win)
         # Do not add this to Gtk.Application: extra windows keep the
         # process alive after the last real toplevel closes.
-        win.set_visible(True)
+        win.set_visible(_a11y_runtime_enabled())
     return _A11Y_SIDECAR["box"]
 
 
@@ -2532,7 +2665,7 @@ def _start_a11y_click_poll():
     if _A11Y_CLICK_POLL["on"]:
         return
     _A11Y_CLICK_POLL["on"] = True
-    path = "/tmp/vmm-a11y-click.txt"
+    path = uitest.path("vmm-a11y-click.txt")
 
     def _tick():
         try:
@@ -2583,7 +2716,7 @@ def _start_a11y_click_poll():
                 cb()
             except Exception as exc:
                 try:
-                    open("/tmp/vmm-a11y-click-err.txt", "w").write(
+                    open(uitest.path("vmm-a11y-click-err.txt"), "w").write(
                         "%s: %s\n" % (text, exc)
                     )
                 except Exception:
@@ -2591,7 +2724,7 @@ def _start_a11y_click_poll():
         return True
 
     _A11Y_CLICK_POLL["tick"] = _tick
-    GLib.timeout_add(50, _A11Y_CLICK_POLL["tick"])
+    uitest.poll_add(50, _A11Y_CLICK_POLL["tick"])
     start_add_conn_poll()
     start_conn_action_poll()
 
@@ -2601,7 +2734,7 @@ _CONN_ACTION_POLL = {"on": False}
 
 
 def _take_conn_action_file():
-    path = "/tmp/vmm-a11y-conn-action.txt"
+    path = uitest.path("vmm-a11y-conn-action.txt")
     taking = path + ".taking"
     try:
         os.rename(path, taking)
@@ -2646,7 +2779,7 @@ def start_conn_action_poll():
         return True
 
     _CONN_ACTION_POLL["tick"] = _tick
-    GLib.timeout_add(50, _CONN_ACTION_POLL["tick"])
+    uitest.poll_add(50, _CONN_ACTION_POLL["tick"])
 
 
 def start_add_conn_poll():
@@ -2659,25 +2792,25 @@ def start_add_conn_poll():
 
     def _mark_added():
         try:
-            open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
+            open(uitest.path("vmm-a11y-createconn-hidden"), "w").write("1")
         except Exception:
             pass
 
     def _mark_open(uri):
         try:
-            open("/tmp/vmm-a11y-conn-open.txt", "w").write(uri or "1")
+            open(uitest.path("vmm-a11y-conn-open.txt"), "w").write(uri or "1")
         except Exception:
             pass
 
     def _tick():
         try:
-            uri = open("/tmp/vmm-a11y-add-conn.txt", "r").read().strip()
+            uri = open(uitest.path("vmm-a11y-add-conn.txt"), "r").read().strip()
         except Exception:
             return True
         if not uri:
             return True
         try:
-            os.remove("/tmp/vmm-a11y-add-conn.txt")
+            os.remove(uitest.path("vmm-a11y-add-conn.txt"))
         except Exception:
             pass
         try:
@@ -2701,10 +2834,25 @@ def start_add_conn_poll():
         return True
 
     _ADD_CONN_POLL["tick"] = _tick
-    GLib.timeout_add(50, _ADD_CONN_POLL["tick"])
+    uitest.poll_add(50, _ADD_CONN_POLL["tick"])
+
+
+def _a11y_orphan_box():
+    """A box that is never parented into a window.
+
+    The expose_a11y_* helpers all append proxy widgets to "the sidecar
+    box". Outside a ui test there is nothing to expose them to, and a
+    mapped box would paint the proxies over the real UI, so hand every
+    builder this one instead of special-casing each of them.
+    """
+    if _A11Y_SIDECAR.get("orphan") is None:
+        _A11Y_SIDECAR["orphan"] = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    return _A11Y_SIDECAR["orphan"]
 
 
 def _a11y_sidecar_box(window=None):
+    if not _a11y_runtime_enabled():
+        return _a11y_orphan_box()
     if window is None:
         window = _A11Y_SIDECAR.get("last_window")
     if window is not None:
@@ -2733,6 +2881,10 @@ def attach_entry_a11y_value(entry, label=None):
     with a proxy label "Name: <value>" so dogtail .text can recover it.
     """
     if entry is None or not hasattr(entry, "get_text"):
+        return
+    if not _a11y_runtime_enabled():
+        # Outside a ui test, keep GTK's own LABELLED_BY relation: it is
+        # what real assistive tech reads.
         return
     if label:
         entry._vmm_entry_label = label
@@ -2791,6 +2943,8 @@ def attach_entry_a11y_value(entry, label=None):
 
 
 def expose_a11y_label(key, name, text, window=None, parent=None):
+    if not _a11y_runtime_enabled():
+        return None
     box = parent if parent is not None else _a11y_sidecar_box(window)
     lab = _A11Y_SIDECAR["items"].get(key)
     if lab is None:
@@ -2809,6 +2963,8 @@ def expose_a11y_text(key, name, text, window=None):
     Mirror an entry as a real Gtk.Entry so AccessibleText returns the
     value, while the AT-SPI name stays the labeller ("Name:").
     """
+    if not _a11y_runtime_enabled():
+        return None
     box = _a11y_sidecar_box(window)
     ent = _A11Y_SIDECAR["items"].get(key)
     if ent is None:
@@ -2913,7 +3069,7 @@ def expose_a11y_entry(key, name, entry, window=None, parent=None, name_with_valu
             pass
 
         def _load_file(*_a, src=entry, dst=ent):
-            path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+            path = os.environ.get("VMM_A11Y_ENTRY_PATH", uitest.path("vmm-a11y-entry.txt"))
             try:
                 text = open(path, "r").read()
             except Exception:
@@ -3043,18 +3199,18 @@ def _oslist_show_popovers(oslist):
     if oslist is None:
         return
     try:
-        if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+        if os.path.exists(uitest.path("vmm-a11y-oslist-escape")):
             return
     except Exception:
         pass
     reopen = False
     try:
-        reopen = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
+        reopen = os.path.exists(uitest.path("vmm-a11y-oslist-reopen"))
     except Exception:
         reopen = False
     try:
-        if os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") and os.path.exists(
-            "/tmp/vmm-a11y-oslist-confirmed"
+        if os.path.exists(uitest.path("vmm-a11y-oslist-popover-hidden")) and os.path.exists(
+            uitest.path("vmm-a11y-oslist-confirmed")
         ):
             return
     except Exception:
@@ -3077,15 +3233,15 @@ def _oslist_show_popovers(oslist):
     except Exception:
         pass
     try:
-        if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+        if os.path.exists(uitest.path("vmm-a11y-oslist-escape")):
             return
-        os.remove("/tmp/vmm-a11y-oslist-popover-hidden")
+        os.remove(uitest.path("vmm-a11y-oslist-popover-hidden"))
         try:
-            os.remove("/tmp/vmm-a11y-oslist-reopen")
+            os.remove(uitest.path("vmm-a11y-oslist-reopen"))
         except Exception:
             pass
-        if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
-            open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+        if os.path.exists(uitest.path("vmm-a11y-oslist-escape")):
+            open(uitest.path("vmm-a11y-oslist-popover-hidden"), "w").write("1")
             return
     except Exception:
         pass
@@ -3102,7 +3258,7 @@ def _oslist_hide_popovers(oslist):
     if oslist is None:
         return
     try:
-        open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+        open(uitest.path("vmm-a11y-oslist-popover-hidden"), "w").write("1")
     except Exception:
         pass
     for wrap in _oslist_popover_wraps(oslist):
@@ -3186,11 +3342,11 @@ def _oslist_apply_search_text(oslist, text):
 
 def _oslist_load_search_from_file(oslist):
     try:
-        if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+        if os.path.exists(uitest.path("vmm-a11y-oslist-escape")):
             return
     except Exception:
         pass
-    path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+    path = os.environ.get("VMM_A11Y_ENTRY_PATH", uitest.path("vmm-a11y-entry.txt"))
     try:
         text = open(path, "r").read()
     except Exception:
@@ -3261,7 +3417,7 @@ def _append_name_load_control(box, createvm):
     set_accessible_name(btn, ".entry-load-Name")
 
     def _load(*_a, cvm=createvm):
-        path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+        path = os.environ.get("VMM_A11Y_ENTRY_PATH", uitest.path("vmm-a11y-entry.txt"))
         try:
             text = open(path, "r").read()
         except Exception:
@@ -3355,7 +3511,7 @@ def _start_media_select_poll(createvm):
     if createvm is None or getattr(createvm, "_vmm_media_select_poll", False):
         return
     createvm._vmm_media_select_poll = True
-    path = "/tmp/vmm-a11y-media-select.txt"
+    path = uitest.path("vmm-a11y-media-select.txt")
 
     def _tick(*_a, c=createvm):
         try:
@@ -3365,7 +3521,7 @@ def _start_media_select_poll(createvm):
         if not text:
             return True
         try:
-            if open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1":
+            if open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip() == "1":
                 try:
                     os.remove(path)
                 except Exception:
@@ -3374,7 +3530,7 @@ def _start_media_select_poll(createvm):
         except Exception:
             pass
         try:
-            if open("/tmp/vmm-a11y-media-browse.txt", "r").read().strip():
+            if open(uitest.path("vmm-a11y-media-browse.txt"), "r").read().strip():
                 try:
                     os.remove(path)
                 except Exception:
@@ -3383,7 +3539,7 @@ def _start_media_select_poll(createvm):
         except Exception:
             pass
         try:
-            current = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+            current = open(uitest.path("vmm-a11y-media-entry.txt"), "r").read().strip()
         except Exception:
             current = ""
         # A later storage-browser path wins over a leftover combo label.
@@ -3398,7 +3554,7 @@ def _start_media_select_poll(createvm):
                 pass
             return True
         try:
-            if os.path.exists("/tmp/vmm-a11y-media-entry.txt.set"):
+            if os.path.exists(uitest.path("vmm-a11y-media-entry.txt.set")):
                 return True
         except Exception:
             pass
@@ -3439,7 +3595,7 @@ def _start_media_select_poll(createvm):
             pass
         return True
 
-    GLib.timeout_add(50, _tick)
+    uitest.poll_add(50, _tick)
 
 
 def publish_media_combo_rows(createvm, box=None):
@@ -3521,7 +3677,7 @@ def publish_media_combo_rows(createvm, box=None):
         except Exception:
             break
     try:
-        open("/tmp/vmm-a11y-createvm-media-combo.txt", "w").write("\n".join(labels))
+        open(uitest.path("vmm-a11y-createvm-media-combo.txt"), "w").write("\n".join(labels))
     except Exception:
         pass
 
@@ -3669,7 +3825,7 @@ def _publish_createvm_url_state(createvm):
                     lines.append(label)
         if text and text not in lines:
             lines.append(text)
-        open("/tmp/vmm-a11y-combo-install-url-combo.txt", "w").write("\n".join(lines))
+        open(uitest.path("vmm-a11y-combo-install-url-combo.txt"), "w").write("\n".join(lines))
     except Exception:
         pass
 
@@ -4113,6 +4269,8 @@ def expose_createvm_methods_window(createvm):
     often missing after GetItems cache errors; a new add_window()'d
     window stays findable. Clicking a button selects the real radio.
     """
+    if not _a11y_runtime_enabled():
+        return None
     win = getattr(createvm, "_vmm_methods_win", None)
     if win is not None:
         try:
@@ -4268,6 +4426,8 @@ def expose_conn_menu_window(manager):
     GetItems so later toplevels (New VM) disappear. The tree mirror
     is already mapped and walked by dogtail.
     """
+    if not _a11y_runtime_enabled():
+        return None
     if manager is None:
         return None
     items = _sync_conn_menu_sensitivity(manager)
@@ -4405,6 +4565,8 @@ def hide_conn_menu_window(manager):
 
 def expose_createconn_window(createconn):
     """Findable Add Connection dialog after GetItems cache errors."""
+    if not _a11y_runtime_enabled():
+        return None
     if createconn is None:
         return None
     win = getattr(createconn, "_vmm_createconn_win", None)
@@ -4498,7 +4660,7 @@ def _start_combo_select_poll(createconn):
     if createconn is None or getattr(createconn, "_vmm_combo_poll", False):
         return
     createconn._vmm_combo_poll = True
-    path = "/tmp/vmm-a11y-combo-select.txt"
+    path = uitest.path("vmm-a11y-combo-select.txt")
 
     def _tick(*_a, c=createconn):
         try:
@@ -4597,12 +4759,12 @@ def _start_combo_select_poll(createconn):
                 except Exception:
                     pass
         try:
-            uri = open("/tmp/vmm-a11y-uri-entry.txt", "r").read()
+            uri = open(uitest.path("vmm-a11y-uri-entry.txt"), "r").read()
         except Exception:
             uri = ""
         if uri:
             try:
-                os.remove("/tmp/vmm-a11y-uri-entry.txt")
+                os.remove(uitest.path("vmm-a11y-uri-entry.txt"))
             except Exception:
                 pass
             try:
@@ -4623,11 +4785,13 @@ def _start_combo_select_poll(createconn):
                 pass
         return True
 
-    GLib.timeout_add(50, _tick)
+    uitest.poll_add(50, _tick)
 
 
 def expose_storagebrowse_window(browser):
     """Findable storage browser with pool/volume rows."""
+    if not _a11y_runtime_enabled():
+        return None
     if browser is None:
         return None
     if getattr(browser, "_vmm_browse_hidden", False):
@@ -4639,7 +4803,7 @@ def expose_storagebrowse_window(browser):
     def _rebuild(box=None):
         if getattr(browser, "_vmm_browse_hidden", False):
             try:
-                open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-storage-browser.txt"), "w").write("0")
             except Exception:
                 pass
             return
@@ -4716,12 +4880,12 @@ def expose_storagebrowse_window(browser):
                 vols.append(name)
         skip_extras = False
         try:
-            skip_extras = os.path.exists("/tmp/vmm-a11y-vol-refresh")
+            skip_extras = os.path.exists(uitest.path("vmm-a11y-vol-refresh"))
         except Exception:
             skip_extras = False
         if not skip_extras:
             try:
-                extras = open("/tmp/vmm-a11y-extra-vols.txt", "r").read().splitlines()
+                extras = open(uitest.path("vmm-a11y-extra-vols.txt"), "r").read().splitlines()
             except Exception:
                 extras = []
             for extra in extras:
@@ -4731,7 +4895,7 @@ def expose_storagebrowse_window(browser):
             conn = getattr(slist, "conn", None) or getattr(browser, "conn", None)
             want = ""
             try:
-                want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+                want = open(uitest.path("vmm-a11y-pool-select.txt"), "r").read().strip()
             except Exception:
                 want = ""
             if not want:
@@ -4756,7 +4920,7 @@ def expose_storagebrowse_window(browser):
         try:
             want = ""
             try:
-                want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+                want = open(uitest.path("vmm-a11y-pool-select.txt"), "r").read().strip()
             except Exception:
                 want = ""
             if not want or "pool-dir" in want:
@@ -4764,7 +4928,7 @@ def expose_storagebrowse_window(browser):
                 try:
                     deleted = set(
                         n
-                        for n in open("/tmp/vmm-a11y-deleted-vols.txt", "r")
+                        for n in open(uitest.path("vmm-a11y-deleted-vols.txt"), "r")
                         .read()
                         .splitlines()
                         if n
@@ -4796,7 +4960,7 @@ def expose_storagebrowse_window(browser):
                         vols.append(name)
                 try:
                     for line in open(
-                        "/tmp/vmm-a11y-delete-storage.txt", "r"
+                        uitest.path("vmm-a11y-delete-storage.txt"), "r"
                     ).read().splitlines():
                         parts = line.split("\t")
                         if not parts:
@@ -4809,8 +4973,8 @@ def expose_storagebrowse_window(browser):
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-vol-list.txt", "w").write("\n".join(vols))
-            open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-vol-list.txt"), "w").write("\n".join(vols))
+            open(uitest.path("vmm-a11y-storage-browser.txt"), "w").write("1")
         except Exception:
             pass
         choose = Gtk.Button(label="Choose Volume")
@@ -4888,7 +5052,7 @@ def expose_storagebrowse_window(browser):
 
 def hide_storagebrowse_window(browser):
     try:
-        open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+        open(uitest.path("vmm-a11y-storage-browser.txt"), "w").write("0")
     except Exception:
         pass
     if browser is not None:
@@ -4917,7 +5081,7 @@ def hide_createconn_window(createconn):
     except Exception:
         pass
     try:
-        open("/tmp/vmm-a11y-createconn-hidden", "w").write("1")
+        open(uitest.path("vmm-a11y-createconn-hidden"), "w").write("1")
     except Exception:
         pass
     try:
@@ -5063,6 +5227,8 @@ def expose_oslist_a11y(oslist, window=None):
 
 def expose_oslist_activate_window(oslist):
     """Always-mapped window so Enter can confirm an OS after GetItems errors."""
+    if not _a11y_runtime_enabled():
+        return None
     if oslist is None:
         return None
     win = getattr(oslist, "_vmm_activate_win", None)
@@ -5179,7 +5345,7 @@ def expose_a11y_xml_editor(key, name, srcview, srcbuff, window=None, parent=None
         _from_src()
 
         def _load_file(*_a, dst=view, src=srcbuff, real=srcview):
-            path = os.environ.get("VMM_A11Y_XML_PATH", "/tmp/vmm-a11y-xml.txt")
+            path = os.environ.get("VMM_A11Y_XML_PATH", uitest.path("vmm-a11y-xml.txt"))
             try:
                 text = open(path, "r").read()
             except Exception:
@@ -5347,7 +5513,7 @@ def start_config_remove_poll(details):
     if details is None or getattr(details, "_vmm_config_remove_poll", False):
         return
     details._vmm_config_remove_poll = True
-    path = "/tmp/vmm-a11y-config-remove"
+    path = uitest.path("vmm-a11y-config-remove")
 
     def _tick(*_a, d=details):
         try:
@@ -5356,8 +5522,8 @@ def start_config_remove_poll(details):
             # A leftover retry must not rebuild Remove Disk after the
             # user has already toggled "Delete associated".
             try:
-                shown = open("/tmp/vmm-a11y-delete-shown.txt", "r").read().strip()
-                title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+                shown = open(uitest.path("vmm-a11y-delete-shown.txt"), "r").read().strip()
+                title = open(uitest.path("vmm-a11y-delete-title.txt"), "r").read()
             except Exception:
                 shown = ""
                 title = ""
@@ -5368,20 +5534,20 @@ def start_config_remove_poll(details):
         except Exception:
             return True
         try:
-            open("/tmp/vmm-a11y-config-remove-debug.txt", "a").write("poller\n")
+            open(uitest.path("vmm-a11y-config-remove-debug.txt"), "a").write("poller\n")
         except Exception:
             pass
         try:
             d._config_remove()
         except Exception as exc:
             try:
-                open("/tmp/vmm-a11y-config-remove-err.txt", "w").write("%s\n" % exc)
+                open(uitest.path("vmm-a11y-config-remove-err.txt"), "w").write("%s\n" % exc)
             except Exception:
                 pass
         return True
 
     _CONFIG_REMOVE_POLLS.append(_tick)
-    GLib.timeout_add(50, _tick)
+    uitest.poll_add(50, _tick)
 
 
 def _start_config_apply_poll(details):
@@ -5389,15 +5555,15 @@ def _start_config_apply_poll(details):
     if details is None or getattr(details, "_vmm_config_apply_poll", False):
         return
     details._vmm_config_apply_poll = True
-    path = "/tmp/vmm-a11y-config-apply"
+    path = uitest.path("vmm-a11y-config-apply")
 
     def _tick(*_a, d=details):
         if not os.path.exists(path):
             return True
         try:
             for fpath, wid in (
-                ("/tmp/vmm-a11y-boot-init-path.txt", "boot-init-path"),
-                ("/tmp/vmm-a11y-boot-init-args.txt", "boot-init-args"),
+                (uitest.path("vmm-a11y-boot-init-path.txt"), "boot-init-path"),
+                (uitest.path("vmm-a11y-boot-init-args.txt"), "boot-init-args"),
             ):
                 if not os.path.exists(fpath):
                     continue
@@ -5407,19 +5573,19 @@ def _start_config_apply_poll(details):
                     w.set_text(text)
             tab = ""
             try:
-                tab = open("/tmp/vmm-a11y-details-tab.txt", "r").read().strip()
+                tab = open(uitest.path("vmm-a11y-details-tab.txt"), "r").read().strip()
             except Exception:
                 tab = ""
             hw = ""
             try:
-                hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+                hw = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read()
             except Exception:
                 hw = ""
             if hasattr(d, "_enable_apply") and (
                 tab == "boot-tab" or "Boot" in hw
             ) and (
-                os.path.exists("/tmp/vmm-a11y-boot-init-path.txt")
-                or os.path.exists("/tmp/vmm-a11y-boot-init-args.txt")
+                os.path.exists(uitest.path("vmm-a11y-boot-init-path.txt"))
+                or os.path.exists(uitest.path("vmm-a11y-boot-init-args.txt"))
             ):
                 # EDIT_INIT == 17; avoid importing details from gtkcompat.
                 d._enable_apply(17)
@@ -5427,8 +5593,8 @@ def _start_config_apply_poll(details):
             pass
         try:
             text = None
-            nwant = "/tmp/vmm-a11y-overview-name-want.txt"
-            npath = "/tmp/vmm-a11y-overview-name.txt"
+            nwant = uitest.path("vmm-a11y-overview-name-want.txt")
+            npath = uitest.path("vmm-a11y-overview-name.txt")
             if os.path.exists(nwant) and (
                 tab == "overview-tab" or "Overview" in (hw or "")
             ):
@@ -5447,7 +5613,7 @@ def _start_config_apply_poll(details):
         except Exception:
             pass
         try:
-            tpath = "/tmp/vmm-a11y-overview-title.txt"
+            tpath = uitest.path("vmm-a11y-overview-title.txt")
             if os.path.exists(tpath):
                 text = open(tpath, "r").read()
                 os.remove(tpath)
@@ -5459,7 +5625,7 @@ def _start_config_apply_poll(details):
         except Exception:
             pass
         try:
-            dpath = "/tmp/vmm-a11y-overview-desc.txt"
+            dpath = uitest.path("vmm-a11y-overview-desc.txt")
             if os.path.exists(dpath):
                 text = open(dpath, "r").read()
                 os.remove(dpath)
@@ -5473,9 +5639,9 @@ def _start_config_apply_poll(details):
         try:
             mem_changed = False
             for fpath, wid, edit in (
-                ("/tmp/vmm-a11y-mem-current.txt.set", "mem-memory", 11),
-                ("/tmp/vmm-a11y-mem-max.txt.set", "mem-maxmem", 11),
-                ("/tmp/vmm-a11y-cpu-vcpus.txt.set", "cpu-vcpus", 8),
+                (uitest.path("vmm-a11y-mem-current.txt.set"), "mem-memory", 11),
+                (uitest.path("vmm-a11y-mem-max.txt.set"), "mem-maxmem", 11),
+                (uitest.path("vmm-a11y-cpu-vcpus.txt.set"), "cpu-vcpus", 8),
             ):
                 if not os.path.exists(fpath):
                     continue
@@ -5498,7 +5664,7 @@ def _start_config_apply_poll(details):
                 if hasattr(d, "_enable_apply"):
                     d._enable_apply(edit)
                 mem_changed = True
-            cpath = "/tmp/vmm-a11y-mem-shared.txt.click"
+            cpath = uitest.path("vmm-a11y-mem-shared.txt.click")
             if os.path.exists(cpath):
                 os.remove(cpath)
                 w = d.widget("shared-memory")
@@ -5531,7 +5697,7 @@ def _start_config_apply_poll(details):
             pass
         return True
 
-    GLib.timeout_add(50, _tick)
+    uitest.poll_add(50, _tick)
 
 
 def expose_a11y_spin(key, name, spin, window=None, parent=None):
@@ -5562,7 +5728,7 @@ def expose_a11y_spin(key, name, spin, window=None, parent=None):
                 except Exception:
                     pass
             try:
-                open("/tmp/vmm-a11y-spin-%s.txt" % spin_key, "w").write(val)
+                open(uitest.path("vmm-a11y-spin-%s.txt") % spin_key, "w").write(val)
             except Exception:
                 pass
             dst._vmm_spin_syncing = False
@@ -5585,7 +5751,7 @@ def expose_a11y_spin(key, name, spin, window=None, parent=None):
             pass
 
         def _load_file(*_a, src=spin, dst=ent):
-            path = os.environ.get("VMM_A11Y_ENTRY_PATH", "/tmp/vmm-a11y-entry.txt")
+            path = os.environ.get("VMM_A11Y_ENTRY_PATH", uitest.path("vmm-a11y-entry.txt"))
             try:
                 text = open(path, "r").read().strip()
             except Exception:
@@ -5721,7 +5887,7 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                                 text = ""
                                 if child is not None and hasattr(child, "get_text"):
                                     text = child.get_text() or ""
-                                open("/tmp/vmm-a11y-media-entry.txt", "w").write(
+                                open(uitest.path("vmm-a11y-media-entry.txt"), "w").write(
                                     str(path or text or "")
                                 )
                             except Exception:
@@ -5735,7 +5901,7 @@ def expose_a11y_combo(key, name, combo, window=None, parent=None):
                     except Exception:
                         break
                 try:
-                    open("/tmp/vmm-a11y-combo-%s.txt" % name, "w").write(
+                    open(uitest.path("vmm-a11y-combo-%s.txt") % name, "w").write(
                         "\n".join(lines)
                     )
                 except Exception:
@@ -5852,6 +6018,8 @@ def present_a11y_alert(primary, buttons, secondary=""):
     invisible after GetItems cache errors; a new window is not.
     buttons: [(label, callback), ...]
     """
+    if not _a11y_runtime_enabled():
+        return None
     win = Gtk.Window()
     win.set_decorated(False)
     win.set_modal(False)
@@ -5873,7 +6041,7 @@ def present_a11y_alert(primary, buttons, secondary=""):
     lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
     set_accessible_name(lab, primary or "")
     try:
-        open("/tmp/vmm-a11y-alert.txt", "w").write(
+        open(uitest.path("vmm-a11y-alert.txt"), "w").write(
             "%s\n%s" % (primary or "", secondary or "")
         )
     except Exception:
@@ -6068,12 +6236,12 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 if published and published != want and published == "Overview":
                     label = want
                 try:
-                    prev = open("/tmp/vmm-a11y-hw-clicked.txt", "r").read().strip()
+                    prev = open(uitest.path("vmm-a11y-hw-clicked.txt"), "r").read().strip()
                 except Exception:
                     prev = ""
                 try:
                     pending_sel = open(
-                        "/tmp/vmm-a11y-hw-select.txt", "r"
+                        uitest.path("vmm-a11y-hw-select.txt"), "r"
                     ).read().strip()
                 except Exception:
                     pending_sel = ""
@@ -6088,11 +6256,11 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 ):
                     label = prev
                 try:
-                    open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(label)
-                    open("/tmp/vmm-a11y-hw-selected.txt", "w").write(label)
-                    open("/tmp/vmm-a11y-last-hw.txt", "w").write(label)
+                    open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(label)
+                    open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(label)
+                    open(uitest.path("vmm-a11y-last-hw.txt"), "w").write(label)
                     if label not in _NON_DEVICE:
-                        open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(label)
+                        open(uitest.path("vmm-a11y-hw-last-device.txt"), "w").write(label)
                 except Exception:
                     pass
             _sync_row_selected()
@@ -6271,7 +6439,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         if tname != "hw-list" and wname != "hw-list":
             return
         try:
-            open("/tmp/vmm-a11y-hw-list.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-hw-list.txt"), "w").write("\n".join(names))
         except Exception:
             pass
         selected = ""
@@ -6285,8 +6453,8 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         try:
             pending = ""
             for path in (
-                "/tmp/vmm-a11y-hw-clicked.txt",
-                "/tmp/vmm-a11y-hw-select.txt",
+                uitest.path("vmm-a11y-hw-clicked.txt"),
+                uitest.path("vmm-a11y-hw-select.txt"),
             ):
                 try:
                     pending = open(path, "r").read().strip()
@@ -6314,7 +6482,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                     # model rename of the same row.
                     if not same_unique:
                         selected = pending
-            open("/tmp/vmm-a11y-hw-selected.txt", "w").write(selected)
+            open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(selected)
             if selected and selected not in (
                 "Overview",
                 "OS information",
@@ -6323,7 +6491,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 "Memory",
                 "Boot Options",
             ):
-                open("/tmp/vmm-a11y-hw-last-device.txt", "w").write(selected)
+                open(uitest.path("vmm-a11y-hw-last-device.txt"), "w").write(selected)
         except Exception:
             pass
         selected_idx = -1
@@ -6358,7 +6526,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             keep = None
             pending_idx = None
             try:
-                cur = open("/tmp/vmm-a11y-hw-selected-index.txt", "r").read().strip()
+                cur = open(uitest.path("vmm-a11y-hw-selected-index.txt"), "r").read().strip()
                 if cur != "":
                     ci = int(cur)
                     if 0 <= ci < len(names) and selected and names[ci] == selected:
@@ -6366,7 +6534,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             except Exception:
                 keep = None
             try:
-                pcur = open("/tmp/vmm-a11y-hw-select-index.txt", "r").read().strip()
+                pcur = open(uitest.path("vmm-a11y-hw-select-index.txt"), "r").read().strip()
                 if pcur != "":
                     pi = int(pcur)
                     if 0 <= pi < len(names) and selected and names[pi] == selected:
@@ -6406,7 +6574,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                         if name.split()[0] == sel_first:
                             selected_idx = i
                             break
-            open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(
+            open(uitest.path("vmm-a11y-hw-selected-index.txt"), "w").write(
                 str(selected_idx) if selected_idx >= 0 else ""
             )
         except Exception:
@@ -6417,7 +6585,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     def _on_model(*_a):
         if pending["src"]:
             GLib.source_remove(pending["src"])
-        pending["src"] = GLib.timeout_add(150, _rebuild)
+        pending["src"] = uitest.poll_add(150, _rebuild)
 
     def _on_row_changed(model, path, _iter):
         try:
@@ -6464,7 +6632,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
         _on_model()
 
     def _poll_hw_select():
-        ipath = "/tmp/vmm-a11y-hw-select-index.txt"
+        ipath = uitest.path("vmm-a11y-hw-select-index.txt")
         try:
             itext = open(ipath, "r").read().strip()
         except Exception:
@@ -6473,7 +6641,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
             matched = False
             want_name = ""
             try:
-                want_name = open("/tmp/vmm-a11y-hw-select.txt", "r").read().strip()
+                want_name = open(uitest.path("vmm-a11y-hw-select.txt"), "r").read().strip()
             except Exception:
                 want_name = ""
             index_ok = True
@@ -6524,11 +6692,11 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
                 except Exception:
                     pass
                 try:
-                    os.remove("/tmp/vmm-a11y-hw-select.txt")
+                    os.remove(uitest.path("vmm-a11y-hw-select.txt"))
                 except Exception:
                     pass
                 return True
-        path = "/tmp/vmm-a11y-hw-select.txt"
+        path = uitest.path("vmm-a11y-hw-select.txt")
         try:
             text = open(path, "r").read().strip()
         except Exception:
@@ -6549,7 +6717,7 @@ def attach_treeview_a11y(treeview, name_column=1, text_column=None, on_popup=Non
     if not getattr(treeview, "_vmm_hw_select_poll", False):
         treeview._vmm_hw_select_poll = True
         treeview._vmm_hw_select_poll_cb = _poll_hw_select
-        GLib.timeout_add(50, treeview._vmm_hw_select_poll_cb)
+        uitest.poll_add(50, treeview._vmm_hw_select_poll_cb)
 
     treeview.connect("notify::model", _on_model)
     model = treeview.get_model()
@@ -7381,17 +7549,17 @@ def _run_modal(window, response_signal="response"):
 
     def _apply_alert_checkbox():
         try:
-            if os.path.exists("/tmp/vmm-a11y-alert-check.txt"):
-                os.remove("/tmp/vmm-a11y-alert-check.txt")
+            if os.path.exists(uitest.path("vmm-a11y-alert-check.txt")):
+                os.remove(uitest.path("vmm-a11y-alert-check.txt"))
                 want_checked[0] = True
-            if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-alert-checked.txt")):
                 want_checked[0] = True
         except Exception:
             pass
         if not want_checked[0]:
             return
         try:
-            open("/tmp/vmm-a11y-alert-checked.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-alert-checked.txt"), "w").write("1")
         except Exception:
             pass
         box = getattr(window, "chk_vbox", None)
@@ -7409,14 +7577,14 @@ def _run_modal(window, response_signal="response"):
             return False
         _apply_alert_checkbox()
         try:
-            if os.path.exists("/tmp/vmm-a11y-alert-details.txt"):
-                os.remove("/tmp/vmm-a11y-alert-details.txt")
+            if os.path.exists(uitest.path("vmm-a11y-alert-details.txt")):
+                os.remove(uitest.path("vmm-a11y-alert-details.txt"))
                 exp = getattr(window, "buf_expander", None)
                 if exp is not None:
                     exp.set_expanded(True)
         except Exception:
             pass
-        path = "/tmp/vmm-a11y-alert-response.txt"
+        path = uitest.path("vmm-a11y-alert-response.txt")
         try:
             if not os.path.exists(path):
                 return True
@@ -7443,10 +7611,10 @@ def _run_modal(window, response_signal="response"):
             on_response(window, resp)
         return True
 
-    GLib.timeout_add(50, _poll_alert_response)
+    uitest.poll_add(50, _poll_alert_response)
     loop.run()
     try:
-        os.remove("/tmp/vmm-a11y-alert.txt")
+        os.remove(uitest.path("vmm-a11y-alert.txt"))
     except Exception:
         pass
     if hid is not None:
@@ -7826,7 +7994,7 @@ def _browse_local_window(
                     chosen[0] = p
                     try:
                         open(
-                            os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
+                            os.environ.get("VMM_A11Y_FILE_OPEN", uitest.path("vmm-a11y-file-open"))
                             + ".path",
                             "w",
                         ).write(p)
@@ -7843,7 +8011,7 @@ def _browse_local_window(
                     name_entry.set_text(n)
                 try:
                     open(
-                        os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
+                        os.environ.get("VMM_A11Y_FILE_OPEN", uitest.path("vmm-a11y-file-open"))
                         + ".path",
                         "w",
                     ).write(p)
@@ -7885,11 +8053,11 @@ def _browse_local_window(
 
     def _publish_filechooser():
         try:
-            open("/tmp/vmm-a11y-filechooser-shown.txt", "w").write(dialog_name or "")
-            open("/tmp/vmm-a11y-filechooser-list.txt", "w").write(
+            open(uitest.path("vmm-a11y-filechooser-shown.txt"), "w").write(dialog_name or "")
+            open(uitest.path("vmm-a11y-filechooser-list.txt"), "w").write(
                 "\n".join(_filechooser_names())
             )
-            open("/tmp/vmm-a11y-filechooser-selected.txt", "w").write(
+            open(uitest.path("vmm-a11y-filechooser-selected.txt"), "w").write(
                 os.path.basename(chosen[0] or "") 
             )
         except Exception:
@@ -7914,7 +8082,7 @@ def _browse_local_window(
         if want == "COPYING" and not os.path.exists(path):
             path = os.path.join(extra, want)
         path_marker = (
-            os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open") + ".path"
+            os.environ.get("VMM_A11Y_FILE_OPEN", uitest.path("vmm-a11y-file-open")) + ".path"
         )
         if select_folder:
             chosen[0] = path
@@ -7960,7 +8128,7 @@ def _browse_local_window(
 
     result = [None]
     loop = GLib.MainLoop()
-    marker = os.environ.get("VMM_A11Y_FILE_OPEN", "/tmp/vmm-a11y-file-open")
+    marker = os.environ.get("VMM_A11Y_FILE_OPEN", uitest.path("vmm-a11y-file-open"))
     try:
         os.unlink(marker)
     except Exception:
@@ -7985,14 +8153,14 @@ def _browse_local_window(
 
     def _close(*_a):
         try:
-            open("/tmp/vmm-a11y-filechooser-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-filechooser-shown.txt"), "w").write("0")
         except Exception:
             pass
         for path in (
-            "/tmp/vmm-a11y-filechooser-select.txt",
-            "/tmp/vmm-a11y-filechooser-open",
-            "/tmp/vmm-a11y-filechooser-close",
-            "/tmp/vmm-a11y-filechooser-cancel",
+            uitest.path("vmm-a11y-filechooser-select.txt"),
+            uitest.path("vmm-a11y-filechooser-open"),
+            uitest.path("vmm-a11y-filechooser-close"),
+            uitest.path("vmm-a11y-filechooser-cancel"),
         ):
             try:
                 os.remove(path)
@@ -8040,7 +8208,7 @@ def _browse_local_window(
                 result[0] = fallback
         if result[0]:
             try:
-                open("/tmp/vmm-a11y-storage-entry.txt", "w").write(result[0])
+                open(uitest.path("vmm-a11y-storage-entry.txt"), "w").write(result[0])
             except Exception:
                 pass
         if _path_needs_overwrite_confirm(result[0], confirm_overwrite):
@@ -8052,16 +8220,16 @@ def _browse_local_window(
 
     def _poll_marker():
         try:
-            if os.path.exists("/tmp/vmm-a11y-filechooser-select.txt"):
-                want = open("/tmp/vmm-a11y-filechooser-select.txt", "r").read().strip()
-                os.remove("/tmp/vmm-a11y-filechooser-select.txt")
+            if os.path.exists(uitest.path("vmm-a11y-filechooser-select.txt")):
+                want = open(uitest.path("vmm-a11y-filechooser-select.txt"), "r").read().strip()
+                os.remove(uitest.path("vmm-a11y-filechooser-select.txt"))
                 _select_filechooser_name(want)
         except Exception:
             pass
         try:
-            if os.path.exists("/tmp/vmm-a11y-filechooser-open") or os.path.exists(marker):
+            if os.path.exists(uitest.path("vmm-a11y-filechooser-open")) or os.path.exists(marker):
                 try:
-                    os.remove("/tmp/vmm-a11y-filechooser-open")
+                    os.remove(uitest.path("vmm-a11y-filechooser-open"))
                 except Exception:
                     pass
                 try:
@@ -8073,15 +8241,15 @@ def _browse_local_window(
         except Exception:
             pass
         try:
-            if os.path.exists("/tmp/vmm-a11y-filechooser-close") or os.path.exists(
-                "/tmp/vmm-a11y-filechooser-cancel"
+            if os.path.exists(uitest.path("vmm-a11y-filechooser-close")) or os.path.exists(
+                uitest.path("vmm-a11y-filechooser-cancel")
             ):
                 try:
-                    os.remove("/tmp/vmm-a11y-filechooser-close")
+                    os.remove(uitest.path("vmm-a11y-filechooser-close"))
                 except Exception:
                     pass
                 try:
-                    os.remove("/tmp/vmm-a11y-filechooser-cancel")
+                    os.remove(uitest.path("vmm-a11y-filechooser-cancel"))
                 except Exception:
                     pass
                 _close()
@@ -8130,7 +8298,7 @@ def _browse_local_window(
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-filechooser-name.txt", "w").write(
+            open(uitest.path("vmm-a11y-filechooser-name.txt"), "w").write(
                 name_entry.get_text() or ""
             )
         except Exception:
@@ -8162,7 +8330,7 @@ def _browse_local_window(
     except Exception:
         pass
     _publish_filechooser()
-    GLib.timeout_add(50, _poll_marker)
+    uitest.poll_add(50, _poll_marker)
     loop.run()
     return result[0]
 
@@ -8202,6 +8370,22 @@ class MenuItem(Gtk.Button):
         motion.connect("enter", self._on_pointer_enter)
         motion.connect("leave", self._on_pointer_leave)
         self.add_controller(motion)
+        self.connect("notify::parent", self._on_parent_changed)
+
+    def _on_parent_changed(self, *_args):
+        """Fill the width inside a dropdown, hug the label in a menubar.
+
+        Menu items live in a vertical Gtk.Box inside a popup, where they
+        must stretch; the same widget in a horizontal menubar would space
+        File/Edit/View/Help right across the window.
+        """
+        in_bar = self._menubar_parent() is not None
+        self.set_hexpand(not in_bar)
+        self.set_halign(Gtk.Align.START if in_bar else Gtk.Align.FILL)
+        try:
+            self._label_widget.set_xalign(0.5 if in_bar else 0)
+        except Exception:
+            pass
 
     def _set_selected(self, selected):
         self.update_state([Gtk.AccessibleState.SELECTED], [bool(selected)])
@@ -8962,7 +9146,11 @@ class MenuToolButton(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, **kwargs)
         self._button = Gtk.Button()
         self._menu_button = Gtk.ToggleButton()
-        self._button.set_hexpand(True)
+        # Not hexpand: in a toolbar this stretched the split button across
+        # every pixel the other items left over.
+        self._button.set_hexpand(False)
+        self.set_halign(Gtk.Align.START)
+        self.add_css_class("linked")
         self._button.set_accessible_role(Gtk.AccessibleRole.BUTTON)
         self._menu_button.set_accessible_role(Gtk.AccessibleRole.TOGGLE_BUTTON)
         self._menu_button.set_icon_name("pan-down-symbolic")
@@ -8980,6 +9168,10 @@ class MenuToolButton(Gtk.Box):
         )
         self._menu_button.connect("toggled", self._on_menu_toggled)
         GLib.idle_add(self._sync_tooltip)
+        # GtkBuilder sets label/icon-name after construction; re-sync once
+        # the properties have actually landed so the button is not blank.
+        GLib.idle_add(self._sync_label)
+        GLib.idle_add(self._sync_icon)
 
     def _sync_tooltip(self, *_args):
         """GTK 3 showed tooltip-text on the whole MenuToolButton."""
@@ -9012,6 +9204,11 @@ class MenuToolButton(Gtk.Box):
 
     def _sync_label(self, *_args):
         self._button.set_label(self.label)
+        try:
+            # Otherwise a GTK 3 mnemonic label renders as "_Shut Down".
+            self._button.set_use_underline(bool(self.use_underline))
+        except Exception:
+            pass
         name = _mnemonic_label(self.label)
         if name:
             self._button._vmm_a11y_name = name
@@ -9486,6 +9683,55 @@ def _patch_widget_methods():
 
         Gtk.FileChooser.get_filename = get_filename
 
+    # GTK 3 signals that GTK 4 dropped are re-implemented below with tick
+    # callbacks and event controllers. Those return ids from namespaces
+    # Gtk.Widget.disconnect() knows nothing about, so hand out ids of our
+    # own and teach disconnect() to undo them -- otherwise a caller that
+    # disconnects (vmwindow's one-shot initial-size handler, say) leaves a
+    # tick callback running at the display refresh rate for the life of
+    # the widget, and may disconnect an unrelated real handler by luck.
+    _shim_handles = {}
+    _shim_handle_seq = [1 << 30]
+
+    def _register_shim_handle(undo):
+        """Hand out an id that disconnect() can actually undo.
+
+        One GTK 3 signal can become several GTK 4 registrations -- the
+        configure-event shim below uses two notify:: handlers *and* a tick
+        callback -- so a handle owns the teardown for all of them.
+        Returning just one of the three left the rest live: the callback
+        kept firing and kept re-disconnecting an id already spent.
+        """
+        hid = _shim_handle_seq[0]
+        _shim_handle_seq[0] += 1
+        _shim_handles[hid] = undo
+        return hid
+
+    orig_disconnect = Gtk.Widget.disconnect
+
+    def disconnect(self, handler_id):
+        undo = _shim_handles.pop(handler_id, None)
+        if undo is None:
+            return orig_disconnect(self, handler_id)
+        try:
+            undo()
+        except Exception:  # pragma: no cover
+            pass
+        return None
+
+    Gtk.Widget.disconnect = disconnect
+
+    def _shim_handler_is_connected(self, handler_id):
+        if handler_id in _shim_handles:
+            return True
+        try:
+            return orig_handler_is_connected(self, handler_id)
+        except Exception:  # pragma: no cover
+            return False
+
+    orig_handler_is_connected = Gtk.Widget.handler_is_connected
+    Gtk.Widget.handler_is_connected = _shim_handler_is_connected
+
     orig_connect = Gtk.Widget.connect
 
     def connect(self, signal, callback, *args):
@@ -9501,7 +9747,10 @@ def _patch_widget_methods():
                     callback(w, w.get_allocation() if hasattr(w, "get_allocation") else None, *args)
                 return True
 
-            return self.add_tick_callback(_tick)
+            tick_id = self.add_tick_callback(_tick)
+            return _register_shim_handle(
+                lambda w=self, t=tick_id: w.remove_tick_callback(t)
+            )
         if signal == "configure-event":
             last = [None]
 
@@ -9518,9 +9767,19 @@ def _patch_widget_methods():
                     callback(w, None, *args)
                 return True
 
-            orig_connect(self, "notify::default-width", _on_notify)
-            orig_connect(self, "notify::default-height", _on_notify)
-            return self.add_tick_callback(_tick)
+            width_hid = orig_connect(self, "notify::default-width", _on_notify)
+            height_hid = orig_connect(self, "notify::default-height", _on_notify)
+            tick_id = self.add_tick_callback(_tick)
+
+            def _undo(w=self, a=width_hid, b=height_hid, t=tick_id):
+                for sid in (a, b):
+                    try:
+                        orig_disconnect(w, sid)
+                    except Exception:  # pragma: no cover
+                        pass
+                w.remove_tick_callback(t)
+
+            return _register_shim_handle(_undo)
         if signal == "button-press-event":
             gesture = Gtk.GestureClick()
             # virt-manager only uses this for GTK 3 context menus (button 3).
@@ -9534,7 +9793,9 @@ def _patch_widget_methods():
 
             gesture.connect("pressed", _pressed)
             self.add_controller(gesture)
-            return id(gesture)
+            return _register_shim_handle(
+                lambda w=self, c=gesture: w.remove_controller(c)
+            )
         if signal in ("key-press-event", "key-release-event"):
             controller = Gtk.EventControllerKey()
             sig = "key-pressed" if signal == "key-press-event" else "key-released"
@@ -9546,7 +9807,9 @@ def _patch_widget_methods():
 
             controller.connect(sig, _key)
             self.add_controller(controller)
-            return id(controller)
+            return _register_shim_handle(
+                lambda w=self, c=controller: w.remove_controller(c)
+            )
         if signal == "icon-press":
 
             def _icon(entry, icon_pos, *_rest):
@@ -9565,7 +9828,9 @@ def _patch_widget_methods():
 
             controller.connect(evname, _focus)
             self.add_controller(controller)
-            return id(controller)
+            return _register_shim_handle(
+                lambda w=self, c=controller: w.remove_controller(c)
+            )
         if signal in ("enter-notify-event", "leave-notify-event"):
             controller = Gtk.EventControllerMotion()
             evname = "enter" if signal == "enter-notify-event" else "leave"
@@ -9575,7 +9840,9 @@ def _patch_widget_methods():
 
             controller.connect(evname, _motion)
             self.add_controller(controller)
-            return id(controller)
+            return _register_shim_handle(
+                lambda w=self, c=controller: w.remove_controller(c)
+            )
         return orig_connect(self, signal, callback, *args)
 
     Gtk.Widget.connect = connect
@@ -9740,7 +10007,7 @@ def _install_stock_and_enums():
 
             def set_text(self, text, _length=-1):
                 try:
-                    open("/tmp/vmm-a11y-clipboard.txt", "w").write(text or "")
+                    open(uitest.path("vmm-a11y-clipboard.txt"), "w").write(text or "")
                 except Exception:
                     pass
                 if self._clip is not None:
@@ -9761,7 +10028,7 @@ def _install_stock_and_enums():
 
             def wait_for_text(self):
                 try:
-                    text = open("/tmp/vmm-a11y-clipboard.txt", "r").read()
+                    text = open(uitest.path("vmm-a11y-clipboard.txt"), "r").read()
                     if text:
                         return text
                 except Exception:

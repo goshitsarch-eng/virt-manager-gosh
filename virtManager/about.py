@@ -14,6 +14,7 @@ from virtinst import log
 
 from .baseclass import vmmGObject
 from .lib import gtkcompat
+from .lib import uitest
 
 
 # Fields match the GTK 3 GtkAboutDialog in ui/about.ui.
@@ -32,6 +33,20 @@ _WEBSITE = "https://virt-manager.org/"
 _GPL2 = (
     "License: GNU General Public License, version 2 or later "
     "(https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)"
+)
+
+# The projects this application is built out of. Keep this in sync with the
+# "Credits" section of README.md.
+_ACKNOWLEDGEMENTS = (
+    ("virt-manager", "https://virt-manager.org/"),
+    ("libvirt", "https://libvirt.org"),
+    ("GTK", "https://gtk.org"),
+    ("libadwaita", "https://gitlab.gnome.org/GNOME/libadwaita"),
+    ("PyGObject", "https://pygobject.gnome.org"),
+    ("libosinfo", "https://libosinfo.org"),
+    ("SPICE", "https://www.spice-space.org"),
+    ("VTE", "https://gitlab.gnome.org/GNOME/vte"),
+    ("GtkSourceView", "https://gitlab.gnome.org/GNOME/gtksourceview"),
 )
 
 
@@ -82,12 +97,12 @@ class vmmAbout(vmmGObject):
         # internal widgets are not reliably exposed to AT-SPI in GTK 4,
         # and Adw.AboutDialog is an overlay sibling. Extra mapped
         # dialogs also poison GetItems, so keep all GTK 3 fields on
-        # this one window as labels.
+        # this one window, styled the way libadwaita would.
         dialog = Gtk.Window()
         dialog.set_transient_for(parent)
         dialog.set_modal(True)
         dialog.set_title("About")
-        dialog.set_default_size(460, 400)
+        dialog.set_default_size(480, 640)
         if parent is not None and hasattr(parent, "get_application"):
             app = parent.get_application()
             if app is not None:
@@ -100,38 +115,45 @@ class vmmAbout(vmmGObject):
             pass
         gtkcompat.apply_gtk3_window_hints(dialog, dialog=True)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.set_margin_top(18)
-        box.set_margin_bottom(18)
-        box.set_margin_start(18)
-        box.set_margin_end(18)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.set_margin_top(12)
+        box.set_margin_bottom(24)
+        box.set_margin_start(24)
+        box.set_margin_end(24)
 
         try:
             logo = Gtk.Image.new_from_icon_name("virt-manager")
-            logo.set_pixel_size(48)
+            logo.set_pixel_size(128)
             logo.set_halign(Gtk.Align.CENTER)
+            logo.set_margin_bottom(6)
             box.append(logo)
         except Exception:
             pass
 
-        def _label(text, name=None):
+        def _label(text, name=None, css=None, center=True, parent_box=None,
+                   selectable=False):
             lab = Gtk.Label(label=text)
             lab.set_wrap(True)
-            lab.set_xalign(0)
-            lab.set_selectable(True)
+            lab.set_xalign(0.5 if center else 0)
+            lab.set_justify(Gtk.Justification.CENTER if center else Gtk.Justification.LEFT)
+            # A focused selectable label paints its whole text highlighted, so
+            # the header block stays non-selectable and focus lands on the
+            # website link instead.
+            lab.set_selectable(selectable)
             lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+            for cls in css or ():
+                lab.add_css_class(cls)
             if name:
                 gtkcompat.set_accessible_name(lab, name)
-            box.append(lab)
+            (parent_box if parent_box is not None else box).append(lab)
             return lab
 
-        _label("Virtual Machine Manager", "Virtual Machine Manager")
-        _label(self.config.get_appversion())
-        _label(_("Powered by libvirt"))
-        _label("Copyright (C) 2006-2026 Red Hat Inc.", "Copyright")
+        _label("Virtual Machine Manager", "Virtual Machine Manager", css=("title-1",))
+        _label(self.config.get_appversion(), css=("dim-label", "numeric"))
+        _label(_("Powered by libvirt"), css=("body",)).set_margin_top(6)
         try:
             website = Gtk.LinkButton(uri=_WEBSITE, label=_WEBSITE)
-            website.set_halign(Gtk.Align.START)
+            website.set_halign(Gtk.Align.CENTER)
             try:
                 website.set_visited(False)
             except Exception:
@@ -155,26 +177,71 @@ class vmmAbout(vmmGObject):
                 website.add_css_class("link")
             except Exception:
                 pass
-        _label(_AUTHORS, "authors")
-        _label(_ARTISTS, "artists")
+        _label(
+            "Copyright (C) 2006-2026 Red Hat Inc. and the virt-manager contributors",
+            "Copyright",
+            css=("dim-label", "caption"),
+        )
+
+        def _section(title, body, name=None):
+            """A boxed-list style credits card, like AdwPreferencesGroup."""
+            head = Gtk.Label(label=title)
+            head.set_xalign(0)
+            head.add_css_class("heading")
+            head.set_margin_top(12)
+            box.append(head)
+
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            card.add_css_class("card")
+            card.set_margin_top(2)
+            lab = Gtk.Label(label=body)
+            lab.set_wrap(True)
+            lab.set_xalign(0)
+            lab.set_selectable(True)
+            lab.set_margin_top(10)
+            lab.set_margin_bottom(10)
+            lab.set_margin_start(12)
+            lab.set_margin_end(12)
+            lab.set_accessible_role(Gtk.AccessibleRole.LABEL)
+            if name:
+                gtkcompat.set_accessible_name(lab, name)
+            card.append(lab)
+            box.append(card)
+            return lab
+
+        _section(_("Created by"), _AUTHORS, "authors")
+        _section(_("Artwork by"), _ARTISTS, "artists")
         credits = _("translator-credits")
         if credits and credits.strip() and credits != "translator-credits":
-            _label(credits, "translator-credits")
-        _label(_GPL2, "License")
+            _section(_("Translated by"), credits, "translator-credits")
+        _section(
+            _("Built with"),
+            "\n".join("%s — %s" % (n, u) for n, u in _ACKNOWLEDGEMENTS),
+            "acknowledgements",
+        )
+
+        _label(_GPL2, "License", css=("dim-label", "caption"), center=False).set_margin_top(12)
         license_btn = Gtk.Button(label="_License")
         try:
             license_btn.set_use_underline(True)
         except Exception:
             pass
-        license_btn.set_halign(Gtk.Align.START)
+        license_btn.set_halign(Gtk.Align.CENTER)
+        license_btn.set_margin_top(6)
+        license_btn.add_css_class("pill")
         gtkcompat.set_accessible_name(license_btn, "License")
         license_btn.connect("clicked", lambda *_a: self._show_license(dialog))
         box.append(license_btn)
-        dialog.set_child(box)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+        scroll.set_child(box)
+        dialog.set_child(gtkcompat.wrap_in_toolbar_view(scroll, dialog))
 
         def _hide(*_a):
             try:
-                open("/tmp/vmm-a11y-about-shown.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-about-shown.txt"), "w").write("0")
             except Exception:
                 pass
             dialog.hide()
@@ -201,7 +268,7 @@ class vmmAbout(vmmGObject):
         dialog.connect("close-request", lambda *_a: _hide())
         self._dialog = dialog
         try:
-            open("/tmp/vmm-a11y-about-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-about-shown.txt"), "w").write("1")
         except Exception:
             pass
         dialog.present()
@@ -291,7 +358,7 @@ class vmmAbout(vmmGObject):
             self._license_win = None
         if self._dialog:
             try:
-                open("/tmp/vmm-a11y-about-shown.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-about-shown.txt"), "w").write("0")
             except Exception:
                 pass
             self._dialog.hide()

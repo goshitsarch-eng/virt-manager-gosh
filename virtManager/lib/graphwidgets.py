@@ -62,6 +62,61 @@ def _theme_base_rgb(widget=None):
     return _adw_base_rgb()
 
 
+def _theme_border_rgba(widget=None):
+    """A subtle graph outline that reads on light *and* dark backgrounds.
+
+    GTK 3 hardcoded a light grey here. Against the Adwaita dark window
+    background that is a near-white box drawn around every sparkline, so
+    derive the outline from the fill it sits on instead.
+    """
+    if widget is not None and hasattr(widget, "get_style_context"):
+        try:
+            found, color = widget.get_style_context().lookup_color("borders")
+        except Exception:
+            found, color = False, None
+        if found and color is not None:
+            try:
+                return (
+                    float(color.red),
+                    float(color.green),
+                    float(color.blue),
+                    float(color.alpha),
+                )
+            except Exception:
+                pass
+    red, green, blue = _theme_base_rgb(widget)
+    luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
+    shade = 0.0 if luminance > 0.5 else 1.0
+    return shade, shade, shade, 0.22
+
+
+def _theme_accent_rgb(widget=None):
+    """The Adwaita accent colour, or virt-manager's traditional blue.
+
+    Drawing the graphs in the user's accent keeps them at home in both
+    light and dark; the hardcoded pale-blue fill below was tuned for a
+    white background and washed out over the dark one.
+    """
+    if widget is not None and hasattr(widget, "get_style_context"):
+        ctx = None
+        try:
+            ctx = widget.get_style_context()
+        except Exception:
+            ctx = None
+        if ctx is not None:
+            for name in ("accent_color", "accent_bg_color", "theme_selected_bg_color"):
+                try:
+                    found, color = ctx.lookup_color(name)
+                except Exception:
+                    found, color = False, None
+                if found and color is not None:
+                    try:
+                        return float(color.red), float(color.green), float(color.blue)
+                    except Exception:
+                        continue
+    return 0.421875, 0.640625, 0.73046875
+
+
 BASECOLOR = _RGB()
 
 
@@ -222,8 +277,8 @@ class CellRendererSparkline(Gtk.CellRenderer):
         # 1 == LINE_CAP_ROUND
         cr.set_line_cap(1)
 
-        # Draw gray graph border
-        cr.set_source_rgb(0.8828125, 0.8671875, 0.8671875)
+        # Draw the graph border
+        cr.set_source_rgba(*_theme_border_rgba(widget))
         cr.rectangle(
             cell_area.x + BORDER_PADDING,
             cell_area.y + BORDER_PADDING,
@@ -269,13 +324,13 @@ class CellRendererSparkline(Gtk.CellRenderer):
         cell_area.width = graph_width
         cell_area.height = graph_height
 
-        # Set color to dark blue for the actual sparkline
+        # The sparkline and its fill, in the theme's accent colour.
         cr.set_line_width(2)
-        cr.set_source_rgb(0.421875, 0.640625, 0.73046875)
+        accent = _theme_accent_rgb(widget)
+        cr.set_source_rgb(*accent)
         draw_line(cr, cell_area.y, cell_area.height, points)
 
-        # Set color to light blue for the fill
-        cr.set_source_rgba(0.71484375, 0.84765625, 0.89453125, 0.5)
+        cr.set_source_rgba(accent[0], accent[1], accent[2], 0.28)
 
         draw_fill(cr, cell_area.x, cell_area.y, cell_area.width, cell_area.height, points)
         return
@@ -368,8 +423,11 @@ class Sparkline(Gtk.DrawingArea):
         self.reversed = False
         self.rgb = []
 
-        ctxt = self.get_style_context()
-        ctxt.add_class("entry")
+        self.add_css_class("entry")
+        # GTK 3 gave this a size request and let the container stretch it.
+        # do_size_request is not a GTK 4 vfunc, so ask for the height here.
+        self.set_vexpand(True)
+        self.set_content_height(80)
         self.set_draw_func(self._draw_func)
 
     def set_data_array(self, val):
@@ -391,19 +449,31 @@ class Sparkline(Gtk.DrawingArea):
         pixels_per_point = float(w) / (float((points_per_set - 1) or 1))
 
         widget = self
-        ctx = widget.get_style_context()
 
-        # This draws the light gray backing rectangle
-        Gtk.render_background(ctx, cr, 0, 0, w - 1, h - 1)
+        # GTK 3 drew the backing rectangle, ticks and frame through the
+        # "entry" style class. In GTK 4 that class paints nothing on a
+        # GtkDrawingArea node, which left the graph as three bare tick
+        # lines on the window background, so draw them directly -- from
+        # theme colours, so this still follows light/dark.
+        border = _theme_border_rgba(widget)
 
-        # This draws the marker ticks
+        red, green, blue = _theme_base_rgb(widget)
+        cr.set_source_rgb(red, green, blue)
+        cr.rectangle(0, 0, w - 1, h - 1)
+        cr.fill()
+
+        cr.set_line_width(1)
+        cr.set_source_rgba(border[0], border[1], border[2], border[3] * 0.5)
         max_ticks = 4
         for index in range(1, max_ticks):
-            Gtk.render_line(ctx, cr, 1, (h // max_ticks) * index, w - 2, (h // max_ticks) * index)
+            tick_y = (h // max_ticks) * index + 0.5
+            cr.move_to(1, tick_y)
+            cr.line_to(w - 2, tick_y)
+            cr.stroke()
 
-        # Foreground-color graphics context
-        # This draws the black border
-        Gtk.render_frame(ctx, cr, 0, 0, w - 1, h - 1)
+        cr.set_source_rgba(*border)
+        cr.rectangle(0.5, 0.5, w - 2, h - 2)
+        cr.stroke()
 
         # Draw the actual sparkline
         def get_y(dataset, index):
@@ -421,11 +491,14 @@ class Sparkline(Gtk.DrawingArea):
         cr.set_line_width(2)
 
         for dataset in range(0, self.num_sets):
+            cr.set_source_rgb(*_theme_accent_rgb(widget))
             if len(self.rgb) == (self.num_sets * 3):
                 cr.set_source_rgb(
                     self.rgb[(dataset * 3)],
                     self.rgb[(dataset * 3) + 1],
-                    self.rgb[(dataset * 1) + 2],
+                    # Was (dataset * 1) + 2, so the second data set drew
+                    # its blue channel from the first set's.
+                    self.rgb[(dataset * 3) + 2],
                 )
             points = []
             for index in range(0, points_per_set):

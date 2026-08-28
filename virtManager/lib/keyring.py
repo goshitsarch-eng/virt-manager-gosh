@@ -202,12 +202,23 @@ class vmmKeyring(vmmGObject):
             return {}
 
     def _file_save(self, data):
+        """Write the fallback store, readable only by its owner.
+
+        This holds console passwords in the clear, so it must never be
+        created with the default umask (0644 on most systems).
+        """
         path = self._file_store_path()
         try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
+            os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
             tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(data, fh)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    json.dump(data, fh)
+            except Exception:
+                os.close(fd)
+                raise
+            os.chmod(tmp, 0o600)
             os.replace(tmp, path)
         except Exception:
             log.debug("Error saving file keyring", exc_info=True)
@@ -240,6 +251,16 @@ class vmmKeyring(vmmGObject):
                 {"uuid": vm.get_uuid(), "hvuri": vm.conn.get_uri()},
             )
             self._add_secret(secret)
+            # The Secret Service has it. Writing a cleartext copy as well
+            # would defeat the point of storing it there, so drop any
+            # entry left over from a session that had no keyring.
+            data = self._file_load()
+            if data.pop(self._file_key(vm), None) is not None:
+                self._file_save(data)
+            return
+
+        # No Secret Service: the file is the only place "Save this
+        # password" can put it. Keep the feature, owner-readable only.
         data = self._file_load()
         data[self._file_key(vm)] = {"password": password, "username": username}
         self._file_save(data)

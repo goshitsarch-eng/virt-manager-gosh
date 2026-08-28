@@ -32,7 +32,8 @@
     </screenshot>
   </screenshots>
   <url type="homepage">https://www.virt-manager.org/</url>
-  <url type="bugtracker">https://github.com/virt-manager/virt-manager/issues/new/choose</url>
+  <url type="bugtracker">https://github.com/goshitsarch-eng/virt-manager-gosh/issues</url>
+  <url type="vcs-browser">https://github.com/goshitsarch-eng/virt-manager-gosh</url>
   <url type="translate">https://translate.fedoraproject.org/projects/virt-manager/virt-manager/</url>
   <translation type="gettext">virt-manager</translation>
   <keywords>
@@ -47,6 +48,17 @@
   </provides>
   <launchable type="desktop-id">virt-manager.desktop</launchable>
   <releases>
+    <release version="5.2.0" date="2026-08-28">
+      <description>
+        <p>
+          The desktop application is rewritten on GTK 4 and libadwaita,
+          keeping the existing windows, wizards and actions. This release
+          also fixes console credential handling, a context menu that could
+          act on the wrong virtual machine, and framebuffer updates that
+          re-sent the whole screen every frame.
+        </p>
+      </description>
+    </release>
     <release version="5.1.0" date="2025-08-26"/>
     <release version="5.0.0" date="2024-11-26"/>
     <release version="4.1.0" date="2022-08-04"/>

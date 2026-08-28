@@ -12,6 +12,7 @@ from virtinst import xmlutil
 
 from .baseclass import vmmGObjectUI
 from .lib import gtkcompat
+from .lib import uitest
 
 
 def _always_show(osobj):
@@ -64,11 +65,11 @@ class vmmOSList(vmmGObjectUI):
         # Leftover Escape/hide markers from a killed uitest must not
         # latch the next New VM wizard's oslist-popover closed.
         for _marker in (
-            "/tmp/vmm-a11y-oslist-escape",
-            "/tmp/vmm-a11y-oslist-popover-hidden",
-            "/tmp/vmm-a11y-oslist-typed",
-            "/tmp/vmm-a11y-oslist-confirmed",
-            "/tmp/vmm-a11y-oslist-reopen",
+            uitest.path("vmm-a11y-oslist-escape"),
+            uitest.path("vmm-a11y-oslist-popover-hidden"),
+            uitest.path("vmm-a11y-oslist-typed"),
+            uitest.path("vmm-a11y-oslist-confirmed"),
+            uitest.path("vmm-a11y-oslist-reopen"),
         ):
             try:
                 os.remove(_marker)
@@ -93,7 +94,7 @@ class vmmOSList(vmmGObjectUI):
             self._vmm_escape_poll = True
 
             def _poll_escape():
-                path = "/tmp/vmm-a11y-oslist-escape"
+                path = uitest.path("vmm-a11y-oslist-escape")
                 try:
                     if not os.path.exists(path):
                         self._vmm_escape_seen = None
@@ -110,10 +111,10 @@ class vmmOSList(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_escape)
+            uitest.poll_add(50, _poll_escape)
 
             def _poll_os_select():
-                path = "/tmp/vmm-a11y-os-select.txt"
+                path = uitest.path("vmm-a11y-os-select.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -128,10 +129,10 @@ class vmmOSList(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_os_select)
+            uitest.poll_add(50, _poll_os_select)
 
             def _poll_eol():
-                path = "/tmp/vmm-a11y-oslist-eol.txt"
+                path = uitest.path("vmm-a11y-oslist-eol.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -151,7 +152,7 @@ class vmmOSList(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_eol)
+            uitest.poll_add(50, _poll_eol)
 
     def _cleanup(self):
         pass
@@ -222,7 +223,7 @@ class vmmOSList(vmmGObjectUI):
         osobj = None
         confirmed = getattr(self, "_os_confirmed", False)
         try:
-            confirmed = confirmed and os.path.exists("/tmp/vmm-a11y-oslist-confirmed")
+            confirmed = confirmed and os.path.exists(uitest.path("vmm-a11y-oslist-confirmed"))
         except Exception:
             pass
         if confirmed:
@@ -230,8 +231,8 @@ class vmmOSList(vmmGObjectUI):
         label = osobj.label if osobj is not None else ""
         hidden = False
         try:
-            hidden = os.path.exists("/tmp/vmm-a11y-oslist-popover-hidden") or os.path.exists(
-                "/tmp/vmm-a11y-oslist-escape"
+            hidden = os.path.exists(uitest.path("vmm-a11y-oslist-popover-hidden")) or os.path.exists(
+                uitest.path("vmm-a11y-oslist-escape")
             )
         except Exception:
             hidden = False
@@ -248,7 +249,7 @@ class vmmOSList(vmmGObjectUI):
             )
             user_search = False
             try:
-                user_search = os.path.exists("/tmp/vmm-a11y-oslist-typed")
+                user_search = os.path.exists(uitest.path("vmm-a11y-oslist-typed"))
             except Exception:
                 user_search = False
             if typed in special and not user_search:
@@ -269,13 +270,13 @@ class vmmOSList(vmmGObjectUI):
                 pass
             label = osobj.label
         try:
-            open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(label or "")
+            open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(label or "")
         except Exception:
             pass
         # After GetItems, renaming oslist sidecars blocks the main loop
         # long enough that New VM Forward stays busy and later pages hang.
         try:
-            if os.path.exists("/tmp/vmm-a11y-pagenum.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-pagenum.txt")):
                 return
         except Exception:
             pass
@@ -313,7 +314,7 @@ class vmmOSList(vmmGObjectUI):
 
     def _show_popover(self):
         try:
-            if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+            if os.path.exists(uitest.path("vmm-a11y-oslist-escape")):
                 return
         except Exception:
             pass
@@ -402,7 +403,7 @@ class vmmOSList(vmmGObjectUI):
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write("1" if active else "0")
+            open(uitest.path("vmm-a11y-oslist-eol-state.txt"), "w").write("1" if active else "0")
         except Exception:
             pass
 
@@ -420,7 +421,7 @@ class vmmOSList(vmmGObjectUI):
             selected_label = self._selected_os.label
 
         try:
-            if os.path.exists("/tmp/vmm-a11y-oslist-escape"):
+            if os.path.exists(uitest.path("vmm-a11y-oslist-escape")):
                 try:
                     self.topwin.popdown()
                 except Exception:
@@ -434,12 +435,12 @@ class vmmOSList(vmmGObjectUI):
             pass
 
         try:
-            if not searchname and os.path.exists("/tmp/vmm-a11y-oslist-reopen"):
+            if not searchname and os.path.exists(uitest.path("vmm-a11y-oslist-reopen")):
                 return
         except Exception:
             pass
         try:
-            if os.path.exists("/tmp/vmm-a11y-oslist-typed"):
+            if os.path.exists(uitest.path("vmm-a11y-oslist-typed")):
                 show = getattr(self, "_vmm_oslist_show_a11y", None)
                 if show:
                     show()
@@ -485,7 +486,7 @@ class vmmOSList(vmmGObjectUI):
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-oslist-popover-hidden", "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-popover-hidden"), "w").write("1")
         except Exception:
             pass
         self.refresh_a11y()
@@ -493,7 +494,7 @@ class vmmOSList(vmmGObjectUI):
     def _os_selected_cb(self, src, path, column):
         self._os_confirmed = True
         try:
-            open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+            open(uitest.path("vmm-a11y-oslist-confirmed"), "w").write("1")
         except Exception:
             pass
         self._sync_os_selection()
@@ -525,19 +526,19 @@ class vmmOSList(vmmGObjectUI):
         self._os_confirmed = False
         self.search_entry.set_text("")
         try:
-            os.remove("/tmp/vmm-a11y-os-select.txt")
+            os.remove(uitest.path("vmm-a11y-os-select.txt"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-oslist-confirmed")
+            os.remove(uitest.path("vmm-a11y-oslist-confirmed"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-oslist-typed")
+            os.remove(uitest.path("vmm-a11y-oslist-typed"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-oslist-reopen")
+            os.remove(uitest.path("vmm-a11y-oslist-reopen"))
         except Exception:
             pass
         self._clear_filter()
@@ -595,12 +596,12 @@ class vmmOSList(vmmGObjectUI):
             self._selected_os = vmosobj
             self._os_confirmed = True
             try:
-                open("/tmp/vmm-a11y-oslist-confirmed", "w").write("1")
+                open(uitest.path("vmm-a11y-oslist-confirmed"), "w").write("1")
             except Exception:
                 pass
             try:
                 self.search_entry.set_text(vmosobj.label)
-                open("/tmp/vmm-a11y-oslist-entry.txt", "w").write(vmosobj.label)
+                open(uitest.path("vmm-a11y-oslist-entry.txt"), "w").write(vmosobj.label)
             except Exception:
                 pass
         # Do not set_active/refilter here: walking the full OS model after
@@ -609,7 +610,7 @@ class vmmOSList(vmmGObjectUI):
             self._set_include_eol_quiet(True)
         else:
             try:
-                open("/tmp/vmm-a11y-oslist-eol-state.txt", "w").write(
+                open(uitest.path("vmm-a11y-oslist-eol-state.txt"), "w").write(
                     "1" if self.widget("include-eol").get_active() else "0"
                 )
             except Exception:

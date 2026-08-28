@@ -17,19 +17,20 @@ from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .xmleditor import vmmXMLEditor
+from .lib import uitest
 
-_CREATEVOL_SHOWN = "/tmp/vmm-a11y-createvol-shown.txt"
-_CREATEVOL_NAME = "/tmp/vmm-a11y-createvol-name.txt"
-_CREATEVOL_FORMAT = "/tmp/vmm-a11y-createvol-format.txt"
-_CREATEVOL_ALLOCATE = "/tmp/vmm-a11y-createvol-allocate.txt"
-_CREATEVOL_ALLOCATE_VIS = "/tmp/vmm-a11y-createvol-allocate-vis.txt"
-_CREATEVOL_BACKING = "/tmp/vmm-a11y-createvol-backing.txt"
-_CREATEVOL_BACKING_VIS = "/tmp/vmm-a11y-createvol-backing-vis.txt"
-_CREATEVOL_FINISH = "/tmp/vmm-a11y-createvol-finish"
-_CREATEVOL_CANCEL = "/tmp/vmm-a11y-createvol-cancel"
-_CREATEVOL_BROWSE = "/tmp/vmm-a11y-createvol-browse"
-_CREATEVOL_EXPAND = "/tmp/vmm-a11y-createvol-expand"
-_CREATEVOL_COMBO = "/tmp/vmm-a11y-combo-select.txt"
+_CREATEVOL_SHOWN = uitest.path("vmm-a11y-createvol-shown.txt")
+_CREATEVOL_NAME = uitest.path("vmm-a11y-createvol-name.txt")
+_CREATEVOL_FORMAT = uitest.path("vmm-a11y-createvol-format.txt")
+_CREATEVOL_ALLOCATE = uitest.path("vmm-a11y-createvol-allocate.txt")
+_CREATEVOL_ALLOCATE_VIS = uitest.path("vmm-a11y-createvol-allocate-vis.txt")
+_CREATEVOL_BACKING = uitest.path("vmm-a11y-createvol-backing.txt")
+_CREATEVOL_BACKING_VIS = uitest.path("vmm-a11y-createvol-backing-vis.txt")
+_CREATEVOL_FINISH = uitest.path("vmm-a11y-createvol-finish")
+_CREATEVOL_CANCEL = uitest.path("vmm-a11y-createvol-cancel")
+_CREATEVOL_BROWSE = uitest.path("vmm-a11y-createvol-browse")
+_CREATEVOL_EXPAND = uitest.path("vmm-a11y-createvol-expand")
+_CREATEVOL_COMBO = uitest.path("vmm-a11y-combo-select.txt")
 
 
 class vmmCreateVolume(vmmGObjectUI):
@@ -455,13 +456,13 @@ class vmmCreateVolume(vmmGObjectUI):
 
     def _a11y_load_pending_xml(self):
         try:
-            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+            pending = open(uitest.path("vmm-a11y-xml.txt"), "r").read()
         except Exception:
             pending = ""
         if not pending:
             return
         try:
-            os.remove("/tmp/vmm-a11y-xml.txt")
+            os.remove(uitest.path("vmm-a11y-xml.txt"))
         except Exception:
             pass
         if (self._xmleditor.get_xml() or "") != pending:
@@ -574,5 +575,5 @@ class vmmCreateVolume(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _fields_tick)
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _fields_tick)
+        uitest.poll_add(50, _tick)

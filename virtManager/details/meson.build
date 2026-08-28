@@ -2,6 +2,7 @@ virtmanager_details_sources = files(
   '__init__.py',
   'console.py',
   'details.py',
+  'gtk4display.py',
   'serialcon.py',
   'snapshots.py',
   'sshtunnels.py',

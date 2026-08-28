@@ -17,6 +17,7 @@ from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .createnet import vmmCreateNetwork
 from .xmleditor import vmmXMLEditor
+from .lib import uitest
 
 
 EDIT_NET_IDS = (
@@ -161,32 +162,32 @@ class vmmHostNets(vmmGObjectUI):
         if not selected:
             selected = getattr(self, "_last_net_name", "") or ""
         try:
-            open("/tmp/vmm-a11y-host-net-list.txt", "w").write("\n".join(names))
-            open("/tmp/vmm-a11y-host-net-selected.txt", "w").write(selected)
+            open(uitest.path("vmm-a11y-host-net-list.txt"), "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-host-net-selected.txt"), "w").write(selected)
         except Exception:
             pass
         try:
             errpage = self.widget("network-pages").get_current_page() == 1
-            open("/tmp/vmm-a11y-host-net-error.txt", "w").write("1" if errpage else "0")
-            open("/tmp/vmm-a11y-host-net-error-text.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-net-error.txt"), "w").write("1" if errpage else "0")
+            open(uitest.path("vmm-a11y-host-net-error-text.txt"), "w").write(
                 self.widget("network-error-label").get_text() or ""
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-host-net-delete.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-net-delete.txt"), "w").write(
                 "1" if self.widget("net-delete").get_sensitive() else "0"
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-host-net-name.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-net-name.txt"), "w").write(
                 self.widget("net-name").get_text() or ""
             )
-            open("/tmp/vmm-a11y-host-net-device.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-net-device.txt"), "w").write(
                 self.widget("net-device").get_text() or ""
             )
-            open("/tmp/vmm-a11y-host-net-autostart.txt", "w").write(
+            open(uitest.path("vmm-a11y-host-net-autostart.txt"), "w").write(
                 "1" if self.widget("net-autostart").get_active() else "0"
             )
         except Exception:
@@ -207,14 +208,14 @@ class vmmHostNets(vmmGObjectUI):
             try:
                 names = [
                     n
-                    for n in open("/tmp/vmm-a11y-host-net-list.txt", "r").read().splitlines()
+                    for n in open(uitest.path("vmm-a11y-host-net-list.txt"), "r").read().splitlines()
                     if n
                 ]
             except Exception:
                 names = []
         cur = ""
         try:
-            cur = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+            cur = open(uitest.path("vmm-a11y-host-net-selected.txt"), "r").read().strip()
         except Exception:
             cur = ""
         if not names:
@@ -257,7 +258,7 @@ class vmmHostNets(vmmGObjectUI):
                         net_list.grab_focus()
                         self._last_net_name = name
                         try:
-                            open("/tmp/vmm-a11y-host-net-selected.txt", "w").write(name)
+                            open(uitest.path("vmm-a11y-host-net-selected.txt"), "w").write(name)
                         except Exception:
                             pass
                         self._publish_a11y_state()
@@ -282,7 +283,7 @@ class vmmHostNets(vmmGObjectUI):
 
         def _tick():
             try:
-                path = "/tmp/vmm-a11y-host-net-select.txt"
+                path = uitest.path("vmm-a11y-host-net-select.txt")
                 if os.path.exists(path):
                     name = open(path, "r").read().strip()
                     os.remove(path)
@@ -290,10 +291,10 @@ class vmmHostNets(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                nav = "/tmp/vmm-a11y-host-nav.txt"
+                nav = uitest.path("vmm-a11y-host-nav.txt")
                 which = ""
                 try:
-                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                    which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
                 except Exception:
                     which = "net"
                 if os.path.exists(nav) and which in ("net", ""):
@@ -303,7 +304,7 @@ class vmmHostNets(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-net-name.txt.set"
+                path = uitest.path("vmm-a11y-host-net-name.txt.set")
                 if os.path.exists(path):
                     text = open(path, "r").read()
                     os.remove(path)
@@ -312,7 +313,7 @@ class vmmHostNets(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-net-autostart.txt.click"
+                path = uitest.path("vmm-a11y-host-net-autostart.txt.click")
                 if os.path.exists(path):
                     os.remove(path)
                     chk = self.widget("net-autostart")
@@ -321,7 +322,7 @@ class vmmHostNets(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                path = "/tmp/vmm-a11y-host-net-action.txt"
+                path = uitest.path("vmm-a11y-host-net-action.txt")
                 if os.path.exists(path):
                     action = open(path, "r").read().strip()
                     os.remove(path)
@@ -341,7 +342,7 @@ class vmmHostNets(vmmGObjectUI):
                 pass
             return True
 
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _tick)
 
     #################
     # UI populating #
@@ -373,7 +374,7 @@ class vmmHostNets(vmmGObjectUI):
         name = getattr(self, "_last_net_name", "") or ""
         if not name:
             try:
-                name = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+                name = open(uitest.path("vmm-a11y-host-net-selected.txt"), "r").read().strip()
             except Exception:
                 name = ""
         if not name:
@@ -455,7 +456,7 @@ class vmmHostNets(vmmGObjectUI):
             name = ""
         if not name:
             try:
-                name = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+                name = open(uitest.path("vmm-a11y-host-net-selected.txt"), "r").read().strip()
             except Exception:
                 name = ""
         if name:
@@ -555,7 +556,7 @@ class vmmHostNets(vmmGObjectUI):
             name = ""
         if not name:
             try:
-                name = open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip()
+                name = open(uitest.path("vmm-a11y-host-net-selected.txt"), "r").read().strip()
             except Exception:
                 name = ""
         if name:
@@ -625,7 +626,7 @@ class vmmHostNets(vmmGObjectUI):
 
     def _apply_pending_xml_edit(self):
         pending = ""
-        for path in ("/tmp/vmm-a11y-xml.txt", "/tmp/vmm-a11y-xml-contents.txt"):
+        for path in (uitest.path("vmm-a11y-xml.txt"), uitest.path("vmm-a11y-xml-contents.txt")):
             try:
                 pending = open(path, "r").read()
             except Exception:
@@ -653,7 +654,7 @@ class vmmHostNets(vmmGObjectUI):
         except Exception:
             pass
         try:
-            names.append(open("/tmp/vmm-a11y-host-net-selected.txt", "r").read().strip())
+            names.append(open(uitest.path("vmm-a11y-host-net-selected.txt"), "r").read().strip())
         except Exception:
             pass
         want = [n for n in names if n]
@@ -723,7 +724,7 @@ class vmmHostNets(vmmGObjectUI):
 
         except Exception as e:
             try:
-                open("/tmp/vmm-a11y-alert.txt", "w").write(
+                open(uitest.path("vmm-a11y-alert.txt"), "w").write(
                     _("Error changing network settings: %s") % str(e)
                 )
             except Exception:

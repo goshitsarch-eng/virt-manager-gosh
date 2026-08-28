@@ -22,6 +22,7 @@ from .baseclass import vmmGObjectUI
 from .connmanager import vmmConnectionManager
 from .engine import vmmEngine
 from .lib.graphwidgets import CellRendererSparkline
+from .lib import uitest
 
 # Number of data points for performance graphs
 GRAPH_LEN = 40
@@ -188,26 +189,26 @@ class vmmManager(vmmGObjectUI):
 
         def _select_tick():
             try:
-                name = open("/tmp/vmm-a11y-select-conn.txt", "r").read().strip()
+                name = open(uitest.path("vmm-a11y-select-conn.txt"), "r").read().strip()
             except Exception:
                 return True
             if not name:
                 return True
             try:
-                os.remove("/tmp/vmm-a11y-select-conn.txt")
+                os.remove(uitest.path("vmm-a11y-select-conn.txt"))
             except Exception:
                 pass
             try:
                 self.select_row_for_name(name)
-                open("/tmp/vmm-a11y-selected-conn.txt", "w").write(name)
+                open(uitest.path("vmm-a11y-selected-conn.txt"), "w").write(name)
             except Exception:
                 pass
             return True
 
-        GLib.timeout_add(50, _select_tick)
+        uitest.poll_add(50, _select_tick)
 
         def _maximize_tick():
-            path = "/tmp/vmm-a11y-window-maximize.txt"
+            path = uitest.path("vmm-a11y-window-maximize.txt")
             try:
                 if not os.path.exists(path):
                     return True
@@ -225,17 +226,17 @@ class vmmManager(vmmGObjectUI):
                 except Exception:
                     pass
             try:
-                open("/tmp/vmm-a11y-window-maximize-done", "w").write("1")
+                open(uitest.path("vmm-a11y-window-maximize-done"), "w").write("1")
             except Exception:
                 pass
             return True
 
         if not getattr(self, "_vmm_maximize_poll", False):
             self._vmm_maximize_poll = True
-            GLib.timeout_add(50, _maximize_tick)
+            uitest.poll_add(50, _maximize_tick)
 
         def _close_tick():
-            path = "/tmp/vmm-a11y-window-close.txt"
+            path = uitest.path("vmm-a11y-window-close.txt")
             try:
                 if not os.path.exists(path):
                     return True
@@ -260,29 +261,29 @@ class vmmManager(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                open("/tmp/vmm-a11y-window-close-done", "w").write("1")
+                open(uitest.path("vmm-a11y-window-close-done"), "w").write("1")
             except Exception:
                 pass
             return True
 
         if not getattr(self, "_vmm_close_poll", False):
             self._vmm_close_poll = True
-            GLib.timeout_add(50, _close_tick)
+            uitest.poll_add(50, _close_tick)
 
         def _pos_tick():
             try:
-                if os.path.exists("/tmp/vmm-a11y-manager-restore-lock"):
+                if os.path.exists(uitest.path("vmm-a11y-manager-restore-lock")):
                     return True
                 if self.is_visible():
                     try:
-                        if open("/tmp/vmm-a11y-manager-shown.txt", "r").read().strip() == "0":
+                        if open(uitest.path("vmm-a11y-manager-shown.txt"), "r").read().strip() == "0":
                             return True
                     except Exception:
                         pass
-                    open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
-                    if not os.path.exists("/tmp/vmm-a11y-manager-position.txt"):
+                    open(uitest.path("vmm-a11y-manager-shown.txt"), "w").write("1")
+                    if not os.path.exists(uitest.path("vmm-a11y-manager-position.txt")):
                         x, y = self.topwin.get_position()
-                        open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                        open(uitest.path("vmm-a11y-manager-position.txt"), "w").write(
                             "%s %s" % (x, y)
                         )
             except Exception:
@@ -291,10 +292,10 @@ class vmmManager(vmmGObjectUI):
 
         if not getattr(self, "_vmm_pos_poll", False):
             self._vmm_pos_poll = True
-            GLib.timeout_add(200, _pos_tick)
+            uitest.poll_add(200, _pos_tick)
 
         def _createconn_open_tick():
-            path = "/tmp/vmm-a11y-createconn-open"
+            path = uitest.path("vmm-a11y-createconn-open")
             try:
                 if not os.path.exists(path):
                     return True
@@ -309,7 +310,7 @@ class vmmManager(vmmGObjectUI):
 
         if not getattr(self, "_vmm_createconn_open_poll", False):
             self._vmm_createconn_open_poll = True
-            GLib.timeout_add(50, _createconn_open_tick)
+            uitest.poll_add(50, _createconn_open_tick)
 
         def _vm_list_tick():
             try:
@@ -318,17 +319,17 @@ class vmmManager(vmmGObjectUI):
                 pass
             try:
                 self._a11y_open_vm_dialog(
-                    "/tmp/vmm-a11y-clone-open.txt", vmmenu.VMActionUI.clone
+                    uitest.path("vmm-a11y-clone-open.txt"), vmmenu.VMActionUI.clone
                 )
                 self._a11y_open_vm_dialog(
-                    "/tmp/vmm-a11y-delete-open.txt", vmmenu.VMActionUI.delete
+                    uitest.path("vmm-a11y-delete-open.txt"), vmmenu.VMActionUI.delete
                 )
                 self._a11y_open_vm_dialog(
-                    "/tmp/vmm-a11y-migrate-open.txt", vmmenu.VMActionUI.migrate
+                    uitest.path("vmm-a11y-migrate-open.txt"), vmmenu.VMActionUI.migrate
                 )
             except Exception:
                 pass
-            path = "/tmp/vmm-a11y-vm-select.txt"
+            path = uitest.path("vmm-a11y-vm-select.txt")
             try:
                 if not os.path.exists(path):
                     return True
@@ -339,10 +340,10 @@ class vmmManager(vmmGObjectUI):
             if want:
                 try:
                     self.select_row_for_name(want)
-                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(want)
+                    open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(want)
                 except Exception:
                     pass
-            path = "/tmp/vmm-a11y-vm-open.txt"
+            path = uitest.path("vmm-a11y-vm-open.txt")
             try:
                 if os.path.exists(path):
                     name = open(path, "r").read().strip().split("\n")[0].strip()
@@ -374,7 +375,7 @@ class vmmManager(vmmGObjectUI):
                                     import traceback
 
                                     open(path, "w").write(name)
-                                    open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                                    open(uitest.path("vmm-a11y-vm-action-err.txt"), "w").write(
                                         "show %s\n%s" % (name, traceback.format_exc())
                                     )
                                 except Exception:
@@ -385,7 +386,7 @@ class vmmManager(vmmGObjectUI):
 
         if not getattr(self, "_vmm_vm_list_poll", False):
             self._vmm_vm_list_poll = True
-            GLib.timeout_add(50, _vm_list_tick)
+            uitest.poll_add(50, _vm_list_tick)
             try:
                 self._publish_vm_list()
             except Exception:
@@ -403,17 +404,17 @@ class vmmManager(vmmGObjectUI):
             pass
         self.topwin.present()
         try:
-            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-manager-shown.txt"), "w").write("1")
         except Exception:
             pass
         if self.prev_position:
             dest = self.prev_position
             self.topwin.move(*dest)
             try:
-                open("/tmp/vmm-a11y-manager-position.txt", "w").write(
+                open(uitest.path("vmm-a11y-manager-position.txt"), "w").write(
                     "%s %s" % (int(dest[0]), int(dest[1]))
                 )
-                open("/tmp/vmm-a11y-manager-restore-lock", "w").write("1")
+                open(uitest.path("vmm-a11y-manager-restore-lock"), "w").write("1")
             except Exception:
                 pass
             self.prev_position = None
@@ -436,7 +437,7 @@ class vmmManager(vmmGObjectUI):
 
         log.debug("Closing manager")
         try:
-            parts = open("/tmp/vmm-a11y-manager-position.txt", "r").read().split()
+            parts = open(uitest.path("vmm-a11y-manager-position.txt"), "r").read().split()
             self.prev_position = (int(parts[0]), int(parts[1]))
         except Exception:
             try:
@@ -450,7 +451,7 @@ class vmmManager(vmmGObjectUI):
             pass
         vmmEngine.get_instance().decrement_window_counter()
         try:
-            open("/tmp/vmm-a11y-manager-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-manager-shown.txt"), "w").write("0")
         except Exception:
             pass
 
@@ -483,7 +484,7 @@ class vmmManager(vmmGObjectUI):
             "error-label", "error-label", msg or "error", window=self.topwin
         )
         try:
-            open("/tmp/vmm-a11y-error-label.txt", "w").write(msg or "")
+            open(uitest.path("vmm-a11y-error-label.txt"), "w").write(msg or "")
         except Exception:
             pass
 
@@ -579,7 +580,7 @@ class vmmManager(vmmGObjectUI):
             vm = self._a11y_resolve_vm() if name else None
         if vm is None:
             try:
-                open("/tmp/vmm-a11y-dialog-open-err.txt", "w").write(
+                open(uitest.path("vmm-a11y-dialog-open-err.txt"), "w").write(
                     "no-vm path=%s name=%s" % (path, name)
                 )
             except Exception:
@@ -592,7 +593,7 @@ class vmmManager(vmmGObjectUI):
             try:
                 import traceback
 
-                open("/tmp/vmm-a11y-dialog-open-err.txt", "w").write(
+                open(uitest.path("vmm-a11y-dialog-open-err.txt"), "w").write(
                     "opener %s %s\n%s" % (path, name, traceback.format_exc())
                 )
             except Exception:
@@ -605,8 +606,8 @@ class vmmManager(vmmGObjectUI):
     def _a11y_resolve_vm(self):
         want = ""
         for src in (
-            "/tmp/vmm-a11y-vm-select.txt",
-            "/tmp/vmm-a11y-vm-selected.txt",
+            uitest.path("vmm-a11y-vm-select.txt"),
+            uitest.path("vmm-a11y-vm-selected.txt"),
         ):
             try:
                 want = open(src, "r").read().split("\n")[0].strip()
@@ -649,7 +650,7 @@ class vmmManager(vmmGObjectUI):
                     if not self.is_visible():
                         return True
                     try:
-                        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                        if open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip():
                             return True
                     except Exception:
                         pass
@@ -660,12 +661,12 @@ class vmmManager(vmmGObjectUI):
                     label = "Run"
                     if vm is not None and vm.managedsave_supported and vm.has_managed_save():
                         label = "Restore"
-                    open("/tmp/vmm-a11y-vm-run-sensitive.txt", "w").write("1" if run else "0")
-                    open("/tmp/vmm-a11y-vm-run-label.txt", "w").write(label)
-                    open("/tmp/vmm-a11y-vm-pause-checked.txt", "w").write(
+                    open(uitest.path("vmm-a11y-vm-run-sensitive.txt"), "w").write("1" if run else "0")
+                    open(uitest.path("vmm-a11y-vm-run-label.txt"), "w").write(label)
+                    open(uitest.path("vmm-a11y-vm-pause-checked.txt"), "w").write(
                         "1" if paused else "0"
                     )
-                    open("/tmp/vmm-a11y-vm-shutdown-sensitive.txt", "w").write(
+                    open(uitest.path("vmm-a11y-vm-shutdown-sensitive.txt"), "w").write(
                         "1" if stoppable else "0"
                     )
                 except Exception:
@@ -673,14 +674,14 @@ class vmmManager(vmmGObjectUI):
                 return True
 
             def _poll_toolbar_action():
-                path = "/tmp/vmm-a11y-vm-toolbar-action.txt"
+                path = uitest.path("vmm-a11y-vm-toolbar-action.txt")
                 try:
                     if not os.path.exists(path):
                         return True
                     if not self.is_visible():
                         return True
                     try:
-                        if open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip():
+                        if open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip():
                             return True
                     except Exception:
                         pass
@@ -718,8 +719,8 @@ class vmmManager(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _publish_toolbar)
-            GLib.timeout_add(50, _poll_toolbar_action)
+            uitest.poll_add(50, _publish_toolbar)
+            uitest.poll_add(50, _poll_toolbar_action)
 
         for c in gtkcompat.get_children(tool):
             if hasattr(c, "set_homogeneous"):
@@ -750,7 +751,7 @@ class vmmManager(vmmGObjectUI):
             self._vmm_vm_action_poll = True
 
             def _poll_vm_action():
-                path = "/tmp/vmm-a11y-vm-action.txt"
+                path = uitest.path("vmm-a11y-vm-action.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -767,9 +768,9 @@ class vmmManager(vmmGObjectUI):
                 # so a second show() does not reset the wizard mid-populate.
                 action_key = (action or "").rstrip(".")
                 open_for = {
-                    "Clone": "/tmp/vmm-a11y-clone-open.txt",
-                    "Delete": "/tmp/vmm-a11y-delete-open.txt",
-                    "Migrate": "/tmp/vmm-a11y-migrate-open.txt",
+                    "Clone": uitest.path("vmm-a11y-clone-open.txt"),
+                    "Delete": uitest.path("vmm-a11y-delete-open.txt"),
+                    "Migrate": uitest.path("vmm-a11y-migrate-open.txt"),
                 }
                 if action_key in open_for and (
                     os.path.exists(open_for[action_key])
@@ -789,7 +790,7 @@ class vmmManager(vmmGObjectUI):
                 vm = self._a11y_resolve_vm()
                 want = ""
                 try:
-                    want = open("/tmp/vmm-a11y-vm-selected.txt", "r").read().split("\n")[0].strip()
+                    want = open(uitest.path("vmm-a11y-vm-selected.txt"), "r").read().split("\n")[0].strip()
                 except Exception:
                     want = ""
                 if action_key in ("Take Screenshot", "Screenshot", "Redirect USB", "USB"):
@@ -854,8 +855,8 @@ class vmmManager(vmmGObjectUI):
 
                             open(path, "w").write(action)
                             if (action or "") == "Open" and want:
-                                open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
-                            open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                                open(uitest.path("vmm-a11y-vm-open.txt"), "w").write(want)
+                            open(uitest.path("vmm-a11y-vm-action-err.txt"), "w").write(
                                 "%s\n%s\n%s" % (action, want, traceback.format_exc())
                             )
                         except Exception:
@@ -863,8 +864,8 @@ class vmmManager(vmmGObjectUI):
                 elif fn is not None and vm is None:
                     try:
                         if (action or "") == "Open" and want:
-                            open("/tmp/vmm-a11y-vm-open.txt", "w").write(want)
-                        open("/tmp/vmm-a11y-vm-action-err.txt", "w").write(
+                            open(uitest.path("vmm-a11y-vm-open.txt"), "w").write(want)
+                        open(uitest.path("vmm-a11y-vm-action-err.txt"), "w").write(
                             "no-vm %s want=%s" % (action, want)
                         )
                     except Exception:
@@ -876,7 +877,7 @@ class vmmManager(vmmGObjectUI):
                         pass
                 return True
 
-            GLib.timeout_add(50, _poll_vm_action)
+            uitest.poll_add(50, _poll_vm_action)
 
         gtkcompat.start_conn_action_poll()
         if not getattr(self, "_vmm_appmenu_poll", False):
@@ -884,14 +885,14 @@ class vmmManager(vmmGObjectUI):
 
             def _poll_appmenu():
                 try:
-                    if os.path.exists("/tmp/vmm-a11y-prefs-open"):
-                        os.remove("/tmp/vmm-a11y-prefs-open")
+                    if os.path.exists(uitest.path("vmm-a11y-prefs-open")):
+                        os.remove(uitest.path("vmm-a11y-prefs-open"))
                         self.show_preferences(None)
-                    if os.path.exists("/tmp/vmm-a11y-about-open"):
-                        os.remove("/tmp/vmm-a11y-about-open")
+                    if os.path.exists(uitest.path("vmm-a11y-about-open")):
+                        os.remove(uitest.path("vmm-a11y-about-open"))
                         self.show_about(None)
-                    if os.path.exists("/tmp/vmm-a11y-about-close"):
-                        os.remove("/tmp/vmm-a11y-about-close")
+                    if os.path.exists(uitest.path("vmm-a11y-about-close")):
+                        os.remove(uitest.path("vmm-a11y-about-close"))
                         from .about import vmmAbout
 
                         if vmmAbout._instance:
@@ -899,7 +900,7 @@ class vmmManager(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-graph-toggle.txt"
+                    path = uitest.path("vmm-a11y-graph-toggle.txt")
                     if os.path.exists(path):
                         name = open(path, "r").read().strip().lower()
                         os.remove(path)
@@ -917,13 +918,13 @@ class vmmManager(vmmGObjectUI):
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-column-click.txt"
+                    path = uitest.path("vmm-a11y-column-click.txt")
                     if os.path.exists(path):
                         os.remove(path)
                 except Exception:
                     pass
                 try:
-                    path = "/tmp/vmm-a11y-appmenu-action.txt"
+                    path = uitest.path("vmm-a11y-appmenu-action.txt")
                     if os.path.exists(path):
                         action = open(path, "r").read().strip()
                         os.remove(path)
@@ -940,7 +941,7 @@ class vmmManager(vmmGObjectUI):
                     pass
                 return True
 
-            GLib.timeout_add(50, _poll_appmenu)
+            uitest.poll_add(50, _poll_appmenu)
         gtkcompat.set_accessible_name(self.connmenu, "conn-menu")
         self.connmenu._vmm_menu_name = "conn-menu"
         for idx, item in self.connmenu_items.items():
@@ -1154,7 +1155,7 @@ class vmmManager(vmmGObjectUI):
             name = (name or "").strip()
             if not name:
                 try:
-                    name = open("/tmp/vmm-a11y-selected-conn.txt", "r").read().strip()
+                    name = open(uitest.path("vmm-a11y-selected-conn.txt"), "r").read().strip()
                 except Exception:
                     name = ""
             if name:
@@ -1175,10 +1176,10 @@ class vmmManager(vmmGObjectUI):
                     try:
                         pretty = target.get_pretty_desc() or name or ""
                         if pretty:
-                            open("/tmp/vmm-a11y-conn-list.txt", "w").write(
+                            open(uitest.path("vmm-a11y-conn-list.txt"), "w").write(
                                 "%s\t0\n" % pretty
                             )
-                            open("/tmp/vmm-a11y-conn-status.txt", "w").write(
+                            open(uitest.path("vmm-a11y-conn-status.txt"), "w").write(
                                 "%s\t%s - Not Connected\n" % (pretty, pretty)
                             )
                     except Exception:
@@ -1316,11 +1317,11 @@ class vmmManager(vmmGObjectUI):
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-vm-list.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-vm-list.txt"), "w").write("\n".join(names))
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-vm-status.txt", "w").write("\n".join(statuses))
+            open(uitest.path("vmm-a11y-vm-status.txt"), "w").write("\n".join(statuses))
         except Exception:
             pass
         conns = []
@@ -1344,7 +1345,7 @@ class vmmManager(vmmGObjectUI):
         except Exception:
             conns = []
         try:
-            open("/tmp/vmm-a11y-conn-list.txt", "w").write("\n".join(conns))
+            open(uitest.path("vmm-a11y-conn-list.txt"), "w").write("\n".join(conns))
         except Exception:
             pass
 
@@ -1702,7 +1703,7 @@ class vmmManager(vmmGObjectUI):
                 key = str(crow[ROW_SORT_KEY] or "")
                 text = gtkcompat._strip_pango_markup(crow[ROW_MARKUP] or "")
                 lines.append("%s\t%s" % (key, text))
-            open("/tmp/vmm-a11y-conn-status.txt", "w").write("\n".join(lines))
+            open(uitest.path("vmm-a11y-conn-status.txt"), "w").write("\n".join(lines))
         except Exception:
             pass
         try:
@@ -1808,7 +1809,7 @@ class vmmManager(vmmGObjectUI):
         if event.button != 3:
             return False
 
-        tup = vmlist.get_path_at_pos(int(event.x), int(event.y))
+        tup = gtkcompat.treeview_path_at_event(vmlist, event)
         if tup is None:
             return False  # pragma: no cover
         path = tup[0]

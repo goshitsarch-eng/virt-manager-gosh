@@ -1,6 +1,6 @@
 # Virtual Machine Manager News
 
-## Release 5.2.0 (unreleased)
+## Release 5.2.0 (August 28, 2026)
 - virt-manager: Rewrite the graphical application on GTK 4 and libadwaita
   while keeping the existing feature set, windows, wizards, and actions
 - virt-manager: Grab the console on Wayland via shortcut inhibit and
@@ -9,6 +9,102 @@
   textures, including tiled modifiers, and always release gl_draw_done
 - virt-manager: Retry StatusNotifierItem registration so the tray works
   when a Wayland watcher appears after startup
+- virt-manager: SECURITY: the ui-test sentinel files no longer live at
+  predictable /tmp/vmm-a11y-* paths, where any local user could write one
+  and make a running virt-manager delete storage, apply XML, or start,
+  clone and migrate domains. They now go in a private per-process
+  directory, and the pollers that consume them only run under a ui test
+- virt-manager: Do not build AT-SPI proxy widgets outside a ui test. They
+  were mapped over the real interface, so a normal session drew stray
+  labels across the manager and extra undecorated windows under the New
+  VM wizard, storage browser and connection dialogs
+- virt-manager: Keep GTK's own LABELLED_BY relation on entries, which is
+  what screen readers read; the proxy labels used to replace it
+- virt-manager: Fix a NameError importing the console viewers on a machine
+  without SpiceClientGLib, which stopped any VM window from opening
+- virt-manager: Do not crash finishing an install when the New VM wizard
+  has already been closed
+- virt-manager: Treat a missing GTK 4 VTE (API 3.91) as "no serial
+  console" instead of falling back to the GTK 3 build, which cannot load
+- virt-manager: Fix the host CPU and memory graphs, which drew as three
+  bare tick lines, and the second data set's colour
+- virt-manager: Fix the manager toolbar's Shut Down button, which was
+  blank and stretched across the toolbar, and the menubar, which spaced
+  File/Edit/View/Help across the whole window
+- virt-manager: Draw the sparkline border and the wizard header from theme
+  colours, so both follow light/dark and the user's accent colour
+- virt-manager: Fix the New button icon, which named an icon that does
+  not exist and rendered as a broken image
+- Require vte291-gtk4 rather than the GTK 3 vte291, and drop the unused
+  gtk-vnc2 dependency
+- Credit upstream virt-manager and the projects this is built on in the
+  README and the About dialog
+- virt-manager: SECURITY: the built-in VNC client asked for the VeNCrypt
+  "Plain" subtype first, which has no TLS at all, so a console username
+  and password went over the wire in the clear whenever the server also
+  offered a TLS or X509 subtype. Prefer the strongest subtype offered
+- virt-manager: SECURITY: verify the server certificate for the VeNCrypt
+  X509 subtypes, and stop silently falling back to no verification when
+  the CA cannot be loaded
+- virt-manager: SECURITY: do not keep a cleartext copy of console
+  passwords in ~/.config/virt-manager/console-keyring.json when the
+  Secret Service is available, and create that fallback file 0600
+- virt-manager: SECURITY: never write the live console password, or the
+  domain XML that carries the graphics password, to disk outside a ui test
+- virt-manager: Bound reads from the VNC socket, so a hostile or broken
+  server cannot make the client allocate an arbitrary amount of memory
+  from a 32-bit length or a 16-bit rectangle size
+- virt-manager: Fix right-click on the manager's VM list acting on the
+  wrong VM. Gtk.TreeView.get_path_at_pos() takes bin-window coordinates,
+  and the GTK 4 click gesture reports widget coordinates, so the header
+  height shifted the result by one or two rows -- into a context menu
+  carrying Delete, Force Off and Migrate
+- virt-manager: Ask for incremental framebuffer updates. The VNC client
+  re-requested the whole screen after every update, which with Raw
+  encoding is width * height * 4 bytes per frame for as long as the
+  console is open
+- virt-manager: Read framebuffer data in linear time rather than quadratic
+- virt-manager: Fix closing the Migrate dialog with the window manager,
+  which raised TypeError and destroyed the reused dialog
+- virt-manager: Do not shell out to xdotool in a sleep/retry loop on the
+  GTK main thread when moving or resizing a window
+- virt-manager: Fix Apply writing one device's settings onto another when
+  two hardware rows share a label (two smartcards, two panic notifiers,
+  two filesystems with the same target)
+- virt-manager: Restore the selected storage volume by exact name after a
+  refresh, instead of picking whichever volume merely contained the name
+- virt-manager: Ctrl+Q, Ctrl+W and F10 ran their menu item twice
+- virt-manager: Restore the borderless look of the grouped sections in
+  Details, Host Details and Preferences. GTK 4 dropped shadow-type=none
+  and GtkFrame always draws a border, so all 39 sections had turned into
+  hard-edged boxes
+- virt-manager: Put the padding back around the wizard header band, and
+  stop showing the internal string "vmm dialog" as the window title of
+  every error and confirmation dialog
+- virt-manager: Draw the VM list and Host Details graphs in the theme's
+  accent colour rather than a fixed pale blue tuned for a white background
+- virt-manager: Install virtManager/lib/uitest.py and
+  virtManager/details/gtk4display.py, without which an installed build
+  cannot start or cannot open a console; tests now check for the gap
+- virt-manager: Fix tests/test_dist.py, which still required gtk+ 3.22 of
+  every ui file and so failed the whole suite after the port
+- virt-manager: Add gtkcompat.py and gtk4display.py to po/POTFILES so the
+  dialog buttons and file-transfer messages they own can be translated
+- virt-manager: Show New VM wizard validation errors again. Fourteen of
+  them only wrote a ui-test sentinel file, so leaving the install media
+  or install tree blank made Forward do nothing, silently
+- virt-manager: Fix "Enable direct kernel boot" being impossible to turn
+  off: unticking it marked the page edited, and Apply then re-ticked the
+  box and wrote the greyed-out kernel paths straight back
+- virt-manager: SECURITY: the built-in SASL fallback preferred the PLAIN
+  mechanism, which sends the console username and password in the clear,
+  over DIGEST-MD5 and GSSAPI -- on a socket the RFB SASL and Tight paths
+  never TLS-wrap. Rank them strongest first, and fall through to the next
+  when one cannot start, so a host without Kerberos still connects
+- virt-manager: Do not fork xdotool to read a window's size or position.
+  Those run from a per-frame configure-event tick, so dragging a window
+  edge forked a process on the GTK main loop every frame
+- Point the appdata bug tracker at this tree rather than upstream's
 
 ## Release 5.1.0 (August 26, 2025)
 - cli: Support --cpu maximum (Andrea Bolognani)

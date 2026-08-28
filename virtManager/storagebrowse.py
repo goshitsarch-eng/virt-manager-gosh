@@ -14,6 +14,7 @@ from virtinst import log
 from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .hoststorage import vmmHostStorage
+from .lib import uitest
 
 
 class _BrowseReasonMetadata:
@@ -97,7 +98,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             if app is not None:
                 app.add_window(self.topwin)
             try:
-                os.remove("/tmp/vmm-a11y-choose-volume")
+                os.remove(uitest.path("vmm-a11y-choose-volume"))
             except Exception:
                 pass
             self._vmm_browse_hidden = False
@@ -107,17 +108,17 @@ class vmmStorageBrowser(vmmGObjectUI):
                 pass
             gtkcompat.expose_storagebrowse_window(self)
             try:
-                open("/tmp/vmm-a11y-storage-browser.txt", "w").write("1")
+                open(uitest.path("vmm-a11y-storage-browser.txt"), "w").write("1")
             except Exception:
                 pass
             self._publish_browse_local_sensitive()
             try:
-                if not os.path.exists("/tmp/vmm-a11y-pool-select.txt"):
-                    open("/tmp/vmm-a11y-pool-select.txt", "w").write("pool-dir")
+                if not os.path.exists(uitest.path("vmm-a11y-pool-select.txt")):
+                    open(uitest.path("vmm-a11y-pool-select.txt"), "w").write("pool-dir")
             except Exception:
                 pass
             try:
-                os.remove("/tmp/vmm-a11y-vol-refresh")
+                os.remove(uitest.path("vmm-a11y-vol-refresh"))
             except Exception:
                 pass
 
@@ -125,7 +126,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                 if getattr(self, "_vmm_browse_hidden", False):
                     return
                 try:
-                    open("/tmp/vmm-a11y-vol-refresh", "w").write("1")
+                    open(uitest.path("vmm-a11y-vol-refresh"), "w").write("1")
                 except Exception:
                     pass
                 try:
@@ -138,7 +139,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                 if getattr(self, "_vmm_browse_hidden", False):
                     return
                 try:
-                    want = open("/tmp/vmm-a11y-pool-select.txt", "r").read().strip()
+                    want = open(uitest.path("vmm-a11y-pool-select.txt"), "r").read().strip()
                 except Exception:
                     want = ""
                 if not want:
@@ -176,7 +177,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                                 self.storagelist.widget("vol-list"), vol
                             )
                             try:
-                                open("/tmp/vmm-a11y-vol-selected.txt", "w").write(want)
+                                open(uitest.path("vmm-a11y-vol-selected.txt"), "w").write(want)
                             except Exception:
                                 pass
                             return vol
@@ -187,7 +188,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             def _select_vol_tick():
                 if getattr(self, "_vmm_browse_hidden", False):
                     return True
-                path = "/tmp/vmm-a11y-vol-select.txt"
+                path = uitest.path("vmm-a11y-vol-select.txt")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -214,7 +215,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             gtkcompat.register_a11y_click("Browse Local", self._browse_local)
 
             def _poll_browse_cancel():
-                path = "/tmp/vmm-a11y-browse-cancel"
+                path = uitest.path("vmm-a11y-browse-cancel")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -230,14 +231,14 @@ class vmmStorageBrowser(vmmGObjectUI):
             if not getattr(self, "_vmm_browse_cancel_poll", False):
                 self._vmm_browse_cancel_poll = True
                 self._vmm_browse_cancel_poll_cb = _poll_browse_cancel
-                GLib.timeout_add(50, self._vmm_browse_cancel_poll_cb)
+                uitest.poll_add(50, self._vmm_browse_cancel_poll_cb)
             if not getattr(self, "_vmm_vol_select_poll", False):
                 self._vmm_vol_select_poll = True
                 self._vmm_vol_select_poll_cb = _select_vol_tick
-                GLib.timeout_add(50, self._vmm_vol_select_poll_cb)
+                uitest.poll_add(50, self._vmm_vol_select_poll_cb)
 
             def _poll_pool_select():
-                path = "/tmp/vmm-a11y-pool-select.txt"
+                path = uitest.path("vmm-a11y-pool-select.txt")
                 try:
                     want = open(path, "r").read().strip()
                 except Exception:
@@ -250,7 +251,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             if not getattr(self, "_vmm_pool_select_poll", False):
                 self._vmm_pool_select_poll = True
                 self._vmm_pool_select_poll_cb = _poll_pool_select
-                GLib.timeout_add(50, self._vmm_pool_select_poll_cb)
+                uitest.poll_add(50, self._vmm_pool_select_poll_cb)
             try:
                 self.storagelist._start_a11y_poll()
             except Exception:
@@ -263,7 +264,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             def _poll_choose():
                 if getattr(self, "_vmm_browse_hidden", False):
                     return True
-                path = "/tmp/vmm-a11y-choose-volume"
+                path = uitest.path("vmm-a11y-choose-volume")
                 try:
                     if not os.path.exists(path):
                         return True
@@ -274,7 +275,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                     self._a11y_choose_volume()
                 except Exception as exc:
                     try:
-                        open("/tmp/vmm-a11y-browse-err.txt", "w").write(
+                        open(uitest.path("vmm-a11y-browse-err.txt"), "w").write(
                             "choose-volume: %s\n" % exc
                         )
                     except Exception:
@@ -282,7 +283,7 @@ class vmmStorageBrowser(vmmGObjectUI):
                 return True
 
             self._vmm_choose_poll_cb = _poll_choose
-            GLib.timeout_add(50, self._vmm_choose_poll_cb)
+            uitest.poll_add(50, self._vmm_choose_poll_cb)
         self.topwin.present()
         self.conn.schedule_priority_tick(pollpool=True)
 
@@ -291,14 +292,14 @@ class vmmStorageBrowser(vmmGObjectUI):
             log.debug("Closing storage browser")
             self.topwin.hide()
         try:
-            open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-storage-browser.txt"), "w").write("0")
         except Exception:
             pass
         for leftover in (
-            "/tmp/vmm-a11y-choose-volume",
-            "/tmp/vmm-a11y-browse-cancel",
-            "/tmp/vmm-a11y-pool-select.txt",
-            "/tmp/vmm-a11y-vol-select.txt",
+            uitest.path("vmm-a11y-choose-volume"),
+            uitest.path("vmm-a11y-browse-cancel"),
+            uitest.path("vmm-a11y-pool-select.txt"),
+            uitest.path("vmm-a11y-vol-select.txt"),
         ):
             try:
                 os.remove(leftover)
@@ -360,7 +361,7 @@ class vmmStorageBrowser(vmmGObjectUI):
         if getattr(self, "_vmm_browse_hidden", False):
             return
         try:
-            os.remove("/tmp/vmm-a11y-choose-volume")
+            os.remove(uitest.path("vmm-a11y-choose-volume"))
         except Exception:
             pass
 
@@ -390,8 +391,8 @@ class vmmStorageBrowser(vmmGObjectUI):
 
         want = ""
         for path in (
-            "/tmp/vmm-a11y-vol-selected.txt",
-            "/tmp/vmm-a11y-vol-select.txt",
+            uitest.path("vmm-a11y-vol-selected.txt"),
+            uitest.path("vmm-a11y-vol-select.txt"),
         ):
             try:
                 want = open(path, "r").read().strip()
@@ -418,12 +419,12 @@ class vmmStorageBrowser(vmmGObjectUI):
                 pass
         want = ""
         try:
-            want = open("/tmp/vmm-a11y-vol-selected.txt", "r").read().strip()
+            want = open(uitest.path("vmm-a11y-vol-selected.txt"), "r").read().strip()
         except Exception:
             want = ""
         if not want:
             try:
-                want = open("/tmp/vmm-a11y-vol-select.txt", "r").read().strip()
+                want = open(uitest.path("vmm-a11y-vol-select.txt"), "r").read().strip()
             except Exception:
                 want = ""
         self._finish("/pool-dir/%s" % (want or "dir-vol"))
@@ -471,7 +472,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             sensitive = bool(
                 btn is not None and btn.get_visible() and btn.get_sensitive()
             )
-            open("/tmp/vmm-a11y-browse-local-sensitive.txt", "w").write(
+            open(uitest.path("vmm-a11y-browse-local-sensitive.txt"), "w").write(
                 "1" if sensitive else "0"
             )
         except Exception:
@@ -508,26 +509,26 @@ class vmmStorageBrowser(vmmGObjectUI):
         try:
             if path:
                 try:
-                    os.remove("/tmp/vmm-a11y-addhw-fs-source.txt.set")
+                    os.remove(uitest.path("vmm-a11y-addhw-fs-source.txt.set"))
                 except Exception:
                     pass
                 try:
-                    os.remove("/tmp/vmm-a11y-media-select.txt")
+                    os.remove(uitest.path("vmm-a11y-media-select.txt"))
                 except Exception:
                     pass
                 try:
-                    os.remove("/tmp/vmm-a11y-media-entry.txt.set")
+                    os.remove(uitest.path("vmm-a11y-media-entry.txt.set"))
                 except Exception:
                     pass
-                open("/tmp/vmm-a11y-addhw-fs-source.txt", "w").write(path)
-                open("/tmp/vmm-a11y-storage-entry.txt", "w").write(path)
-                open("/tmp/vmm-a11y-media-entry.txt", "w").write(path)
-                open("/tmp/vmm-a11y-details-media-entry.txt", "w").write(path)
-                open("/tmp/vmm-a11y-details-media-path.txt", "w").write(path)
-                open("/tmp/vmm-a11y-media-browse.txt", "w").write(path)
+                open(uitest.path("vmm-a11y-addhw-fs-source.txt"), "w").write(path)
+                open(uitest.path("vmm-a11y-storage-entry.txt"), "w").write(path)
+                open(uitest.path("vmm-a11y-media-entry.txt"), "w").write(path)
+                open(uitest.path("vmm-a11y-details-media-entry.txt"), "w").write(path)
+                open(uitest.path("vmm-a11y-details-media-path.txt"), "w").write(path)
+                open(uitest.path("vmm-a11y-media-browse.txt"), "w").write(path)
                 target = getattr(self, "_vmm_boot_browse_target", None)
                 if target in ("initrd", "kernel", "dtb"):
-                    open("/tmp/vmm-a11y-boot-%s.txt" % target, "w").write(path)
+                    open(uitest.path("vmm-a11y-boot-%s.txt") % target, "w").write(path)
         except Exception:
             pass
         try:
@@ -543,7 +544,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             def _stay_closed():
                 if getattr(self, "_vmm_browse_hidden", False):
                     try:
-                        open("/tmp/vmm-a11y-storage-browser.txt", "w").write("0")
+                        open(uitest.path("vmm-a11y-storage-browser.txt"), "w").write("0")
                     except Exception:
                         pass
                     try:
@@ -557,7 +558,7 @@ class vmmStorageBrowser(vmmGObjectUI):
             try:
                 self._vmm_stay_closed_cb = _stay_closed
                 GLib.idle_add(self._vmm_stay_closed_cb)
-                GLib.timeout_add(250, self._vmm_stay_closed_cb)
+                uitest.poll_add(250, self._vmm_stay_closed_cb)
             except Exception:
                 pass
             if parent is not None:

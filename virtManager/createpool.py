@@ -18,22 +18,23 @@ from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .object.storagepool import vmmStoragePool
 from .xmleditor import vmmXMLEditor
+from .lib import uitest
 
-_CREATEPOOL_SHOWN = "/tmp/vmm-a11y-createpool-shown.txt"
-_CREATEPOOL_NAME = "/tmp/vmm-a11y-createpool-name.txt"
-_CREATEPOOL_TYPE = "/tmp/vmm-a11y-createpool-type.txt"
-_CREATEPOOL_HOST = "/tmp/vmm-a11y-createpool-host.txt"
-_CREATEPOOL_SOURCE = "/tmp/vmm-a11y-createpool-source.txt"
-_CREATEPOOL_TARGET = "/tmp/vmm-a11y-createpool-target.txt"
-_CREATEPOOL_IQN = "/tmp/vmm-a11y-createpool-iqn.txt"
-_CREATEPOOL_IQN_CHK = "/tmp/vmm-a11y-createpool-iqn-chk.txt"
-_CREATEPOOL_SOURCE_NAME = "/tmp/vmm-a11y-createpool-source-name.txt"
-_CREATEPOOL_ADAPTER = "/tmp/vmm-a11y-createpool-adapter.txt"
-_CREATEPOOL_VOLGROUP = "/tmp/vmm-a11y-createpool-volgroup.txt"
-_CREATEPOOL_FINISH = "/tmp/vmm-a11y-createpool-finish"
-_CREATEPOOL_CANCEL = "/tmp/vmm-a11y-createpool-cancel"
-_CREATEPOOL_ACTION = "/tmp/vmm-a11y-createpool-action.txt"
-_CREATEPOOL_COMBO = "/tmp/vmm-a11y-combo-select.txt"
+_CREATEPOOL_SHOWN = uitest.path("vmm-a11y-createpool-shown.txt")
+_CREATEPOOL_NAME = uitest.path("vmm-a11y-createpool-name.txt")
+_CREATEPOOL_TYPE = uitest.path("vmm-a11y-createpool-type.txt")
+_CREATEPOOL_HOST = uitest.path("vmm-a11y-createpool-host.txt")
+_CREATEPOOL_SOURCE = uitest.path("vmm-a11y-createpool-source.txt")
+_CREATEPOOL_TARGET = uitest.path("vmm-a11y-createpool-target.txt")
+_CREATEPOOL_IQN = uitest.path("vmm-a11y-createpool-iqn.txt")
+_CREATEPOOL_IQN_CHK = uitest.path("vmm-a11y-createpool-iqn-chk.txt")
+_CREATEPOOL_SOURCE_NAME = uitest.path("vmm-a11y-createpool-source-name.txt")
+_CREATEPOOL_ADAPTER = uitest.path("vmm-a11y-createpool-adapter.txt")
+_CREATEPOOL_VOLGROUP = uitest.path("vmm-a11y-createpool-volgroup.txt")
+_CREATEPOOL_FINISH = uitest.path("vmm-a11y-createpool-finish")
+_CREATEPOOL_CANCEL = uitest.path("vmm-a11y-createpool-cancel")
+_CREATEPOOL_ACTION = uitest.path("vmm-a11y-createpool-action.txt")
+_CREATEPOOL_COMBO = uitest.path("vmm-a11y-combo-select.txt")
 
 
 class vmmCreatePool(vmmGObjectUI):
@@ -595,13 +596,13 @@ class vmmCreatePool(vmmGObjectUI):
 
     def _a11y_load_pending_xml(self):
         try:
-            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+            pending = open(uitest.path("vmm-a11y-xml.txt"), "r").read()
         except Exception:
             pending = ""
         if not pending:
             return
         try:
-            os.remove("/tmp/vmm-a11y-xml.txt")
+            os.remove(uitest.path("vmm-a11y-xml.txt"))
         except Exception:
             pass
         if (self._xmleditor.get_xml() or "") != pending:
@@ -704,5 +705,5 @@ class vmmCreatePool(vmmGObjectUI):
 
         self._vmm_createpool_fields_tick = _fields_tick
         self._vmm_createpool_tick = _tick
-        GLib.timeout_add(50, self._vmm_createpool_fields_tick)
-        GLib.timeout_add(50, self._vmm_createpool_tick)
+        uitest.poll_add(50, self._vmm_createpool_fields_tick)
+        uitest.poll_add(50, self._vmm_createpool_tick)

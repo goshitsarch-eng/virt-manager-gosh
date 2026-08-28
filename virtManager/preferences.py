@@ -19,6 +19,7 @@ from .lib import uiutil
 from .baseclass import vmmGObjectUI
 from .lib.inspection import vmmInspection
 from .systray import vmmSystray
+from .lib import uitest
 
 
 class vmmPreferences(vmmGObjectUI):
@@ -102,7 +103,7 @@ class vmmPreferences(vmmGObjectUI):
         log.debug("Closing preferences")
         self.topwin.hide()
         try:
-            open("/tmp/vmm-a11y-prefs-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-prefs-shown.txt"), "w").write("0")
         except Exception:
             pass
         return 1
@@ -122,7 +123,7 @@ class vmmPreferences(vmmGObjectUI):
             pass
         self.topwin.present()
         try:
-            open("/tmp/vmm-a11y-prefs-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-prefs-shown.txt"), "w").write("1")
         except Exception:
             pass
         self._publish_prefs_a11y_state()
@@ -486,7 +487,7 @@ class vmmPreferences(vmmGObjectUI):
             self.refresh_grabkeys_combination()
             dialog.hide()
             try:
-                open("/tmp/vmm-a11y-grab-shown.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-grab-shown.txt"), "w").write("0")
             except Exception:
                 pass
             _finish_loop()
@@ -495,7 +496,7 @@ class vmmPreferences(vmmGObjectUI):
         def _close_grab(*_a):
             dialog.hide()
             try:
-                open("/tmp/vmm-a11y-grab-shown.txt", "w").write("0")
+                open(uitest.path("vmm-a11y-grab-shown.txt"), "w").write("0")
             except Exception:
                 pass
             _finish_loop()
@@ -513,7 +514,7 @@ class vmmPreferences(vmmGObjectUI):
         self._grab_accept = _accept
         self._grab_loop = None
         try:
-            open("/tmp/vmm-a11y-grab-shown.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-grab-shown.txt"), "w").write("1")
         except Exception:
             pass
         # Official uitests must return from the AT-SPI click so dogtail
@@ -572,7 +573,7 @@ class vmmPreferences(vmmGObjectUI):
                 else "general-tab"
             )
         try:
-            open("/tmp/vmm-a11y-prefs-page-current.txt", "w").write(page_id)
+            open(uitest.path("vmm-a11y-prefs-page-current.txt"), "w").write(page_id)
         except Exception:
             pass
 
@@ -594,18 +595,18 @@ class vmmPreferences(vmmGObjectUI):
 
     def _publish_prefs_a11y_state(self):
         self._write_prefs_page_current()
-        self._publish_prefs_combo("prefs-cpu-default", "/tmp/vmm-a11y-prefs-cpu-default.txt")
-        self._publish_prefs_combo("prefs-storage-format", "/tmp/vmm-a11y-prefs-storage-format.txt")
-        self._publish_prefs_combo("prefs-graphics-type", "/tmp/vmm-a11y-prefs-graphics-type.txt")
-        self._publish_prefs_combo("prefs-firmware-default", "/tmp/vmm-a11y-prefs-firmware.txt")
-        self._publish_prefs_combo("prefs-console-autoredir", "/tmp/vmm-a11y-prefs-usb-redir.txt")
+        self._publish_prefs_combo("prefs-cpu-default", uitest.path("vmm-a11y-prefs-cpu-default.txt"))
+        self._publish_prefs_combo("prefs-storage-format", uitest.path("vmm-a11y-prefs-storage-format.txt"))
+        self._publish_prefs_combo("prefs-graphics-type", uitest.path("vmm-a11y-prefs-graphics-type.txt"))
+        self._publish_prefs_combo("prefs-firmware-default", uitest.path("vmm-a11y-prefs-firmware.txt"))
+        self._publish_prefs_combo("prefs-console-autoredir", uitest.path("vmm-a11y-prefs-usb-redir.txt"))
         self._publish_prefs_combo(
-            "prefs-console-resizeguest", "/tmp/vmm-a11y-prefs-resize-guest.txt"
+            "prefs-console-resizeguest", uitest.path("vmm-a11y-prefs-resize-guest.txt")
         )
-        self._publish_prefs_combo("prefs-console-scaling", "/tmp/vmm-a11y-prefs-scaling.txt")
+        self._publish_prefs_combo("prefs-console-scaling", uitest.path("vmm-a11y-prefs-scaling.txt"))
         try:
             val = int(self.widget("prefs-stats-update-interval").get_value())
-            open("/tmp/vmm-a11y-prefs-cpu-poll.txt", "w").write(str(val))
+            open(uitest.path("vmm-a11y-prefs-cpu-poll.txt"), "w").write(str(val))
         except Exception:
             pass
 
@@ -664,43 +665,43 @@ class vmmPreferences(vmmGObjectUI):
                 ("cpu default:", "cpu default"),
                 "prefs-cpu-default",
                 self.change_cpu_default,
-                "/tmp/vmm-a11y-prefs-cpu-default.txt",
+                uitest.path("vmm-a11y-prefs-cpu-default.txt"),
             ),
             (
                 ("storage format:", "storage format"),
                 "prefs-storage-format",
                 self.change_storage_format,
-                "/tmp/vmm-a11y-prefs-storage-format.txt",
+                uitest.path("vmm-a11y-prefs-storage-format.txt"),
             ),
             (
                 ("graphics type",),
                 "prefs-graphics-type",
                 self.change_graphics_type,
-                "/tmp/vmm-a11y-prefs-graphics-type.txt",
+                uitest.path("vmm-a11y-prefs-graphics-type.txt"),
             ),
             (
                 ("x86 firmware",),
                 "prefs-firmware-default",
                 self.change_firmware_default,
-                "/tmp/vmm-a11y-prefs-firmware.txt",
+                uitest.path("vmm-a11y-prefs-firmware.txt"),
             ),
             (
                 ("spice usb", "spice usb redirection:"),
                 "prefs-console-autoredir",
                 self.change_console_autoredir,
-                "/tmp/vmm-a11y-prefs-usb-redir.txt",
+                uitest.path("vmm-a11y-prefs-usb-redir.txt"),
             ),
             (
                 ("resize guest", "resize guest with window:"),
                 "prefs-console-resizeguest",
                 self.change_console_resizeguest,
-                "/tmp/vmm-a11y-prefs-resize-guest.txt",
+                uitest.path("vmm-a11y-prefs-resize-guest.txt"),
             ),
             (
                 ("graphical console scaling", "graphical console scaling:"),
                 "prefs-console-scaling",
                 self.change_console_scaling,
-                "/tmp/vmm-a11y-prefs-scaling.txt",
+                uitest.path("vmm-a11y-prefs-scaling.txt"),
             ),
         )
         compact = str(key or "").strip().lower()
@@ -731,7 +732,7 @@ class vmmPreferences(vmmGObjectUI):
         self._publish_prefs_a11y_state()
 
         def _check_tick():
-            path = "/tmp/vmm-a11y-prefs-check.txt"
+            path = uitest.path("vmm-a11y-prefs-check.txt")
             try:
                 if os.path.exists(path):
                     key = open(path, "r").read().strip()
@@ -771,13 +772,13 @@ class vmmPreferences(vmmGObjectUI):
                         except Exception:
                             pass
                     try:
-                        open("/tmp/vmm-a11y-prefs-check-done", "w").write("1")
+                        open(uitest.path("vmm-a11y-prefs-check-done"), "w").write("1")
                     except Exception:
                         pass
             except Exception:
                 pass
 
-            page_want = "/tmp/vmm-a11y-prefs-page.txt"
+            page_want = uitest.path("vmm-a11y-prefs-page.txt")
             try:
                 if os.path.exists(page_want):
                     want = open(page_want, "r").read().strip()
@@ -787,7 +788,7 @@ class vmmPreferences(vmmGObjectUI):
             except Exception:
                 pass
 
-            combo_want = "/tmp/vmm-a11y-prefs-combo.txt"
+            combo_want = uitest.path("vmm-a11y-prefs-combo.txt")
             try:
                 if os.path.exists(combo_want):
                     text = open(combo_want, "r").read().strip()
@@ -798,7 +799,7 @@ class vmmPreferences(vmmGObjectUI):
             except Exception:
                 pass
 
-            generic = "/tmp/vmm-a11y-combo-select.txt"
+            generic = uitest.path("vmm-a11y-combo-select.txt")
             try:
                 if os.path.exists(generic):
                     text = open(generic, "r").read().strip()
@@ -809,7 +810,7 @@ class vmmPreferences(vmmGObjectUI):
             except Exception:
                 pass
 
-            spin_set = "/tmp/vmm-a11y-prefs-cpu-poll.set"
+            spin_set = uitest.path("vmm-a11y-prefs-cpu-poll.set")
             try:
                 if os.path.exists(spin_set):
                     val = open(spin_set, "r").read().strip()
@@ -817,22 +818,22 @@ class vmmPreferences(vmmGObjectUI):
                     src = self.widget("prefs-stats-update-interval")
                     src.set_value(float(val or 0))
                     self.change_update_interval(src)
-                    open("/tmp/vmm-a11y-prefs-cpu-poll.txt", "w").write(
+                    open(uitest.path("vmm-a11y-prefs-cpu-poll.txt"), "w").write(
                         str(int(src.get_value()))
                     )
             except Exception:
                 pass
 
             try:
-                if os.path.exists("/tmp/vmm-a11y-prefs-change-grab"):
-                    os.remove("/tmp/vmm-a11y-prefs-change-grab")
+                if os.path.exists(uitest.path("vmm-a11y-prefs-change-grab")):
+                    os.remove(uitest.path("vmm-a11y-prefs-change-grab"))
                     self.change_grab_keys(None)
             except Exception:
                 pass
 
             try:
-                if os.path.exists("/tmp/vmm-a11y-grab-ok.txt"):
-                    os.remove("/tmp/vmm-a11y-grab-ok.txt")
+                if os.path.exists(uitest.path("vmm-a11y-grab-ok.txt")):
+                    os.remove(uitest.path("vmm-a11y-grab-ok.txt"))
                     accept = getattr(self, "_grab_accept", None)
                     if accept is not None:
                         accept()
@@ -840,24 +841,24 @@ class vmmPreferences(vmmGObjectUI):
                 pass
 
             try:
-                if os.path.exists("/tmp/vmm-a11y-grab-cancel.txt"):
-                    os.remove("/tmp/vmm-a11y-grab-cancel.txt")
+                if os.path.exists(uitest.path("vmm-a11y-grab-cancel.txt")):
+                    os.remove(uitest.path("vmm-a11y-grab-cancel.txt"))
                     dlg = getattr(self, "_grab_dialog", None)
                     if dlg is not None:
                         dlg.hide()
-                    open("/tmp/vmm-a11y-grab-shown.txt", "w").write("0")
+                    open(uitest.path("vmm-a11y-grab-shown.txt"), "w").write("0")
             except Exception:
                 pass
 
             try:
-                if os.path.exists("/tmp/vmm-a11y-prefs-close"):
-                    os.remove("/tmp/vmm-a11y-prefs-close")
+                if os.path.exists(uitest.path("vmm-a11y-prefs-close")):
+                    os.remove(uitest.path("vmm-a11y-prefs-close"))
                     self.close()
             except Exception:
                 pass
             return True
 
-        GLib.timeout_add(50, _check_tick)
+        uitest.poll_add(50, _check_tick)
 
     def change_view_system_tray(self, src):
         self.config.set_view_system_tray(src.get_active())

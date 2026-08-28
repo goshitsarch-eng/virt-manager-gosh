@@ -22,6 +22,7 @@ from .lib import uiutil
 from .asyncjob import vmmAsyncJob
 from .baseclass import vmmGObjectUI
 from .xmleditor import vmmXMLEditor
+from .lib import uitest
 
 
 def _make_ipaddr(addrstr):
@@ -74,13 +75,13 @@ class vmmCreateNetwork(vmmGObjectUI):
             self._publish_a11y_state()
             return
         for path in (
-            "/tmp/vmm-a11y-createnet-finish",
-            "/tmp/vmm-a11y-createnet-cancel",
-            "/tmp/vmm-a11y-createnet-name.txt.set",
-            "/tmp/vmm-a11y-createnet-mode.txt",
-            "/tmp/vmm-a11y-createnet-forward.txt",
-            "/tmp/vmm-a11y-createnet-hostdev.txt",
-            "/tmp/vmm-a11y-createnet-device.txt.set",
+            uitest.path("vmm-a11y-createnet-finish"),
+            uitest.path("vmm-a11y-createnet-cancel"),
+            uitest.path("vmm-a11y-createnet-name.txt.set"),
+            uitest.path("vmm-a11y-createnet-mode.txt"),
+            uitest.path("vmm-a11y-createnet-forward.txt"),
+            uitest.path("vmm-a11y-createnet-hostdev.txt"),
+            uitest.path("vmm-a11y-createnet-device.txt.set"),
         ):
             try:
                 os.remove(path)
@@ -109,7 +110,7 @@ class vmmCreateNetwork(vmmGObjectUI):
         log.debug("Closing new network wizard")
         self.topwin.hide()
         try:
-            open("/tmp/vmm-a11y-createnet-shown.txt", "w").write("0")
+            open(uitest.path("vmm-a11y-createnet-shown.txt"), "w").write("0")
         except Exception:
             pass
         try:
@@ -516,15 +517,15 @@ class vmmCreateNetwork(vmmGObjectUI):
     def _apply_createnet_fields(self):
         changed = False
         pairs = (
-            ("/tmp/vmm-a11y-createnet-name.txt.set", "net-name"),
-            ("/tmp/vmm-a11y-createnet-ipv4-network.txt.set", "net-ipv4-network"),
-            ("/tmp/vmm-a11y-createnet-ipv4-start.txt.set", "net-dhcpv4-start"),
-            ("/tmp/vmm-a11y-createnet-ipv4-end.txt.set", "net-dhcpv4-end"),
-            ("/tmp/vmm-a11y-createnet-ipv6-network.txt.set", "net-ipv6-network"),
-            ("/tmp/vmm-a11y-createnet-ipv6-start.txt.set", "net-dhcpv6-start"),
-            ("/tmp/vmm-a11y-createnet-ipv6-end.txt.set", "net-dhcpv6-end"),
-            ("/tmp/vmm-a11y-createnet-domain.txt.set", "net-domain-name"),
-            ("/tmp/vmm-a11y-createnet-device.txt.set", "net-forward-manual"),
+            (uitest.path("vmm-a11y-createnet-name.txt.set"), "net-name"),
+            (uitest.path("vmm-a11y-createnet-ipv4-network.txt.set"), "net-ipv4-network"),
+            (uitest.path("vmm-a11y-createnet-ipv4-start.txt.set"), "net-dhcpv4-start"),
+            (uitest.path("vmm-a11y-createnet-ipv4-end.txt.set"), "net-dhcpv4-end"),
+            (uitest.path("vmm-a11y-createnet-ipv6-network.txt.set"), "net-ipv6-network"),
+            (uitest.path("vmm-a11y-createnet-ipv6-start.txt.set"), "net-dhcpv6-start"),
+            (uitest.path("vmm-a11y-createnet-ipv6-end.txt.set"), "net-dhcpv6-end"),
+            (uitest.path("vmm-a11y-createnet-domain.txt.set"), "net-domain-name"),
+            (uitest.path("vmm-a11y-createnet-device.txt.set"), "net-forward-manual"),
         )
         for path, widget_name in pairs:
             if not os.path.exists(path):
@@ -540,53 +541,53 @@ class vmmCreateNetwork(vmmGObjectUI):
 
     def _publish_a11y_state(self):
         try:
-            open("/tmp/vmm-a11y-createnet-shown.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-shown.txt"), "w").write(
                 "1" if self.topwin.get_visible() else "0"
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createnet-name.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-name.txt"), "w").write(
                 self.widget("net-name").get_text() or ""
             )
         except Exception:
             pass
         try:
             row = uiutil.get_list_selected_row(self.widget("net-forward-mode"))
-            open("/tmp/vmm-a11y-createnet-mode-label.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-mode-label.txt"), "w").write(
                 str(row[1] if row else "")
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createnet-ipv4-network.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-ipv4-network.txt"), "w").write(
                 self.widget("net-ipv4-network").get_text() or ""
             )
-            open("/tmp/vmm-a11y-createnet-ipv4-start.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-ipv4-start.txt"), "w").write(
                 self.widget("net-dhcpv4-start").get_text() or ""
             )
-            open("/tmp/vmm-a11y-createnet-ipv4-end.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-ipv4-end.txt"), "w").write(
                 self.widget("net-dhcpv4-end").get_text() or ""
             )
-            open("/tmp/vmm-a11y-createnet-ipv6-network.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-ipv6-network.txt"), "w").write(
                 self.widget("net-ipv6-network").get_text() or ""
             )
-            open("/tmp/vmm-a11y-createnet-ipv6-start.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-ipv6-start.txt"), "w").write(
                 self.widget("net-dhcpv6-start").get_text() or ""
             )
-            open("/tmp/vmm-a11y-createnet-ipv6-end.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-ipv6-end.txt"), "w").write(
                 self.widget("net-dhcpv6-end").get_text() or ""
             )
-            open("/tmp/vmm-a11y-createnet-domain.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-domain.txt"), "w").write(
                 self.widget("net-domain-name").get_text() or ""
             )
-            open("/tmp/vmm-a11y-createnet-device.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-device.txt"), "w").write(
                 self.widget("net-forward-manual").get_text() or ""
             )
         except Exception:
             pass
         try:
-            open("/tmp/vmm-a11y-createnet-devicelist-vis.txt", "w").write(
+            open(uitest.path("vmm-a11y-createnet-devicelist-vis.txt"), "w").write(
                 "1" if self.widget("net-hostdevs").is_visible() else "0"
             )
             names = []
@@ -594,7 +595,7 @@ class vmmCreateNetwork(vmmGObjectUI):
             if model is not None:
                 for row in model:
                     names.append(str(row[1] or ""))
-            open("/tmp/vmm-a11y-createnet-hostdevs.txt", "w").write("\n".join(names))
+            open(uitest.path("vmm-a11y-createnet-hostdevs.txt"), "w").write("\n".join(names))
         except Exception:
             pass
 
@@ -658,13 +659,13 @@ class vmmCreateNetwork(vmmGObjectUI):
 
     def _a11y_load_pending_xml(self):
         try:
-            pending = open("/tmp/vmm-a11y-xml.txt", "r").read()
+            pending = open(uitest.path("vmm-a11y-xml.txt"), "r").read()
         except Exception:
             pending = ""
         if not pending:
             return
         try:
-            os.remove("/tmp/vmm-a11y-xml.txt")
+            os.remove(uitest.path("vmm-a11y-xml.txt"))
         except Exception:
             pass
         if (self._xmleditor.get_xml() or "") != pending:
@@ -689,15 +690,15 @@ class vmmCreateNetwork(vmmGObjectUI):
             try:
                 if self._apply_createnet_fields():
                     for path in (
-                        "/tmp/vmm-a11y-createnet-name.txt.set",
-                        "/tmp/vmm-a11y-createnet-ipv4-network.txt.set",
-                        "/tmp/vmm-a11y-createnet-ipv4-start.txt.set",
-                        "/tmp/vmm-a11y-createnet-ipv4-end.txt.set",
-                        "/tmp/vmm-a11y-createnet-ipv6-network.txt.set",
-                        "/tmp/vmm-a11y-createnet-ipv6-start.txt.set",
-                        "/tmp/vmm-a11y-createnet-ipv6-end.txt.set",
-                        "/tmp/vmm-a11y-createnet-domain.txt.set",
-                        "/tmp/vmm-a11y-createnet-device.txt.set",
+                        uitest.path("vmm-a11y-createnet-name.txt.set"),
+                        uitest.path("vmm-a11y-createnet-ipv4-network.txt.set"),
+                        uitest.path("vmm-a11y-createnet-ipv4-start.txt.set"),
+                        uitest.path("vmm-a11y-createnet-ipv4-end.txt.set"),
+                        uitest.path("vmm-a11y-createnet-ipv6-network.txt.set"),
+                        uitest.path("vmm-a11y-createnet-ipv6-start.txt.set"),
+                        uitest.path("vmm-a11y-createnet-ipv6-end.txt.set"),
+                        uitest.path("vmm-a11y-createnet-domain.txt.set"),
+                        uitest.path("vmm-a11y-createnet-device.txt.set"),
                     ):
                         try:
                             os.remove(path)
@@ -724,17 +725,17 @@ class vmmCreateNetwork(vmmGObjectUI):
 
         def _tick():
             try:
-                if os.path.exists("/tmp/vmm-a11y-createnet-mode.txt"):
-                    item = open("/tmp/vmm-a11y-createnet-mode.txt", "r").read().strip()
-                    os.remove("/tmp/vmm-a11y-createnet-mode.txt")
+                if os.path.exists(uitest.path("vmm-a11y-createnet-mode.txt")):
+                    item = open(uitest.path("vmm-a11y-createnet-mode.txt"), "r").read().strip()
+                    os.remove(uitest.path("vmm-a11y-createnet-mode.txt"))
                     self._a11y_select_mode(item)
                     self._publish_a11y_state()
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-createnet-forward.txt"):
-                    item = open("/tmp/vmm-a11y-createnet-forward.txt", "r").read().strip()
-                    os.remove("/tmp/vmm-a11y-createnet-forward.txt")
+                if os.path.exists(uitest.path("vmm-a11y-createnet-forward.txt")):
+                    item = open(uitest.path("vmm-a11y-createnet-forward.txt"), "r").read().strip()
+                    os.remove(uitest.path("vmm-a11y-createnet-forward.txt"))
                     combo = self.widget("net-forward-device")
                     if "physical" in item.lower():
                         uiutil.set_list_selection(combo, True)
@@ -745,45 +746,45 @@ class vmmCreateNetwork(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-createnet-hostdev.txt"):
-                    item = open("/tmp/vmm-a11y-createnet-hostdev.txt", "r").read().strip()
-                    os.remove("/tmp/vmm-a11y-createnet-hostdev.txt")
+                if os.path.exists(uitest.path("vmm-a11y-createnet-hostdev.txt")):
+                    item = open(uitest.path("vmm-a11y-createnet-hostdev.txt"), "r").read().strip()
+                    os.remove(uitest.path("vmm-a11y-createnet-hostdev.txt"))
                     self._a11y_select_combo(self.widget("net-hostdevs"), item)
                     self._publish_a11y_state()
             except Exception:
                 pass
             try:
                 _toggle(
-                    "/tmp/vmm-a11y-createnet-ipv4-enable.click",
+                    uitest.path("vmm-a11y-createnet-ipv4-enable.click"),
                     "net-ipv4-enable",
                     self._ipv4_toggled_cb,
                 )
                 _toggle(
-                    "/tmp/vmm-a11y-createnet-dhcpv4.click",
+                    uitest.path("vmm-a11y-createnet-dhcpv4.click"),
                     "net-dhcpv4-enable",
                     self._dhcpv4_toggled_cb,
                 )
                 _toggle(
-                    "/tmp/vmm-a11y-createnet-ipv6-enable.click",
+                    uitest.path("vmm-a11y-createnet-ipv6-enable.click"),
                     "net-ipv6-enable",
                     self._ipv6_toggled_cb,
                 )
                 _toggle(
-                    "/tmp/vmm-a11y-createnet-dhcpv6.click",
+                    uitest.path("vmm-a11y-createnet-dhcpv6.click"),
                     "net-dhcpv6-enable",
                     self._dhcpv6_toggled_cb,
                 )
                 _toggle(
-                    "/tmp/vmm-a11y-createnet-dns-custom.click",
+                    uitest.path("vmm-a11y-createnet-dns-custom.click"),
                     "net-dns-use-custom",
                     self._net_dns_use_toggled_cb,
                 )
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-createnet-expand.txt"):
-                    which = open("/tmp/vmm-a11y-createnet-expand.txt", "r").read().strip()
-                    os.remove("/tmp/vmm-a11y-createnet-expand.txt")
+                if os.path.exists(uitest.path("vmm-a11y-createnet-expand.txt")):
+                    which = open(uitest.path("vmm-a11y-createnet-expand.txt"), "r").read().strip()
+                    os.remove(uitest.path("vmm-a11y-createnet-expand.txt"))
                     mapping = {
                         "ipv4": "net-ipv4-expander",
                         "ipv6": "net-ipv6-expander",
@@ -796,19 +797,19 @@ class vmmCreateNetwork(vmmGObjectUI):
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-createnet-cancel"):
-                    os.remove("/tmp/vmm-a11y-createnet-cancel")
+                if os.path.exists(uitest.path("vmm-a11y-createnet-cancel")):
+                    os.remove(uitest.path("vmm-a11y-createnet-cancel"))
                     self.close()
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-createnet-finish"):
-                    os.remove("/tmp/vmm-a11y-createnet-finish")
+                if os.path.exists(uitest.path("vmm-a11y-createnet-finish")):
+                    os.remove(uitest.path("vmm-a11y-createnet-finish"))
                     self._apply_createnet_fields()
                     GLib.idle_add(self._a11y_finish)
             except Exception:
                 pass
             return True
 
-        GLib.timeout_add(50, _fields_tick)
-        GLib.timeout_add(50, _tick)
+        uitest.poll_add(50, _fields_tick)
+        uitest.poll_add(50, _tick)

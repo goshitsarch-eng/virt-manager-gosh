@@ -15,6 +15,7 @@ import dogtail.tree
 from virtinst import log
 import tests.utils
 from . import utils
+from virtManager.lib import uitest
 
 _orig_press_key = dogtail.rawinput.pressKey
 _orig_point = dogtail.rawinput.point
@@ -23,10 +24,10 @@ _orig_point = dogtail.rawinput.point
 def _point_with_fullscreen_hover(x, y, *args, **kwargs):
     try:
         if y is not None and int(y) <= 8:
-            open("/tmp/vmm-a11y-fullscreen-hover-top", "w").write("1")
+            open(uitest.path("vmm-a11y-fullscreen-hover-top"), "w").write("1")
         else:
             try:
-                os.remove("/tmp/vmm-a11y-fullscreen-hover-top")
+                os.remove(uitest.path("vmm-a11y-fullscreen-hover-top"))
             except Exception:
                 pass
     except Exception:
@@ -40,18 +41,18 @@ dogtail.rawinput.point = _point_with_fullscreen_hover
 def _press_key_with_filechooser(key, *args, **kwargs):
     if str(key) in ("Enter", "Return"):
         try:
-            if open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1":
-                open("/tmp/vmm-a11y-console-login", "w").write("1")
+            if open(uitest.path("vmm-a11y-console-auth.txt"), "r").read().strip() == "1":
+                open(uitest.path("vmm-a11y-console-login"), "w").write("1")
                 return
         except Exception:
             pass
         try:
-            shown = open("/tmp/vmm-a11y-filechooser-shown.txt", "r").read().strip()
+            shown = open(uitest.path("vmm-a11y-filechooser-shown.txt"), "r").read().strip()
         except Exception:
             shown = ""
         if shown and shown != "0":
             try:
-                open("/tmp/vmm-a11y-filechooser-open", "w").write("1")
+                open(uitest.path("vmm-a11y-filechooser-open"), "w").write("1")
             except Exception:
                 pass
     return _orig_press_key(key, *args, **kwargs)
@@ -108,21 +109,21 @@ class VMMDogtailApp:
             from . import _node
 
             found = _wait_sentinel(
-                "/tmp/vmm-a11y-clone-shown.txt", _node._SentinelCloneWindow
+                uitest.path("vmm-a11y-clone-shown.txt"), _node._SentinelCloneWindow
             )
             if found is not None:
                 return found
             # Do not fall through to a substring AT-SPI child; the
             # clone wizard is only usable via the sentinel.
             while time.time() < deadline:
-                if _sentinel_is("/tmp/vmm-a11y-clone-shown.txt"):
+                if _sentinel_is(uitest.path("vmm-a11y-clone-shown.txt")):
                     return _node._SentinelCloneWindow()
                 time.sleep(0.1)
             return _node._SentinelCloneWindow()
         if name and "Connection Details" in name:
             while time.time() < deadline:
                 try:
-                    shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                    shown = open(uitest.path("vmm-a11y-host-shown.txt"), "r").read().strip()
                     if shown and (shown in name or name in shown or "Connection Details" in name):
                         from . import _node
 
@@ -133,7 +134,7 @@ class VMMDogtailApp:
         if name and "Add Connection" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-createconn-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-createconn-shown.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelCreateConnWindow()
@@ -143,7 +144,7 @@ class VMMDogtailApp:
         if name and "Add a New Storage Pool" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-createpool-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-createpool-shown.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelCreatePoolWindow()
@@ -153,7 +154,7 @@ class VMMDogtailApp:
         if name and "Add a Storage Volume" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-createvol-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-createvol-shown.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelCreateVolWindow()
@@ -163,7 +164,7 @@ class VMMDogtailApp:
         if name and "Create a new virtual network" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-createnet-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-createnet-shown.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelCreateNetWindow()
@@ -177,13 +178,13 @@ class VMMDogtailApp:
             while time.time() < deadline:
                 shown = ""
                 try:
-                    shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                    shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
                     if shown and _node._vmwindow_matches(shown, want):
                         return _node._SentinelVMWindow(shown)
                 except Exception as exc:
                     last_err = exc
                 try:
-                    title = open("/tmp/vmm-a11y-vmwindow-title.txt", "r").read().strip()
+                    title = open(uitest.path("vmm-a11y-vmwindow-title.txt"), "r").read().strip()
                     if title and (
                         want in title
                         or name in title
@@ -202,7 +203,7 @@ class VMMDogtailApp:
 
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-systray-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-systray-shown.txt"), "r").read().strip() == "1":
                         return _node._SentinelFakeSystray()
                 except Exception as exc:
                     last_err = exc
@@ -215,7 +216,7 @@ class VMMDogtailApp:
         if name and "Saving Virtual Machine" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-progress.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelProgressWindow(name)
@@ -227,7 +228,7 @@ class VMMDogtailApp:
 
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-prefs-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-prefs-shown.txt"), "r").read().strip() == "1":
                         return _node._SentinelPrefsWindow()
                 except Exception as exc:
                     last_err = exc
@@ -238,7 +239,7 @@ class VMMDogtailApp:
 
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-grab-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-grab-shown.txt"), "r").read().strip() == "1":
                         return _node._SentinelGrabWindow()
                 except Exception as exc:
                     last_err = exc
@@ -247,7 +248,7 @@ class VMMDogtailApp:
         if name and "Authentication required" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelConnectAuthWindow()
@@ -258,10 +259,10 @@ class VMMDogtailApp:
             from . import _node
 
             while time.time() < deadline:
-                if _sentinel_is("/tmp/vmm-a11y-delete-shown.txt"):
+                if _sentinel_is(uitest.path("vmm-a11y-delete-shown.txt")):
                     return _node._SentinelDeleteWindow(name)
                 try:
-                    title = open("/tmp/vmm-a11y-delete-title.txt", "r").read()
+                    title = open(uitest.path("vmm-a11y-delete-title.txt"), "r").read()
                     if name in title or (
                         name == "Remove Disk" and "Remove" in title
                     ):
@@ -269,7 +270,7 @@ class VMMDogtailApp:
                 except Exception:
                     pass
                 try:
-                    alert = open("/tmp/vmm-a11y-alert.txt", "r").read()
+                    alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
                     if name == "Delete" and alert and "does not have VM" in alert:
                         return _node._SentinelAlert()
                 except Exception:
@@ -281,8 +282,8 @@ class VMMDogtailApp:
 
             while time.time() < deadline:
                 try:
-                    shown = open("/tmp/vmm-a11y-addhw-shown.txt", "r").read().strip()
-                    if shown == "1" or os.path.exists("/tmp/vmm-a11y-addhw-open"):
+                    shown = open(uitest.path("vmm-a11y-addhw-shown.txt"), "r").read().strip()
+                    if shown == "1" or os.path.exists(uitest.path("vmm-a11y-addhw-open")):
                         return _node._SentinelAddhwWindow()
                 except Exception as exc:
                     last_err = exc
@@ -291,7 +292,7 @@ class VMMDogtailApp:
         if name and "Create snapshot" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-snapshot-new-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-snapshot-new-shown.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelSnapshotNewWindow()
@@ -303,7 +304,7 @@ class VMMDogtailApp:
 
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-migrate-shown.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-migrate-shown.txt"), "r").read().strip() == "1":
                         return _node._SentinelMigrateWindow()
                 except Exception as exc:
                     last_err = exc
@@ -312,7 +313,7 @@ class VMMDogtailApp:
         if name and "Migrating VM" in name:
             while time.time() < deadline:
                 try:
-                    if open("/tmp/vmm-a11y-progress.txt", "r").read().strip() == "1":
+                    if open(uitest.path("vmm-a11y-progress.txt"), "r").read().strip() == "1":
                         from . import _node
 
                         return _node._SentinelProgressWindow(name)
@@ -419,12 +420,12 @@ class VMMDogtailApp:
 
         def click(self, *a, **kw):
             try:
-                hw = open("/tmp/vmm-a11y-hw-selected.txt", "r").read()
+                hw = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read()
             except Exception:
                 hw = ""
             if "Boot" in hw:
                 try:
-                    open("/tmp/vmm-a11y-boot-toggle.txt", "w").write("1")
+                    open(uitest.path("vmm-a11y-boot-toggle.txt"), "w").write("1")
                 except Exception:
                     pass
                 return
@@ -444,65 +445,65 @@ class VMMDogtailApp:
             key_l = str(key or "").lower()
             if key_l == "enter":
                 try:
-                    if open("/tmp/vmm-a11y-console-auth.txt", "r").read().strip() == "1":
-                        open("/tmp/vmm-a11y-console-login", "w").write("1")
+                    if open(uitest.path("vmm-a11y-console-auth.txt"), "r").read().strip() == "1":
+                        open(uitest.path("vmm-a11y-console-login"), "w").write("1")
                         return
                 except Exception:
                     pass
                 try:
-                    if open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1":
-                        open("/tmp/vmm-a11y-connectauth-activate", "w").write("1")
+                    if open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1":
+                        open(uitest.path("vmm-a11y-connectauth-activate"), "w").write("1")
                         return
                 except Exception:
                     pass
                 try:
-                    if open("/tmp/vmm-a11y-newvm-shown.txt", "r").read().strip() == "1":
-                        want = open("/tmp/vmm-a11y-oslist-entry.txt", "r").read().strip()
+                    if open(uitest.path("vmm-a11y-newvm-shown.txt"), "r").read().strip() == "1":
+                        want = open(uitest.path("vmm-a11y-oslist-entry.txt"), "r").read().strip()
                         if want and want.lower() not in ("none detected", "detecting..."):
-                            open("/tmp/vmm-a11y-os-select.txt", "w").write(want)
+                            open(uitest.path("vmm-a11y-os-select.txt"), "w").write(want)
                 except Exception:
                     pass
             if key_l == "escape":
                 try:
-                    shown = open("/tmp/vmm-a11y-systray-menu.txt", "r").read().strip()
+                    shown = open(uitest.path("vmm-a11y-systray-menu.txt"), "r").read().strip()
                 except Exception:
                     shown = ""
                 if shown == "1":
                     try:
-                        open("/tmp/vmm-a11y-systray-menu.txt", "w").write("0")
-                        open("/tmp/vmm-a11y-systray-escape", "w").write("1")
+                        open(uitest.path("vmm-a11y-systray-menu.txt"), "w").write("0")
+                        open(uitest.path("vmm-a11y-systray-escape"), "w").write("1")
                     except Exception:
                         pass
                     try:
-                        os.remove("/tmp/vmm-a11y-systray-click.txt")
+                        os.remove(uitest.path("vmm-a11y-systray-click.txt"))
                     except Exception:
                         pass
                     return
                 try:
-                    with open("/tmp/vmm-a11y-oslist-escape", "w") as fh:
+                    with open(uitest.path("vmm-a11y-oslist-escape"), "w") as fh:
                         fh.write("1")
                 except Exception:
                     pass
                 try:
-                    with open("/tmp/vmm-a11y-oslist-popover-hidden", "w") as fh:
+                    with open(uitest.path("vmm-a11y-oslist-popover-hidden"), "w") as fh:
                         fh.write("1")
                 except Exception:
                     pass
                 try:
-                    if not os.path.exists("/tmp/vmm-a11y-oslist-confirmed"):
-                        with open("/tmp/vmm-a11y-oslist-entry.txt", "w") as fh:
+                    if not os.path.exists(uitest.path("vmm-a11y-oslist-confirmed")):
+                        with open(uitest.path("vmm-a11y-oslist-entry.txt"), "w") as fh:
                             fh.write("")
                 except Exception:
                     pass
             if key_l in ("down", "up"):
                 try:
                     if open(
-                        "/tmp/vmm-a11y-watchdog-action-focus", "r"
+                        uitest.path("vmm-a11y-watchdog-action-focus"), "r"
                     ).read().strip() == "1":
                         if key_l == "down":
-                            open("/tmp/vmm-a11y-watchdog-action-down", "w").write("1")
+                            open(uitest.path("vmm-a11y-watchdog-action-down"), "w").write("1")
                         try:
-                            os.remove("/tmp/vmm-a11y-watchdog-action-focus")
+                            os.remove(uitest.path("vmm-a11y-watchdog-action-focus"))
                         except Exception:
                             pass
                         return
@@ -511,25 +512,25 @@ class VMMDogtailApp:
                 oslist_open = False
                 try:
                     oslist_open = (
-                        os.path.exists("/tmp/vmm-a11y-oslist-reopen")
-                        or os.path.exists("/tmp/vmm-a11y-oslist-typed")
-                        or open("/tmp/vmm-a11y-oslist-focus", "r").read().strip() == "1"
+                        os.path.exists(uitest.path("vmm-a11y-oslist-reopen"))
+                        or os.path.exists(uitest.path("vmm-a11y-oslist-typed"))
+                        or open(uitest.path("vmm-a11y-oslist-focus"), "r").read().strip() == "1"
                     )
                 except Exception:
-                    oslist_open = os.path.exists("/tmp/vmm-a11y-oslist-reopen")
+                    oslist_open = os.path.exists(uitest.path("vmm-a11y-oslist-reopen"))
                 if oslist_open:
                     return dogtail.rawinput.pressKey(key, *a, **kw)
                 snap_page = False
                 try:
                     snap_page = (
-                        open("/tmp/vmm-a11y-snapshot-page.txt", "r").read().strip() == "1"
+                        open(uitest.path("vmm-a11y-snapshot-page.txt"), "r").read().strip() == "1"
                     )
                 except Exception:
                     snap_page = False
                 if snap_page:
                     nav = "shift-down" if type(self)._shift_held and key_l == "down" else key_l
                     try:
-                        open("/tmp/vmm-a11y-snapshot-nav.txt", "w").write(nav)
+                        open(uitest.path("vmm-a11y-snapshot-nav.txt"), "w").write(nav)
                     except Exception:
                         pass
                     return
@@ -537,29 +538,29 @@ class VMMDogtailApp:
                 try:
                     hw_names = [
                         n
-                        for n in open("/tmp/vmm-a11y-hw-list.txt", "r").read().splitlines()
+                        for n in open(uitest.path("vmm-a11y-hw-list.txt"), "r").read().splitlines()
                         if n
                     ]
                 except Exception:
                     hw_names = []
                 vm_open = False
                 try:
-                    vm_open = bool(open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip())
+                    vm_open = bool(open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip())
                 except Exception:
                     vm_open = False
                 # hw-list.txt is enough: vmwindow can lag on first show.
-                if hw_names and (vm_open or os.path.exists("/tmp/vmm-a11y-hw-list.txt")):
+                if hw_names and (vm_open or os.path.exists(uitest.path("vmm-a11y-hw-list.txt"))):
                     idx = 0
                     try:
                         idx = int(
-                            open("/tmp/vmm-a11y-hw-selected-index.txt", "r")
+                            open(uitest.path("vmm-a11y-hw-selected-index.txt"), "r")
                             .read()
                             .strip()
                         )
                     except Exception:
                         cur = ""
                         try:
-                            cur = open("/tmp/vmm-a11y-hw-selected.txt", "r").read().strip()
+                            cur = open(uitest.path("vmm-a11y-hw-selected.txt"), "r").read().strip()
                         except Exception:
                             cur = ""
                         idx = hw_names.index(cur) if cur in hw_names else 0
@@ -569,11 +570,11 @@ class VMMDogtailApp:
                         idx = max(idx - 1, 0)
                     nxt = hw_names[idx]
                     try:
-                        open("/tmp/vmm-a11y-hw-select.txt", "w").write(nxt)
-                        open("/tmp/vmm-a11y-hw-select-index.txt", "w").write(str(idx))
-                        open("/tmp/vmm-a11y-hw-selected.txt", "w").write(nxt)
-                        open("/tmp/vmm-a11y-hw-selected-index.txt", "w").write(str(idx))
-                        open("/tmp/vmm-a11y-hw-clicked.txt", "w").write(nxt)
+                        open(uitest.path("vmm-a11y-hw-select.txt"), "w").write(nxt)
+                        open(uitest.path("vmm-a11y-hw-select-index.txt"), "w").write(str(idx))
+                        open(uitest.path("vmm-a11y-hw-selected.txt"), "w").write(nxt)
+                        open(uitest.path("vmm-a11y-hw-selected-index.txt"), "w").write(str(idx))
+                        open(uitest.path("vmm-a11y-hw-clicked.txt"), "w").write(nxt)
                     except Exception:
                         pass
                     try:
@@ -584,38 +585,38 @@ class VMMDogtailApp:
                         pass
                     deadline = time.time() + 2.0
                     while time.time() < deadline:
-                        if not os.path.exists("/tmp/vmm-a11y-hw-select-index.txt"):
+                        if not os.path.exists(uitest.path("vmm-a11y-hw-select-index.txt")):
                             break
                         time.sleep(0.05)
                     return
                 which = ""
                 try:
-                    which = open("/tmp/vmm-a11y-host-active-list.txt", "r").read().strip()
+                    which = open(uitest.path("vmm-a11y-host-active-list.txt"), "r").read().strip()
                 except Exception:
                     which = ""
                 shown = ""
                 try:
-                    shown = open("/tmp/vmm-a11y-host-shown.txt", "r").read().strip()
+                    shown = open(uitest.path("vmm-a11y-host-shown.txt"), "r").read().strip()
                 except Exception:
                     shown = ""
                 if which or shown:
                     paths = {
                         "pool": (
-                            "/tmp/vmm-a11y-host-pool-list.txt",
-                            "/tmp/vmm-a11y-host-pool-selected.txt",
-                            "/tmp/vmm-a11y-host-pool-select.txt",
+                            uitest.path("vmm-a11y-host-pool-list.txt"),
+                            uitest.path("vmm-a11y-host-pool-selected.txt"),
+                            uitest.path("vmm-a11y-host-pool-select.txt"),
                         ),
                         "vol": (
-                            "/tmp/vmm-a11y-host-vol-list.txt",
-                            "/tmp/vmm-a11y-host-vol-selected.txt",
-                            "/tmp/vmm-a11y-host-vol-select.txt",
+                            uitest.path("vmm-a11y-host-vol-list.txt"),
+                            uitest.path("vmm-a11y-host-vol-selected.txt"),
+                            uitest.path("vmm-a11y-host-vol-select.txt"),
                         ),
                     }.get(
                         which,
                         (
-                            "/tmp/vmm-a11y-host-net-list.txt",
-                            "/tmp/vmm-a11y-host-net-selected.txt",
-                            "/tmp/vmm-a11y-host-net-select.txt",
+                            uitest.path("vmm-a11y-host-net-list.txt"),
+                            uitest.path("vmm-a11y-host-net-selected.txt"),
+                            uitest.path("vmm-a11y-host-net-select.txt"),
                         ),
                     )
                     list_path, selected_path, select_path = paths
@@ -644,15 +645,15 @@ class VMMDogtailApp:
                         except Exception:
                             pass
                     try:
-                        open("/tmp/vmm-a11y-host-nav.txt", "w").write(key_l)
+                        open(uitest.path("vmm-a11y-host-nav.txt"), "w").write(key_l)
                     except Exception:
                         pass
                     return
             if key_l in ("enter", "return"):
                 try:
-                    url = open("/tmp/vmm-a11y-url-entry.txt", "r").read().strip()
+                    url = open(uitest.path("vmm-a11y-url-entry.txt"), "r").read().strip()
                     if url.startswith("http"):
-                        open("/tmp/vmm-a11y-url-activate", "w").write("1")
+                        open(uitest.path("vmm-a11y-url-activate"), "w").write("1")
                         return
                 except Exception:
                     pass
@@ -708,14 +709,14 @@ class VMMDogtailApp:
         real_want = _node._manager_vm_real_name(want) or want
         while time.time() < deadline:
             try:
-                shown = open("/tmp/vmm-a11y-vmwindow.txt", "r").read().strip()
+                shown = open(uitest.path("vmm-a11y-vmwindow.txt"), "r").read().strip()
             except Exception:
                 shown = ""
             if shown and _node._vmwindow_matches(shown, want):
                 win = _node._SentinelVMWindow(shown)
                 break
             try:
-                created = open("/tmp/vmm-a11y-created-vm.txt", "r").read().strip()
+                created = open(uitest.path("vmm-a11y-created-vm.txt"), "r").read().strip()
             except Exception:
                 created = ""
             if created and _node._vmwindow_matches(created, want):
@@ -725,17 +726,17 @@ class VMMDogtailApp:
             customize = False
             try:
                 customize = (
-                    open("/tmp/vmm-a11y-customize-shown.txt", "r").read().strip() == "1"
+                    open(uitest.path("vmm-a11y-customize-shown.txt"), "r").read().strip() == "1"
                 )
             except Exception:
                 customize = False
             if want and now - last_nudge >= 2.0 and not customize:
                 last_nudge = now
                 try:
-                    open("/tmp/vmm-a11y-vm-select.txt", "w").write(real_want)
-                    open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real_want)
-                    open("/tmp/vmm-a11y-vm-open.txt", "w").write(real_want)
-                    open("/tmp/vmm-a11y-vm-action.txt", "w").write("Open")
+                    open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(real_want)
+                    open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(real_want)
+                    open(uitest.path("vmm-a11y-vm-open.txt"), "w").write(real_want)
+                    open(uitest.path("vmm-a11y-vm-action.txt"), "w").write("Open")
                 except Exception:
                     pass
             time.sleep(0.1)
@@ -752,7 +753,7 @@ class VMMDogtailApp:
     def click_alert_button(self, label_text, button_text):
         def _alert_text():
             try:
-                return open("/tmp/vmm-a11y-alert.txt", "r").read()
+                return open(uitest.path("vmm-a11y-alert.txt"), "r").read()
             except Exception:
                 return ""
 
@@ -760,7 +761,7 @@ class VMMDogtailApp:
             if "error setting installer" not in (label_text or "").lower():
                 return False
             try:
-                media = open("/tmp/vmm-a11y-media-entry.txt", "r").read().strip()
+                media = open(uitest.path("vmm-a11y-media-entry.txt"), "r").read().strip()
             except Exception:
                 media = ""
             return bool(media.startswith("/dev/") and not os.path.exists(media))
@@ -778,7 +779,7 @@ class VMMDogtailApp:
                     "take effect" in text.lower() or "could not be removed" in text.lower()
                 ):
                     try:
-                        if open("/tmp/vmm-a11y-delete-associated.txt", "r").read().strip() in (
+                        if open(uitest.path("vmm-a11y-delete-associated.txt"), "r").read().strip() in (
                             "1",
                             "true",
                             "yes",
@@ -796,7 +797,7 @@ class VMMDogtailApp:
         if _alert_matches():
             stored = _alert_text()
             try:
-                open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
+                open(uitest.path("vmm-a11y-alert-response.txt"), "w").write(button_text or "")
             except Exception:
                 pass
             if (
@@ -804,16 +805,16 @@ class VMMDogtailApp:
                 and (button_text or "").strip().lower() == "yes"
             ):
                 try:
-                    open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                    open(uitest.path("vmm-a11y-disk-inuse-allow"), "w").write("1")
                 except Exception:
                     pass
             if (
                 "unapplied" in (stored or "").lower()
                 and (button_text or "").strip().lower() == "yes"
-                and os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+                and os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
             ):
                 try:
-                    open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
+                    open(uitest.path("vmm-a11y-force-overview-apply"), "w").write("1")
                 except Exception:
                     pass
             if (
@@ -821,7 +822,7 @@ class VMMDogtailApp:
                 and (button_text or "").strip().lower() == "ok"
             ):
                 try:
-                    open("/tmp/vmm-a11y-delete-close", "w").write("1")
+                    open(uitest.path("vmm-a11y-delete-close"), "w").write("1")
                 except Exception:
                     pass
             # Generic labels must not go through click.txt: "Close" is
@@ -834,7 +835,7 @@ class VMMDogtailApp:
                 "cancel",
             }:
                 try:
-                    open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+                    open(uitest.path("vmm-a11y-click.txt"), "w").write(button_text or "")
                 except Exception:
                     pass
             try:
@@ -845,7 +846,7 @@ class VMMDogtailApp:
                 # nested dialog running and blocks snapshot-add.
                 if "unapplied" not in (stored or "").lower():
                     try:
-                        os.remove("/tmp/vmm-a11y-alert-response.txt")
+                        os.remove(uitest.path("vmm-a11y-alert-response.txt"))
                     except Exception:
                         pass
             # Do not clobber a replacement alert (apply error after Yes).
@@ -853,19 +854,19 @@ class VMMDogtailApp:
             try:
                 now = _alert_text()
                 if now == stored:
-                    os.remove("/tmp/vmm-a11y-alert.txt")
+                    os.remove(uitest.path("vmm-a11y-alert.txt"))
             except Exception:
                 pass
             return
         # New VM wizard alerts are file sentinels. Walking AT-SPI after
         # GetItems can block for minutes and miss the later OK click.
         if (
-            os.path.exists("/tmp/vmm-a11y-pagenum.txt")
-            or os.path.exists("/tmp/vmm-a11y-createconn-shown.txt")
-            or os.path.exists("/tmp/vmm-a11y-snapshot-page.txt")
-            or os.path.exists("/tmp/vmm-a11y-addhw-shown.txt")
-            or os.path.exists("/tmp/vmm-a11y-addhw-open")
-            or os.path.exists("/tmp/vmm-a11y-clone-shown.txt")
+            os.path.exists(uitest.path("vmm-a11y-pagenum.txt"))
+            or os.path.exists(uitest.path("vmm-a11y-createconn-shown.txt"))
+            or os.path.exists(uitest.path("vmm-a11y-snapshot-page.txt"))
+            or os.path.exists(uitest.path("vmm-a11y-addhw-shown.txt"))
+            or os.path.exists(uitest.path("vmm-a11y-addhw-open"))
+            or os.path.exists(uitest.path("vmm-a11y-clone-shown.txt"))
         ):
             try:
                 utils.check(_alert_matches, timeout=20)
@@ -874,7 +875,7 @@ class VMMDogtailApp:
             if _alert_matches():
                 stored = _alert_text()
                 try:
-                    open("/tmp/vmm-a11y-alert-response.txt", "w").write(button_text or "")
+                    open(uitest.path("vmm-a11y-alert-response.txt"), "w").write(button_text or "")
                 except Exception:
                     pass
                 if (
@@ -882,16 +883,16 @@ class VMMDogtailApp:
                     and (button_text or "").strip().lower() == "yes"
                 ):
                     try:
-                        open("/tmp/vmm-a11y-disk-inuse-allow", "w").write("1")
+                        open(uitest.path("vmm-a11y-disk-inuse-allow"), "w").write("1")
                     except Exception:
                         pass
                 if (
                     "unapplied" in (stored or "").lower()
                     and (button_text or "").strip().lower() == "yes"
-                    and os.path.exists("/tmp/vmm-a11y-overview-name-want.txt")
+                    and os.path.exists(uitest.path("vmm-a11y-overview-name-want.txt"))
                 ):
                     try:
-                        open("/tmp/vmm-a11y-force-overview-apply", "w").write("1")
+                        open(uitest.path("vmm-a11y-force-overview-apply"), "w").write("1")
                     except Exception:
                         pass
                 if (
@@ -899,7 +900,7 @@ class VMMDogtailApp:
                     and (button_text or "").strip().lower() == "ok"
                 ):
                     try:
-                        open("/tmp/vmm-a11y-delete-close", "w").write("1")
+                        open(uitest.path("vmm-a11y-delete-close"), "w").write("1")
                     except Exception:
                         pass
                 if (button_text or "").strip().lower() not in {
@@ -910,20 +911,20 @@ class VMMDogtailApp:
                     "cancel",
                 }:
                     try:
-                        open("/tmp/vmm-a11y-click.txt", "w").write(button_text or "")
+                        open(uitest.path("vmm-a11y-click.txt"), "w").write(button_text or "")
                     except Exception:
                         pass
                 try:
                     utils.check(lambda: _alert_text() != stored, timeout=3)
                 except Exception:
                     try:
-                        os.remove("/tmp/vmm-a11y-alert-response.txt")
+                        os.remove(uitest.path("vmm-a11y-alert-response.txt"))
                     except Exception:
                         pass
                 try:
                     now = _alert_text()
                     if now == stored:
-                        os.remove("/tmp/vmm-a11y-alert.txt")
+                        os.remove(uitest.path("vmm-a11y-alert.txt"))
                 except Exception:
                     pass
                 return
@@ -976,29 +977,29 @@ class VMMDogtailApp:
 
     def manager_open_createconn(self):
         try:
-            os.remove("/tmp/vmm-a11y-createconn-hidden")
+            os.remove(uitest.path("vmm-a11y-createconn-hidden"))
         except Exception:
             pass
         self.get_manager()
         try:
-            os.remove("/tmp/vmm-a11y-pagenum.txt")
+            os.remove(uitest.path("vmm-a11y-pagenum.txt"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-alert.txt")
+            os.remove(uitest.path("vmm-a11y-alert.txt"))
         except Exception:
             pass
         for path in (
-            "/tmp/vmm-a11y-createconn-user.txt",
-            "/tmp/vmm-a11y-createconn-host.txt",
-            "/tmp/vmm-a11y-createconn-connect",
+            uitest.path("vmm-a11y-createconn-user.txt"),
+            uitest.path("vmm-a11y-createconn-host.txt"),
+            uitest.path("vmm-a11y-createconn-connect"),
         ):
             try:
                 os.remove(path)
             except Exception:
                 pass
         try:
-            open("/tmp/vmm-a11y-createconn-open", "w").write("1")
+            open(uitest.path("vmm-a11y-createconn-open"), "w").write("1")
         except Exception:
             pass
         return self.find_window("Add Connection")
@@ -1013,25 +1014,25 @@ class VMMDogtailApp:
         # Launch virt-manager first. The poller lives in that process.
         self.get_manager()
         try:
-            os.remove("/tmp/vmm-a11y-createconn-hidden")
+            os.remove(uitest.path("vmm-a11y-createconn-hidden"))
         except Exception:
             pass
         try:
-            os.remove("/tmp/vmm-a11y-conn-open.txt")
+            os.remove(uitest.path("vmm-a11y-conn-open.txt"))
         except Exception:
             pass
         try:
-            with open("/tmp/vmm-a11y-add-conn.txt", "w") as fh:
+            with open(uitest.path("vmm-a11y-add-conn.txt"), "w") as fh:
                 fh.write(uri or "")
         except Exception:
             pass
         utils.check(
-            lambda: os.path.exists("/tmp/vmm-a11y-createconn-hidden"),
+            lambda: os.path.exists(uitest.path("vmm-a11y-createconn-hidden")),
             timeout=15,
         )
         def _opened():
             try:
-                got = open("/tmp/vmm-a11y-conn-open.txt", "r").read().strip()
+                got = open(uitest.path("vmm-a11y-conn-open.txt"), "r").read().strip()
             except Exception:
                 return False
             return bool(got)
@@ -1050,7 +1051,7 @@ class VMMDogtailApp:
             if "Not Connected" not in c.text:
                 return True
             try:
-                return open("/tmp/vmm-a11y-connectauth-shown.txt", "r").read().strip() == "1"
+                return open(uitest.path("vmm-a11y-connectauth-shown.txt"), "r").read().strip() == "1"
             except Exception:
                 return False
 
@@ -1059,7 +1060,7 @@ class VMMDogtailApp:
 
     def manager_conn_disconnect(self, conn_label):
         try:
-            with open("/tmp/vmm-a11y-select-conn.txt", "w") as fh:
+            with open(uitest.path("vmm-a11y-select-conn.txt"), "w") as fh:
                 fh.write(conn_label)
         except Exception:
             pass
@@ -1069,7 +1070,7 @@ class VMMDogtailApp:
             if c.state_selected:
                 return True
             try:
-                return conn_label in open("/tmp/vmm-a11y-selected-conn.txt", "r").read()
+                return conn_label in open(uitest.path("vmm-a11y-selected-conn.txt"), "r").read()
             except Exception:
                 return False
 
@@ -1110,14 +1111,14 @@ class VMMDogtailApp:
         vmcell = manager.find(vmname + "\n", "table cell")
         try:
             real = vmname.split("\n")[0].strip()
-            open("/tmp/vmm-a11y-vm-select.txt", "w").write(real)
-            open("/tmp/vmm-a11y-vm-selected.txt", "w").write(real)
+            open(uitest.path("vmm-a11y-vm-select.txt"), "w").write(real)
+            open(uitest.path("vmm-a11y-vm-selected.txt"), "w").write(real)
             if clone:
-                open("/tmp/vmm-a11y-clone-open.txt", "w").write(real)
+                open(uitest.path("vmm-a11y-clone-open.txt"), "w").write(real)
             if delete:
-                open("/tmp/vmm-a11y-delete-open.txt", "w").write(real)
+                open(uitest.path("vmm-a11y-delete-open.txt"), "w").write(real)
             if migrate:
-                open("/tmp/vmm-a11y-migrate-open.txt", "w").write(real)
+                open(uitest.path("vmm-a11y-migrate-open.txt"), "w").write(real)
         except Exception:
             pass
 
@@ -1225,7 +1226,7 @@ class VMMDogtailApp:
         tab.click()
         try:
             which = "pool" if "storage" in str(tab.name or "").lower() else "net"
-            open("/tmp/vmm-a11y-host-active-list.txt", "w").write(which)
+            open(uitest.path("vmm-a11y-host-active-list.txt"), "w").write(which)
         except Exception:
             pass
         return win
@@ -1334,7 +1335,7 @@ class VMMDogtailApp:
         os.environ.setdefault("GTK_A11Y", "atspi")
         import glob
 
-        for path in glob.glob("/tmp/vmm-a11y-*"):
+        for path in glob.glob(uitest.path("vmm-a11y-*")):
             try:
                 os.remove(path)
             except Exception:
@@ -1389,6 +1390,8 @@ class VMMDogtailApp:
         # The app under test still needs it for the findable file
         # browser and other official-uitest shims.
         env["VIRTINST_TEST_SUITE"] = "1"
+        # Keep the app's sentinel directory the same as ours.
+        env["VMM_UITEST_DIR"] = uitest.base_dir()
         if enable_libguestfs is True:
             stub = os.path.join(tests.utils.TOPDIR, "tests", "guestfs_stub")
             if os.path.isdir(stub):
@@ -1415,7 +1418,7 @@ class VMMDogtailApp:
                 deadline = time.time() + 20
                 while time.time() < deadline:
                     try:
-                        if open("/tmp/vmm-a11y-vm-list.txt", "r").read().strip():
+                        if open(uitest.path("vmm-a11y-vm-list.txt"), "r").read().strip():
                             break
                     except Exception:
                         pass

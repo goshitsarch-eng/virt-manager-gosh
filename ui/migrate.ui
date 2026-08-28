@@ -147,6 +147,7 @@
                         <property name="spacing">18</property>
                         <child>
                           <object class="GtkFrame" id="frame1">
+                            <property name="css-classes">flat</property>
                             <property name="child">
                               <object class="GtkGrid" id="grid2">
                                 <property name="margin-start">12</property>

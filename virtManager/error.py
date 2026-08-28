@@ -16,6 +16,7 @@ from virtinst import log
 
 from .baseclass import vmmGObject
 from .lib import gtkcompat
+from .lib import uitest
 
 
 def _launch_dialog(
@@ -51,14 +52,14 @@ def _launch_dialog(
     # "Are you sure..." before chkbox_helper, and the test may answer first).
     incoming = incoming_full
     try:
-        existing = open("/tmp/vmm-a11y-alert.txt", "r").read()
+        existing = open(uitest.path("vmm-a11y-alert.txt"), "r").read()
         if "name must be specified" in existing.lower():
             incoming = existing
     except Exception:
         pass
     try:
-        resp = "/tmp/vmm-a11y-alert-response.txt"
-        alert = "/tmp/vmm-a11y-alert.txt"
+        resp = uitest.path("vmm-a11y-alert-response.txt")
+        alert = uitest.path("vmm-a11y-alert.txt")
         keep = False
         if os.path.exists(resp) and os.path.exists(alert):
             existing = open(alert, "r").read()
@@ -71,7 +72,7 @@ def _launch_dialog(
     except Exception:
         pass
     try:
-        open("/tmp/vmm-a11y-alert.txt", "w").write(incoming)
+        open(uitest.path("vmm-a11y-alert.txt"), "w").write(incoming)
     except Exception:
         pass
 
@@ -83,7 +84,11 @@ def _launch_dialog(
     else:
         dialog.set_property("text", primary_text)
     dialog.format_secondary_text(secondary_text or None)
-    dialog.set_title(title or "vmm dialog")
+    # Upstream leaves the visible title empty and puts "vmm dialog" on
+    # the accessible name, which is what the ui tests match. Setting it
+    # as the window title put that internal string in the title bar of
+    # every error, warning and confirmation in the app.
+    dialog.set_title(title or "")
     gtkcompat.set_accessible_name(dialog, title or "vmm dialog")
     gtkcompat.expose_a11y_label("err-primary", primary_text or "vmm dialog", primary_text or "")
     if secondary_text:
@@ -322,15 +327,15 @@ class vmmErrorDialog(vmmGObject):
         # the CheckButton is realized. Honor that so the next leave
         # (testDetailsMiscEdits line 731) abandons without a prompt.
         try:
-            if os.path.exists("/tmp/vmm-a11y-dont-warn-unapplied.txt"):
+            if os.path.exists(uitest.path("vmm-a11y-dont-warn-unapplied.txt")):
                 self.config.set_confirm_unapplied(False)
         except Exception:
             pass
         try:
-            alert = open("/tmp/vmm-a11y-alert.txt", "r").read().lower()
+            alert = open(uitest.path("vmm-a11y-alert.txt"), "r").read().lower()
             if "unapplied" in alert and (
-                os.path.exists("/tmp/vmm-a11y-alert-checked.txt")
-                or os.path.exists("/tmp/vmm-a11y-alert-check.txt")
+                os.path.exists(uitest.path("vmm-a11y-alert-checked.txt"))
+                or os.path.exists(uitest.path("vmm-a11y-alert-check.txt"))
             ):
                 self.config.set_confirm_unapplied(False)
         except Exception:
@@ -338,7 +343,7 @@ class vmmErrorDialog(vmmGObject):
         if not self.config.get_confirm_unapplied():
             return False
         try:
-            open("/tmp/vmm-a11y-unapplied-prompt.txt", "w").write("1")
+            open(uitest.path("vmm-a11y-unapplied-prompt.txt"), "w").write("1")
         except Exception:
             pass
         try:
@@ -351,7 +356,7 @@ class vmmErrorDialog(vmmGObject):
             )
         finally:
             try:
-                os.remove("/tmp/vmm-a11y-unapplied-prompt.txt")
+                os.remove(uitest.path("vmm-a11y-unapplied-prompt.txt"))
             except Exception:
                 pass
 
@@ -469,7 +474,7 @@ class _errorDialog(Gtk.Window):
             app = parent.get_application()
             if app is not None:
                 app.add_window(self)
-        self.set_title("vmm dialog")
+        self.set_title("")
         self.set_default_size(440, 180)
         self.set_accessible_role(Gtk.AccessibleRole.ALERT)
         gtkcompat.set_accessible_name(self, "vmm dialog")
@@ -671,11 +676,11 @@ class _errorDialog(Gtk.Window):
             self.chk_vbox.set_visible(True)
             chkbox.show()
             try:
-                os.remove("/tmp/vmm-a11y-alert-checked.txt")
+                os.remove(uitest.path("vmm-a11y-alert-checked.txt"))
             except Exception:
                 pass
             try:
-                os.remove("/tmp/vmm-a11y-alert-check.txt")
+                os.remove(uitest.path("vmm-a11y-alert-check.txt"))
             except Exception:
                 pass
 
@@ -692,19 +697,19 @@ class _errorDialog(Gtk.Window):
         if chktext:
             checked = bool(chkbox.get_active())
             try:
-                if os.path.exists("/tmp/vmm-a11y-alert-checked.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-alert-checked.txt")):
                     checked = True
-                    os.remove("/tmp/vmm-a11y-alert-checked.txt")
+                    os.remove(uitest.path("vmm-a11y-alert-checked.txt"))
             except Exception:
                 pass
             try:
-                if os.path.exists("/tmp/vmm-a11y-dont-warn-unapplied.txt"):
+                if os.path.exists(uitest.path("vmm-a11y-dont-warn-unapplied.txt")):
                     checked = True
             except Exception:
                 pass
             if checked and chktext and "warn" in (chktext or "").lower():
                 try:
-                    open("/tmp/vmm-a11y-dont-warn-unapplied.txt", "w").write("1")
+                    open(uitest.path("vmm-a11y-dont-warn-unapplied.txt"), "w").write("1")
                 except Exception:
                     pass
             res = [res, checked]
