@@ -198,7 +198,7 @@
                                 <child>
                                   <object class="GtkImage" id="image2">
                                     <property name="icon-name">dialog-information</property>
-                                    <property name="icon_size">large</property>
+                                    <property name="pixel-size">16</property>
                                   </object>
                                 </child>
                                 <child>

@@ -1162,6 +1162,11 @@ class _DisplayBase(Gtk.DrawingArea):
         self._cursor_hot = (0, 0)
         self._cursor_pixels = None
         self._toplevel_bound = None
+        self._toplevel_active_id = 0
+        self._toplevel_root_id = 0
+        self._texture_pixbuf_src = None
+        self._texture_pixbuf_size = None
+        self._texture_pixbuf = None
         self.set_draw_func(self._on_draw)
         motion = Gtk.EventControllerMotion()
         motion.connect("motion", self._on_motion)
@@ -1253,6 +1258,18 @@ class _DisplayBase(Gtk.DrawingArea):
         return all(int(k) in self._pressed_hwkeys for k in keys)
 
     def _bind_toplevel_active(self):
+        """Release the input grab when the window loses focus.
+
+        The handler used to be connected and never disconnected. It is a
+        bound method, so the toplevel held a strong reference to this
+        display -- its framebuffer, textures and the whole Viewer graph
+        leaked across every console reconnect. And because _ungrab_input()
+        calls XUngrabPointer/XUngrabKeyboard, which are process-wide, a
+        stale display went on dropping the *live* console's grab every
+        time the window lost focus. Track the handler, drop it when we
+        rebind to another toplevel, when this widget leaves the window,
+        and on close().
+        """
         root = None
         try:
             root = self.get_root()
@@ -1260,11 +1277,35 @@ class _DisplayBase(Gtk.DrawingArea):
             root = None
         if root is None or getattr(self, "_toplevel_bound", None) is root:
             return
+        self._unbind_toplevel_active()
         self._toplevel_bound = root
         try:
-            root.connect("notify::is-active", self._on_toplevel_active)
+            self._toplevel_active_id = root.connect(
+                "notify::is-active", self._on_toplevel_active
+            )
         except Exception:
-            pass
+            self._toplevel_active_id = 0
+        if not getattr(self, "_toplevel_root_id", 0):
+            try:
+                self._toplevel_root_id = self.connect(
+                    "notify::root", self._on_display_rerooted
+                )
+            except Exception:  # pragma: no cover
+                self._toplevel_root_id = 0
+
+    def _on_display_rerooted(self, *_args):
+        self._unbind_toplevel_active()
+
+    def _unbind_toplevel_active(self):
+        win = getattr(self, "_toplevel_bound", None)
+        hid = getattr(self, "_toplevel_active_id", 0)
+        self._toplevel_bound = None
+        self._toplevel_active_id = 0
+        if win is not None and hid:
+            try:
+                win.disconnect(hid)
+            except Exception:  # pragma: no cover
+                pass
 
     def _on_toplevel_active(self, win, *_args):
         try:
@@ -1440,7 +1481,7 @@ class _DisplayBase(Gtk.DrawingArea):
             cr.set_source_surface(self._fb, 0, 0)
             cr.paint()
         elif self._texture is not None:
-            pix = _pixbuf_from_texture(self._texture, fw, fh)
+            pix = self._cached_texture_pixbuf(fw, fh)
             if pix is not None:
                 Gdk.cairo_set_source_pixbuf(cr, pix, 0, 0)
                 cr.paint()
@@ -1451,14 +1492,44 @@ class _DisplayBase(Gtk.DrawingArea):
             cr.paint()
         cr.restore()
 
+    def _cached_texture_pixbuf(self, fw, fh):
+        """Download the scanout texture at most once per frame.
+
+        _on_draw runs on every repaint -- a moving cursor, an expose, a
+        resize -- while a new texture only arrives once per frame, and
+        each download is a synchronous GPU readback plus two full copies
+        of the framebuffer.
+        """
+        texture = self._texture
+        if (
+            getattr(self, "_texture_pixbuf_src", None) is texture
+            and getattr(self, "_texture_pixbuf_size", None) == (fw, fh)
+        ):
+            return self._texture_pixbuf
+        pix = _pixbuf_from_texture(texture, fw, fh)
+        self._texture_pixbuf_src = texture
+        self._texture_pixbuf_size = (fw, fh)
+        self._texture_pixbuf = pix
+        return pix
+
     def do_snapshot(self, snapshot, *args):
         """Paint dmabuf textures on the GPU. Tiled modifiers cannot go
-        through cairo without a download that often fails."""
+        through cairo without a download that often fails.
+
+        This used to hand over to the cairo path whenever the guest drew
+        its own cursor, and that path downloads the whole texture off the
+        GPU and copies it twice on *every* repaint -- ~25MB and a pipeline
+        stall per frame at 1080p, and a moving cursor repaints constantly.
+        The cursor is a small overlay, so composite it as its own little
+        cairo node on top of the texture instead. A flipped (dmabuf
+        bottom-up) scanout still takes the old path: the cursor has to be
+        placed in the mirrored space and that is not worth guessing at.
+        """
         texture = self._texture
         if (
             texture is None
             or Graphene is None
-            or self._cursor_surface is not None
+            or (self._cursor_surface is not None and self._texture_flip)
         ):
             return Gtk.DrawingArea.do_snapshot(self, snapshot, *args)
         width = max(self.get_width(), 1)
@@ -1480,10 +1551,45 @@ class _DisplayBase(Gtk.DrawingArea):
             snapshot.append_texture(
                 texture, Graphene.Rect().init(dx, dy, dw, dh)
             )
+        self._snapshot_cursor(snapshot, dx, dy, dw, dh)
+
+    def _snapshot_cursor(self, snapshot, dx, dy, dw, dh):
+        """Composite the guest's software cursor over the scanout texture."""
+        cursor = self._cursor_surface
+        if cursor is None:
+            return
+        fw, fh = self._fb_size
+        if fw <= 0 or fh <= 0:
+            return
+        try:
+            cw = cursor.get_width()
+            ch = cursor.get_height()
+        except Exception:  # pragma: no cover
+            return
+        if cw <= 0 or ch <= 0:
+            return
+        scale_x = dw / float(fw)
+        scale_y = dh / float(fh)
+        fb_x, fb_y = self._scale_pointer(self._last_x, self._last_y)
+        hot_x, hot_y = self._cursor_hot
+        left = dx + (fb_x - hot_x) * scale_x
+        top = dy + (fb_y - hot_y) * scale_y
+        try:
+            cr = snapshot.append_cairo(
+                Graphene.Rect().init(left, top, cw * scale_x, ch * scale_y)
+            )
+            cr.translate(left, top)
+            cr.scale(scale_x, scale_y)
+            cr.set_source_surface(cursor, 0, 0)
+            cr.paint()
+        except Exception:  # pragma: no cover
+            log.debug("Could not composite the guest cursor", exc_info=True)
 
     def _set_framebuffer(self, surface, width, height):
         changed = self._fb_size != (width, height)
         self._texture = None
+        self._texture_pixbuf_src = None
+        self._texture_pixbuf = None
         self._texture_flip = False
         self._fb = surface
         self._fb_size = (width, height)
@@ -1687,6 +1793,7 @@ class _DisplayBase(Gtk.DrawingArea):
 
     def close(self):
         self._ungrab_input()
+        self._unbind_toplevel_active()
         self._open = False
 
 
@@ -1790,6 +1897,7 @@ class VNCDisplay(_DisplayBase):
 
     def close(self):
         self._ungrab_input()
+        self._unbind_toplevel_active()
         self._stop = True
         self._open = False
         try:
@@ -4352,6 +4460,7 @@ class SpiceDisplay(_DisplayBase):
 
     def close(self):
         self._ungrab_input()
+        self._unbind_toplevel_active()
         self._open = False
         self.attach_cursor_channel(None)
         self._channel = None

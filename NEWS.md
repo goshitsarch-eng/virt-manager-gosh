@@ -117,6 +117,17 @@
   search with nothing selected
 - virt-manager: Mark the primary and destructive buttons, so Delete no
   longer looks exactly like Cancel
+- virt-manager: A closed console no longer keeps listening to the window
+  it was shown in. The handler was never disconnected, so the toplevel
+  held the whole display alive across reconnects and a dead viewer went
+  on releasing the live console's input grab on every focus change
+- virt-manager: Composite the guest's software cursor onto the GL scanout
+  texture instead of falling back to a path that downloaded the whole
+  texture off the GPU and copied it twice on every repaint
+- virt-manager: Restore the icon sizes the port mistranslated. GTK 4's
+  enum has no 48px or 24px step, so ten wizard header icons shrank from
+  48px to 32px, an inline caption icon doubled from 16px to 32px, and the
+  network and delete lists drew 32px icons in 32px rows
 - Point the appdata bug tracker at this tree rather than upstream's
 
 ## Release 5.1.0 (August 26, 2025)

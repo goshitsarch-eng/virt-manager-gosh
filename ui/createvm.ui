@@ -31,7 +31,7 @@
                   <object class="GtkImage" id="image5">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_new_wizard</property>
-                    <property name="icon_size">large</property>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
                 <child>

@@ -20,7 +20,7 @@
                   <object class="GtkImage" id="image2">
                     <property name="halign">center</property>
                     <property name="icon-name">document-new</property>
-                    <property name="icon_size">large</property>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
                 <child>

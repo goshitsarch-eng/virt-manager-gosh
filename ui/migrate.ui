@@ -28,7 +28,7 @@
                   <object class="GtkImage" id="image1">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_clone_wizard</property>
-                    <property name="icon_size">large</property>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
                 <child>

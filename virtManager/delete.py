@@ -888,7 +888,9 @@ def _populate_storage_list(storage_list, vm, conn, diskdatas):
             info = definfo
 
         icon = "dialog-warning"
-        icon_size = Gtk.IconSize.LARGE_TOOLBAR
+        # GTK 4's enum has no 24px step, and LARGE (32) leaves a row-height
+        # icon no breathing room next to the path text.
+        icon_size = Gtk.IconSize.NORMAL
 
         row = [
             default,
