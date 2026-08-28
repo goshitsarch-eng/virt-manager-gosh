@@ -90,6 +90,33 @@ def _theme_border_rgba(widget=None):
     return shade, shade, shade, 0.22
 
 
+def _theme_accent_rgb(widget=None):
+    """The Adwaita accent colour, or virt-manager's traditional blue.
+
+    Drawing the graphs in the user's accent keeps them at home in both
+    light and dark; the hardcoded pale-blue fill below was tuned for a
+    white background and washed out over the dark one.
+    """
+    if widget is not None and hasattr(widget, "get_style_context"):
+        ctx = None
+        try:
+            ctx = widget.get_style_context()
+        except Exception:
+            ctx = None
+        if ctx is not None:
+            for name in ("accent_color", "accent_bg_color", "theme_selected_bg_color"):
+                try:
+                    found, color = ctx.lookup_color(name)
+                except Exception:
+                    found, color = False, None
+                if found and color is not None:
+                    try:
+                        return float(color.red), float(color.green), float(color.blue)
+                    except Exception:
+                        continue
+    return 0.421875, 0.640625, 0.73046875
+
+
 BASECOLOR = _RGB()
 
 
@@ -297,13 +324,13 @@ class CellRendererSparkline(Gtk.CellRenderer):
         cell_area.width = graph_width
         cell_area.height = graph_height
 
-        # Set color to dark blue for the actual sparkline
+        # The sparkline and its fill, in the theme's accent colour.
         cr.set_line_width(2)
-        cr.set_source_rgb(0.421875, 0.640625, 0.73046875)
+        accent = _theme_accent_rgb(widget)
+        cr.set_source_rgb(*accent)
         draw_line(cr, cell_area.y, cell_area.height, points)
 
-        # Set color to light blue for the fill
-        cr.set_source_rgba(0.71484375, 0.84765625, 0.89453125, 0.5)
+        cr.set_source_rgba(accent[0], accent[1], accent[2], 0.28)
 
         draw_fill(cr, cell_area.x, cell_area.y, cell_area.width, cell_area.height, points)
         return
@@ -464,6 +491,7 @@ class Sparkline(Gtk.DrawingArea):
         cr.set_line_width(2)
 
         for dataset in range(0, self.num_sets):
+            cr.set_source_rgb(*_theme_accent_rgb(widget))
             if len(self.rgb) == (self.num_sets * 3):
                 cr.set_source_rgb(
                     self.rgb[(dataset * 3)],

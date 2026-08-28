@@ -1641,12 +1641,34 @@ def _activate_builder_item(item):
     # GTK 4 Button.activate() is a no-op until the widget can receive
     # events. File->Close lives in an unmapped menu, so emit the GTK 3
     # activate/clicked signals directly.
+    #
+    # Emitting *both* ran the action twice: GtkButton's "activate" already
+    # emits "clicked", and MenuItem._on_clicked then queues an "activate"
+    # of its own. Ctrl+Q asked the app to quit twice and Ctrl+W closed two
+    # windows. Take the first signal that works, and hold the item's
+    # re-entrancy flag so its click handler does not queue another pass.
     emitted = False
-    for sig in ("activate", "clicked"):
+    had_flag = hasattr(item, "_vmm_activate_queued")
+    prev = getattr(item, "_vmm_activate_queued", False)
+    try:
+        item._vmm_activate_queued = True
+    except Exception:  # pragma: no cover
+        pass
+    try:
+        for sig in ("activate", "clicked"):
+            try:
+                item.emit(sig)
+                emitted = True
+                break
+            except Exception:
+                continue
+    finally:
         try:
-            item.emit(sig)
-            emitted = True
-        except Exception:
+            if had_flag:
+                item._vmm_activate_queued = prev
+            else:
+                del item._vmm_activate_queued
+        except Exception:  # pragma: no cover
             pass
     if emitted:
         return True

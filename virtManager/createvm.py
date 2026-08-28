@@ -839,6 +839,15 @@ class vmmCreateVM(vmmGObjectUI):
             pass
 
     def _write_a11y_alert(self, msg):
+        """Report a wizard validation error.
+
+        The ui tests read the message from a sentinel file, but every
+        caller here is a validation failure the *user* has to see -- a
+        blank install media path, a missing install tree, an import path
+        that does not exist. Writing only the sentinel meant Forward did
+        nothing at all and said nothing about why. Keep the sentinel and
+        show the dialog, as upstream's err.val_err() does.
+        """
         try:
             os.remove(uitest.path("vmm-a11y-alert-response.txt"))
         except Exception:
@@ -847,7 +856,7 @@ class vmmCreateVM(vmmGObjectUI):
             open(uitest.path("vmm-a11y-alert.txt"), "w").write(msg or "")
         except Exception:
             pass
-        log.debug("Validation Error: %s", msg)
+        self.err.val_err(msg)
         return False
 
     def _publish_method_a11y(self):

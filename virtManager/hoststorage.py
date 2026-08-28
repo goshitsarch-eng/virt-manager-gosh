@@ -487,26 +487,43 @@ class vmmHostStorage(vmmGObjectUI):
         sel = vol_list.get_selection()
         if model is None or sel is None:
             return False
-        it = model.get_iter_first()
-        while it is not None:
+        def _names(it):
+            have = str(model[it][VOL_COLUMN_NAME] or "")
+            handle = model[it][VOL_COLUMN_HANDLE]
             try:
-                have = str(model[it][VOL_COLUMN_NAME] or "")
-                handle = model[it][VOL_COLUMN_HANDLE]
-                hname = ""
-                try:
-                    hname = handle.get_name() if handle is not None else ""
-                except Exception:
-                    hname = ""
-                if have == name or hname == name or name in have or have in name or (
-                    hname and (name in hname or hname in name)
-                ):
-                    sel.select_iter(it)
-                    vol_list.grab_focus()
-                    self._publish_a11y_state()
-                    return True
+                hname = handle.get_name() if handle is not None else ""
             except Exception:
-                pass
-            it = model.iter_next(it)
+                hname = ""
+            return have, hname
+
+        def _pick(it):
+            sel.select_iter(it)
+            vol_list.grab_focus()
+            self._publish_a11y_state()
+            return True
+
+        # Exact name first. This runs on every pool refresh to restore the
+        # user's selection (_populate_vols), and matching on substrings
+        # alone moved it to whichever volume merely contained the name --
+        # "backup-vm1.qcow2" sorts before "vm1.qcow2" and would win. The
+        # toolbar's delete acts on whatever is selected.
+        for match_exactly in (True, False):
+            it = model.get_iter_first()
+            while it is not None:
+                try:
+                    have, hname = _names(it)
+                    if match_exactly:
+                        if have == name or hname == name:
+                            return _pick(it)
+                    elif (
+                        name in have
+                        or have in name
+                        or (hname and (name in hname or hname in name))
+                    ):
+                        return _pick(it)
+                except Exception:
+                    pass
+                it = model.iter_next(it)
         return False
 
     def _a11y_wanted_vol_name(self):

@@ -84,7 +84,11 @@ def _launch_dialog(
     else:
         dialog.set_property("text", primary_text)
     dialog.format_secondary_text(secondary_text or None)
-    dialog.set_title(title or "vmm dialog")
+    # Upstream leaves the visible title empty and puts "vmm dialog" on
+    # the accessible name, which is what the ui tests match. Setting it
+    # as the window title put that internal string in the title bar of
+    # every error, warning and confirmation in the app.
+    dialog.set_title(title or "")
     gtkcompat.set_accessible_name(dialog, title or "vmm dialog")
     gtkcompat.expose_a11y_label("err-primary", primary_text or "vmm dialog", primary_text or "")
     if secondary_text:
@@ -470,7 +474,7 @@ class _errorDialog(Gtk.Window):
             app = parent.get_application()
             if app is not None:
                 app.add_window(self)
-        self.set_title("vmm dialog")
+        self.set_title("")
         self.set_default_size(440, 180)
         self.set_accessible_role(Gtk.AccessibleRole.ALERT)
         gtkcompat.set_accessible_name(self, "vmm dialog")

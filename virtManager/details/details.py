@@ -3325,10 +3325,19 @@ class vmmDetails(vmmGObjectUI):
         try:
             last = getattr(self, "_vmm_last_refreshed_hw", None)
             apply_on = bool(self.widget("config-apply").get_sensitive())
+            # Matching on the label alone also swallowed a real move to a
+            # *different* device that happens to share it -- two
+            # smartcards, two panic notifiers, two same-target
+            # filesystems. That skipped both the page refresh and the
+            # unapplied-changes prompt while still repointing _oldhwkey,
+            # so Apply wrote the old form onto the new device. The key is
+            # the device object and survives an in-place cell rewrite, so
+            # require it to be the same row.
             if (
                 apply_on
                 and last
                 and str(newrow[HW_LIST_COL_LABEL] or "") == last
+                and newrow[HW_LIST_COL_KEY] == self._oldhwkey
             ):
                 self._oldhwkey = newrow[HW_LIST_COL_KEY]
                 return
@@ -5473,33 +5482,46 @@ class vmmDetails(vmmGObjectUI):
         if self._edited(EDIT_BOOTMENU):
             kwargs["boot_menu"] = self.widget("boot-menu").get_active()
 
-        if (
-            self._edited(EDIT_KERNEL)
-            or os.path.exists(uitest.path("vmm-a11y-boot-kernel-args.txt"))
-            or os.path.exists(uitest.path("vmm-a11y-boot-initrd.txt"))
-            or os.path.exists(uitest.path("vmm-a11y-boot-kernel.txt"))
-        ):
-            try:
-                self.widget("boot-kernel-enable").set_active(True)
-                self.widget("boot-kernel-box").set_sensitive(True)
-            except Exception:
-                pass
-            for fpath, wid in (
-                (uitest.path("vmm-a11y-boot-kernel-args.txt"), "boot-kernel-args"),
-                (uitest.path("vmm-a11y-boot-initrd.txt"), "boot-initrd"),
-                (uitest.path("vmm-a11y-boot-kernel.txt"), "boot-kernel"),
-                (uitest.path("vmm-a11y-boot-dtb.txt"), "boot-dtb"),
-            ):
+        # A ui test fills the kernel fields through sentinel files without
+        # ever ticking the enable box, so that path force-enables the box
+        # and reads the fields regardless of sensitivity. Doing that for a
+        # real edit as well made "Enable direct kernel boot" impossible to
+        # turn off: unticking it marks EDIT_KERNEL, and Apply then re-ticked
+        # the box and wrote the greyed-out paths straight back. Upstream
+        # reads with checksens=True, so an unticked (insensitive) box yields
+        # empty strings and clears the kernel.
+        from_sentinel = any(
+            os.path.exists(uitest.path(name))
+            for name in (
+                "vmm-a11y-boot-kernel-args.txt",
+                "vmm-a11y-boot-initrd.txt",
+                "vmm-a11y-boot-kernel.txt",
+            )
+        )
+        if self._edited(EDIT_KERNEL) or from_sentinel:
+            if from_sentinel:
                 try:
-                    text = open(fpath, "r").read()
-                    if text:
-                        self.widget(wid).set_text(text)
+                    self.widget("boot-kernel-enable").set_active(True)
+                    self.widget("boot-kernel-box").set_sensitive(True)
                 except Exception:
                     pass
-            kwargs["kernel"] = self._get_text("boot-kernel", checksens=False)
-            kwargs["initrd"] = self._get_text("boot-initrd", checksens=False)
-            kwargs["dtb"] = self._get_text("boot-dtb", checksens=False)
-            kwargs["kernel_args"] = self._get_text("boot-kernel-args", checksens=False)
+                for fpath, wid in (
+                    (uitest.path("vmm-a11y-boot-kernel-args.txt"), "boot-kernel-args"),
+                    (uitest.path("vmm-a11y-boot-initrd.txt"), "boot-initrd"),
+                    (uitest.path("vmm-a11y-boot-kernel.txt"), "boot-kernel"),
+                    (uitest.path("vmm-a11y-boot-dtb.txt"), "boot-dtb"),
+                ):
+                    try:
+                        text = open(fpath, "r").read()
+                        if text:
+                            self.widget(wid).set_text(text)
+                    except Exception:
+                        pass
+            checksens = not from_sentinel
+            kwargs["kernel"] = self._get_text("boot-kernel", checksens=checksens)
+            kwargs["initrd"] = self._get_text("boot-initrd", checksens=checksens)
+            kwargs["dtb"] = self._get_text("boot-dtb", checksens=checksens)
+            kwargs["kernel_args"] = self._get_text("boot-kernel-args", checksens=checksens)
 
             if kwargs["initrd"] and not kwargs["kernel"]:
                 msg = _("Cannot set initrd without specifying a kernel path")

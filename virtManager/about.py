@@ -45,8 +45,8 @@ _ACKNOWLEDGEMENTS = (
     ("PyGObject", "https://pygobject.gnome.org"),
     ("libosinfo", "https://libosinfo.org"),
     ("SPICE", "https://www.spice-space.org"),
-    ("GTK-VNC", "https://gitlab.gnome.org/GNOME/gtk-vnc"),
     ("VTE", "https://gitlab.gnome.org/GNOME/vte"),
+    ("GtkSourceView", "https://gitlab.gnome.org/GNOME/gtksourceview"),
 )
 
 

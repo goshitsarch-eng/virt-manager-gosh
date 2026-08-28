@@ -132,6 +132,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkFrame" id="frame2">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment9">
                                         <property name="margin-start">12</property>
@@ -292,6 +293,7 @@
                                 </child>
                                 <child>
                                   <object class="GtkFrame" id="frame7">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment6">
                                         <property name="margin-start">12</property>
@@ -500,6 +502,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkFrame" id="details-inspection-os">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment43">
                                         <property name="margin-start">12</property>
@@ -660,6 +663,7 @@
                                     <property name="spacing">12</property>
                                     <child>
                                       <object class="GtkFrame" id="frame24">
+                                        <property name="css-classes">flat</property>
                                         <property name="valign">center</property>
                                         <property name="child">
                                           <object class="GtkBox" id="alignment50">
@@ -696,6 +700,7 @@
                                     </child>
                                     <child>
                                       <object class="GtkFrame" id="frame3">
+                                        <property name="css-classes">flat</property>
                                         <property name="valign">center</property>
                                         <property name="child">
                                           <object class="GtkBox" id="alignment4">
@@ -732,6 +737,7 @@
                                     </child>
                                     <child>
                                       <object class="GtkFrame" id="frame22">
+                                        <property name="css-classes">flat</property>
                                         <property name="valign">center</property>
                                         <property name="child">
                                           <object class="GtkBox" id="alignment48">
@@ -769,6 +775,7 @@
                                     </child>
                                     <child>
                                       <object class="GtkFrame" id="frame23">
+                                        <property name="css-classes">flat</property>
                                         <property name="valign">center</property>
                                         <property name="child">
                                           <object class="GtkBox" id="alignment49">
@@ -825,6 +832,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkFrame" id="CPUs">
+                                    <property name="css-classes">flat</property>
                                     <property name="valign">center</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment11">
@@ -932,6 +940,7 @@
                                 </child>
                                 <child>
                                   <object class="GtkFrame" id="frame1">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment5">
@@ -1161,6 +1170,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="frame5">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment23">
@@ -1324,6 +1334,7 @@
                                 <property name="row-spacing">24</property>
                                 <child>
                                   <object class="GtkFrame" id="frame4">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment2">
                                         <property name="margin-start">12</property>
@@ -1353,6 +1364,7 @@
                                 </child>
                                 <child>
                                   <object class="GtkFrame" id="boot-init-frame">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment36">
                                         <property name="margin-start">12</property>
@@ -1632,6 +1644,7 @@
                                 </child>
                                 <child>
                                   <object class="GtkFrame" id="boot-order-frame">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="bootalign">
                                         <property name="margin-start">12</property>
@@ -1754,6 +1767,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkFrame" id="frame10">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment149">
                                         <property name="margin-start">12</property>
@@ -1953,6 +1967,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkFrame" id="frame9">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment137">
                                         <property name="margin-start">12</property>
@@ -2144,6 +2159,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkFrame" id="frame11">
+                                    <property name="css-classes">flat</property>
                                     <property name="valign">center</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment150">
@@ -2225,6 +2241,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="vnc-frame">
+                                    <property name="css-classes">flat</property>
                                     <property name="child">
                                       <object class="GtkBox" id="graphics-align">
                                         <property name="margin-start">12</property>
@@ -2259,6 +2276,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="frame13">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment159">
@@ -2326,6 +2344,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="frame14">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment160">
@@ -2530,6 +2549,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="frame6">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment22">
@@ -2634,6 +2654,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="frame8">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkGrid">
@@ -2717,6 +2738,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="frame15">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment34">
@@ -2810,6 +2832,7 @@
                             <property name="position">15</property>
                             <property name="child">
                               <object class="GtkFrame" id="frame12">
+                                <property name="css-classes">flat</property>
                                 <property name="child">
                                   <object class="GtkBox" id="alignment35">
                                     <property name="margin-start">12</property>
@@ -2951,6 +2974,7 @@
                             <property name="position">16</property>
                             <property name="child">
                               <object class="GtkFrame" id="frame16">
+                                <property name="css-classes">flat</property>
                                 <property name="child">
                                   <object class="GtkBox" id="fs-alignment">
                                     <property name="margin-start">12</property>
@@ -2983,6 +3007,7 @@
                                 <property name="orientation">vertical</property>
                                 <child>
                                   <object class="GtkFrame" id="frame18">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="alignment46">
@@ -3047,6 +3072,7 @@
                             <property name="position">18</property>
                             <property name="child">
                               <object class="GtkFrame" id="frame19">
+                                <property name="css-classes">flat</property>
                                 <property name="child">
                                   <object class="GtkBox" id="alignment161">
                                     <property name="margin-start">12</property>
@@ -3123,6 +3149,7 @@
                                 <property name="spacing">12</property>
                                 <child>
                                   <object class="GtkFrame" id="frame20">
+                                    <property name="css-classes">flat</property>
                                     <property name="vexpand">1</property>
                                     <property name="child">
                                       <object class="GtkBox" id="tpm-align">
@@ -3155,6 +3182,7 @@
                             <property name="position">20</property>
                             <property name="child">
                               <object class="GtkFrame" id="frame21">
+                                <property name="css-classes">flat</property>
                                 <property name="child">
                                   <object class="GtkBox" id="alignment28">
                                     <property name="margin-start">12</property>
@@ -3227,6 +3255,7 @@
                             <property name="position">21</property>
                             <property name="child">
                               <object class="GtkFrame" id="frame17">
+                                <property name="css-classes">flat</property>
                                 <property name="child">
                                   <object class="GtkBox" id="alignment10">
                                     <property name="margin-start">12</property>
@@ -3280,6 +3309,7 @@
                             <property name="position">22</property>
                             <property name="child">
                               <object class="GtkFrame" id="frame25">
+                                <property name="css-classes">flat</property>
                                 <property name="child">
                                   <object class="GtkBox" id="vsock-align">
                                     <property name="margin-start">12</property>

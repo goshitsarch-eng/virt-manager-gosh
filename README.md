@@ -58,11 +58,16 @@ Enormous thanks to the people and projects this work is built on:
    that hold the whole thing together.
  - **[libosinfo](https://libosinfo.org)** — the OS database behind
    guest detection and defaults.
- - **[SPICE](https://www.spice-space.org)** and
-   **[GTK-VNC](https://gitlab.gnome.org/GNOME/gtk-vnc)** — graphical
-   console support.
+ - **[SPICE](https://www.spice-space.org)** — the session, USB
+   redirection and audio behind the graphical console. (The VNC console
+   is drawn by an RFB client built into this tree rather than by
+   [GTK-VNC](https://gitlab.gnome.org/GNOME/gtk-vnc), whose widget is
+   GTK 3 only — but GTK-VNC is what the GTK 3 versions used, and the
+   protocol work here follows its behaviour closely.)
  - **[VTE](https://gitlab.gnome.org/GNOME/vte)** — the serial console
-   terminal, and **GtkSourceView** for XML editing.
+   terminal, and
+   **[GtkSourceView](https://gitlab.gnome.org/GNOME/gtksourceview)** for
+   XML editing.
  - Application artwork by Máirín Duffy, Mike Langlie, Jeremy Perry and
    Jakub Steiner.
  - The translators working through

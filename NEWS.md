@@ -68,6 +68,35 @@
   which raised TypeError and destroyed the reused dialog
 - virt-manager: Do not shell out to xdotool in a sleep/retry loop on the
   GTK main thread when moving or resizing a window
+- virt-manager: Fix Apply writing one device's settings onto another when
+  two hardware rows share a label (two smartcards, two panic notifiers,
+  two filesystems with the same target)
+- virt-manager: Restore the selected storage volume by exact name after a
+  refresh, instead of picking whichever volume merely contained the name
+- virt-manager: Ctrl+Q, Ctrl+W and F10 ran their menu item twice
+- virt-manager: Restore the borderless look of the grouped sections in
+  Details, Host Details and Preferences. GTK 4 dropped shadow-type=none
+  and GtkFrame always draws a border, so all 39 sections had turned into
+  hard-edged boxes
+- virt-manager: Put the padding back around the wizard header band, and
+  stop showing the internal string "vmm dialog" as the window title of
+  every error and confirmation dialog
+- virt-manager: Draw the VM list and Host Details graphs in the theme's
+  accent colour rather than a fixed pale blue tuned for a white background
+- virt-manager: Install virtManager/lib/uitest.py and
+  virtManager/details/gtk4display.py, without which an installed build
+  cannot start or cannot open a console; tests now check for the gap
+- virt-manager: Fix tests/test_dist.py, which still required gtk+ 3.22 of
+  every ui file and so failed the whole suite after the port
+- virt-manager: Add gtkcompat.py and gtk4display.py to po/POTFILES so the
+  dialog buttons and file-transfer messages they own can be translated
+- virt-manager: Show New VM wizard validation errors again. Fourteen of
+  them only wrote a ui-test sentinel file, so leaving the install media
+  or install tree blank made Forward do nothing, silently
+- virt-manager: Fix "Enable direct kernel boot" being impossible to turn
+  off: unticking it marked the page edited, and Apply then re-ticked the
+  box and wrote the greyed-out kernel paths straight back
+- Point the appdata bug tracker at this tree rather than upstream's
 
 ## Release 5.1.0 (August 26, 2025)
 - cli: Support --cpu maximum (Andrea Bolognani)
