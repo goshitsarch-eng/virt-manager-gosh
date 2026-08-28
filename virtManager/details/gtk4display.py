@@ -1162,6 +1162,11 @@ class _DisplayBase(Gtk.DrawingArea):
         self._cursor_hot = (0, 0)
         self._cursor_pixels = None
         self._toplevel_bound = None
+        self._toplevel_active_id = 0
+        self._toplevel_root_id = 0
+        self._texture_pixbuf_src = None
+        self._texture_pixbuf_size = None
+        self._texture_pixbuf = None
         self.set_draw_func(self._on_draw)
         motion = Gtk.EventControllerMotion()
         motion.connect("motion", self._on_motion)
@@ -1253,6 +1258,18 @@ class _DisplayBase(Gtk.DrawingArea):
         return all(int(k) in self._pressed_hwkeys for k in keys)
 
     def _bind_toplevel_active(self):
+        """Release the input grab when the window loses focus.
+
+        The handler used to be connected and never disconnected. It is a
+        bound method, so the toplevel held a strong reference to this
+        display -- its framebuffer, textures and the whole Viewer graph
+        leaked across every console reconnect. And because _ungrab_input()
+        calls XUngrabPointer/XUngrabKeyboard, which are process-wide, a
+        stale display went on dropping the *live* console's grab every
+        time the window lost focus. Track the handler, drop it when we
+        rebind to another toplevel, when this widget leaves the window,
+        and on close().
+        """
         root = None
         try:
             root = self.get_root()
@@ -1260,11 +1277,35 @@ class _DisplayBase(Gtk.DrawingArea):
             root = None
         if root is None or getattr(self, "_toplevel_bound", None) is root:
             return
+        self._unbind_toplevel_active()
         self._toplevel_bound = root
         try:
-            root.connect("notify::is-active", self._on_toplevel_active)
+            self._toplevel_active_id = root.connect(
+                "notify::is-active", self._on_toplevel_active
+            )
         except Exception:
-            pass
+            self._toplevel_active_id = 0
+        if not getattr(self, "_toplevel_root_id", 0):
+            try:
+                self._toplevel_root_id = self.connect(
+                    "notify::root", self._on_display_rerooted
+                )
+            except Exception:  # pragma: no cover
+                self._toplevel_root_id = 0
+
+    def _on_display_rerooted(self, *_args):
+        self._unbind_toplevel_active()
+
+    def _unbind_toplevel_active(self):
+        win = getattr(self, "_toplevel_bound", None)
+        hid = getattr(self, "_toplevel_active_id", 0)
+        self._toplevel_bound = None
+        self._toplevel_active_id = 0
+        if win is not None and hid:
+            try:
+                win.disconnect(hid)
+            except Exception:  # pragma: no cover
+                pass
 
     def _on_toplevel_active(self, win, *_args):
         try:
@@ -1440,7 +1481,7 @@ class _DisplayBase(Gtk.DrawingArea):
             cr.set_source_surface(self._fb, 0, 0)
             cr.paint()
         elif self._texture is not None:
-            pix = _pixbuf_from_texture(self._texture, fw, fh)
+            pix = self._cached_texture_pixbuf(fw, fh)
             if pix is not None:
                 Gdk.cairo_set_source_pixbuf(cr, pix, 0, 0)
                 cr.paint()
@@ -1451,14 +1492,44 @@ class _DisplayBase(Gtk.DrawingArea):
             cr.paint()
         cr.restore()
 
+    def _cached_texture_pixbuf(self, fw, fh):
+        """Download the scanout texture at most once per frame.
+
+        _on_draw runs on every repaint -- a moving cursor, an expose, a
+        resize -- while a new texture only arrives once per frame, and
+        each download is a synchronous GPU readback plus two full copies
+        of the framebuffer.
+        """
+        texture = self._texture
+        if (
+            getattr(self, "_texture_pixbuf_src", None) is texture
+            and getattr(self, "_texture_pixbuf_size", None) == (fw, fh)
+        ):
+            return self._texture_pixbuf
+        pix = _pixbuf_from_texture(texture, fw, fh)
+        self._texture_pixbuf_src = texture
+        self._texture_pixbuf_size = (fw, fh)
+        self._texture_pixbuf = pix
+        return pix
+
     def do_snapshot(self, snapshot, *args):
         """Paint dmabuf textures on the GPU. Tiled modifiers cannot go
-        through cairo without a download that often fails."""
+        through cairo without a download that often fails.
+
+        This used to hand over to the cairo path whenever the guest drew
+        its own cursor, and that path downloads the whole texture off the
+        GPU and copies it twice on *every* repaint -- ~25MB and a pipeline
+        stall per frame at 1080p, and a moving cursor repaints constantly.
+        The cursor is a small overlay, so composite it as its own little
+        cairo node on top of the texture instead. A flipped (dmabuf
+        bottom-up) scanout still takes the old path: the cursor has to be
+        placed in the mirrored space and that is not worth guessing at.
+        """
         texture = self._texture
         if (
             texture is None
             or Graphene is None
-            or self._cursor_surface is not None
+            or (self._cursor_surface is not None and self._texture_flip)
         ):
             return Gtk.DrawingArea.do_snapshot(self, snapshot, *args)
         width = max(self.get_width(), 1)
@@ -1480,10 +1551,45 @@ class _DisplayBase(Gtk.DrawingArea):
             snapshot.append_texture(
                 texture, Graphene.Rect().init(dx, dy, dw, dh)
             )
+        self._snapshot_cursor(snapshot, dx, dy, dw, dh)
+
+    def _snapshot_cursor(self, snapshot, dx, dy, dw, dh):
+        """Composite the guest's software cursor over the scanout texture."""
+        cursor = self._cursor_surface
+        if cursor is None:
+            return
+        fw, fh = self._fb_size
+        if fw <= 0 or fh <= 0:
+            return
+        try:
+            cw = cursor.get_width()
+            ch = cursor.get_height()
+        except Exception:  # pragma: no cover
+            return
+        if cw <= 0 or ch <= 0:
+            return
+        scale_x = dw / float(fw)
+        scale_y = dh / float(fh)
+        fb_x, fb_y = self._scale_pointer(self._last_x, self._last_y)
+        hot_x, hot_y = self._cursor_hot
+        left = dx + (fb_x - hot_x) * scale_x
+        top = dy + (fb_y - hot_y) * scale_y
+        try:
+            cr = snapshot.append_cairo(
+                Graphene.Rect().init(left, top, cw * scale_x, ch * scale_y)
+            )
+            cr.translate(left, top)
+            cr.scale(scale_x, scale_y)
+            cr.set_source_surface(cursor, 0, 0)
+            cr.paint()
+        except Exception:  # pragma: no cover
+            log.debug("Could not composite the guest cursor", exc_info=True)
 
     def _set_framebuffer(self, surface, width, height):
         changed = self._fb_size != (width, height)
         self._texture = None
+        self._texture_pixbuf_src = None
+        self._texture_pixbuf = None
         self._texture_flip = False
         self._fb = surface
         self._fb_size = (width, height)
@@ -1687,6 +1793,7 @@ class _DisplayBase(Gtk.DrawingArea):
 
     def close(self):
         self._ungrab_input()
+        self._unbind_toplevel_active()
         self._open = False
 
 
@@ -1790,6 +1897,7 @@ class VNCDisplay(_DisplayBase):
 
     def close(self):
         self._ungrab_input()
+        self._unbind_toplevel_active()
         self._stop = True
         self._open = False
         try:
@@ -2882,14 +2990,29 @@ class VNCDisplay(_DisplayBase):
             self._pixels[dst : dst + w * 4] = rowbytes
 
     def _copy_rect(self, width, height, x, y, w, h, srcx, srcy):
-        src = bytearray(self._pixels)
-        for row in range(h):
+        """Move a rectangle within the framebuffer (RFB CopyRect).
+
+        This used to snapshot the entire framebuffer first -- an 8.3MB
+        allocation and copy at 1080p -- to avoid the source and
+        destination aliasing. They can only alias row-wise, and a slice
+        assignment materialises its right-hand side before writing, so a
+        row never aliases itself; only the row *order* matters when the
+        two rectangles overlap vertically.
+        """
+        ignore = height
+        if w <= 0 or h <= 0:
+            return
+        span = w * 4
+        pixels = self._pixels
+        rows = range(h - 1, -1, -1) if y > srcy else range(h)
+        for row in rows:
             s = ((srcy + row) * width + srcx) * 4
             d = ((y + row) * width + x) * 4
             if s < 0 or d < 0:
                 continue
-            self._pixels[d : d + w * 4] = src[s : s + w * 4]
-        ignore = height
+            if s + span > len(pixels) or d + span > len(pixels):
+                continue
+            pixels[d : d + span] = pixels[s : s + span]
 
     def _inflate_zhex(self, rawz):
         import zlib
@@ -3167,19 +3290,25 @@ class VNCDisplay(_DisplayBase):
                 elif 2 <= sub <= 16:
                     palette = [take(4) for _ in range(sub)]
                     bits = 1 if sub <= 2 else 2 if sub <= 4 else 4
+                    tile = bytearray(tw * th * 4)
                     for row in range(th):
                         packed = take((tw * bits + 7) // 8)
                         bitpos = 0
+                        base = row * tw * 4
                         for col in range(tw):
                             byte = packed[bitpos // 8]
                             shift = 8 - bits - (bitpos % 8)
                             idx = (byte >> shift) & ((1 << bits) - 1)
                             bitpos += bits
                             pix = palette[idx] if idx < len(palette) else palette[0]
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
+                            off = base + col * 4
+                            tile[off : off + 4] = pix
+                    self._blit_raw(width, tx, ty, tw, th, tile)
                 elif sub == 128:
+                    total = tw * th
+                    tile = bytearray(total * 4)
                     count = 0
-                    while count < tw * th:
+                    while count < total:
                         pix = take(4)
                         run = 1
                         while True:
@@ -3187,18 +3316,17 @@ class VNCDisplay(_DisplayBase):
                             run += b
                             if b != 255:
                                 break
-                        for _ in range(run):
-                            col = count % tw
-                            row = count // tw
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
-                            count += 1
-                            if count >= tw * th:
-                                break
+                        run = min(run, total - count)
+                        tile[count * 4 : (count + run) * 4] = pix * run
+                        count += run
+                    self._blit_raw(width, tx, ty, tw, th, tile)
                 elif 130 <= sub <= 255:
                     ncolors = sub - 128
                     palette = [take(4) for _ in range(ncolors)]
+                    total = tw * th
+                    tile = bytearray(total * 4)
                     count = 0
-                    while count < tw * th:
+                    while count < total:
                         idx = take(1)[0]
                         run = 1
                         if idx & 0x80:
@@ -3209,13 +3337,10 @@ class VNCDisplay(_DisplayBase):
                                 if b != 255:
                                     break
                         pix = palette[idx] if idx < len(palette) else palette[0]
-                        for _ in range(run):
-                            col = count % tw
-                            row = count // tw
-                            self._fill_rect(width, tx + col, ty + row, 1, 1, pix)
-                            count += 1
-                            if count >= tw * th:
-                                break
+                        run = min(run, total - count)
+                        tile[count * 4 : (count + run) * 4] = pix * run
+                        count += run
+                    self._blit_raw(width, tx, ty, tw, th, tile)
 
     def _read_zrle(self, sock, width, x, y, w, h):
         import zlib
@@ -4335,6 +4460,7 @@ class SpiceDisplay(_DisplayBase):
 
     def close(self):
         self._ungrab_input()
+        self._unbind_toplevel_active()
         self._open = False
         self.attach_cursor_channel(None)
         self._channel = None

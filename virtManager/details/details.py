@@ -3662,16 +3662,24 @@ class vmmDetails(vmmGObjectUI):
             except Exception:
                 pass
         if apply_on and not self.vm.is_active():
-            pending_share = _EDIT_SHARE in getattr(
-                self._addstorage, "_active_edits", []
-            )
+            pending = list(getattr(self, "_active_edits", None) or [])
+            store_pending = list(getattr(self._addstorage, "_active_edits", None) or [])
+            pending_share = _EDIT_SHARE in store_pending
             pending_media = (
-                EDIT_DISK_PATH in getattr(self, "_active_edits", [])
-                or self._pending_media_path() is not None
+                EDIT_DISK_PATH in pending or self._pending_media_path() is not None
             )
-            if not pending_share and not pending_media:
-                # Leftover bus/cache Apply from a post-apply refresh
-                # must not skip the shutoff disk-page refresh.
+            # A disk Apply that has already run can leave a stale bus edit
+            # armed, and that must not block the shutoff disk-page refresh.
+            # But this used to clear *every* pending edit: a guest shutting
+            # down while the user had an unapplied memory value, vCPU count
+            # or boot order typed in threw that work away with no prompt.
+            # Only stand down for the stale disk edits themselves.
+            stale_disk_only = (
+                bool(pending)
+                and not store_pending
+                and all(e in (EDIT_DISK, EDIT_DISK_BUS) for e in pending)
+            )
+            if not pending_share and not pending_media and stale_disk_only:
                 try:
                     self._disable_apply()
                 except Exception:

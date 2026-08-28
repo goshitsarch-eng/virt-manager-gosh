@@ -251,18 +251,26 @@
                 <property name="css-classes">toolbar</property>
                 <child>
                   <object class="GtkToggleButton" id="control-vm-console">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">icon_console</property>
+                        <property name="label" translatable="1">Console</property>
+                      </object>
+                    </property>
                     <property name="tooltip-text" translatable="1">Show the graphical console</property>
-                    <property name="label" translatable="1">Console</property>
-                    <property name="icon-name">icon_console</property>
                     <property name="active">1</property>
                     <signal name="toggled" handler="on_control_vm_console_toggled" swapped="no" />
                   </object>
                 </child>
                 <child>
                   <object class="GtkToggleButton" id="control-vm-details">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">dialog-information</property>
+                        <property name="label" translatable="1">Details</property>
+                      </object>
+                    </property>
                     <property name="tooltip-text" translatable="1">Show virtual hardware details</property>
-                    <property name="label" translatable="1">Details</property>
-                    <property name="icon-name">dialog-information</property>
                     <property name="group">control-vm-console</property>
                     <signal name="toggled" handler="on_control_vm_details_toggled" swapped="no" />
                   </object>
@@ -274,19 +282,27 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="control-run">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">media-playback-start</property>
+                        <property name="label" translatable="1">Run</property>
+                        <property name="use-underline">1</property>
+                      </object>
+                    </property>
                     <property name="tooltip-text" translatable="1">Power on the virtual machine</property>
-                    <property name="label" translatable="1">Run</property>
-                    <property name="use-underline">1</property>
-                    <property name="icon-name">media-playback-start</property>
                     <signal name="clicked" handler="on_control_run_clicked" swapped="no" />
                   </object>
                 </child>
                 <child>
                   <object class="GtkToggleButton" id="control-pause">
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">media-playback-pause</property>
+                        <property name="label" translatable="1">Pause</property>
+                        <property name="use-underline">1</property>
+                      </object>
+                    </property>
                     <property name="tooltip-text" translatable="1">Pause the virtual machine</property>
-                    <property name="label" translatable="1">Pause</property>
-                    <property name="use-underline">1</property>
-                    <property name="icon-name">media-playback-pause</property>
                     <signal name="toggled" handler="on_control_pause_toggled" swapped="no" />
                   </object>
                 </child>
@@ -306,8 +322,12 @@
                 </child>
                 <child>
                   <object class="GtkToggleButton" id="control-snapshots">
-                    <property name="label" translatable="1">Snapshots</property>
-                    <property name="icon-name">vm_clone_wizard</property>
+                    <property name="child">
+                      <object class="AdwButtonContent">
+                        <property name="icon-name">vm_clone_wizard</property>
+                        <property name="label" translatable="1">Snapshots</property>
+                      </object>
+                    </property>
                     <property name="group">control-vm-console</property>
                     <signal name="toggled" handler="on_control_snapshots_toggled" swapped="no" />
                   </object>
@@ -328,6 +348,7 @@
                 <property name="css-classes">toolbar</property>
                 <child>
                   <object class="GtkButton" id="details-finish-customize">
+                    <property name="css-classes">suggested-action</property>
                     <property name="tooltip-text" translatable="1">Begin Installation</property>
                     <property name="label" translatable="1">_Begin Installation</property>
                     <property name="use-underline">1</property>

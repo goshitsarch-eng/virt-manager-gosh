@@ -31,7 +31,7 @@
                   <object class="GtkImage" id="image5">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_new_wizard</property>
-                    <property name="icon_size">large</property>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
                 <child>
@@ -1530,6 +1530,7 @@ connections is not yet supported.&lt;/small&gt;</property>
                   </child>
                 <child>
                   <object class="GtkButton" id="create-forward">
+                    <property name="css-classes">suggested-action</property>
                     <property name="label" translatable="1">_Forward</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>
@@ -1539,6 +1540,7 @@ connections is not yet supported.&lt;/small&gt;</property>
                   </child>
                 <child>
                   <object class="GtkButton" id="create-finish">
+                    <property name="css-classes">suggested-action</property>
                     <property name="visible">0</property>
                     <property name="label" translatable="1">_Finish</property>
                     <property name="focusable">1</property>

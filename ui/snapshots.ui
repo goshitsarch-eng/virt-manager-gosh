@@ -198,7 +198,7 @@
                                 <child>
                                   <object class="GtkImage" id="image2">
                                     <property name="icon-name">dialog-information</property>
-                                    <property name="icon_size">large</property>
+                                    <property name="pixel-size">16</property>
                                   </object>
                                 </child>
                                 <child>
@@ -296,6 +296,7 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="snapshot-delete">
+                    <property name="css-classes">destructive-action</property>
                     <property name="halign">center</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>

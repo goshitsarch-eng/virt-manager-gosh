@@ -18,7 +18,7 @@
                   <object class="GtkImage" id="image4">
                     <property name="halign">center</property>
                     <property name="icon-name">document-new</property>
-                    <property name="icon_size">large</property>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
                 <child>
@@ -230,6 +230,7 @@
                   </child>
                 <child>
                   <object class="GtkButton" id="snapshot-new-ok">
+                    <property name="css-classes">suggested-action</property>
                     <property name="label" translatable="1">_Finish</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>

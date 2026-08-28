@@ -104,6 +104,30 @@
 - virt-manager: Do not fork xdotool to read a window's size or position.
   Those run from a per-frame configure-event tick, so dragging a window
   edge forked a process on the GTK main loop every frame
+- virt-manager: Decode VNC CopyRect and the ZRLE/TRLE run-length tiles in
+  bulk. CopyRect cloned the whole framebuffer for every rectangle, and the
+  RLE paths wrote one pixel at a time -- around 100x faster each
+- virt-manager: Toolbar buttons carry an Adw.ButtonContent, so they show
+  their labels again and the Run button keeps its icon when it becomes
+  Restore
+- virt-manager: A guest shutting down no longer discards unapplied
+  hardware edits (a typed memory value, vCPU count or boot order)
+- virt-manager: Selecting an OS clears the search filter and highlights
+  the matching row again, instead of leaving the list on the previous
+  search with nothing selected
+- virt-manager: Mark the primary and destructive buttons, so Delete no
+  longer looks exactly like Cancel
+- virt-manager: A closed console no longer keeps listening to the window
+  it was shown in. The handler was never disconnected, so the toplevel
+  held the whole display alive across reconnects and a dead viewer went
+  on releasing the live console's input grab on every focus change
+- virt-manager: Composite the guest's software cursor onto the GL scanout
+  texture instead of falling back to a path that downloaded the whole
+  texture off the GPU and copied it twice on every repaint
+- virt-manager: Restore the icon sizes the port mistranslated. GTK 4's
+  enum has no 48px or 24px step, so ten wizard header icons shrank from
+  48px to 32px, an inline caption icon doubled from 16px to 32px, and the
+  network and delete lists drew 32px icons in 32px rows
 - Point the appdata bug tracker at this tree rather than upstream's
 
 ## Release 5.1.0 (August 26, 2025)

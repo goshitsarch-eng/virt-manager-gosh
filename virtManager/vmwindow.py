@@ -907,7 +907,7 @@ class vmmVMWindow(vmmGObjectUI):
         strip_text = text.replace("_", "")
 
         self.widget("details-vm-menu").get_submenu().change_run_text(text)
-        self.widget("control-run").set_label(strip_text)
+        gtkcompat.set_button_text(self.widget("control-run"), strip_text)
         try:
             gtkcompat.ensure_button_accessible_name(self.widget("control-run"), strip_text)
             gtkcompat.register_a11y_click(strip_text, self.control_vm_run)

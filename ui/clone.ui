@@ -122,11 +122,11 @@
                     <property name="margin-start">18</property>
                     <property name="margin-end">18</property>
                     <property name="icon-name">drive-harddisk</property>
-                    <property name="icon_size">large</property>
                     <layout>
                       <property name="column">0</property>
                       <property name="row">1</property>
                     </layout>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
               </object>
@@ -236,7 +236,7 @@
                   <object class="GtkImage" id="image4">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_clone_wizard</property>
-                    <property name="icon_size">large</property>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
                 <child>
@@ -474,6 +474,7 @@ like change passwords or static IPs, please see the virt-sysprep(1) tool.&lt;/sp
                   </child>
                 <child>
                   <object class="GtkButton" id="clone-ok">
+                    <property name="css-classes">suggested-action</property>
                     <property name="label" translatable="1">C_lone</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>

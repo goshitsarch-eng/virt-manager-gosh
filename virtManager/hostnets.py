@@ -442,7 +442,9 @@ class vmmHostNets(vmmGObjectUI):
                         net,
                         net.get_name(),
                         "network-idle",
-                        Gtk.IconSize.LARGE_TOOLBAR,
+                        # GTK 4's enum has no 24px step, and LARGE (32)
+                        # fills the whole row. NORMAL is the closer fit.
+                        Gtk.IconSize.NORMAL,
                         bool(net.is_active()),
                     ]
                 )

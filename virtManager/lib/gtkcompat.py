@@ -1051,6 +1051,64 @@ def treeview_path_at_event(treeview, event):
     return treeview.get_path_at_pos(int(x), int(y))
 
 
+def button_content_of(button):
+    """The Adw.ButtonContent a toolbar button carries, if any."""
+    if button is None or Adw is None:
+        return None
+    try:
+        child = button.get_child()
+    except Exception:  # pragma: no cover
+        return None
+    return child if isinstance(child, Adw.ButtonContent) else None
+
+
+def set_button_icon(button, icon_name):
+    """Re-icon a button without throwing away its label.
+
+    Gtk.Button.set_icon_name() replaces the child just as set_label()
+    does, so calling it on a button that carries an Adw.ButtonContent
+    dropped the label back to an icon-only button.
+    """
+    if button is None:
+        return
+    content = button_content_of(button)
+    if content is not None:
+        try:
+            content.set_icon_name(icon_name or "")
+            return
+        except Exception:  # pragma: no cover
+            pass
+    try:
+        button.set_icon_name(icon_name or "")
+    except Exception:  # pragma: no cover
+        pass
+
+
+def set_button_text(button, text):
+    """Retitle a button without throwing away its icon.
+
+    Gtk.Button.set_label() replaces the whole child, so calling it on a
+    button built from icon-name blanks the icon: the manager and VM window
+    toolbars lost the Run button's icon the moment it became Restore,
+    leaving one bare text button among its icon neighbours. Toolbar buttons
+    now carry an Adw.ButtonContent, which holds both.
+    """
+    if button is None:
+        return
+    content = button_content_of(button)
+    if content is not None:
+        try:
+            content.set_label(text or "")
+        except Exception:  # pragma: no cover
+            pass
+    else:
+        try:
+            button.set_label(text or "")
+        except Exception:  # pragma: no cover
+            pass
+    set_accessible_name(button, _mnemonic_label(text) or text or "")
+
+
 def wrap_in_toolbar_view(content, window=None, title=None):
     """Put ``content`` under a flat Adw.HeaderBar, the way Adwaita apps look.
 
@@ -2421,7 +2479,7 @@ def ensure_button_accessible_name(widget, name):
         # alone: swapping in "icon + screen-reader-only label" renders a
         # completely blank button whenever the button has no icon at all
         # (the manager toolbar's Shut Down split button, for one).
-        if not icon and hasattr(widget, "set_label"):
+        if not icon and button_content_of(widget) is None and hasattr(widget, "set_label"):
             try:
                 if not (widget.get_label() or ""):
                     widget.set_label(name)
@@ -2436,6 +2494,13 @@ def ensure_button_accessible_name(widget, name):
             except Exception:
                 pass
             sync_accessible_checked(widget)
+        return
+
+    if button_content_of(widget) is not None:
+        # Already an icon + label pair. Name it and leave the content be.
+        apply_accessible_label(widget)
+        set_accessible_name(widget, name)
+        ensure_activate_clicked(widget)
         return
 
     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)

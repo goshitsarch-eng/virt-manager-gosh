@@ -20,7 +20,7 @@
                   <object class="GtkImage" id="image2">
                     <property name="halign">center</property>
                     <property name="icon-name">vm_delete_wizard</property>
-                    <property name="icon_size">large</property>
+                    <property name="pixel-size">48</property>
                   </object>
                 </child>
                 <child>
@@ -120,6 +120,7 @@
                   </child>
                 <child>
                   <object class="GtkButton" id="delete-ok">
+                    <property name="css-classes">destructive-action</property>
                     <property name="label" translatable="1">_Delete</property>
                     <property name="focusable">1</property>
                     <property name="receives-default">1</property>
